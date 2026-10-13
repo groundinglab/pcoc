@@ -16,7 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 axum = "0.8"
-hike = { git = "https://github.com/groundinglab/pcoc", tag = "ref-rust-v2.0.1" }
+hike = { git = "https://github.com/groundinglab/pcoc", tag = "ref-rust-v2.0.2" }
 hex = "0.4"
 base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
@@ -25,8 +25,8 @@ sha2 = "0.10"
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "time"] }
 ureq = { version = "=2.12.1", features = ["json"] }
-# Keep ureq's TLS stack on rustc 1.83. Newer url pulls idna 1; newer zeroize needs edition 2024.
-url = "=2.5.2"
+# url 2.5.4+ pulls idna 1 (GHSA-h97m-ww89-6jmq fix). The lock pins idna_adapter 1.1 so the build stays on rustc 1.83. Newer zeroize needs edition 2024.
+url = "2.5.4"
 zeroize = "=1.8.2"
 hashbrown = "=0.15.5"
 subtle = "=2.5.0"
@@ -38,4 +38,4 @@ tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 
 [dev-dependencies]
-hike-net = { git = "https://github.com/groundinglab/pcoc", tag = "ref-rust-v2.0.1" }
+hike-net = { git = "https://github.com/groundinglab/pcoc", tag = "ref-rust-v2.0.2" }
