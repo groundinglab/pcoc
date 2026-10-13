@@ -1,0 +1,21 @@
+[Unit]
+Description=bari: waypoint POST and path GET (Satoshi Hike)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bari
+Group=bari
+EnvironmentFile=/etc/bari/env
+ExecStart=/usr/local/bin/bari
+Restart=on-failure
+RestartSec=5
+StateDirectory=bari
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
