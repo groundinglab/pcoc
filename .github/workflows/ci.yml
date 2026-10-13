@@ -244,6 +244,8 @@ jobs:
         run: gitleaks git --log-opts=--all --redact -v .
 
   g1:
+    # Fork PRs get no secrets, so G1 cannot run there; ci-ok accepts a skip only in that case.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -257,9 +259,21 @@ jobs:
           G1_PATTERNS: ${{ secrets.G1_PATTERNS }}
         run: bash .github/scripts/g1.sh
 
+  walk-prose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: ripgrep
+        run: command -v rg || { sudo apt-get update && sudo apt-get install -y --no-install-recommends ripgrep; }
+      - name: walk-prose check (exact-line allowlist)
+        run: python3 .github/scripts/walk-prose.py
+
   ci-ok:
     if: always()
-    needs: [changes, spec, rust, go, java, services, desktop, docs, gitleaks, g1]
+    needs: [changes, spec, rust, go, java, services, desktop, docs, gitleaks, g1, walk-prose]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -286,6 +300,7 @@ jobs:
       - name: aggregate
         env:
           NEEDS: ${{ toJSON(needs) }}
+          FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
         run: |
           python3 - <<'PY'
           import json, os
@@ -293,6 +308,14 @@ jobs:
           bad = []
           if needs["changes"]["result"] != "success":
               bad.append(f"changes={needs['changes']['result']}")
+          # always-on scans must succeed; g1 may be skipped only on a fork PR
+          fork = os.environ.get("FORK_PR") == "true"
+          for name in ("gitleaks", "g1", "walk-prose"):
+              r = needs[name]["result"]
+              if r == "skipped" and name == "g1" and fork:
+                  print("g1: skipped on fork PR (accepted)")
+              elif r != "success":
+                  bad.append(f"{name}={r}")
           for name, job in needs.items():
               r = job["result"]
               print(f"{name}: {r}")
