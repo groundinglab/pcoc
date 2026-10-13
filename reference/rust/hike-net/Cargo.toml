@@ -1,0 +1,11 @@
+[package]
+name = "hike-net"
+version = "0.1.0"
+license = "Apache-2.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+hike = { path = "../hike" }
+serde_json = "=1.0.151"
+ureq = { version = "=2.12.1", default-features = false, features = ["tls"] }
