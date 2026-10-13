@@ -32,7 +32,7 @@ Rule A4.3 checkpoint comparisons run together. `PCOC_BIND_THREADS` sets how many
 | [rust/nip06/](rust/nip06/) | DEMO keys only. BIP-39 English 12-word, empty passphrase, NIP-06 path, BIP-340 x-only. Not the hike's `production_seed`. |
 | [rust/satoshi-hike-produce/](rust/satoshi-hike-produce/) | Reference produce program. Lab `--demo-mnemonic` derives the x-only key. |
 | [rust/satoshi-hike-verify/](rust/satoshi-hike-verify/) | Reference verify program. Calls `hike::verify`. |
-| [go/](go/) | Go port. Module path `github.com/groundinglab/pcoc/reference/go`. |
+| [go/](go/) | Go port. Module path `github.com/groundinglab/pcoc/reference/go/v2`. |
 | [java/](java/) | Java port. `reference/java/v2.sh` runs the conformance pack. |
 
 ```text
