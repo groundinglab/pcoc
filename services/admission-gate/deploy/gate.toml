@@ -1,0 +1,64 @@
+# Admission gate config. The process reads this file. The path is `--config`
+# or GATE_CONFIG. It does not read PCOC_BIND_THREADS or any GL_VERIFY_* variable.
+# Omitted keys use the defaults below. Unknown keys are an error.
+
+# TCP address. Default 127.0.0.1:8787 (loopback only). Put a reverse proxy in
+# front to serve it publicly. This file does not publish a hostname.
+bind = "127.0.0.1:8787"
+
+# Portable index origin. Absolute http(s) URL, no trailing slash.
+# Default https://index.groundinglab.io. Sign-in reads GET {index_url}/index and,
+# when that file exists, GET {index_url}/index/{height-1}. Thorough verify
+# reads GET {index_url}/index/{beacon_height}. Each read is one shot.
+index_url = "https://index.groundinglab.io"
+
+# Seconds for one index read, including the sign-in tip. Default 5.
+# A timeout, an HTTP 5xx, or a refused connection is not retried.
+index_timeout_secs = 5
+
+# Public decision log. The process creates this directory. It must be empty
+# of any v1.35 chain. Default gate-log-v2, relative to the working directory.
+log_dir = "gate-log-v2"
+
+# Largest object, in bytes. Default 2097152. A larger object is HTTP 413.
+# The transport limit covers the website's JSON object_b64 envelope, not
+# only the raw bytes.
+max_object_bytes = 2097152
+
+# How long a finished verify job stays readable, in seconds. Default 3600.
+job_retention_secs = 3600
+
+# How many verify jobs the process holds. Default 256. At that count, POST
+# /v1/verify is HTTP 503.
+max_jobs = 256
+
+# How many verifies run at once. Default 2.
+max_concurrent = 2
+
+# Checkpoint binding threads. Default 6. This file is the only input.
+bind_threads = 6
+
+# POSTs per client per minute. 0 disables the limiter. Default 12. GET is
+# not limited.
+rate_per_min = 12
+
+# Header that names the client when a reverse proxy sits in front. Unset uses
+# the peer address. The name is matched case-insensitively. Set it only when
+# the proxy overwrites the header; a client can send it otherwise.
+# client_ip_header = "x-forwarded-for"
+
+# Exact CORS origins, no trailing slash. The code default is empty: no site
+# is allowed, only loopback origins (localhost, 127.0.0.1, [::1]). A live
+# groundinglab deploy needs the two public sites below; another deployment
+# names its own sites instead.
+allowed_origins = ["https://groundinglab.io", "https://www.groundinglab.io"]
+
+# Further exact CORS origins, no trailing slash.
+extra_origins = []
+
+# Policy floor. One of strict (7/20), default (1/4), lenient (1/8).
+# Compared in integers on the bookend pair (N, S) from the section 14 record:
+# q·N >= p·S meets the floor. A pair that is not two numbers is not compared.
+# When the object's own bytes leave N and S `not defined`, the gate refuses
+# at once. `not read` is not that refusal. This is gate policy, not a measurement.
+leg_rate_floor = "default"

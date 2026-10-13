@@ -1,0 +1,40 @@
+# systemd unit for admission-service (Satoshi Hike v2.0).
+# Copy, replace the paths, install. Do not commit machine-specific edits.
+# The optional EnvironmentFile sets GATE_CONFIG (see env.example). The process
+# reads no other variable; every setting is in the config file.
+#
+#   sudo cp pcoc-admission.service /etc/systemd/system/pcoc-admission.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now pcoc-admission
+#
+# User unit: drop User= and Group=, set WantedBy=default.target, and point
+# WorkingDirectory, ExecStart, and the config at directories you create.
+# Do not install this file under the name of a gate that is already running.
+#
+# No WatchdogSec. A thorough check of 2,000,000-step legs can run for minutes.
+# Restart=on-failure starts the process again after it exits. It does not
+# stop a process that is still running.
+
+[Unit]
+Description=Satoshi Hike v2.0 admission gate
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pcoc
+Group=pcoc
+StateDirectory=pcoc-admission
+WorkingDirectory=/var/lib/pcoc-admission
+Environment=GATE_CONFIG=/etc/pcoc-admission/gate.toml
+EnvironmentFile=-/etc/pcoc-admission/env
+ExecStart=/usr/local/bin/admission-service
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+# Hides /tmp and /var/tmp. The paths in this file are outside those mounts.
+# A binary under /tmp does not start while this line is set. See DEPLOY.md.
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
