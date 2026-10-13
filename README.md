@@ -21,6 +21,7 @@ The object does not store the terrain. Anyone can recompute it from the claimed 
 - [Conformance vectors](conformance/v2.0/) — the byte oracle
 - [Reference programs](reference/) — Rust, Go, and Java
 - [Services](services/) — Bari, the index, and the Admission Gate
+- [Docs](docs/README.md) — plain-language briefs and rationale
 
 ## Licence
 
