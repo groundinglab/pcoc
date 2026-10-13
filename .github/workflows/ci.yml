@@ -1,0 +1,304 @@
+# Public CI for groundinglab/pcoc. GitHub-hosted runners only (never self-hosted).
+# `ci-ok` is the single check to require. Suites are path-gated by .github/scripts/changes.sh;
+# a suite whose directory does not exist yet is skipped.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      spec: ${{ steps.gate.outputs.spec }}
+      rust: ${{ steps.gate.outputs.rust }}
+      go: ${{ steps.gate.outputs.go }}
+      java: ${{ steps.gate.outputs.java }}
+      gate: ${{ steps.gate.outputs.gate }}
+      bari: ${{ steps.gate.outputs.bari }}
+      index: ${{ steps.gate.outputs.index }}
+      desktop: ${{ steps.gate.outputs.desktop }}
+      docs: ${{ steps.gate.outputs.docs }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: gate
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          case "$EVENT" in
+            pull_request) base="$PR_BASE" ;;
+            push) base="$PUSH_BEFORE" ;;
+            *) base="" ;;
+          esac
+          bash .github/scripts/changes.sh "$base" HEAD | tee -a "$GITHUB_OUTPUT"
+
+  spec:
+    needs: changes
+    if: needs.changes.outputs.spec == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: sparse worktree (full clone, cone mode, no partial filter)
+        run: git sparse-checkout set spec conformance reference/tools
+      - name: ring 1 checks (section 6, sign-in wire, links, manifest hash)
+        run: python3 conformance/tools/ring1_checks.py
+      - name: spec pin
+        run: python3 reference/tools/check_spec_pin.py
+
+  rust:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: sparse worktree (full clone, cone mode, no partial filter)
+        run: git sparse-checkout set spec conformance reference
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            reference/rust/target
+          key: rust-${{ runner.os }}-${{ hashFiles('reference/rust/Cargo.lock', 'reference/rust/rust-toolchain.toml') }}
+          restore-keys: rust-${{ runner.os }}-
+      - name: spec pin
+        run: python3 reference/tools/check_spec_pin.py
+      - name: cargo test (includes conformance_v2)
+        working-directory: reference/rust
+        run: cargo test --locked --release
+
+  go:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: sparse worktree (full clone, cone mode, no partial filter)
+        run: git sparse-checkout set spec conformance reference
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: reference/go/go.mod
+          cache: false # no third-party modules (no go.sum)
+      - name: spec pin
+        run: python3 reference/tools/check_spec_pin.py
+      - name: go vet + test (includes conformance/v2_test.go)
+        working-directory: reference/go
+        run: |
+          go vet ./...
+          go test ./...
+
+  java:
+    needs: changes
+    if: needs.changes.outputs.java == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: sparse worktree (full clone, cone mode, no partial filter)
+        run: git sparse-checkout set spec conformance reference
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: spec pin
+        run: python3 reference/tools/check_spec_pin.py
+      - name: conformance pack (v2.sh)
+        run: bash reference/java/v2.sh
+
+  services:
+    needs: changes
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { key: gate, dir: services/admission-gate }
+          - { key: bari, dir: services/bari }
+          - { key: index, dir: services/index }
+    name: service (${{ matrix.key }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: gate
+        id: on
+        env:
+          OUTS: ${{ toJSON(needs.changes.outputs) }}
+          KEY: ${{ matrix.key }}
+        run: echo "run=$(jq -r --arg k "$KEY" '.[$k]' <<<"$OUTS")" >> "$GITHUB_OUTPUT"
+      # Standalone build: only this service's directory is checked out.
+      - if: steps.on.outputs.run == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: steps.on.outputs.run == 'true'
+        name: sparse worktree (full clone, cone mode, no partial filter)
+        run: git sparse-checkout set ${{ matrix.dir }}
+      - if: steps.on.outputs.run == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ matrix.dir }}/target
+          key: svc-${{ matrix.key }}-${{ runner.os }}-${{ hashFiles(format('{0}/Cargo.lock', matrix.dir)) }}
+          restore-keys: svc-${{ matrix.key }}-${{ runner.os }}-
+      - if: steps.on.outputs.run == 'true'
+        name: cargo test (git+tag deps fetched with the read-only job token)
+        working-directory: ${{ matrix.dir }}
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Needed only while the repo is private; harmless once public.
+          git config --global "url.https://x-access-token:${GH_TOKEN}@github.com/groundinglab/pcoc.insteadOf" "https://github.com/groundinglab/pcoc"
+          cargo test --locked --release
+
+  desktop:
+    # Not required: ci-ok ignores this job's result.
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: sparse worktree (full clone, cone mode, no partial filter)
+        run: git sparse-checkout set apps/desktop
+      - name: GTK dev packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-4-dev libadwaita-1-dev
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/target
+          key: desktop-${{ runner.os }}-${{ hashFiles('apps/desktop/Cargo.lock') }}
+          restore-keys: desktop-${{ runner.os }}-
+      - name: cargo test core
+        working-directory: apps/desktop
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config --global "url.https://x-access-token:${GH_TOKEN}@github.com/groundinglab/pcoc.insteadOf" "https://github.com/groundinglab/pcoc"
+          cargo test --locked -p pcoc-hike-core
+
+  docs:
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: relative link check
+        run: python3 .github/scripts/doclinks.py
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: install gitleaks 8.30.1 (checksum pinned)
+        run: |
+          f=gitleaks_8.30.1_linux_x64.tar.gz
+          curl -sSfL -o "$f" "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/$f"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $f" | sha256sum -c -
+          tar -xzf "$f" gitleaks && sudo install gitleaks /usr/local/bin/
+      - name: gitleaks over full history
+        run: gitleaks git --log-opts=--all --redact -v .
+
+  g1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: ripgrep
+        run: command -v rg || { sudo apt-get update && sudo apt-get install -y --no-install-recommends ripgrep; }
+      - name: G1 leak grep + name spelling
+        env:
+          G1_PATTERNS: ${{ secrets.G1_PATTERNS }}
+        run: bash .github/scripts/g1.sh
+
+  ci-ok:
+    if: always()
+    needs: [changes, spec, rust, go, java, services, desktop, docs, gitleaks, g1]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: sparse worktree (full clone, cone mode, no partial filter)
+        run: git sparse-checkout set .github/workflows
+      - name: missing-job guard (needs == every other job)
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          # job ids are the 2-space-indented keys under the top-level jobs: map (no PyYAML needed)
+          body = open(".github/workflows/ci.yml").read().split("\njobs:\n", 1)[1]
+          jobs = set(re.findall(r"^  ([A-Za-z0-9_-]+):\s*$", body, re.M)) - {"ci-ok"}
+          needs = set(json.loads(os.environ["NEEDS"]))
+          missing, extra = sorted(jobs - needs), sorted(needs - jobs)
+          if missing or extra:
+              raise SystemExit(f"ci-ok needs drift: missing={missing} extra={extra}")
+          print(f"guard ok: {len(jobs)} jobs")
+          PY
+      - name: aggregate
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          needs = json.loads(os.environ["NEEDS"])
+          bad = []
+          if needs["changes"]["result"] != "success":
+              bad.append(f"changes={needs['changes']['result']}")
+          for name, job in needs.items():
+              r = job["result"]
+              print(f"{name}: {r}")
+              if name != "desktop" and r in ("failure", "cancelled"):
+                  bad.append(f"{name}={r}")
+          if bad:
+              raise SystemExit("ci-ok FAIL: " + ", ".join(bad))
+          print("ci-ok: all required jobs passed or were skipped")
+          PY
