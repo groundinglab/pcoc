@@ -22,7 +22,7 @@ With `PCOC_INDEX_SEQUENCER_DIR` unset, documents are served through the stored v
 |---|---|
 | `satoshi-hike-verify`, checkpoint measurement | `GET {index-url}/index/{beacon_height}`. On the live profile, an omitted URL means `https://index.groundinglab.io` |
 | `satoshi-hike-produce`, Observe | the plane gossip peer. Not an HTTP tip URL |
-| [`admission-gate`](../admission-gate/) checkpoint measurement | `GET {GL_VERIFY_INDEX_URL}/index/{beacon_height}` |
+| [`admission-gate`](../admission-gate/) checkpoint measurement | `GET {index_url}/index/{beacon_height}`, where `index_url` is read from `gate.toml` |
 
 The hike object does not gain a field for `{index-url}` or `{tip-url}`.
 
@@ -86,7 +86,7 @@ CORS is how a browser on `https://groundinglab.io` or `https://www.groundinglab.
 |---|---|
 | Methods | `GET` and `OPTIONS` on `/index`, `/index/{height}`, and `/index/since` |
 | Origin | `https://groundinglab.io`, `https://www.groundinglab.io` |
-| Also allowed | `http://localhost`, `http://127.0.0.1`, `http://[::1]`, and private LAN HTTP (`10.0.0.0/8`, `192.168.0.0/16`, `172.16.0.0/12`), with an optional port |
+| Also allowed | Loopback only: `http://localhost`, `http://127.0.0.1`, `http://[::1]`, with an optional port. No other origin is allowed |
 | Response | The request `Origin` is reflected when it is allowed, with `Vary: Origin` |
 | Allow-Methods | `GET, OPTIONS` |
 | Allow-Headers | `Accept, Content-Type` |
