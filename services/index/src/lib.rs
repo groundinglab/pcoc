@@ -6,7 +6,7 @@
 //! `GET /index/since` streams mainnet heights as newline-delimited JSON.
 //! Produce Observe is the plane gossip peer, not this process.
 //! These routes do not use Hashcash. CORS allows `https://groundinglab.io`,
-//! `https://www.groundinglab.io`, and localhost / private LAN HTTP.
+//! `https://www.groundinglab.io`, and loopback HTTP (`localhost`, `127.0.0.1`, `[::1]`).
 
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
@@ -29,7 +29,8 @@ use std::sync::Arc;
 pub const SINCE_LIMIT_MAX: u32 = 10_000;
 
 /// Origins allowed to fetch the portable index from a browser (CORS).
-/// `https://groundinglab.io` and `https://www.groundinglab.io`, plus localhost and private LAN HTTP.
+/// `https://groundinglab.io` and `https://www.groundinglab.io`, plus loopback HTTP
+/// (`localhost`, `127.0.0.1`, `[::1]`) with an optional port. No other origin is allowed.
 pub fn origin_allowed(origin: &str) -> bool {
     if origin == "https://groundinglab.io" || origin == "https://www.groundinglab.io" {
         return true;
@@ -42,27 +43,6 @@ pub fn origin_allowed(origin: &str) -> bool {
     }
     if let Some(rest) = origin.strip_prefix("http://[::1]") {
         return rest.is_empty() || rest.starts_with(':');
-    }
-    for prefix in ["http://10.", "http://192.168.", "http://172."] {
-        if let Some(after_scheme) = origin.strip_prefix(prefix) {
-            let hostport = after_scheme.split('/').next().unwrap_or("");
-            if hostport.is_empty() || hostport.contains('@') {
-                return false;
-            }
-            if prefix == "http://172." {
-                let mut parts = hostport.split(':').next().unwrap_or("").split('.');
-                let Some(second) = parts.nth(0) else {
-                    return false;
-                };
-                let Ok(second_octet) = second.parse::<u8>() else {
-                    return false;
-                };
-                if !(16..=31).contains(&second_octet) {
-                    return false;
-                }
-            }
-            return true;
-        }
     }
     false
 }
@@ -650,7 +630,7 @@ mod tests {
     }
 
     #[test]
-    fn cors_allows_pcoc_localhost_and_lan() {
+    fn cors_allows_groundinglab_and_loopback_only() {
         assert!(origin_allowed("https://groundinglab.io"));
         assert!(origin_allowed("https://www.groundinglab.io"));
         assert!(!origin_allowed("http://www.groundinglab.io"));
@@ -659,13 +639,9 @@ mod tests {
         assert!(origin_allowed("http://localhost:5173"));
         assert!(origin_allowed("http://127.0.0.1:8080"));
         assert!(origin_allowed("http://[::1]:8080"));
-        assert!(origin_allowed("http://192.168.1.10:3000"));
-        assert!(origin_allowed("http://10.0.0.2"));
-        assert!(origin_allowed("http://172.16.1.1:80"));
-        assert!(origin_allowed("http://172.31.255.255"));
         assert!(!origin_allowed("https://evil.example"));
-        assert!(!origin_allowed("http://172.15.0.1"));
-        assert!(!origin_allowed("http://172.32.0.1"));
+        assert!(!origin_allowed("http://example.lan:3000"));
+        assert!(!origin_allowed("http://localhost.evil"));
         assert!(!origin_allowed("https://groundinglab.io.evil"));
         assert!(!origin_allowed("https://localhost"));
     }
