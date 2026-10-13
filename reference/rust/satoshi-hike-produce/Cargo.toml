@@ -1,0 +1,15 @@
+[package]
+name = "satoshi-hike-produce"
+version = "0.1.0"
+license = "Apache-2.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+hike = { path = "../hike" }
+nip06 = { path = "../nip06" }
+
+[dev-dependencies]
+hike = { path = "../hike" }
+nip06 = { path = "../nip06" }
+serde_json = "1"
