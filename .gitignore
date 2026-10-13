@@ -1,0 +1,28 @@
+# Build products
+target/
+**/target/
+reference/java/build/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Local secrets and env
+.env
+.env.*
+!.env.example
+
+# Flatpak / bundle products
+*.flatpak
+.flatpak-builder/
+apps/desktop/flatpak/cargo-vendor/
+apps/desktop/flatpak/cargo-config.toml
+apps/desktop/flatpak/build-dir/
+apps/desktop/flatpak/repo/
+apps/desktop/flatpak/out/
+
+# Editor / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
