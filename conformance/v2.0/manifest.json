@@ -1,0 +1,24 @@
+{
+  "files": [
+    "constants.json",
+    "checkpoint-preimage.json",
+    "anchor-window.json",
+    "anchor-w16-i17.json",
+    "earlier-run-b.json",
+    "bind-threads.json",
+    "test-3leg.json",
+    "kat-small.json"
+  ],
+  "generator": "cargo test -p hike --test conformance_v2",
+  "ids": [
+    "constants",
+    "checkpoint-preimage",
+    "anchor-window",
+    "anchor-w16-i17",
+    "earlier-run-b",
+    "bind-threads",
+    "test-3leg",
+    "kat-small"
+  ],
+  "pack": "satoshi-hike-v2.0"
+}

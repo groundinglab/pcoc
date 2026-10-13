@@ -1,0 +1,12 @@
+# gitleaks config for the groundinglab/pcoc repository.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Published test vectors only. These keys sign conformance examples and are not production keys."
+paths = [
+  # Section 15.1 example: the fixed test key's secret_hex that signs the sign-in vector.
+  '''conformance/v2\.0/sign-in\.json''',
+  # NIP-06 published vector (reference ring).
+  '''reference/rust/nip06/src/vectors-allowlist/.*''',
+]
