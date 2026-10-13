@@ -1,0 +1,27 @@
+[package]
+name = "pcoc-index"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+description = "Read-only portable-index HTTP. Current tip and fetch by height."
+
+[[bin]]
+name = "pcoc-index"
+path = "src/main.rs"
+
+[lib]
+name = "pcoc_index"
+path = "src/lib.rs"
+
+[dependencies]
+axum = "0.8"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+pcoc-bari = { git = "https://github.com/groundinglab/pcoc", tag = "bari-v0.6.2" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal"] }
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+# Same pin as bari: 3.25+ can pull getrandom 0.4 (edition 2024).
+tempfile = "=3.24.0"

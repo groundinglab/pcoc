@@ -1,0 +1,20 @@
+[Unit]
+Description=pcoc-index: read-only portable-index HTTP (Satoshi Hike)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bari
+Group=bari
+EnvironmentFile=/etc/pcoc-index/env
+ExecStart=/usr/local/bin/pcoc-index
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
