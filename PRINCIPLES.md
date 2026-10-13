@@ -1,6 +1,6 @@
 # PCOC principles
 
-Approved by Christian 2026-10-06. If a proposal conflicts with these principles, the proposal is wrong.
+Approved 2026-10-06. If a proposal conflicts with these principles, the proposal is wrong.
 
 1. **Bitcoin is the clock and the ground truth.** Anything that passes Bitcoin consensus is treated as true. Block times are Bitcoin's own header timestamps. Wall-clock hours are for presentations only.
 
