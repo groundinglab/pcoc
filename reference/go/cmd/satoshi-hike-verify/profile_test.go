@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/groundinglab/pcoc/reference/go/hike"
+	"github.com/groundinglab/pcoc/reference/go/v2/hike"
 )
 
 func TestVerifyConformanceSmallIsTheV2Profile(t *testing.T) {

@@ -13,7 +13,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/groundinglab/pcoc/reference/go/hike"
+	"github.com/groundinglab/pcoc/reference/go/v2/hike"
 )
 
 func main() {
