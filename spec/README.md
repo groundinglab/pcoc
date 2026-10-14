@@ -18,7 +18,9 @@ Part B (§15) is admission policy. It is groundinglab's example, with the locked
 
 The vectors are worked inputs and exact outputs. A text/vector disagreement is a defect in the specification (§16). Open an issue. Do not pick a side.
 
-The Rust, Go, and Java implementations in [reference/](../reference/) are the first tested examples. They are a guide, not a requirement. They conform for the same reason another implementation would: they match the vectors. Where a reference disagrees with the specification, the specification wins and the reference has a bug.
+The Rust, Go, and Java implementations in [reference/](../reference/) are the first tested examples. They are a guide, not a requirement. They conform for the same reason another implementation would: they match the vectors. Where a reference disagrees with the specification, the specification wins and the reference has a bug. Each reference ships its own tests, including a run of the full vector pack, so it also shows how to wire the vectors into a test suite.
+
+The intended use: give the specification and the vectors to your own developers, or your own AI agents, and have them implement PCOC production, verification, or interoperability in your system, service, or application. The references are an optional aid in that work. The vectors decide whether the result conforms.
 
 Only hash-bound values are evidence. The portable index stands in for Bitcoin and can be bypassed by checking Bitcoin directly.
 
