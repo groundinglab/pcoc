@@ -315,7 +315,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 [[package]]
 name = "hike"
 version = "0.1.0"
-source = "git+https://github.com/groundinglab/pcoc?tag=ref-rust-v2.0.2#c32724682e39d77a27918722449000dc29bf6da5"
+source = "git+https://github.com/groundinglab/pcoc?tag=ref-rust-v2.0.3#ad98171b5697c397f304414e67c2f54f88a72a7d"
 dependencies = [
  "getrandom 0.2.17",
  "rayon",
@@ -509,8 +509,8 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "pcoc-bari"
-version = "0.6.2"
-source = "git+https://github.com/groundinglab/pcoc?tag=bari-v0.6.3#1bcfab7f41a16aa0b9010394395ff6e350cc1532"
+version = "0.6.4"
+source = "git+https://github.com/groundinglab/pcoc?tag=bari-v0.6.4#db5bb831b1ee05262d1cd61c34d78091a88223bc"
 dependencies = [
  "axum",
  "base64",
@@ -534,7 +534,7 @@ dependencies = [
 
 [[package]]
 name = "pcoc-index"
-version = "0.1.0"
+version = "0.1.3"
 dependencies = [
  "axum",
  "futures-util",
