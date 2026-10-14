@@ -409,7 +409,7 @@ fn hold_text(kind: HoldKind) -> &'static str {
     match kind {
         HoldKind::MinAboveCap => "held (min ≥ cap)",
         HoldKind::FloorAboveCap => "held (floor > cap)",
-        HoldKind::TreeInMempool => "held (tree in mempool, pre-#282)",
+        HoldKind::TreeInMempool => "held (tree in mempool, older build)",
         HoldKind::NoFeeReading => "held (no fee reading)",
         HoldKind::NoConfirmedCoin => "held (no confirmed coin)",
         HoldKind::SendError => "held (send error)",
@@ -734,7 +734,7 @@ fn kind_label(kind: &str) -> &'static str {
         "sent" => "sent",
         "held:min-above-cap" => "held (min ≥ cap)",
         "held:floor-above-cap" => "held (floor > cap)",
-        "held:tree-in-mempool" => "held (tree in mempool, pre-#282)",
+        "held:tree-in-mempool" => "held (tree in mempool, older build)",
         "held:no-fee-reading" => "held (no fee reading)",
         "held:no-confirmed-coin" => "held (no confirmed coin)",
         "held:send-error" => "held (send error)",
@@ -1358,7 +1358,7 @@ pub fn evaluate_checks(view: &OpsView) -> Vec<Check> {
     for block in &window_blocks {
         if let Some(prev) = previous {
             if let (Some(added), Some(_)) = (block.added, prev.added) {
-                // `held (tree in mempool)` is a pre-#282 line. That build
+                // `held (tree in mempool)` is a line from an older build. That build
                 // sampled `added` after the seal had released the accept lock,
                 // so a waypoint posted during the broadcast could sit in
                 // `added` and not in `pool_size`. This clock does not write
@@ -1642,7 +1642,7 @@ fn chart_html(view: &OpsView) -> String {
 
 fn legend_html() -> String {
     format!(
-        "<ul class=\"legend\"><li><i class=\"sw l-min\"></i>next-block min, read at each block</li><li><i class=\"sw l-cap\"></i>cap {}</li><li><i class=\"sw d-ontime\"></i>bid · on time (+1 through +{WINDOW})</li><li><i class=\"sw d-late\"></i>late</li><li><i class=\"sw d-missed\"></i>missed</li><li><i class=\"sw d-mempool\"></i>in mempool</li></ul><ul class=\"legend\"><li><i class=\"sw s-sent\"></i>sent</li><li><i class=\"sw s-held\"></i>held: fee</li><li><i class=\"sw s-coin\"></i>held: no confirmed coin</li><li><i class=\"sw s-quiet\"></i>quiet</li><li><i class=\"sw s-unseen\"></i>not seen</li><li><i class=\"sw s-next\"></i>collecting</li></ul><p class=\"note\">A dot is the bid when a tree was sent. Its line runs to the block that included it. +{WINDOW} is inside the window, so a longer line is a late tree. × ends a miss at sent + {WINDOW}. Values above 2 sat/vB sit in the hatched band with the peak labelled. A quiet row written long after the header, in one catch-up, reads not seen (Bari offline). held (tree in mempool, pre-#282) is history from before #282.</p>",
+        "<ul class=\"legend\"><li><i class=\"sw l-min\"></i>next-block min, read at each block</li><li><i class=\"sw l-cap\"></i>cap {}</li><li><i class=\"sw d-ontime\"></i>bid · on time (+1 through +{WINDOW})</li><li><i class=\"sw d-late\"></i>late</li><li><i class=\"sw d-missed\"></i>missed</li><li><i class=\"sw d-mempool\"></i>in mempool</li></ul><ul class=\"legend\"><li><i class=\"sw s-sent\"></i>sent</li><li><i class=\"sw s-held\"></i>held: fee</li><li><i class=\"sw s-coin\"></i>held: no confirmed coin</li><li><i class=\"sw s-quiet\"></i>quiet</li><li><i class=\"sw s-unseen\"></i>not seen</li><li><i class=\"sw s-next\"></i>collecting</li></ul><p class=\"note\">A dot is the bid when a tree was sent. Its line runs to the block that included it. +{WINDOW} is inside the window, so a longer line is a late tree. × ends a miss at sent + {WINDOW}. Values above 2 sat/vB sit in the hatched band with the peak labelled. A quiet row written long after the header, in one catch-up, reads not seen (Bari offline). held (tree in mempool, older build) is history from an older build.</p>",
         rate_text(centi(CAP))
     )
 }
@@ -3995,7 +3995,7 @@ mod tests {
         for text in [
             "held (min ≥ cap)",
             "held (floor > cap)",
-            "held (tree in mempool, pre-#282)",
+            "held (tree in mempool, older build)",
             "held (no fee reading)",
             "held (no confirmed coin)",
             "held (send error)",
@@ -4006,11 +4006,11 @@ mod tests {
         }
     }
 
-    /// 970742 was logged by the pre-#282 build. `added` was sampled after the
+    /// 970742 was logged by an older build. `added` was sampled after the
     /// seal released the accept lock, so the pool equation does not hold.
     /// That hold is history. A fee hold with the same numbers is an eviction.
     #[test]
-    fn r11_treats_a_pre_282_tree_in_mempool_row_as_history() {
+    fn r11_treats_an_older_build_tree_in_mempool_row_as_history() {
         let tip = 970_745u32;
         let mut inputs = lone_tree(970_741, Some(970_744), tip);
         inputs.trees[0].tree_size = 13;
@@ -4042,12 +4042,12 @@ mod tests {
         let r11 = check(&view, "R11");
         assert!(
             r11.holds,
-            "pre-#282 tree-in-mempool is not an eviction: {}",
+            "older-build tree-in-mempool is not an eviction: {}",
             r11.detail
         );
         assert!(!r11.detail.contains("970742"), "{}", r11.detail);
         let html = render(&view);
-        assert!(html.contains("held (tree in mempool, pre-#282)"));
+        assert!(html.contains("held (tree in mempool, older build)"));
         assert!(html.contains("970742–970743"));
 
         inputs.blocks[1].decision = DecisionKind::Held(HoldKind::MinAboveCap);
