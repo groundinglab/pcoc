@@ -654,11 +654,11 @@ mod tests {
 
     fn record_of(file: &str) -> String {
         let text = match file {
-            "kat-small" => include_str!("../../../../conformance/v2.0/kat-small.json"),
-            "test-3leg" => include_str!("../../../../conformance/v2.0/test-3leg.json"),
-            "anchor-window" => include_str!("../../../../conformance/v2.0/anchor-window.json"),
-            "anchor-w16-i17" => include_str!("../../../../conformance/v2.0/anchor-w16-i17.json"),
-            "earlier-run-b" => include_str!("../../../../conformance/v2.0/earlier-run-b.json"),
+            "kat-small" => include_str!("../../../../spec/conformance/v2.0/kat-small.json"),
+            "test-3leg" => include_str!("../../../../spec/conformance/v2.0/test-3leg.json"),
+            "anchor-window" => include_str!("../../../../spec/conformance/v2.0/anchor-window.json"),
+            "anchor-w16-i17" => include_str!("../../../../spec/conformance/v2.0/anchor-w16-i17.json"),
+            "earlier-run-b" => include_str!("../../../../spec/conformance/v2.0/earlier-run-b.json"),
             _ => unreachable!(),
         };
         let value: Value = serde_json::from_str(text).unwrap();

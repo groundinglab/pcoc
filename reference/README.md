@@ -20,7 +20,7 @@ Rule A4.3 checkpoint comparisons run together. `PCOC_BIND_THREADS` sets how many
 
 ## Spec pin
 
-[SPEC_PIN](SPEC_PIN) names the spec tag these programs follow, `spec-v2.0.1`, and the conformance vector hash at that tag. `tools/check_spec_pin.py` recomputes the hash from `conformance/v2.0/` and fails on a mismatch.
+[SPEC_PIN](SPEC_PIN) names the spec tag these programs follow, `spec-v2.0.1`, and the conformance vector hash at that tag. `tools/check_spec_pin.py` recomputes the hash from `spec/conformance/v2.0/` and fails on a mismatch.
 
 ## Index
 

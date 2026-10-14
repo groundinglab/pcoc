@@ -22,16 +22,16 @@ import pcoc.hike.Summary;
 import pcoc.hike.Terrain;
 import pcoc.json.Json;
 
-/** conformance/v2.0 runner. Pack comparisons call {@link Summary#packRecord}. Issue 228 points that method at {@link Measure#record}. */
+/** spec/conformance/v2.0 runner. Pack comparisons call {@link Summary#packRecord}. Issue 228 points that method at {@link Measure#record}. */
 public final class V2Pack {
     private V2Pack() {}
 
     public static void main(String[] args) throws Exception {
         Path root = repoRoot();
         selfCheck(root);
-        Path pack = root.resolve("conformance/v2.0");
+        Path pack = root.resolve("spec/conformance/v2.0");
         if (!Files.isDirectory(pack)) {
-            throw new IllegalStateException("conformance/v2.0 is not in this checkout");
+            throw new IllegalStateException("spec/conformance/v2.0 is not in this checkout");
         }
         runPack(root, pack);
         ports219(root);
@@ -49,7 +49,7 @@ public final class V2Pack {
      * {@code stored_hash} stays byte 0 first.
      */
     private static void blockHashDisplayOrder(Path root) throws Exception {
-        Json.Obj pin = Json.asObj(Json.parse(Files.readString(root.resolve("conformance/blockhash-display.json"))));
+        Json.Obj pin = Json.asObj(Json.parse(Files.readString(root.resolve("spec/conformance/blockhash-display.json"))));
         String naturalHex = Json.asString(pin.fields().get("natural_block_hash"));
         String display = Json.asString(pin.fields().get("display_block_hash"));
         byte[] header = Bytes.unhex(Json.asString(pin.fields().get("header_hex")));
@@ -172,7 +172,7 @@ public final class V2Pack {
 
     static Path repoRoot() {
         Path root = Path.of("").toAbsolutePath();
-        while (root != null && !Files.isDirectory(root.resolve("conformance/v2.0"))) {
+        while (root != null && !Files.isDirectory(root.resolve("spec/conformance/v2.0"))) {
             root = root.getParent();
         }
         if (root == null) {
@@ -675,7 +675,7 @@ public final class V2Pack {
      * leg does not replace the seed. The next header is {@code I_0}.
      */
     private static void stage0StartsOnTheLatestKnownHeader(Path root) throws Exception {
-        Json.Obj doc = Json.asObj(Json.parse(Files.readString(root.resolve("conformance/v2.0/stage0-start.json"))));
+        Json.Obj doc = Json.asObj(Json.parse(Files.readString(root.resolve("spec/conformance/v2.0/stage0-start.json"))));
         if (!"P9.14".equals(Json.asString(doc.fields().get("rule")))) {
             throw new AssertionError("rule");
         }

@@ -2257,7 +2257,7 @@ mod tests {
     fn block_hash_on_p_b_p_g_and_claimed_block_is_display_order() {
         let pin: serde_json::Value = serde_json::from_str(
             &std::fs::read_to_string(format!(
-                "{}/../../../conformance/blockhash-display.json",
+                "{}/../../../spec/conformance/blockhash-display.json",
                 env!("CARGO_MANIFEST_DIR")
             ))
             .unwrap(),

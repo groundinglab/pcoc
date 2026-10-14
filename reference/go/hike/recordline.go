@@ -134,7 +134,7 @@ func (o V2Object) encode(profile Profile) []byte {
 
 // RecordLine is the compact line the SPEC names only to exclude it.
 // It is not a conformance output and satoshi-hike-verify does not write it.
-// PackRecord is the section 14 record conformance/v2.0 compares.
+// PackRecord is the section 14 record spec/conformance/v2.0 compares.
 //
 // threads is the Rule A4.3 pool size. It is not StepsPerLeg. A non-positive
 // count uses ConfiguredBindThreads. One at a time is conforming. The record
@@ -172,7 +172,7 @@ func RecordLine(data []byte, profile Profile, index Index, pathChain func(PathLo
 	return measureLine(hike, profile, index, pathChain, threads, stream)
 }
 
-// PackRecord is the verify line conformance/v2.0 compares.
+// PackRecord is the verify line spec/conformance/v2.0 compares.
 // Issue #228 settled that a v2.0 verifier writes one output, the section 14
 // record, and the pack stores those bytes. This is that switch.
 // threads is the Rule A4.3 pool size. The record does not depend on it.

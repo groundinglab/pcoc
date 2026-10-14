@@ -655,7 +655,7 @@ async fn verify_over_the_object_cap_is_refused() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// `tests/vectors/anchor-window.json` (pinned from `conformance/v2.0/`) `record` is the CLI bytes, newline
+/// `tests/vectors/anchor-window.json` (pinned from `spec/conformance/v2.0/`) `record` is the CLI bytes, newline
 /// included. The HTTP job and a decision line splice those same bytes.
 /// `six_leg` is `not defined` on this object, so the draw does not change it.
 #[tokio::test]

@@ -64,7 +64,7 @@ public final class Summary {
     }
 
     /**
-     * Verify line conformance/v2.0 compares.
+     * Verify line spec/conformance/v2.0 compares.
      * Issue 228 settled that a v2.0 verifier writes one output, the section 14
      * record, and the pack stores those bytes. This method is that switch.
      * {@code threads} is the Rule A4.3 pool size. The record does not depend

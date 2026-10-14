@@ -1,0 +1,3 @@
+# walk-prose allowlist: <path><TAB><exact line content>. One entry per allowed line; any other prose line with the word fails.
+# Occurrences of the SEAL_DOMAIN wire constant pcoc-walk-v1 are allowed by the checker itself.
+spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md	| walk or re-walk, for a leg | leg, or recomputed leg result |

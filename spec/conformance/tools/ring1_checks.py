@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 """Ring 1 checks: SPEC section 6 names vs constants.json, the locked sign-in wire,
-links that stay inside spec/ and conformance/, and the vector manifest hash.
+links that stay inside spec/, and the vector manifest hash.
 Run from the repository root. Exit 1 on any failure. Short and deterministic."""
 import hashlib, json, os, re, sys
 
 SPEC = "spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md"
-PACK = "conformance/v2.0"
+PACK = "spec/conformance/v2.0"
+# spec/README.md may link these repository parents. No other page under spec/ may.
+README_PARENTS = {
+    "reference", "services", "apps", "docs",
+    "STATUS.md", "SECURITY.md", "CONTRIBUTING.md",
+    "LICENSE-DOCS.md", "README.md", "PRINCIPLES.md", "LICENSE",
+}
 fails = []
 
 def check(name, ok, detail=""):
@@ -51,24 +57,27 @@ for k, needle in wire.items():
 for tok in si["website_outcomes"]:
     check(f"sign_in_spec_locks_the_wire: outcome {tok}", f"`{tok}`" in spec)
 
-# 3. no relative link leaves spec/ or conformance/.
-for top in ("spec", "conformance"):
-    for d, _, fs in os.walk(top):
-        for f in fs:
-            if not f.endswith(".md"):
+# 3. relative links from spec/ stay inside spec/, except the spec/README.md parent allowlist.
+for d, _, fs in os.walk("spec"):
+    for f in fs:
+        if not f.endswith(".md"):
+            continue
+        p = os.path.join(d, f)
+        for u in re.findall(r"\]\(([^)#\s]+)", open(p, encoding="utf-8").read()):
+            if re.match(r"^[a-z]+:", u):
                 continue
-            p = os.path.join(d, f)
-            for u in re.findall(r"\]\(([^)#\s]+)", open(p, encoding="utf-8").read()):
-                if re.match(r"^[a-z]+:", u):
-                    continue
-                t = os.path.normpath(os.path.join(d, u))
-                inside = t.split(os.sep)[0] in ("spec", "conformance")
-                check(f"link {p} -> {u}", inside and os.path.exists(t), t)
+            t = os.path.normpath(os.path.join(d, u))
+            if p == "spec/README.md" and u.startswith("../"):
+                head = u[3:].split("/", 1)[0]
+                check(f"link {p} -> {u}", head in README_PARENTS and os.path.exists(t), t)
+                continue
+            inside = t.split(os.sep)[0] == "spec"
+            check(f"link {p} -> {u}", inside and os.path.exists(t), t)
 
-# 4. vector hash: every file under conformance/ except tools/, sorted by path.
+# 4. vector hash: every file under spec/conformance/ except tools/, sorted by path.
 h = hashlib.sha256()
-for root, _, fs in sorted(os.walk("conformance")):
-    if "/tools" in root + "/" and root.startswith("conformance/tools"):
+for root, _, fs in sorted(os.walk("spec/conformance")):
+    if "/tools" in root + "/" and root.startswith("spec/conformance/tools"):
         continue
     for f in sorted(fs):
         p = os.path.join(root, f)

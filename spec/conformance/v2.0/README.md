@@ -1,23 +1,8 @@
 # Conformance pack, Satoshi Hike v2.0
 
-This pack is regenerated from the Rust reference. It is the byte record phase 3 ports and the Gate are judged against.
+This pack is regenerated from the Rust reference. It is the byte record that every implementation is checked against, including the three references and the Gate's pinned copies.
 
-## Regenerate
-
-From the repository root, with the reference toolchain:
-
-```text
-PCOC_REGEN_V2=1 cargo test --manifest-path reference/rust/hike/Cargo.toml --test conformance_v2 -- --exact conformance_v2_pack
-```
-
-That writes this directory from `reference/rust/hike`. Then:
-
-```text
-git diff --exit-code conformance/v2.0
-cargo test --manifest-path reference/rust/hike/Cargo.toml --test conformance_v2 -- --exact conformance_v2_pack
-```
-
-The second command reads the committed files and checks them against a fresh run. `PCOC_REGEN_V2` unset does not write.
+What conforms is Part A only. See [Conformance vectors](../README.md). The locked leg-rate floors in `constants.json` are labelled `Part B (§15)`. They are not a conformance target. `sign-in.json` is the locked §15.1 wire. Matching it is not Part A conformance.
 
 ## What the files are
 
@@ -38,10 +23,27 @@ The second command reads the committed files and checks them against a fresh run
 
 `stage0-start.json` is the P9.14 produce vector. The first tip is already known and is observed again after the first leg. Stage 0 stores two legs and its beacon height is that first tip. The next header is `I_0`. Rust, Go, and Java read this file. The hike pack generator does not write it and does not delete it. It is not listed in `manifest.json`.
 
-`test-3leg.json` is a TEST vector. It uses a mock anchor. It is not a real anchored PCOC. It is not a public example. It is not an 18-stage object. `legs_per_stage` has length 3, which is shorter than the section 16.1 length of 18, because this ticket forbids an 18-stage test object. The section 14 record therefore has shape `mismatch` and `shape_item` includes `stages length` and `leg_count`. `field set` applies only to a map that is present with the wrong keys or value types, and the length of this short `stages` array is reported only by `stages length`. The present stages each have `leg_count` 1. The missing stages have no `leg_count`, and section 14.1 treats that absent field as a violation. Three legs is fewer than six, so the injected draw bytes are not consumed and `six_leg` is `not defined`.
+`test-3leg.json` is a TEST vector. It uses a mock anchor. It is not a real anchored PCOC. It is not a public example. It is not an 18-stage object. Test objects are kept short so the pack runs quickly. `legs_per_stage` has length 3, which is shorter than the section 16.1 length of 18. The section 14 record therefore has shape `mismatch` and `shape_item` includes `stages length` and `leg_count`. `field set` applies only to a map that is present with the wrong keys or value types, and the length of this short `stages` array is reported only by `stages length`. The present stages each have `leg_count` 1. The missing stages have no `leg_count`, and section 14.1 treats that absent field as a violation. Three legs is fewer than six, so the injected draw bytes are not consumed and `six_leg` is `not defined`.
 
 `test-3leg`, `anchor-window`, `anchor-w16-i17`, and `bind-threads` are verifier inputs. A section 13.2 producer does not emit them. `test-3leg` stores three stages. `anchor-window`, `anchor-w16-i17`, and `bind-threads` store `leg_count` 0 on at least one stage. Section 13.2 runs the repeat at least once, so `leg_count` is at least 1 on every stage, and eighteen stages stay eighteen. `kat-small` is the producer byte-equality target.
 
 `kat-small.json` is the 18-stage known-answer object at the same small sizes. Its `record` has shape `match`. Bookends are the integers above. `whole_hike_legs` is 17 and `legs_outside` is 17. `index_reads` is `[1004, 1004]`: two issued plant GETs of one height. The header reads are the nineteen `documents`, and the document at height 1004 carries both plants. A section 13.2 producer replay of that object equals `object_hex`.
 
 The verify bytes in this pack are the section 14 record that `satoshi-hike-verify` writes. Keys are in the order SPEC section 14 lists, with no insignificant whitespace and one trailing newline. The `record` string is those bytes, including that newline. The newline that ends the JSON file closes the wrapper. It is not a substitute for the newline inside `record`. An earlier kind is one line, `version` `earlier version` and `kind`. It is not a shape `mismatch`. A current object’s record carries every section 14 key, including `shape_item`, `headers`, `paths`, `anchors`, bookends, `N`, and `S`. The compact line that named only `profile`, `shape`, `checkpoints`, `waypoints`, `leg_rate`, `six_leg`, and `anchors` is not a conformance output. SPEC section 16 names this pack as these reference bytes. Reason `earlier_version` is Gate policy in SPEC section 15. It is not in these records.
+
+## Regenerate
+
+From the repository root, with the reference toolchain:
+
+```text
+PCOC_REGEN_V2=1 cargo test --manifest-path reference/rust/hike/Cargo.toml --test conformance_v2 -- --exact conformance_v2_pack
+```
+
+That writes this directory from `reference/rust/hike`. Then:
+
+```text
+git diff --exit-code spec/conformance/v2.0
+cargo test --manifest-path reference/rust/hike/Cargo.toml --test conformance_v2 -- --exact conformance_v2_pack
+```
+
+The second command reads the committed files and checks them against a fresh run. `PCOC_REGEN_V2` unset does not write.

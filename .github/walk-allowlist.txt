@@ -1,4 +1,0 @@
-# walk-prose allowlist: <path><TAB><exact line content>. One entry per allowed line; any other prose line with the word fails.
-# Occurrences of the SEAL_DOMAIN wire constant pcoc-walk-v1 are allowed by the checker itself.
-spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md	| walk or re-walk, for a leg | leg, or recomputed leg result |
-spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md	4. **Leg names.** Where a measurement name or a test name says “re-walk” or “re-walked leg,” say “leg” or “recomputed leg result.” Section 14.6 in this file already uses that wording. Other files still say “re-walk,” including `reference/rust/hike/src/verify.rs` and `services/admission-gate/src/jobs.rs`. Those stay for a later change. The constant `SEAL_DOMAIN` (`pcoc-walk-v1`) is a byte string. It is not leg wording, and it stays.

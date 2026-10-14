@@ -87,7 +87,7 @@ func genesisPin(t *testing.T) (header []byte, natural, display string) {
 	if !ok {
 		t.Fatal("caller")
 	}
-	raw, err := os.ReadFile(filepath.Join(filepath.Dir(file), "../../../conformance/blockhash-display.json"))
+	raw, err := os.ReadFile(filepath.Join(filepath.Dir(file), "../../../spec/conformance/blockhash-display.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

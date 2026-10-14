@@ -2,11 +2,11 @@
 """Walk-prose check: the word "walk" (whole word, any case) must not appear in prose files
 (*.md, *.html, *.xml; **/import/** excluded, as in the release plan's G1-prose rule).
 Allowed: occurrences of the SEAL_DOMAIN wire constant `pcoc-walk-v1`, and lines listed exactly
-(path + full line content) in .github/walk-allowlist.txt. Code identifiers are out of scope.
+(path + full line content) in .github/retired-term-allowlist.txt. Code identifiers are out of scope.
 Run from the repository root. Exit 1 on any hit."""
 import re, subprocess, sys
 allow = set()
-for raw in open(".github/walk-allowlist.txt", encoding="utf-8"):
+for raw in open(".github/retired-term-allowlist.txt", encoding="utf-8"):
     raw = raw.rstrip("\n")
     if raw and not raw.startswith("#"):
         path, content = raw.split("\t", 1)

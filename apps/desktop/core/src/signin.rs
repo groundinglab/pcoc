@@ -399,7 +399,7 @@ mod tests {
     use serde_json::Value;
 
     fn vector() -> Value {
-        serde_json::from_str(include_str!("../../../../conformance/v2.0/sign-in.json")).unwrap()
+        serde_json::from_str(include_str!("../../../../spec/conformance/v2.0/sign-in.json")).unwrap()
     }
 
     fn hex32(value: &Value) -> [u8; 32] {

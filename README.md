@@ -18,7 +18,7 @@ The object does not store the terrain. Anyone can recompute it from the claimed 
 
 - [PCOC principles](PRINCIPLES.md)
 - [Satoshi Hike v2.0](spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md) — the construction
-- [Conformance vectors](conformance/v2.0/) — the byte oracle
+- [Conformance vectors](spec/conformance/v2.0/) — the byte oracle
 - [Reference programs](reference/) — Rust, Go, and Java
 - [Services](services/) — Bari, the index, and the Admission Gate
 - [Docs](docs/README.md) — plain-language briefs and rationale

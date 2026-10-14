@@ -530,7 +530,7 @@ mod tests {
     #[test]
     fn stage0_starts_on_the_latest_known_header() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../conformance/v2.0/stage0-start.json");
+            .join("../../../spec/conformance/v2.0/stage0-start.json");
         let text = std::fs::read_to_string(&path)
             .unwrap_or_else(|err| panic!("read {}: {err}", path.display()));
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();

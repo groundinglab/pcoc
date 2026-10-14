@@ -450,7 +450,7 @@ mod tests {
 
     fn vector_object(file: &str) -> Vec<u8> {
         let path = format!(
-            "{}/../../../conformance/v2.0/{file}",
+            "{}/../../../spec/conformance/v2.0/{file}",
             env!("CARGO_MANIFEST_DIR")
         );
         let v: serde_json::Value =
@@ -502,7 +502,7 @@ mod tests {
     #[test]
     fn earlier_and_unreadable_rows() {
         let path = format!(
-            "{}/../../../conformance/v2.0/earlier-kind.cbor",
+            "{}/../../../spec/conformance/v2.0/earlier-kind.cbor",
             env!("CARGO_MANIFEST_DIR")
         );
         let bytes = std::fs::read(path).unwrap();
