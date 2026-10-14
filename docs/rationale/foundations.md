@@ -12,9 +12,9 @@ Binding is in that log. A checkpoint ties the run to the previous bind, to the s
 
 The public sequence is the clock. Bitcoin is one system a construction may name. It does not issue the object, and it is not family law. [How do you prove when the work happened?](../briefs/how-do-you-prove-when-the-work-happened.md)
 
-Verification reads the finished file. A cheap inspection may refuse. A confirming look re-does the runs it asks for, and still costs less than the making. A match establishes the relations. It is not admission. [Why is the check always cheaper than the making?](../briefs/why-can-saying-no-be-cheap-when-saying-yes-cannot.md) The reference that runs that check is [reference/rust/satoshi-hike-verify](https://github.com/groundinglab/pcoc/tree/ref-rust-v2.0.1/reference/rust/satoshi-hike-verify). Produce is [reference/rust/satoshi-hike-produce](https://github.com/groundinglab/pcoc/tree/ref-rust-v2.0.1/reference/rust/satoshi-hike-produce).
+Verification reads the finished file. A cheap inspection may refuse. A confirming look re-does the runs it asks for, and still costs less than the making. A match establishes the relations. It is not admission. [Why is the check always cheaper than the making?](../briefs/why-can-saying-no-be-cheap-when-saying-yes-cannot.md) The reference that runs that check is [reference/rust/satoshi-hike-verify](https://github.com/groundinglab/pcoc/tree/ref-rust-v2.0.3/reference/rust/satoshi-hike-verify). Produce is [reference/rust/satoshi-hike-produce](https://github.com/groundinglab/pcoc/tree/ref-rust-v2.0.3/reference/rust/satoshi-hike-produce).
 
-Admission is the door's policy. How many marks must sit on a chain it trusts, how old the object may be, whether one object is one seat: the object does not carry that line. A separate service, the [admission gate](https://github.com/groundinglab/pcoc/tree/gate-v0.3.0/services/admission-gate), applies a named policy to the measurements; the verifier does not. Its decision log is a companion ([WIRE.md](https://github.com/groundinglab/pcoc/blob/gate-v0.3.0/services/admission-gate/WIRE.md)), not a second construction.
+Admission is the door's policy. How many marks must sit on a chain it trusts, how old the object may be, whether one object is one seat: the object does not carry that line. A separate service, the [admission gate](https://github.com/groundinglab/pcoc/tree/gate-v0.3.2/services/admission-gate), applies a named policy to the measurements; the verifier does not. Its decision log is a companion ([WIRE.md](https://github.com/groundinglab/pcoc/blob/gate-v0.3.2/services/admission-gate/WIRE.md)), not a second construction.
 
 Key ownership is a later act. The hike puts the public key in the seed so the terrain belongs to someone. It does not check a signature. A door that wants the presenter to hold the matching secret asks for that challenge itself. [Family contract](family-contract.md)
 
@@ -46,7 +46,7 @@ The finished file is a spent commitment. Keeping it is optional. [Why carry the 
 
 ## Where the parts sit
 
-[BARI](https://github.com/groundinglab/pcoc/tree/bari-v0.6.2/services/bari) is the notary. It observes headers and can plant a mark. It does not correct the hike, and a missed plant is an unattested path, not an invalid object. Bari writes the index files for that mark and does not serve them. The plant is a fee. The work is the occupancy. They are not the same bill.
+[BARI](https://github.com/groundinglab/pcoc/tree/bari-v0.6.5/services/bari) is the notary. It observes headers and can plant a mark. It does not correct the hike, and a missed plant is an unattested path, not an invalid object. Bari writes the index files for that mark and does not serve them. The plant is a fee. The work is the occupancy. They are not the same bill.
 
 The specification is the hike as text. A pin change is not a new family debt. [spec](https://github.com/groundinglab/pcoc/tree/spec-v2.0.1/spec)
 

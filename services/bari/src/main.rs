@@ -2,6 +2,7 @@ use hike::{GossipNetwork, HeaderClock, TipTick};
 use pcoc_bari::bitcoin_rpc::{BitcoinRpc, BitcoinRpcConfig, RpcAuth, UtxoPolicy};
 use pcoc_bari::clock::{BariClock, ChainTip};
 use pcoc_bari::http::BariService;
+use pcoc_bari::operator::VERSION as BARI_VERSION;
 use pcoc_bari::storage::FileStore;
 use pcoc_bari::synth_commit::{SynthCommit, SYNTH_INDEX_NETWORK};
 use std::env;
@@ -62,7 +63,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let service = BariService::new(clock);
             let listener = tokio::net::TcpListener::bind(bind_address).await?;
             eprintln!(
-                "bari v0.6.2 network={} bind={} data={} tip_height={} tip_hash={} poll_ms={} hashcash_bits={} soft_max={:?} confirmation_window_tips={confirmation_window_tips} tip_source=rpc {fee_label}",
+                "bari v{BARI_VERSION} network={} bind={} data={} tip_height={} tip_hash={} poll_ms={} hashcash_bits={} soft_max={:?} confirmation_window_tips={confirmation_window_tips} tip_source=rpc {fee_label}",
                 network,
                 listener.local_addr()?,
                 data_dir.display(),
@@ -109,7 +110,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let service = BariService::new(clock);
             let listener = tokio::net::TcpListener::bind(bind_address).await?;
             eprintln!(
-                "bari v0.6.2 network={} bind={} data={} tip_height={} tip_hash={} hashcash_bits={} soft_max={:?} confirmation_window_tips={confirmation_window_tips} tip_source=synth plant=synth-commit peer={}",
+                "bari v{BARI_VERSION} network={} bind={} data={} tip_height={} tip_hash={} hashcash_bits={} soft_max={:?} confirmation_window_tips={confirmation_window_tips} tip_source=synth plant=synth-commit peer={}",
                 SYNTH_INDEX_NETWORK,
                 listener.local_addr()?,
                 data_dir.display(),
@@ -152,7 +153,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let service = BariService::new(clock);
             let listener = tokio::net::TcpListener::bind(bind_address).await?;
             eprintln!(
-                "bari v0.6.2 network={} bind={} data={} tip_height={} tip_hash={} hashcash_bits={} soft_max={:?} confirmation_window_tips={confirmation_window_tips} tip_source=bitcoin-gossip plant=bitcoin-core peer={} {fee_label}",
+                "bari v{BARI_VERSION} network={} bind={} data={} tip_height={} tip_hash={} hashcash_bits={} soft_max={:?} confirmation_window_tips={confirmation_window_tips} tip_source=bitcoin-gossip plant=bitcoin-core peer={} {fee_label}",
                 network,
                 listener.local_addr()?,
                 data_dir.display(),
@@ -234,7 +235,7 @@ async fn serve_ops_fixture() -> Result<(), Box<dyn std::error::Error>> {
         );
     let listener = tokio::net::TcpListener::bind(bind_address).await?;
     eprintln!(
-        "bari v0.6.2 ops fixture instance={instance} bind={} GET /ops",
+        "bari v{BARI_VERSION} ops fixture instance={instance} bind={} GET /ops",
         listener.local_addr()?,
     );
     axum::serve(listener, app).await?;

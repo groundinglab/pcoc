@@ -16,7 +16,7 @@ A v1.35 object on sign-in is website outcome `earlier_version` after a valid sig
 | Directory | `services/admission-gate/` |
 | Binary | `admission-service` |
 | Config | one TOML file, `--config` or `GATE_CONFIG` |
-| Crate version | `0.3.1` |
+| Crate version | `0.3.2` |
 
 ```text
 POST /v1/sign-in           -> locked §15.1 body
@@ -36,7 +36,7 @@ Policy is not a profile. `leg_rate_floor` in the config is `strict` (7/20), `def
 
 The public log starts empty. The process creates `log_dir`. A chain that is not Satoshi Hike v2.0 is not opened and not served.
 
-This directory is a standalone crate with its own `Cargo.lock`. It depends on the v2.0 reference crate `hike` from this repository at tag `ref-rust-v2.0.2`. Build and test from this directory:
+This directory is a standalone crate with its own `Cargo.lock`. It depends on the v2.0 reference crate `hike` from this repository at tag `ref-rust-v2.0.3`. Build and test from this directory:
 
 ```bash
 cargo build --locked --release

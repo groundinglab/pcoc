@@ -207,7 +207,7 @@ impl BitcoinRpc {
             .set("Authorization", &format!("Basic {authorization}"))
             .send_json(json!({
                 "jsonrpc": "2.0",
-                "id": "bari-v0.6.2",
+                "id": concat!("bari-v", env!("CARGO_PKG_VERSION")),
                 "method": method,
                 "params": params,
             }));
@@ -1535,7 +1535,7 @@ mod tests {
                 let payload = serde_json::to_vec(&json!({
                     "result": result,
                     "error": null,
-                    "id": "bari-v0.6.2"
+                    "id": concat!("bari-v", env!("CARGO_PKG_VERSION"))
                 }))
                 .unwrap();
                 let response = format!(
