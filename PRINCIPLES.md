@@ -1,6 +1,6 @@
 # PCOC principles
 
-Approved 2026-10-06. If a proposal conflicts with these principles, the proposal is wrong.
+Approved 2026-10-06. These principles govern. A change that conflicts with them needs the principles changed first.
 
 1. **Bitcoin is the clock and the ground truth.** Anything that passes Bitcoin consensus is treated as true. Block times are Bitcoin's own header timestamps. Wall-clock hours are for presentations only.
 
@@ -20,4 +20,4 @@ Approved 2026-10-06. If a proposal conflicts with these principles, the proposal
 
 9. **Legs are a measurement.** There is no per-stage minimum or maximum leg count. Per-stage rates are for analysis only.
 
-10. **Language. Verify surfaces measurements and policy judges them.** Be clear and explicit, and keep measurement and policy wording apart. Don't put binary pass/fail words into the record or measurement layers. Proposals get a bot round table before any SPEC change.
+10. **Language. Verify surfaces measurements and policy judges them.** Be clear and explicit, and keep measurement and policy wording apart. Don't put binary pass/fail words into the record or measurement layers. Proposed specification changes are reviewed in public before they land.

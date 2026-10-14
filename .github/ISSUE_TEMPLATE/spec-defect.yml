@@ -1,0 +1,22 @@
+name: Spec defect
+description: A published vector and a sentence of the specification disagree.
+title: "spec: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Section 16. Where a published vector and a sentence of the specification disagree, that is a defect in the specification. Report it here. Do not pick a side.
+  - type: textarea
+    id: where
+    attributes:
+      label: Where
+      description: The specification section, and the vector file under spec/conformance/.
+    validations:
+      required: true
+  - type: textarea
+    id: conflict
+    attributes:
+      label: What disagrees
+      description: Quote the sentence and name the vector field. Do not choose which side should win.
+    validations:
+      required: true

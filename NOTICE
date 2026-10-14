@@ -1,0 +1,11 @@
+PCOC
+Copyright 2026 groundinglab
+
+This product includes the Satoshi Hike specification, reference
+implementations, and services developed by groundinglab and licensed
+under the Apache License, Version 2.0. Specification and documentation
+prose are under CC BY 4.0; see LICENSE-DOCS.md.
+
+The Android demonstrator is a separate repository and is not covered
+by this NOTICE. It is a fork of the Primal Android application,
+Copyright (c) 2023 PRIMAL SYSTEMS INC., MIT License.
