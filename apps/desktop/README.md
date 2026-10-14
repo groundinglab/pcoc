@@ -1,8 +1,10 @@
 # PCOC Hike for Linux
 
-Desktop app for Satoshi Hike v2.0 (Produce, Verify, Sign-in). Rust + GTK4 + libadwaita.
+PCOC Hike for Linux makes a PCOC, checks one, and signs in, on your own machine, using the Rust reference at git tag `ref-rust-v2.0.3` (`Cargo.toml`). A demonstrator, not part of the specification.
 
-Needs GTK 4.14+ and libadwaita 1.5+ (Ubuntu 24.04, Debian 13, Fedora 40 or newer).
+A full hike is eighteen stages paced by Bitcoin blocks. That is hours, not a button press. The key stays on the machine. Verify reads the portable index (the live default is the public index). Anyone can bypass that index by checking Bitcoin. The app does not say pass or fail. Sign-in sends the object to a relying party. Accept, refuse, and revoke are that party's policy.
+
+Needs GTK 4.14+ and libadwaita 1.5+ (Ubuntu 24.04, Debian 13, Fedora 40 or newer). Rust 1.99.0 comes from `rust-toolchain.toml` in this folder.
 
 ## 1. Get the code
 
