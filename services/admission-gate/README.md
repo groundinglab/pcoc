@@ -1,12 +1,14 @@
 # groundinglab Admission Gate
 
+groundinglab's Admission Gate is a standalone service built on the Rust reference (`ref-rust-v2.0.3`). It applies groundinglab's admission policy (specification Part B) to the verifier's measurements. It adds no Part A rule. Accept, refuse, and revoke are this relying party's decisions. They are not pass or fail.
+
 The groundinglab Admission Gate (`admission-service`, crate `pcoc-admission`) checks a Satoshi Hike v2.0 object. It reads one config file. It does not run v1.35 verify and it does not load a v1.35 profile.
 
-Install is deploy/DEPLOY.md (systemd unit, `env.example`, `gate.toml`). Request and response bodies are WIRE.md.
+Install is [deploy/DEPLOY.md](deploy/DEPLOY.md) (systemd unit, `env.example`, `gate.toml`). Request and response bodies are [WIRE.md](WIRE.md).
 
-The Sign-in door is `POST /v1/sign-in`. The body is the locked §15.1 six-field JSON object. The website polls `GET /v1/sign-in/result/<nonce>`. The phone may leave after the POST. A signature miss is HTTP 400 `bad_signature` with no message. A grammar miss is HTTP 400 `malformed` with no message. Any other response is delivery of that POST. This process does not mint a session.
+The Sign-in door is `POST /v1/sign-in`. The body is the locked §15.1 six-field JSON object. The website polls `GET /v1/sign-in/result/<nonce>`. The client may disconnect after the POST. The result is read at `GET /v1/sign-in/result/<nonce>`. A signature miss is HTTP 400 `bad_signature` with no message. A grammar miss is HTTP 400 `malformed` with no message. Any other response is delivery of that POST. This process does not mint a session.
 
-A v1.35 object on sign-in is website outcome `earlier_version` after a valid signature. On verify, the job error message is `This object is an earlier version. This gate checks Satoshi Hike v2.0 only.` It is not "could not be read".
+An earlier-kind object is a measurement (`version` `earlier version`). The Gate's reason `earlier_version` is policy (Rule B9). A v1.35 object on sign-in is website outcome `earlier_version` after a valid signature. On verify, the job error message is `This object is an earlier version. This gate checks Satoshi Hike v2.0 only.` It is not "could not be read".
 
 | Piece | Name |
 |---|---|

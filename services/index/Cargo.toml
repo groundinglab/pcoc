@@ -18,7 +18,7 @@ path = "src/lib.rs"
 [dependencies]
 axum = "0.8"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
-pcoc-bari = { git = "https://github.com/groundinglab/pcoc", tag = "bari-v0.6.4" }
+pcoc-bari = { git = "https://github.com/groundinglab/pcoc", tag = "bari-v0.6.5" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal"] }
