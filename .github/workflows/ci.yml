@@ -1,4 +1,5 @@
-# Public CI for groundinglab/pcoc. GitHub-hosted runners only (never self-hosted).
+# CI for groundinglab/pcoc. Self-hosted runners only (dax: pcoc-heavy; dax+debian1: pcoc-pub).
+# Never GitHub-hosted. Jobs never run for fork PRs (fork guard in every job + runner pre-job hook).
 # `ci-ok` is the single check to require. Suites are path-gated by .github/scripts/changes.sh;
 # a suite whose directory does not exist yet is skipped.
 name: ci
@@ -22,7 +23,8 @@ env:
 
 jobs:
   changes:
-    runs-on: ubuntu-latest
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, linux, pcoc-pub]
     timeout-minutes: 5
     outputs:
       spec: ${{ steps.gate.outputs.spec }}
@@ -54,8 +56,8 @@ jobs:
 
   spec:
     needs: changes
-    if: needs.changes.outputs.spec == 'true'
-    runs-on: ubuntu-latest
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && needs.changes.outputs.spec == 'true'
+    runs-on: [self-hosted, linux, pcoc-pub]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -70,8 +72,8 @@ jobs:
 
   rust:
     needs: changes
-    if: needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-latest
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && needs.changes.outputs.rust == 'true'
+    runs-on: [self-hosted, linux, pcoc-heavy]
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -95,8 +97,8 @@ jobs:
 
   go:
     needs: changes
-    if: needs.changes.outputs.go == 'true'
-    runs-on: ubuntu-latest
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && needs.changes.outputs.go == 'true'
+    runs-on: [self-hosted, linux, pcoc-heavy]
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -118,8 +120,8 @@ jobs:
 
   java:
     needs: changes
-    if: needs.changes.outputs.java == 'true'
-    runs-on: ubuntu-latest
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && needs.changes.outputs.java == 'true'
+    runs-on: [self-hosted, linux, pcoc-heavy]
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -138,6 +140,7 @@ jobs:
 
   services:
     needs: changes
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     strategy:
       fail-fast: false
       matrix:
@@ -146,7 +149,7 @@ jobs:
           - { key: bari, dir: services/bari }
           - { key: index, dir: services/index }
     name: service (${{ matrix.key }})
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, pcoc-heavy]
     timeout-minutes: 30
     steps:
       - name: gate
@@ -186,17 +189,17 @@ jobs:
   desktop:
     # Not required: ci-ok ignores this job's result.
     needs: changes
-    if: needs.changes.outputs.desktop == 'true'
-    runs-on: ubuntu-latest
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && needs.changes.outputs.desktop == 'true'
+    runs-on: [self-hosted, linux, pcoc-heavy]
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: sparse worktree (full clone, cone mode, no partial filter)
-        run: git sparse-checkout set apps/desktop
-      - name: GTK dev packages
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-4-dev libadwaita-1-dev
+        run: git sparse-checkout set apps/desktop conformance
+      - name: GTK dev packages (preinstalled on the runner image; no sudo on self-hosted)
+        run: pkg-config --modversion gtk4 libadwaita-1 || echo "::warning::gtk4/libadwaita dev packages missing on this runner image"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -216,8 +219,8 @@ jobs:
 
   docs:
     needs: changes
-    if: needs.changes.outputs.docs == 'true'
-    runs-on: ubuntu-latest
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && needs.changes.outputs.docs == 'true'
+    runs-on: [self-hosted, linux, pcoc-pub]
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -227,7 +230,8 @@ jobs:
         run: python3 .github/scripts/doclinks.py
 
   gitleaks:
-    runs-on: ubuntu-latest
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, linux, pcoc-pub]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -239,42 +243,53 @@ jobs:
           f=gitleaks_8.30.1_linux_x64.tar.gz
           curl -sSfL -o "$f" "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/$f"
           echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $f" | sha256sum -c -
-          tar -xzf "$f" gitleaks && sudo install gitleaks /usr/local/bin/
+          mkdir -p "$RUNNER_TEMP/bin" && tar -xzf "$f" -C "$RUNNER_TEMP/bin" gitleaks && echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: gitleaks over full history
         run: gitleaks git --log-opts=--all --redact -v .
 
   g1:
     # Fork PRs get no secrets, so G1 cannot run there; ci-ok accepts a skip only in that case.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, linux, pcoc-pub]
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: ripgrep
-        run: command -v rg || { sudo apt-get update && sudo apt-get install -y --no-install-recommends ripgrep; }
+      - name: ripgrep 14.1.1 (checksum pinned, user-local)
+        run: |
+          command -v rg && exit 0
+          f=ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz
+          cd "$RUNNER_TEMP" && curl -sSfL -o "$f" "https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/$f"
+          echo "4cf9f2741e6c465ffdb7c26f38056a59e2a2544b51f7cc128ef28337eeae4d8e  $f" | sha256sum -c -
+          mkdir -p bin && tar -xzf "$f" --strip-components=1 -C bin "${f%.tar.gz}/rg" && echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: G1 leak grep + name spelling
         env:
           G1_PATTERNS: ${{ secrets.G1_PATTERNS }}
         run: bash .github/scripts/g1.sh
 
   walk-prose:
-    runs-on: ubuntu-latest
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, linux, pcoc-pub]
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: ripgrep
-        run: command -v rg || { sudo apt-get update && sudo apt-get install -y --no-install-recommends ripgrep; }
+      - name: ripgrep 14.1.1 (checksum pinned, user-local)
+        run: |
+          command -v rg && exit 0
+          f=ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz
+          cd "$RUNNER_TEMP" && curl -sSfL -o "$f" "https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/$f"
+          echo "4cf9f2741e6c465ffdb7c26f38056a59e2a2544b51f7cc128ef28337eeae4d8e  $f" | sha256sum -c -
+          mkdir -p bin && tar -xzf "$f" --strip-components=1 -C bin "${f%.tar.gz}/rg" && echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: walk-prose check (exact-line allowlist)
         run: python3 .github/scripts/walk-prose.py
 
   ci-ok:
-    if: always()
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     needs: [changes, spec, rust, go, java, services, desktop, docs, gitleaks, g1, walk-prose]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, pcoc-pub]
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
