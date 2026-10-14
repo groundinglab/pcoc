@@ -3,6 +3,7 @@ name = "nip06"
 version = "0.1.0"
 license = "Apache-2.0"
 edition = "2021"
+rust-version = "1.83"
 publish = false
 description = "DEMO keys: BIP-39 English 12-word, empty passphrase, NIP-06 path, BIP-340 x-only. nsec and npub are NIP-19 clothing."
 
