@@ -1,0 +1,27 @@
+[package]
+name = "pcoc-hike-core"
+description = "PCOC Hike desktop: ephemeral keys, sign-in wire, record presentation and produce progress. No GTK."
+version.workspace = true
+license = "Apache-2.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+# The DESIGN-v2 section 2 sample hike, for screenshots and demos. Not in a shipping build.
+sample = []
+
+[dependencies]
+hike.workspace = true
+base64.workspace = true
+bech32.workspace = true
+getrandom.workspace = true
+secp256k1.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+ureq.workspace = true
+zeroize.workspace = true
+
+[build-dependencies]
+toml = "0.8"

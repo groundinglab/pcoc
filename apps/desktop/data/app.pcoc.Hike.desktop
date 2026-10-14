@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=PCOC Hike
+GenericName=Satoshi Hike
+Comment=Produce, verify and sign in with Satoshi Hike v2.0 objects
+Exec=pcoc-hike
+Icon=app.pcoc.Hike
+Terminal=false
+Categories=Utility;
+Keywords=PCOC;Satoshi;Hike;Bitcoin;Nostr;
+StartupNotify=true
