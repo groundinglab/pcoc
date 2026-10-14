@@ -1,8 +1,8 @@
 # Satoshi Hike v2.0
 
-> **Live construction, 2026-10-08.** This file is the live construction. Satoshi Hike v1.35 is historical. One lineage. An object whose `kind` is the v1.35 kind is not measured under these constants.
+> **Hard cut, 2026-10-08.** This file is the live construction. Satoshi Hike v1.35 is historical. One lineage. An object whose `kind` is the v1.35 kind is not measured under these constants.
 
-**Status.** The parameters in the list below are the 2026-10-08 lock.
+**Status.** The parameters in the list below are the 2026-10-08 lock. Sign-off of this file is not recorded here.
 
 **Changes from v1.35.**
 
@@ -1993,19 +1993,19 @@ Closed. Section 14.3 records `plant` `match`, `mismatch`, or `not read` for each
 
 A **match** on a document whose `network` is `synthetic` is not a mainnet fact.
 
-## 18. Wording notes
+## 18. Follow-up wording
 
 **Informative for items 1–8. Item 9 is locked.**
 
-Items 1–8 record wording that other documents should follow. They do not change Part A, and they are not a conformance target. Item 9 is locked law for the verify CLI.
+Items 1–8 are Docs follow-ups. This file does not edit the files named there. Docs applies the replacements an item still names, in a later change. Item 1 remains Informative. Its closing sentences lock the public verify page’s website rows as **valid** and **invalid** and do not ask Docs to retoken those rows. The proposals follow section 4. Item 9 is locked law for the verify CLI.
 
-1. **Verify page.** Replace “One broken checkpoint breaks the proof” with “One checkpoint recorded as mismatch is a measurement. The Gate judges it.” Replace “An empty path does not fail” with “An empty path on W_1 through W_16 is recorded as skip. The Gate’s paths minimum, if one is locked, is what judges skips.” The public verify page’s website rows stay **valid** and **invalid**. This item must not require those website rows, including the lines for `shape`, `checkpoint_mismatch`, and `successor_waypoint_differs`, to become the section 14 match and mismatch tokens. Apps (CLI, Desktop, and Android) keep the section 14 measurement vocabulary (match, mismatch, and the other section 14 tokens).
+1. **Verify page.** In `apps/www/verify/verify.js` and `apps/www/verify/README.md`, replace “One broken checkpoint breaks the proof” with “One checkpoint recorded as mismatch is a measurement. The Gate judges it.” Replace “An empty path does not fail” with “An empty path on W_1 through W_16 is recorded as skip. The Gate’s paths minimum, if one is locked, is what judges skips.” The public verify page’s website rows stay **valid** and **invalid**. This item must not require those website rows, including the lines for `shape`, `checkpoint_mismatch`, and `successor_waypoint_differs`, to become the section 14 match and mismatch tokens. Apps (CLI, Desktop, and Android) keep the section 14 measurement vocabulary (match, mismatch, and the other section 14 tokens).
 
 2. **Ops.** In the operator's environment documents (not published), replace “A verify pass is a separate result” with “A verify measurement record is separate from the Sign-in door. Verify records match, mismatch, present, skip, not defined, not read, not fetched by design, and n/a. The Sign-in door is the HTTP door of the groundinglab Admission Gate (section 15).” A Bari POST miss or an incomplete ask is `path_skip` and produce continues. Those pages must not say a missed plant stops the hike.
 
 3. **Gate `/v1/verify`.** Replace the double-negative fields `checkpoint_mismatch: false` and `successor_waypoint_differs: false` with positive tokens, for example `checkpoints: match` and `waypoints: match`, using **match** and **mismatch**. The same response’s `present_path_does_not_match_plant` and `opening_waypoint_is_zero` follow the same change: plant comparison **match** or **mismatch**, and the seed-value comparison **match** or **mismatch**. `opening_waypoint_is_zero` does not describe the seed value.
 
-4. **Leg names.** Where a measurement name or a test name uses a retired word for a leg, say "leg" or "recomputed leg result." Section 14.6 in this file already uses that wording. The constant `SEAL_DOMAIN` is a byte string. It is not leg wording, and it stays.
+4. **Leg names.** Where a measurement name or a test name says “re-walk” or “re-walked leg,” say “leg” or “recomputed leg result.” Section 14.6 in this file already uses that wording. Other files still say “re-walk,” including `reference/rust/hike/src/verify.rs` and `services/admission-gate/src/jobs.rs`. Those stay for a later change. The constant `SEAL_DOMAIN` (`pcoc-walk-v1`) is a byte string. It is not leg wording, and it stays.
 
 5. **Withdrawn.** This item is withdrawn. The number is not reused.
 
