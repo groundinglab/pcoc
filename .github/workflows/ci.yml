@@ -182,7 +182,9 @@ jobs:
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Needed only while the repo is private; harmless once public.
+          # Needed only while the repo is private; harmless once public. Job-scoped git config:
+          # self-hosted HOME persists between jobs, so never write the token to ~/.gitconfig.
+          export GIT_CONFIG_GLOBAL="$RUNNER_TEMP/gitconfig-$GITHUB_JOB"; : > "$GIT_CONFIG_GLOBAL"
           git config --global "url.https://x-access-token:${GH_TOKEN}@github.com/groundinglab/pcoc.insteadOf" "https://github.com/groundinglab/pcoc"
           cargo test --locked --release
 
@@ -214,6 +216,7 @@ jobs:
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
           GH_TOKEN: ${{ github.token }}
         run: |
+          export GIT_CONFIG_GLOBAL="$RUNNER_TEMP/gitconfig-$GITHUB_JOB"; : > "$GIT_CONFIG_GLOBAL"
           git config --global "url.https://x-access-token:${GH_TOKEN}@github.com/groundinglab/pcoc.insteadOf" "https://github.com/groundinglab/pcoc"
           cargo test --locked -p pcoc-hike-core
 
