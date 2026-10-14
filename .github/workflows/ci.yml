@@ -1,4 +1,4 @@
-# CI for groundinglab/pcoc. Self-hosted runners only (dax: pcoc-heavy; dax+debian1: pcoc-pub).
+# CI for groundinglab/pcoc. Self-hosted runners only (labels pcoc-heavy and pcoc-pub).
 # Never GitHub-hosted. Jobs never run for fork PRs (fork guard in every job + runner pre-job hook).
 # `ci-ok` is the single check to require. Suites are path-gated by .github/scripts/changes.sh;
 # a suite whose directory does not exist yet is skipped.
