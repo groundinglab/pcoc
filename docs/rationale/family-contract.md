@@ -2,9 +2,9 @@
 
 This page is the abstract object. A self-issued thing is scarce because making it cost something, not because an office issued it. It is bound to a key and to a public sequence the maker does not control. A check establishes the relations the file claims. Admission is a later policy about whether those relations are enough. Membership is not a person, a population, or a yes.
 
-The briefs ask the questions. [How you make one](how-you-make-one.md) is one discharge. This page is the debts any construction still owes before it picks a work size, a memory size, or a clock.
+The briefs ask the questions. [How you make one](how-you-make-one.md) is one way those obligations are met. This page is the obligations any construction still owes before it picks a work size, a memory size, or a clock.
 
-PCOC is a construction pattern. An object is had by making one. It is bound to a key and to public time. It is checked without trusting the maker. That pattern is not a product and it is not a parameter file. It is a list of debts. Any concrete construction that wants to belong still has to discharge them. The debts say what kind of object may exist.
+PCOC is a construction pattern. An object is had by making one. It is bound to a key and to public time. It is checked without trusting the maker. That pattern is not a product and it is not a parameter file. It is a list of obligations. Any concrete construction that wants to belong still has to meet them. The obligations say what kind of object may exist.
 
 Belonging to the family does not mean two instances share numbers. Membership does not establish that a particular lock is sound, unique, or measured against a determined adversary. Other instances are allowed.
 

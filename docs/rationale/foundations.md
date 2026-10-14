@@ -46,8 +46,8 @@ The finished file is a spent commitment. Keeping it is optional. [Why carry the 
 
 ## Where the parts sit
 
-[BARI](https://github.com/groundinglab/pcoc/tree/bari-v0.6.5/services/bari) is the notary. It observes headers and can plant a mark. It does not correct the hike, and a missed plant is an unattested path, not an invalid object. Bari writes the index files for that mark and does not serve them. The plant is a fee. The work is the occupancy. They are not the same bill.
+[BARI](../../services/bari/) is the notary. It observes headers and can plant a mark. It does not correct the hike, and a missed plant is an unattested path, not an invalid object. Bari writes the index files for that mark and does not serve them. The plant is a fee. The work is the occupancy. They are not the same bill.
 
-The specification is the hike as text. A pin change is not a new family debt. [spec](https://github.com/groundinglab/pcoc/tree/spec-v2.0.1/spec)
+The specification is the hike as text. A pin change is not a new family debt. [spec](../../spec/)
 
-Tests and conformance are how a second implementation shows it agrees. They are not the argument. [conformance](https://github.com/groundinglab/pcoc/tree/spec-v2.0.1/conformance) Nothing under it is this law.
+Tests and conformance are how a second implementation shows it agrees. They are not the argument. [conformance](../../spec/conformance/) Nothing under it is this law.

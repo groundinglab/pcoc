@@ -1,6 +1,10 @@
-# groundinglab docs
+# Docs
 
-Plain-language background for PCOC and the Satoshi Hike construction. These pages teach; they do not amend the specification. The normative text is the [Satoshi Hike v2.0 SPEC](https://github.com/groundinglab/pcoc/tree/spec-v2.0.1/spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md) at tag `spec-v2.0.1`; the reference implementation is at [`ref-rust-v2.0.3`](https://github.com/groundinglab/pcoc/tree/ref-rust-v2.0.3/reference/rust).
+Plain-language briefs and rationale for why PCOC is built this way. Explanatory, not normative. Where a page and the specification disagree, the specification wins. CC BY 4.0.
+
+New here: start with [Where does the trouble start?](briefs/where-does-the-trouble-start.md), then [Foundations](rationale/foundations.md).
+
+The normative text is [the specification](../spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md). The vectors are [spec/conformance](../spec/conformance/). The first tested examples are [the references](../reference/).
 
 ## Briefs: the questions
 
@@ -17,5 +21,12 @@ Short essays, one question each. Start with [the briefs index](briefs/README.md)
 ## Architecture
 
 - [Two-plane substrate](architecture/two-plane-substrate.md): the test and live planes as one table.
+
+The two-plane note is for someone running a test plane and a live plane side by side. It assumes those four parameters. It is not required reading for the specification.
+
+## Technical
+
+- [Integrate a producer](technical/integrate-a-producer.md)
+- [Integrate a verifier](technical/integrate-a-verifier.md)
 
 Verification measures the object. Whether to accept it is a separate policy decision.
