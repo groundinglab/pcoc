@@ -16,9 +16,9 @@ Every service binds to loopback by default. To serve one publicly, put a reverse
 
 | Folder | Process | Default bind | Depends on (git tag) | Release tag |
 |---|---|---|---|---|
-| [`bari/`](bari/) | `bari` (crate `pcoc-bari`) | `127.0.0.1:38080` | `hike`, `hike-net` @ `ref-rust-v2.0.2` | `bari-v0.6.3` |
-| [`index/`](index/) | `pcoc-index` | `127.0.0.1:38081` | `pcoc-bari` @ `bari-v0.6.3` | `index-v0.1.2` |
-| [`admission-gate/`](admission-gate/) | `admission-service` (crate `pcoc-admission`) | `127.0.0.1:8787` | `hike` @ `ref-rust-v2.0.2` | `gate-v0.3.1` |
+| [`bari/`](bari/) | `bari` (crate `pcoc-bari`) | `127.0.0.1:38080` | `hike`, `hike-net` @ `ref-rust-v2.0.3` | `bari-v0.6.5` |
+| [`index/`](index/) | `pcoc-index` | `127.0.0.1:38081` | `pcoc-bari` @ `bari-v0.6.4` (`hike` @ `ref-rust-v2.0.3`) | `index-v0.1.3` |
+| [`admission-gate/`](admission-gate/) | `admission-service` (crate `pcoc-admission`) | `127.0.0.1:8787` | `hike` @ `ref-rust-v2.0.3` | `gate-v0.3.2` |
 
 Release tags are `<service>-v<x.y.z>` and point at the commit that ships that release. The table lists the latest tag of each.
 

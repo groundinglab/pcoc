@@ -4822,7 +4822,7 @@ mod tests {
         let inputs = crate::operator::inputs_from_memory(
             &memory,
             crate::operator::ProcessFacts {
-                version: "0.6.2".to_owned(),
+                version: crate::operator::VERSION.to_owned(),
                 commit: "test".to_owned(),
                 instance: "test".to_owned(),
                 started_unix_ms: now,
@@ -4887,7 +4887,7 @@ mod tests {
         let inputs = crate::operator::inputs_from_memory(
             &memory,
             crate::operator::ProcessFacts {
-                version: "0.6.2".to_owned(),
+                version: crate::operator::VERSION.to_owned(),
                 commit: "test".to_owned(),
                 instance: "test".to_owned(),
                 started_unix_ms: 1,
@@ -4950,7 +4950,7 @@ mod tests {
         let inputs = crate::operator::inputs_from_memory(
             &clock.ops_memory(),
             crate::operator::ProcessFacts {
-                version: "0.6.2".to_owned(),
+                version: crate::operator::VERSION.to_owned(),
                 commit: "test".to_owned(),
                 instance: "test".to_owned(),
                 started_unix_ms: 1,

@@ -596,7 +596,7 @@ async fn render_ops(service: &BariService) -> String {
     let inputs = operator::inputs_from_memory(
         &memory,
         operator::ProcessFacts {
-            version: "0.6.2".to_owned(),
+            version: crate::operator::VERSION.to_owned(),
             commit,
             instance,
             started_unix_ms: started_ms,
@@ -1147,7 +1147,7 @@ mod tests {
             Some(b"application/json".as_slice())
         );
         let body: serde_json::Value = serde_json::from_str(&response_text(health).await).unwrap();
-        assert_eq!(body["version"], "0.6.2");
+        assert_eq!(body["version"], crate::operator::VERSION);
         assert_eq!(body["commit"], compiled_commit());
         assert!(!compiled_commit().is_empty());
         assert_ne!(body["commit"].as_str().unwrap(), "–");

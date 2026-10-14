@@ -1,6 +1,6 @@
 # groundinglab docs
 
-Plain-language background for PCOC and the Satoshi Hike construction. These pages teach; they do not amend the specification. The normative text is the [Satoshi Hike v2.0 SPEC](https://github.com/groundinglab/pcoc/tree/spec-v2.0.1/spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md) at tag `spec-v2.0.1`; the reference implementation is at [`ref-rust-v2.0.1`](https://github.com/groundinglab/pcoc/tree/ref-rust-v2.0.1/reference/rust).
+Plain-language background for PCOC and the Satoshi Hike construction. These pages teach; they do not amend the specification. The normative text is the [Satoshi Hike v2.0 SPEC](https://github.com/groundinglab/pcoc/tree/spec-v2.0.1/spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md) at tag `spec-v2.0.1`; the reference implementation is at [`ref-rust-v2.0.3`](https://github.com/groundinglab/pcoc/tree/ref-rust-v2.0.3/reference/rust).
 
 ## Briefs: the questions
 

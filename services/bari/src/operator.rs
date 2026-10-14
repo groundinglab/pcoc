@@ -16,7 +16,7 @@ use crate::{encode_bitcoin_id, Hash32};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
-pub const VERSION: &str = "0.6.2";
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 const WINDOW: u32 = ANCHOR_WINDOW_BLOCKS;
 const LEDGER_BLOCKS: u32 = LEDGER_RETAIN_BLOCKS;
 const VSIZE: u64 = 159;
@@ -3429,7 +3429,7 @@ mod tests {
         assert!(view.checks.iter().any(|check| check.id == "R12"));
         assert!(html.contains("groundinglab"));
         assert!(html.contains("the Bitcoin Anchored Registry Index"));
-        assert!(html.contains("operator v0.6.2"));
+        assert!(html.contains(&format!("operator v{VERSION}")));
         assert!(html.contains("example-host"));
         assert!(html.contains("https://mempool.space/block/970700"));
         assert!(html.contains(">Sent at<"));

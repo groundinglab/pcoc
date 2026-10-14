@@ -257,7 +257,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 [[package]]
 name = "hike"
 version = "0.1.0"
-source = "git+https://github.com/groundinglab/pcoc?tag=ref-rust-v2.0.2#c32724682e39d77a27918722449000dc29bf6da5"
+source = "git+https://github.com/groundinglab/pcoc?tag=ref-rust-v2.0.3#ad98171b5697c397f304414e67c2f54f88a72a7d"
 dependencies = [
  "getrandom",
  "rayon",
@@ -446,7 +446,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "pcoc-admission"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "axum",
  "base64",
