@@ -1,7 +1,8 @@
 [package]
 name = "pcoc-bari"
-version = "0.6.2"
+version = "0.6.4"
 edition = "2021"
+rust-version = "1.83"
 license = "Apache-2.0"
 publish = false
 description = "Waypoint POST and path GET. Writes the portable-index cache and does not serve GET /index."
@@ -16,7 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 axum = "0.8"
-hike = { git = "https://github.com/groundinglab/pcoc", tag = "ref-rust-v2.0.2" }
+hike = { git = "https://github.com/groundinglab/pcoc", tag = "ref-rust-v2.0.3" }
 hex = "0.4"
 base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
@@ -38,4 +39,4 @@ tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 
 [dev-dependencies]
-hike-net = { git = "https://github.com/groundinglab/pcoc", tag = "ref-rust-v2.0.2" }
+hike-net = { git = "https://github.com/groundinglab/pcoc", tag = "ref-rust-v2.0.3" }
