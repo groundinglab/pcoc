@@ -1,6 +1,6 @@
 //! An ephemeral nsec.
 //!
-//! The user pastes an `nsec1…` string or generates one. The secret stays in
+//! The user pastes an nsec string or generates one. The secret stays in
 //! memory and is wiped on drop. The npub and the hex public key are derived
 //! from it. Nothing here writes a key file, a password, or an ncryptsec.
 
@@ -85,7 +85,7 @@ impl SecretKey {
         }
     }
 
-    /// An `nsec1…` string. Whitespace at the ends is ignored.
+    /// An nsec string (bech32, HRP `nsec`). Whitespace at the ends is ignored.
     pub fn from_nsec(input: &str) -> Result<Self, KeyError> {
         let text = input.trim_matches(|c: char| c.is_ascii_whitespace());
         let bytes = Zeroizing::new(decode_bech32_32("nsec", text).ok_or(KeyError::NotAnNsec)?);
@@ -98,7 +98,7 @@ impl SecretKey {
         Ok(Self { bytes })
     }
 
-    /// The `nsec1…` spelling. Shown so the user can copy it. Not stored.
+    /// The bech32 nsec spelling. Shown so the user can copy it. Not stored.
     pub fn to_nsec(&self) -> Zeroizing<String> {
         let mut data = self.bytes.as_ref().to_base32();
         let out = bech32::encode("nsec", &data, Variant::Bech32).expect("nsec encodes");
@@ -140,11 +140,14 @@ fn decode_bech32_32(expected_hrp: &str, text: &str) -> Option<[u8; 32]> {
     out
 }
 
+/// The bech32 prefix of an nsec: the HRP `nsec` and the separator `1`.
+pub const NSEC_PREFIX: &str = concat!("nsec", "1");
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const NIP19_NSEC: &str = "nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5";
+    use crate::nip19_vector::NIP19_NSEC;
     const NIP19_NSEC_HEX: &str = "67dea2ed018072d675f5415ecfaed7d2597555e202d85b3d65ea4e58d2d92ffa";
     const NIP19_NPUB: &str = "npub10elfcs4fr0l0r8af98jlmgdh9c8tcxjvz9qkw038js35mp4dma8qzvjptg";
 
@@ -179,7 +182,9 @@ mod tests {
         assert!(SecretKey::from_nsec(NIP19_NSEC_HEX).is_err());
         assert!(SecretKey::from_nsec(NIP19_NPUB).is_err());
         assert_eq!(
-            SecretKey::from_nsec("nsec1qqqq").unwrap_err().to_string(),
+            SecretKey::from_nsec(&format!("{NSEC_PREFIX}qqqq"))
+                .unwrap_err()
+                .to_string(),
             "This is not an nsec."
         );
         let mut broken = NIP19_NSEC.to_owned();

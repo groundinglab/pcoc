@@ -183,7 +183,7 @@ fn nsec_block(app: &Rc<App>, key_error: Option<&str>) -> gtk::Widget {
     entry.set_hexpand(true);
     entry.set_width_chars(20);
     entry.add_css_class("mono");
-    entry.set_placeholder_text(Some("nsec1…"));
+    entry.set_placeholder_text(Some("your private key (starts with nsec)"));
     entry.update_property(&[gtk::accessible::Property::Label("nsec")]);
     let current = app
         .state

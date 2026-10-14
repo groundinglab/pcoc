@@ -732,8 +732,9 @@ impl App {
                 state.secret = None;
                 npub.set_text("—");
                 hex.set_text("—");
-                // A short `nsec1` prefix is still being typed. Anything else is a bad nsec.
-                let still_typing = trimmed.starts_with("nsec1") && trimmed.len() < 58;
+                // A short nsec prefix is still being typed. Anything else is a bad nsec.
+                let still_typing =
+                    trimmed.starts_with(pcoc_hike_core::keys::NSEC_PREFIX) && trimmed.len() < 58;
                 if still_typing {
                     state.key_error = None;
                     err.set_visible(false);

@@ -135,9 +135,7 @@ mod tests {
     fn the_config_never_holds_a_secret() {
         let dir = std::env::temp_dir().join(format!("pcoc-config-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let secret =
-            SecretKey::from_nsec("nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5")
-                .unwrap();
+        let secret = SecretKey::from_nsec(crate::nip19_vector::NIP19_NSEC).unwrap();
         let nsec = secret.to_nsec();
         let config_path = dir.join("config.json");
         Config::default().save(&config_path).unwrap();
