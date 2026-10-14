@@ -18,6 +18,8 @@ A bug takes the same path. So does a second implementation that read the specifi
 
 What makes a route worth closing depends on who is making it. A cost that stops one party is nothing to another, and three things decide which.
 
+The weighing is the one Jason P. Lowery sets out in *Softwar* (MIT thesis, 2023): a party attacks when the benefit of attack exceeds its cost.[^softwar] For PCOC the benefit is not something the holder gets from the identifier itself. It is admission: a seat in a population that a door lets in only at a price. The attack is getting many seats into that population cheaply. PCOC makes each seat cost real, measurable production work: memory-bound work timed between Bitcoin blocks, so many seats cost many times what one costs, while checking a seat stays cheap. It is not Bitcoin's proof-of-work. Something that used to be free to mint now has a cost to make, and because no one issues it, no issuer's policy or capacity limits how many can exist. Whether a given floor outweighs a given party's benefit is each door's policy, not something a check reports.
+
 What they want. Wanting a fabricated file accepted is not the same as wanting only to keep the checkers busy. A floor high enough to discourage the first can be wide open to the second.
 
 What they can spend. Own money behaves differently from rented capacity, and differently again from machines nobody is paying for. Which meter each party is actually paying is [Cost and incidence](cost-and-incidence.md).
@@ -49,3 +51,5 @@ The sequence is borrowed, and its behaviour stays with it. Depth, forks, and rew
 A rejected file costs its maker exactly that file. No consequence outlives the rejection, so detection does not accumulate. Today's catch makes tomorrow no harder. Whether to accept anything remains a matter of policy, and the check was never the policy. [Family contract](family-contract.md)
 
 This is one lock, on one floor, aimed at ordinary machines in wide use. A different population needs a different floor, and a different lock.
+
+[^softwar]: Jason P. Lowery, *Softwar: A Novel Theory on Power Projection and the National Strategic Significance of Bitcoin*, S.M. thesis, MIT System Design and Management, February 2023. http://hdl.handle.net/1721.1/153030
