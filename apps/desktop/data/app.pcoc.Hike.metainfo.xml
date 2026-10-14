@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>app.pcoc.Hike</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <name>PCOC Hike</name>
+  <summary>Produce, verify and sign in with Satoshi Hike v2.0 objects</summary>
+  <description>
+    <p>
+      PCOC Hike records a Satoshi Hike v2.0 object against the Bitcoin header
+      chain, shows the section 14 record for any object, and submits one
+      groundinglab sign-in. It links the pinned Rust reference in-process.
+    </p>
+    <p>
+      An nsec is pasted or generated for the session. It stays in memory and
+      is never written. The npub is derived from it.
+    </p>
+  </description>
+  <launchable type="desktop-id">app.pcoc.Hike.desktop</launchable>
+  <developer id="app.pcoc">
+    <name>groundinglab</name>
+  </developer>
+  <url type="homepage">https://groundinglab.io</url>
+  <content_rating type="oars-1.1"/>
+  <requires>
+    <display_length compare="ge">720</display_length>
+  </requires>
+  <releases>
+    <release version="0.1.0" date="2026-10-09">
+      <description>
+        <p>Produce, verify, and sign in. The nsec stays in memory.</p>
+      </description>
+    </release>
+  </releases>
+</component>

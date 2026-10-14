@@ -1,0 +1,24 @@
+[package]
+name = "pcoc-hike"
+description = "PCOC Hike for Linux. GTK4 and libadwaita. Links the pinned Rust reference in-process."
+version.workspace = true
+license = "Apache-2.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "pcoc-hike"
+path = "src/main.rs"
+
+[features]
+# Loads the DESIGN-v2 section 2 sample hike for screenshots. Off in a shipping build.
+sample = ["pcoc-hike-core/sample"]
+
+[dependencies]
+pcoc-hike-core = { path = "../core" }
+adw = { package = "libadwaita", version = "0.7", features = ["v1_5"] }
+gtk = { package = "gtk4", version = "0.9", features = ["v4_14"] }
+async-channel = "2"
+getrandom.workspace = true
+zeroize.workspace = true

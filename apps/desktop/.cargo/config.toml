@@ -1,0 +1,7 @@
+[net]
+# The reference dependency is a git dependency fetched with the git CLI.
+git-fetch-with-cli = true
+
+[resolver]
+# Keep Cargo.lock on crates that build with the workspace `rust-version`.
+incompatible-rust-versions = "fallback"
