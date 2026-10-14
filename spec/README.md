@@ -24,8 +24,6 @@ The intended use: give the specification and the vectors to your own developers,
 
 Only hash-bound values are evidence. The portable index stands in for Bitcoin and can be bypassed by checking Bitcoin directly.
 
-`SEAL_DOMAIN` is a fixed wire constant (section 6). Its spelling is not a vocabulary choice.
-
 ## What the file contains
 
 | § | Title | Role |
@@ -53,7 +51,7 @@ This page is the map. It does not add a second construction. The file is [Satosh
 
 ## How to build from it
 
-1. Read Part A in order (§3 through §8, then §13 for a producer or §14 for a verifier).
+1. Read Part A in order (§3 through §12, then §13 for a producer or §14 for a verifier).
 2. Implement, then run every file in [spec/conformance/v2.0](conformance/v2.0/).
 3. Compare verify records. `kat-small.json` is the producer byte-equality target. The `record` field is the §14 record.
 4. Optionally compare with a reference: [reference/](../reference/). The references are not required.
