@@ -192,13 +192,13 @@ impl Tail {
     }
 }
 
-/// K12. Replace any `nsec1…` or `ncryptsec1…` run with `[redacted]`.
+/// K12. Replace any nsec or ncryptsec bech32 run (HRP plus separator) with `[redacted]`.
 pub fn redact(line: &str) -> String {
     const CHARSET: &str = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
     let mut out = String::with_capacity(line.len());
     let mut rest = line;
     loop {
-        let next = ["ncryptsec1", "nsec1"]
+        let next = ["ncryptsec1", crate::keys::NSEC_PREFIX]
             .iter()
             .filter_map(|p| rest.find(p).map(|i| (i, *p)))
             .min_by_key(|(i, p)| (*i, std::cmp::Reverse(p.len())));
@@ -281,15 +281,22 @@ mod tests {
 
     #[test]
     fn secrets_are_redacted() {
+        use crate::keys::NSEC_PREFIX;
+        use crate::nip19_vector::NIP19_NSEC;
         assert_eq!(
-            redact("key nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5 end"),
+            redact(&format!("key {NIP19_NSEC} end")),
             "key [redacted] end"
         );
         assert_eq!(
-            redact("x ncryptsec1qgg9947rlpvqu76pj5 y nsec1acd"),
+            redact(&format!(
+                "x ncryptsec1qgg9947rlpvqu76pj5 y {NSEC_PREFIX}acd"
+            )),
             "x [redacted] y [redacted]"
         );
-        assert_eq!(redact("nsec1qq, next"), "[redacted], next");
+        assert_eq!(
+            redact(&format!("{NSEC_PREFIX}qq, next")),
+            "[redacted], next"
+        );
         assert_eq!(redact("npub1abc stays"), "npub1abc stays");
     }
 }

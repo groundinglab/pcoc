@@ -15,3 +15,7 @@ pub mod record;
 pub mod sample;
 pub mod signin;
 pub mod verify_job;
+
+#[cfg(test)]
+#[path = "vectors-allowlist/nip19_vector.rs"]
+mod nip19_vector;
