@@ -2464,7 +2464,7 @@ fn footer_html(view: &OpsView) -> String {
 }
 
 /// Lightning address that receives contributions toward plant fees.
-pub const FEES_LIGHTNING_ADDRESS: &str = "spottedpuma570@walletofsatoshi.com";
+pub const FEES_LIGHTNING_ADDRESS: &str = "fees@groundinglab.io";
 
 fn fees_html() -> String {
     format!(
@@ -3992,7 +3992,7 @@ mod tests {
     fn ops_page_ends_with_the_fees_lightning_address() {
         let html = render(&fixture_view("example-host", "0123456"));
         let addr = html
-            .find("href=\"lightning:spottedpuma570@walletofsatoshi.com\"")
+            .find("href=\"lightning:fees@groundinglab.io\"")
             .expect("address link");
         let note = html.find("Contribute to fees</p>").expect("note");
         assert!(addr < note);
