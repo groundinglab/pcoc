@@ -132,18 +132,16 @@ pub fn npub_from_hex(pubkey_hex: &str) -> Result<String, String> {
         .map_err(|_| "npub encode failed".to_owned())
 }
 
-/// 64 hex characters, or an `nsec1…` string. The returned scalar is zeroed on drop.
+/// 64 hex characters, or a bech32 string with the `nsec` prefix. The returned scalar is zeroed on drop.
 pub fn parse_secret(raw: &str) -> Option<Zeroizing<[u8; 32]>> {
     let text = raw.trim();
     if text.len() > 120 || text.chars().any(|c| c.is_control()) {
         return None;
     }
-    let bytes = if text.starts_with("nsec1") {
-        secret_from_nsec(text)?
-    } else if is_lower_hex(text, 64) || is_hex(text, 64) {
+    let bytes = if is_lower_hex(text, 64) || is_hex(text, 64) {
         decode_32(text)?
     } else {
-        return None;
+        secret_from_nsec(text)?
     };
     let secp = Secp256k1::signing_only();
     Keypair::from_seckey_slice(&secp, &bytes).ok()?;
