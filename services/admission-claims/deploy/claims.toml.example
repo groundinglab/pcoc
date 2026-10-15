@@ -1,0 +1,58 @@
+# admission-claims config. The process reads this file and no other.
+# Path: --config or CLAIMS_CONFIG. Unknown keys are a startup error.
+# Omitted keys use the defaults named below. This file holds paths, never a
+# key, a token, or an age identity.
+#
+# An empty r2_account_id selects directory mode: artifacts are written to
+# artifact_dir and are not PUT. Set the account id and the token file when
+# the groundinglab-claims bucket exists.
+
+role = "writer"
+bind = "127.0.0.1:8793"
+claims_origin = "https://claims.groundinglab.io"
+allowed_origins = ["https://groundinglab.io", "https://www.groundinglab.io"]
+gate_base = "http://127.0.0.1:8787"
+gate_timeout_secs = 5
+max_log_bytes = 33554432
+claim_window_secs = 300
+line_future_skew_secs = 5
+sig_skew_secs = 60
+db_path = "/var/lib/admission-claims/claims.sqlite"
+issuer_key_file = "/var/lib/admission-claims/issuer.key"
+# 64 hex characters. The process refuses to start when the key file does not match.
+issuer_pubkey_hex = "80ece133fec4f81fc3d72ce4b3b97eeb1234792a0a25c935500afe0a668f5f92" # gitleaks:allow (public key)
+badge_d = "groundinglab-admitted"
+badge_name = "groundinglab admitted"
+badge_description = "Admitted by groundinglab.io with a PCOC: a self-issued identifier backed by a resource commitment."
+badge_image_url = "https://groundinglab.io/media/badge/groundinglab-admitted-1024.png"
+badge_thumb_url = "https://groundinglab.io/media/badge/groundinglab-admitted-256.png"
+name_event_kind = 1742
+# Re-read on every name request; edit freely, no restart.
+blocked_names_file = "/etc/admission-claims/blocked-names.txt"
+demo_object_sha256 = [
+  "42a34e98196b4a1b11c3a5ed3357be7358d98c98176b414efa99f23fb4f7fe06",
+  "6d5c8e5c0f8180312fdb5a3c9a9113c1dea1467cd27c90ca005e06b71d1528f7",
+]
+claim_per_ip_per_min = 10
+claim_per_pubkey_per_min = 5
+availability_per_ip_per_min = 60
+client_ip_header = "cf-connecting-ip"
+relay_url = "wss://relay.groundinglab.io"
+# Best effort copies after relay_url accepts; logged per relay, never retried.
+public_relays = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net"]
+relay_timeout_secs = 10
+relay_retry_secs = [1, 2, 4, 8, 16, 60]
+# Empty until the bucket exists. Directory mode writes artifact_dir only.
+r2_account_id = ""
+r2_bucket = "groundinglab-claims"
+r2_token_file = "/var/lib/admission-claims/r2.token"
+r2_timeout_secs = 10
+public_site_origin = "https://groundinglab.io"
+artifact_dir = "/var/lib/admission-claims/artifacts"
+backup_dir = "/var/lib/admission-claims/backups"
+backup_keep = 48
+backup_r2_bucket = "groundinglab-claims-backup"
+backup_r2_token_file = "/var/lib/admission-claims/backup.token"
+backup_age_recipient_file = "/var/lib/admission-claims/backup.age.pub"
+backup_interval_secs = 3600
+log_filter = "info"

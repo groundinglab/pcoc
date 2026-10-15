@@ -1,0 +1,2 @@
+# groundinglab claims issuer (admission-claims, Vivobook) v1 2026-10-14
+80ece133fec4f81fc3d72ce4b3b97eeb1234792a0a25c935500afe0a668f5f92

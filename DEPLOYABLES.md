@@ -5,6 +5,8 @@ Everything in this repo that is deployed or published. Each one is released by a
 | Component | Path | Tag prefix | Artifact | Runs as |
 |---|---|---|---|---|
 | Admission Gate (admission + verify) | `services/admission-gate` | `gate-v` | `admission-service` binary | systemd service |
+| Claims service (badge and name issuer) | `services/admission-claims` | `claims-v` | `admission-claims` binary | systemd service |
+| Claims Worker (`/claims/*`, `/badge/*`, `/.well-known/nostr.json*`) | `services/cf-claims-worker` | `claims-worker-v` | Cloudflare Worker `groundinglab-claims` | `wrangler deploy` |
 | Bari (producer API) | `services/bari` | `bari-v` | `bari` binary | systemd service |
 | Index (read-only cache) | `services/index` | `index-v` | `pcoc-index` binary | systemd service |
 | Desktop app | `apps/desktop` | `desktop-v` | `pcoc.flatpak` | download |
@@ -12,4 +14,4 @@ Everything in this repo that is deployed or published. Each one is released by a
 
 Reference implementations (`reference/`, tags `ref-rust-v`, `ref-java-v`, `reference/go/v`) and the spec (`spec-v`) are versioned libraries and documents, not deployables.
 
-Not yet in this repo (they run live from pre-release sources, and promotion is planned): the claims service, the claims Worker, and the website.
+The website is deployed from groundinglab ops (`www/`), not from this repo.
