@@ -151,7 +151,7 @@ fn idle(app: &Rc<App>) -> gtk::Widget {
     let c = card(
         "New hike",
         &["§13"],
-        &["live profile · Bitcoin mainnet"],
+        &["Bitcoin mainnet only · posts to the public Bari · no test plane"],
         on,
     );
     c.body.append(&nsec_block(app, key_error.as_deref()));
@@ -166,7 +166,7 @@ fn idle(app: &Rc<App>) -> gtk::Widget {
         &c.body,
         &c.root,
         &format!(
-            "The pinned hike crate runs in this process on Bitcoin mainnet. It holds {} MiB of terrain for the run, posts each waypoint W_1…W_17 to {} with a Hashcash planting puzzle, and asks for paths at H+2, H+3 and H+4. Each run is a new folder under the data folder. The object is written only after the run returns. Stop or quit writes no object.",
+            "The pinned hike crate runs in this process on Bitcoin mainnet only. The app has no test plane. It holds {} MiB of terrain for the run, posts each waypoint W_1…W_17 to {} with a Hashcash planting puzzle, and asks for paths at H+2, H+3 and H+4. Each run is a new folder under the data folder. The object is written only after the run returns. Stop or quit writes no object.",
             TERRAIN_BYTES >> 20,
             endpoints::BARI
         ),

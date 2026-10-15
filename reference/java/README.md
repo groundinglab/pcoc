@@ -10,7 +10,9 @@ The current tag is `ref-java-v2.0.2`.
 
 ## Toolchain
 
-Java 21. There is no Gradle and no Maven. `reference/java/v2.sh` runs `javac --release 21`.
+JDK 21 or newer is required. JDK 17 does not work. There is no Gradle and no Maven. `reference/java/v2.sh` runs `javac --release 21`.
+
+Check with `javac -version`. It must print 21 or higher. On 17, install a JDK 21 side by side, point `JAVA_HOME` at it, and put `$JAVA_HOME/bin` first on `PATH`. `v2.sh` stops at once with that message when `javac` is older than 21. It does not skip.
 
 ## Test
 
@@ -26,7 +28,7 @@ After `v2.sh` has compiled (or the same `javac --release 21` line), the classes 
 
 ## Spec pin
 
-[../SPEC_PIN](../SPEC_PIN) names `spec-v2.0.3` (proposed, not yet tagged) and the vector hash. Check it with `python3 reference/tools/check_spec_pin.py` from the repository root.
+[../SPEC_PIN](../SPEC_PIN) names `spec-v2.0.3` and the vector hash. Check it with `python3 reference/tools/check_spec_pin.py` from the repository root.
 
 ## Demo keys
 
