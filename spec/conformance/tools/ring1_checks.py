@@ -44,7 +44,9 @@ si = json.load(open(f"{PACK}/sign-in.json"))
 check("sign_in_spec_locks_the_wire: lock sentence",
       "Locked 2026-10-10: the section 15.1 sign-in wire." in spec)
 wire = {
-    "origin": f"The only signature origin is `{si['origin']}`.",
+    "origin": f"`{si['origin']}` is one example deployment.",
+    "origin rule": "Two origins are the same only when their serialized bytes are equal.",
+    "origin vectors": "`spec/conformance/v2.0/sign-in-origins.json`",
     "domain": f"It names the challenge-bytes domain `{si['domain']}`.",
     "lifetime_s": f"The lifetime is {si['lifetime_s']} seconds.",
     "door": f"`{si['method']} {si['door']}`",

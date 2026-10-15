@@ -11,7 +11,18 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::sync::OnceLock;
 
+/// The one origin this build serves (SPEC section 15.1 **Origin**). It is the
+/// example deployment's origin. A builder who runs a gate for another site
+/// edits this constant; there is no config key for it.
 pub const ORIGIN: &str = "https://groundinglab.io";
+
+/// SPEC section 15.1 **Origin**: exact byte equality with a served origin.
+/// No case folding, trimming, decoding, or default-port completion.
+pub fn origin_served(served: &[&str], origin: &str) -> bool {
+    served
+        .iter()
+        .any(|candidate| candidate.as_bytes() == origin.as_bytes())
+}
 pub const DOMAIN: &[u8] = b"pcoc-gate-signin-v1";
 pub const LIFETIME_S: u64 = 120;
 pub const SKEW_S: u64 = 5;
