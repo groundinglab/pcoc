@@ -10,11 +10,11 @@ Each plant is funded by the operator's key. The input that pays the plant is sig
 
 The 39-byte tag stays `OP_RETURN` ‖ push-37 ‖ `BARI` ‖ `0x02` ‖ the 32-byte root. Attribution adds no OP_RETURN bytes.
 
-## Chained plants
+## Confirmed coin pool
 
-Each plant spends the change output of the previous plant. The operator publishes one genesis plant txid. A verifier that wants the operator's sequence starts at that txid and follows each change output to the next plant.
+Plants are not a single change chain. Bari spends from a pool of several confirmed operator coins (around six), replenished in batches of roughly 10,000 sats each, so a confirmed coin is always available to fund the next plant. Each plant's funding input is signed by the operator's key, and that signature is the attribution.
 
-A plant that does not spend the previous plant's change is not in that chain. The note does not say such a plant is invalid. Existing plants stay valid under Part A.
+A rebuild identifies an operator's plants by the operator key on the funding inputs, not by following one change chain. A plant funded by a key the verifier does not attribute to the operator is not that operator's plant. The note does not say such a plant is invalid. Existing plants stay valid under Part A.
 
 ## Several operators
 
