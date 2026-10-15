@@ -48,6 +48,7 @@ The specification and the conformance vectors are the core deliverable. The poin
 | Services | [services/](services/) | Bari (the plant), the index (its own reader), and the Admission Gate, built on the Rust reference |
 | Apps | [apps/](apps/) | Desktop demonstrator, and an Android demonstrator described in [apps/android](apps/android/) |
 | Docs | [docs/](docs/README.md) | Plain-language briefs and rationale. Explanatory, not normative |
+| Your own deployment | [docs/run-under-your-own-name.md](docs/run-under-your-own-name.md) | Every place a builder changes to run the pieces under their own name |
 
 ## Run it yourself
 
