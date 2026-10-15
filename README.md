@@ -1,6 +1,6 @@
 # PCOC
 
-**Early prototype.** Specification: Satoshi Hike v2.0 (`spec-v2.0.2` once that tag is cut; `spec-v2.0.1` until then). Website: https://groundinglab.io
+**Early prototype.** Specification: Satoshi Hike v2.0 (`spec-v2.0.2`). Website: https://groundinglab.io
 
 A PCOC (production-constrained observable commitment) is a self-issued identifier backed by a resource commitment, not a payment. You make it on your own device by holding memory through a hike paced by Bitcoin blocks. Anyone can check the file cheaply, without trusting you or us. The design aims to give bulk making no discount: copying the file is cheap, but a new public key means a new hike.
 

@@ -6,7 +6,7 @@ This port does not generate the conformance vectors. `v2.sh` compiles the source
 
 ## Tag
 
-The current tag is `ref-java-v2.0.1`. The next tag is `ref-java-v2.0.2`, cut at merge.
+The current tag is `ref-java-v2.0.2`.
 
 ## Toolchain
 

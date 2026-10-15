@@ -6,7 +6,7 @@ The point is interoperability. A PCOC made by one implementation must check the 
 
 Anyone, or their AI agents, can build a producer, a verifier, a service, or an app from the specification and the vectors alone, with no groundinglab code, service, or account.
 
-Current release named by `reference/SPEC_PIN`: `spec-v2.0.2`. That tag is cut on the merge commit of the change that moved the vectors under `spec/conformance/`. Until the tag exists, `spec-v2.0.1` is the previous release and still resolves at the old vector paths. This tree is the candidate for `spec-v2.0.2`.
+Current release named by `reference/SPEC_PIN`: `spec-v2.0.2`, on the merge commit that moved the vectors under `spec/conformance/`. `spec-v2.0.1` is the previous release and still resolves at the old vector paths.
 
 ## What "conforms" means
 
