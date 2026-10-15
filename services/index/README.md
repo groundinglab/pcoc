@@ -46,7 +46,7 @@ cargo build --locked --release
   --out /var/lib/pcoc-index
 ```
 
-`--from-txid TXID` starts at the block that contains that genesis plant (a 39-byte `BARI` tag). The walk back from `--to-height` is `PCOC_INDEX_REBUILD_TXID_LOOKBACK` blocks (default 2016). `--to-height` defaults to the source tip.
+`--from-txid TXID` starts at the block that contains that genesis plant (a 39-byte `BARI` tag). The search goes back from `--to-height` by `PCOC_INDEX_REBUILD_TXID_LOOKBACK` blocks (default 2016). `--to-height` defaults to the source tip.
 
 Each header must link: its previous hash is the previous header's hash, the double SHA-256 of the 80-byte header is the claimed hash, and `nTime` matches. A break stops the rebuild. After the range is written, the last `--reorg-depth` blocks (default 6) are fetched again. A file whose header changed is rewritten.
 
