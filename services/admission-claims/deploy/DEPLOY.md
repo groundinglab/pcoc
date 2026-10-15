@@ -6,20 +6,14 @@ This page does not deploy the Worker, does not create Cloudflare resources, and 
 
 ## Build
 
-Build once on Debian 12 (`localhost/pcoc-runner:debian12`, glibc 2.36), from a git checkout so `commit` is the SHA (`COMMIT` overrides it):
+Build from a tag checkout so `commit` is the SHA (`COMMIT` overrides it). Build on a glibc no newer than the target host:
 
 ```bash
-cargo build --locked --release -p admission-claims --manifest-path services/Cargo.toml
+cd services/admission-claims
+COMMIT="$(git rev-parse HEAD)" cargo build --locked --release
 ```
 
-Container build used on the Vivobook (Debian 12 image), stamping the real commit:
-
-```bash
-docker run --rm -v "$PWD":/src -w /src/services -e COMMIT="$(git rev-parse HEAD)" \
-  -e CARGO_HOME=/src/.cargo-home rust:1-bookworm cargo build --locked --release -p admission-claims
-```
-
-`/health` then reports that commit. The binary is `services/target/release/admission-claims`. Record its sha256. Install that one file on the Vivobook as `/usr/local/bin/admission-claims-<ver>-<sha>`, mode `0755`, owner root, and point the unit at it or link it to `/usr/local/bin/admission-claims`. The Vivobook's glibc is newer, so this binary runs there. It is not built on the Vivobook.
+`/health` then reports that commit. The binary is `services/admission-claims/target/release/admission-claims`. Record its sha256. Install that one file on the host as `/usr/local/bin/admission-claims-<ver>-<sha>`, mode `0755`, owner root, and point the unit at it or link it to `/usr/local/bin/admission-claims`.
 
 ## Layout
 
@@ -32,7 +26,7 @@ sudo chmod 0700 /var/lib/admission-claims
 
 Config `/etc/admission-claims/claims.toml`, mode `0640`, `root:claims`. Copy [claims.toml.example](claims.toml.example) and keep the pinned `issuer_pubkey_hex`. The process reads that file only.
 
-The issuer key is already on the Vivobook at `/var/lib/admission-claims/issuer.key`: 64 hex characters, mode `0600`, owner `claims`. Do not print it, do not copy it into the unit, and do not commit it. The process refuses to start when group or other can read the file, or when the derived public key is not the pin. Startup may log the public hex once.
+The issuer key is already on the host at `/var/lib/admission-claims/issuer.key`: 64 hex characters, mode `0600`, owner `claims`. Do not print it, do not copy it into the unit, and do not commit it. The process refuses to start when group or other can read the file, or when the derived public key is not the pin. Startup may log the public hex once.
 
 Copy [blocked-names.txt](blocked-names.txt) to `/etc/admission-claims/blocked-names.txt` (readable by the claims user). Edit it in place; the next name request uses it. Blocked attempts: `journalctl -u admission-claims | grep "blocked name"`.
 
@@ -60,7 +54,7 @@ cloudflared ingress for `claims.groundinglab.io` to `http://127.0.0.1:8793` is a
 
 ## strfry
 
-The write policy is already deployed. The versioned copies in this tree are [strfry-allowlist-v2.py](strfry-allowlist-v2.py) and [issuer.txt](issuer.txt). Kinds 30009, 8, and 1742 are rejected from every pubkey except that issuer. Kind 1808 is unchanged.
+The relay write policy (accept kinds 30009, 8 and 1742 only from the issuer pubkey) is part of the relay deployment, not this service.
 
 ## Backup
 
@@ -70,13 +64,13 @@ The write policy is already deployed. The versioned copies in this tree are [str
 admission-claims backup --config /etc/admission-claims/claims.toml
 ```
 
-The command copies the database, runs `PRAGMA integrity_check`, and age-encrypts the snapshot and `issuer.key` to `backup_age_recipient_file`. Plaintext snapshots are removed after encryption. The box keeps `backup_keep` ciphertext pairs (default 48). The ciphertext is PUT to the private bucket `groundinglab-claims-backup`. The age identity is not on the Vivobook. One offline copy of the issuer key is held by Christian.
+The command copies the database, runs `PRAGMA integrity_check`, and age-encrypts the snapshot and `issuer.key` to `backup_age_recipient_file`. Plaintext snapshots are removed after encryption. The box keeps `backup_keep` ciphertext pairs (default 48). The ciphertext is PUT to the private bucket `groundinglab-claims-backup`. The age identity is not on the host. Keep an offline copy of the issuer key.
 
 Every deploy runs this backup first and does not restart when the check fails.
 
 ## Worker
 
-`services/cf-claims-worker` is the GET-only Worker for `/claims/*`, `/badge/*`, and `/.well-known/nostr.json`. CORS is `*`. It does not redirect. `wrangler.jsonc` has placeholders. Do not deploy it from this change. Deploy is its own GO, with a short-lived token that is not the Pages token and is not stored on the Vivobook.
+`services/cf-claims-worker` is the GET-only Worker for `/claims/*`, `/badge/*`, and `/.well-known/nostr.json`. CORS is `*`. It does not redirect. `wrangler.jsonc` has placeholders. Do not deploy it from this change. Deploy is its own GO, with a short-lived token that is not the Pages token and is not stored on the host.
 
 ## What a badge publishes
 

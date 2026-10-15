@@ -58,10 +58,10 @@ mod tests {
     #[test]
     fn budget_is_per_client_and_zero_is_off() {
         let limiter = RateLimiter::per_minute(2);
-        assert!(limiter.admit("10.0.0.1"));
-        assert!(limiter.admit("10.0.0.1"));
-        assert!(!limiter.admit("10.0.0.1"));
-        assert!(limiter.admit("10.0.0.2"));
+        assert!(limiter.admit("203.0.113.1"));
+        assert!(limiter.admit("203.0.113.1"));
+        assert!(!limiter.admit("203.0.113.1"));
+        assert!(limiter.admit("203.0.113.2"));
         let off = RateLimiter::per_minute(0);
         for _ in 0..20 {
             assert!(off.admit("same"));

@@ -794,7 +794,7 @@ fn blocked_names_file_is_shipped_and_well_formed() {
     sorted.sort();
     sorted.dedup();
     assert_eq!(sorted.len(), names.len());
-    assert_eq!(names.len(), 985);
+    assert_eq!(names.len(), 978);
     assert!(!names.iter().any(|n| n == "christian" || n == "groundinglab"));
 }
 

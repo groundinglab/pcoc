@@ -1,5 +1,5 @@
 # groundinglab blocked names v3 (15 Oct 2026)
-# Live copy: /etc/admission-claims/blocked-names.txt on the Vivobook.
+# Starting list. Operators keep their live copy in their own deploy config.
 # One lowercase name per line. '#' starts a comment; blank lines are ignored.
 # Add a line to block a name; delete it to allow the name. Takes effect on the next
 # request (the service re-reads this file each time). No restart, no rebuild.
@@ -398,7 +398,6 @@ control
 coo
 copyright
 coracle
-cos
 counsel
 crew
 cron
@@ -410,10 +409,7 @@ damus
 dashboard
 data
 database
-dax
 db
-debian
-debian1
 default
 demo
 deploy
@@ -554,7 +550,6 @@ issuer
 issuers
 job
 jobs
-kekbox
 key
 keyring
 keys
@@ -667,7 +662,6 @@ payout
 payouts
 pcoc
 pcocs
-pepebook
 phishing
 pki
 plan
@@ -848,7 +842,6 @@ verification
 verified
 verify
 vip
-vivobook
 void
 vpn
 wallet
