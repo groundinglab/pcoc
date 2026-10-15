@@ -1,0 +1,32 @@
+# systemd system unit for admission-claims.
+# Copy, replace the binary path if you install a versioned file, then install.
+# There is no EnvironmentFile. The config file is the only input.
+#
+#   sudo cp admission-claims.service /etc/systemd/system/admission-claims.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now admission-claims
+
+[Unit]
+Description=groundinglab admission claims
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=claims
+Group=claims
+StateDirectory=admission-claims
+WorkingDirectory=/var/lib/admission-claims
+ExecStart=/usr/local/bin/admission-claims --config /etc/admission-claims/claims.toml
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/admission-claims
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=200
+
+[Install]
+WantedBy=multi-user.target

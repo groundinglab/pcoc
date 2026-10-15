@@ -32,6 +32,7 @@ jobs:
       go: ${{ steps.gate.outputs.go }}
       java: ${{ steps.gate.outputs.java }}
       gate: ${{ steps.gate.outputs.gate }}
+      claims: ${{ steps.gate.outputs.claims }}
       bari: ${{ steps.gate.outputs.bari }}
       index: ${{ steps.gate.outputs.index }}
       desktop: ${{ steps.gate.outputs.desktop }}
@@ -146,6 +147,7 @@ jobs:
       matrix:
         include:
           - { key: gate, dir: services/admission-gate }
+          - { key: claims, dir: services/admission-claims }
           - { key: bari, dir: services/bari }
           - { key: index, dir: services/index }
     name: service (${{ matrix.key }})

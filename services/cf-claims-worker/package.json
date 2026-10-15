@@ -1,0 +1,5 @@
+{
+  "name": "cf-claims-worker",
+  "private": true,
+  "type": "module"
+}

@@ -1,0 +1,16 @@
+# Hourly snapshot. The timer starts this oneshot. User claims.
+# An integrity failure exits non-zero and does not upload.
+
+[Unit]
+Description=groundinglab admission claims backup
+
+[Service]
+Type=oneshot
+User=claims
+Group=claims
+ExecStart=/usr/local/bin/admission-claims backup --config /etc/admission-claims/claims.toml
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/admission-claims

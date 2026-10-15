@@ -1,0 +1,10 @@
+[Unit]
+Description=Hourly groundinglab admission claims backup
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+Unit=admission-claims-backup.service
+
+[Install]
+WantedBy=timers.target

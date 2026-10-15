@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Path gate for ci.yml. Usage: changes.sh <base-sha|""> <head-sha>
-# Prints key=value lines (spec rust go java gate bari index desktop docs).
+# Prints key=value lines (spec rust go java gate claims bari index desktop docs).
 # Empty, all-zero or unknown base => run everything. spec/ or .github/ or any
 # unclassified path => run everything. spec/* already covers spec/conformance/.
 # A file reintroduced at repo-root conformance/ hits the unclassified arm.
 # A suite whose directory is absent is always false.
 set -euo pipefail
 base="${1:-}"; head="${2:-HEAD}"
-keys=(spec rust go java gate bari index desktop docs)
+keys=(spec rust go java gate claims bari index desktop docs)
 declare -A on dir=([spec]=spec [rust]=reference/rust [go]=reference/go [java]=reference/java
-  [gate]=services/admission-gate [bari]=services/bari [index]=services/index
+  [gate]=services/admission-gate [claims]=services/admission-claims [bari]=services/bari [index]=services/index
   [desktop]=apps/desktop [docs]=.)
 for k in "${keys[@]}"; do on[$k]=false; done
 all=false
@@ -25,6 +25,7 @@ else
       reference/java/*) on[java]=true ;;
       reference/*) on[rust]=true; on[go]=true; on[java]=true ;;
       services/admission-gate/*) on[gate]=true ;;
+      services/admission-claims/*) on[claims]=true ;;
       services/bari/*) on[bari]=true ;;
       services/index/*) on[index]=true ;;
       services/*.md|apps/*.md|docs/*|*.md|LICENSE) on[docs]=true ;;

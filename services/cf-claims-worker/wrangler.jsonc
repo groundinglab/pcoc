@@ -1,0 +1,17 @@
+{
+  // Placeholders. This file does not deploy. A later GO supplies the token.
+  "name": "groundinglab-claims",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-14",
+  "account_id": "ACCOUNT_ID",
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "groundinglab.io/.well-known/nostr.json*", "zone_name": "groundinglab.io" },
+    { "pattern": "www.groundinglab.io/.well-known/nostr.json*", "zone_name": "groundinglab.io" },
+    { "pattern": "groundinglab.io/claims/*", "zone_name": "groundinglab.io" },
+    { "pattern": "groundinglab.io/badge/*", "zone_name": "groundinglab.io" }
+  ],
+  "r2_buckets": [
+    { "binding": "CLAIMS", "bucket_name": "groundinglab-claims" }
+  ]
+}
