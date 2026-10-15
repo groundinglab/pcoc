@@ -4,6 +4,10 @@ Every groundinglab host in this repository is an example deployment, not a requi
 
 Nothing here is a config system. Some values are settings you already have. Others are constants you edit and then rebuild.
 
+## Sign-in doors are client build configuration
+
+Each signing client is built for the deployments it serves. The Sign-in door URL for each origin the client accepts is part of that client's build: there is no discovery. A client MUST NOT derive or guess a door URL from the origin, and MUST refuse a link whose origin has no configured door (SPEC §15.1 **Submit**). To serve your site, add your origin and its door to the client build.
+
 ## Admission Gate (`services/admission-gate`)
 
 The Gate's sign-in origin is a single constant. To run a gate for your site, edit it and rebuild.
@@ -30,6 +34,7 @@ The Gate's sign-in origin is a single constant. To run a gate for your site, edi
 |---|---|---|
 | Sign-in origin | `src/signin.rs:14` `ORIGIN` | Your site's origin |
 | Accepted link prefixes | `src/signin.rs:26-27` (`LINK_PREFIX`, `RETIRED_PREFIX`) and the display form at `:117` | Your origin plus `/sign-in/?v=1&nonce=` |
+| Sign-in door for the origin | `src/endpoints.rs:16` `SIGN_IN` (the door for `signin.rs:14` `ORIGIN`) | Your Gate's `/v1/sign-in` URL, paired with your origin |
 | Hosts | `src/endpoints.rs:7` `ADMISSION`, `:9` `BARI`, `:11` `INDEX`, `:13` `VERIFY`, `:16` `SIGN_IN` | Your Gate, Bari, index and verify hosts. The asserts at `:29-32` change with them |
 
 ## Android app (`groundinglab/primal-pcoc`)
@@ -38,7 +43,7 @@ The Gate's sign-in origin is a single constant. To run a gate for your site, edi
 |---|---|---|
 | Sign-in origin | `app/src/main/kotlin/net/primal/android/pcoc/admit/SignInLink.kt:102` `SIGN_IN_ORIGIN` | Your site's origin |
 | Link checks | `SignInLink.kt:68` (the `www` host message) and the link forms in the comments at `:7` and `:31` | Your host |
-| Door and result URLs | `admit/AdmissionDoorClient.kt:175` `SIGN_IN_DOOR`, `:176` `SIGN_IN_RESULT` | Your Gate |
+| Sign-in door for the origin | `admit/AdmissionDoorClient.kt:175` `SIGN_IN_DOOR` (the door for `SignInLink.kt:102` `SIGN_IN_ORIGIN`), with `:176` `SIGN_IN_RESULT` | Your Gate's URLs, paired with your origin |
 | Notices shown to people | `admit/SignInNotices.kt:33,35,36,79,81` | Your Gate's host name |
 | Bari and index | `bridge/PcocNative.kt:4` `INDEX_URL`, `:7` `BARI_URL`; `pcoc-bridge/bridge/src/lib.rs:15` `BARI_URL`, `:17` `INDEX_URL` (from `hike::DEFAULT_INDEX_URL`) | Your Bari and index |
 | App Link | `app/src/main/AndroidManifest.xml:126` `android:host="groundinglab.io"` | Your host. App Links also need your site to publish its own asset links file |
@@ -57,7 +62,7 @@ All of these are defaults you can override in config. If you leave one unset, yo
 | Storage buckets | `src/config.rs:24,29` |
 | Public site | `src/config.rs:26` `DEFAULT_PUBLIC_SITE` |
 | Allowed origins | `src/config.rs:39` `DEFAULT_ORIGINS` |
-| Worker routes and bucket | `services/cf-claims-worker/wrangler.jsonc:3-15`, a deploy file for groundinglab's zone. Copy it and edit it |
+| Worker routes and bucket | `services/cf-claims-worker/wrangler.jsonc:5-17`, a deploy file for groundinglab's zone. Its header says to copy it and edit it for your zone |
 
 ## Portable index (`services/index`)
 

@@ -1,3 +1,5 @@
+// groundinglab's deploy file for its own zone. To run under your own name,
+// copy this file and edit the name, routes, zone and bucket for your zone.
 {
   // Placeholders. This file does not deploy. A later GO supplies the token.
   "name": "groundinglab-claims",
