@@ -537,14 +537,17 @@ name = "pcoc-index"
 version = "0.1.4"
 dependencies = [
  "axum",
+ "base64",
  "futures-util",
  "http-body-util",
  "pcoc-bari",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "tokio",
  "tower",
+ "ureq",
 ]
 
 [[package]]

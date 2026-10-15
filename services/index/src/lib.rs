@@ -8,18 +8,24 @@
 //! These routes do not use Hashcash. CORS allows `https://groundinglab.io`,
 //! `https://www.groundinglab.io`, and loopback HTTP (`localhost`, `127.0.0.1`, `[::1]`).
 
+use crate::document::IndexDocument;
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
-use pcoc_bari::storage::{IndexCache, StorageError, StoredPortableIndex};
+use pcoc_bari::storage::{IndexCache, StorageError};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
+use std::io;
 use std::sync::Arc;
+
+pub mod chain;
+pub mod document;
+pub mod rebuild;
 
 /// Largest `limit` `GET /index/since` accepts.
 ///
@@ -145,7 +151,7 @@ impl IndexService {
         self.clocks.len()
     }
 
-    fn with_clock(&self, mut tip: StoredPortableIndex) -> StoredPortableIndex {
+    fn with_clock(&self, mut tip: IndexDocument) -> IndexDocument {
         // A stored `header.timestamp_unix_ms` is left as stored.
         // `header.time` is filled only when both time fields are absent.
         if tip.header.timestamp_unix_ms.is_some() {
@@ -175,17 +181,87 @@ impl IndexService {
             .with_state(self.clone())
     }
 
-    pub fn load_latest(
-        &self,
-    ) -> Result<Option<StoredPortableIndex>, pcoc_bari::storage::StorageError> {
-        self.cache.load_latest()
+    pub fn load_latest(&self) -> Result<Option<IndexDocument>, CacheError> {
+        self.load_file(self.latest_height()?)
     }
 
-    pub fn load_at_height(
-        &self,
-        height: u32,
-    ) -> Result<Option<StoredPortableIndex>, pcoc_bari::storage::StorageError> {
-        self.cache.load_at_height(height)
+    pub fn load_at_height(&self, height: u32) -> Result<Option<IndexDocument>, CacheError> {
+        let path = self.cache.tip_path(height);
+        if !path.exists() {
+            return Ok(None);
+        }
+        self.read_document(&path).map(Some)
+    }
+
+    fn latest_height(&self) -> Result<Option<u32>, CacheError> {
+        let mut best: Option<u32> = None;
+        for entry in fs::read_dir(self.cache.dir())? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
+                continue;
+            };
+            let Some(rest) = name
+                .strip_prefix("height-")
+                .and_then(|s| s.strip_suffix(".json"))
+            else {
+                continue;
+            };
+            if rest.len() != 10 || !rest.chars().all(|c| c.is_ascii_digit()) {
+                continue;
+            }
+            let Ok(height) = rest.parse::<u32>() else {
+                continue;
+            };
+            if best.is_none_or(|current| height > current) {
+                best = Some(height);
+            }
+        }
+        Ok(best)
+    }
+
+    fn load_file(&self, height: Option<u32>) -> Result<Option<IndexDocument>, CacheError> {
+        let Some(height) = height else {
+            return Ok(None);
+        };
+        self.load_at_height(height)
+    }
+
+    fn read_document(&self, path: &std::path::Path) -> Result<IndexDocument, CacheError> {
+        let bytes = fs::read(path)?;
+        Ok(serde_json::from_slice(&bytes)?)
+    }
+}
+
+/// A cache read failed. The HTTP layer answers 500 and an empty body.
+#[derive(Debug)]
+pub enum CacheError {
+    Storage(StorageError),
+    Io(io::Error),
+    Json(serde_json::Error),
+}
+
+impl std::error::Error for CacheError {}
+
+impl std::fmt::Display for CacheError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Storage(error) => write!(f, "{error}"),
+            Self::Io(error) => write!(f, "{error}"),
+            Self::Json(error) => write!(f, "{error}"),
+        }
+    }
+}
+
+impl From<io::Error> for CacheError {
+    fn from(error: io::Error) -> Self {
+        Self::Io(error)
+    }
+}
+
+impl From<serde_json::Error> for CacheError {
+    fn from(error: serde_json::Error) -> Self {
+        Self::Json(error)
     }
 }
 
@@ -215,9 +291,9 @@ struct SinceQuery {
     limit: Option<u32>,
 }
 
-/// One NDJSON record. Same compact JSON `Json<StoredPortableIndex>` writes
+/// One NDJSON record. Same compact JSON `Json<IndexDocument>` writes
 /// for `GET /index/{height}`, then a newline.
-fn index_ndjson_line(index: &StoredPortableIndex) -> Result<Vec<u8>, serde_json::Error> {
+fn index_ndjson_line(index: &IndexDocument) -> Result<Vec<u8>, serde_json::Error> {
     let mut bytes = serde_json::to_vec(index)?;
     bytes.push(b'\n');
     Ok(bytes)
@@ -422,15 +498,15 @@ fn unix_secs(unix_ms: u64) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::document::{IndexHeader, IndexPlant};
     use http_body_util::BodyExt;
-    use pcoc_bari::storage::{StoredIndexHeader, StoredPortableIndex};
     use tower::ServiceExt;
 
     fn write_tip(dir: &std::path::Path, height: u32, network: &str) {
-        let tip = StoredPortableIndex {
+        let tip = IndexDocument {
             version: 2,
             network: network.to_owned(),
-            header: StoredIndexHeader {
+            header: IndexHeader {
                 hash: "aa".repeat(32),
                 height,
                 time: None,
@@ -529,10 +605,10 @@ mod tests {
     async fn sequencer_events_fill_a_missing_header_time_and_a_stored_time_wins() {
         let index = tempfile::tempdir().unwrap();
         write_tip(index.path(), 7, "synthetic");
-        let stored = StoredPortableIndex {
+        let stored = IndexDocument {
             version: 2,
             network: "synthetic".to_owned(),
-            header: StoredIndexHeader {
+            header: IndexHeader {
                 hash: "bb".repeat(32),
                 height: 8,
                 time: Some(1_800_000_000),
@@ -591,10 +667,10 @@ mod tests {
     #[tokio::test]
     async fn observation_stamp_is_not_shadowed_by_a_sequencer_clock() {
         let index = tempfile::tempdir().unwrap();
-        let stored = StoredPortableIndex {
+        let stored = IndexDocument {
             version: 2,
             network: "synthetic".to_owned(),
-            header: StoredIndexHeader {
+            header: IndexHeader {
                 hash: "cc".repeat(32),
                 height: 9,
                 time: None,
@@ -758,15 +834,15 @@ mod tests {
             .is_none());
     }
 
-    fn write_stored(dir: &std::path::Path, tip: &StoredPortableIndex) {
+    fn write_stored(dir: &std::path::Path, tip: &IndexDocument) {
         let path = dir.join(format!("height-{:010}.json", tip.header.height));
         std::fs::write(path, serde_json::to_vec_pretty(tip).unwrap()).unwrap();
     }
 
-    fn plant(block_height: u32, marker: &str) -> pcoc_bari::storage::StoredIndexPlant {
-        pcoc_bari::storage::StoredIndexPlant {
+    fn plant(block_height: u32, marker: &str) -> IndexPlant {
+        IndexPlant {
             root: marker.repeat(32),
-            tree_size: 2,
+            tree_size: Some(2),
             txid: "ab".repeat(32),
             vout: 1,
             block_hash: "cd".repeat(32),
@@ -777,13 +853,13 @@ mod tests {
     fn stored(
         height: u32,
         network: &str,
-        plant: Option<pcoc_bari::storage::StoredIndexPlant>,
-        plants: Vec<pcoc_bari::storage::StoredIndexPlant>,
-    ) -> StoredPortableIndex {
-        StoredPortableIndex {
+        plant: Option<IndexPlant>,
+        plants: Vec<IndexPlant>,
+    ) -> IndexDocument {
+        IndexDocument {
             version: 2,
             network: network.to_owned(),
-            header: StoredIndexHeader {
+            header: IndexHeader {
                 hash: format!("{height:02x}").repeat(32),
                 height,
                 time: None,
