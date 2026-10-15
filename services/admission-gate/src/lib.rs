@@ -19,6 +19,7 @@ pub mod jobs;
 pub mod log;
 pub mod policy;
 pub mod ratelimit;
+pub mod reasons;
 pub mod signin_row;
 pub mod upload;
 pub mod verifier;

@@ -6,8 +6,10 @@
 //! GET  /v1/health            -> 200 version, commit, spec kind, config summary
 //! POST /v1/sign-in           -> locked §15.1 wire
 //! GET  /v1/sign-in/result/{nonce} -> { "outcome" }
-//! GET  /latest.json          -> unsigned tip, after a durable line
+//! GET  /latest.json          -> unsigned tip, after a durable line, plus policy
 //! GET  /log/{YYYY-MM-DD}.jsonl -> decision lines for that UTC date
+//! GET  /log/{YYYY-MM-DD}/{seq} -> one decision object
+//! GET  /v1/policy            -> the bound admission policy
 //! ```
 //!
 //! The `/v1` prefix stays because the website and the phone already call it.
@@ -17,6 +19,7 @@
 use crate::config::Config;
 use crate::door::{Door, LockedThorough, ThoroughJob};
 use crate::jobs::{EnqueueError, JobStore};
+use crate::policy::{self, AdmissionPolicy};
 use crate::ratelimit::RateLimiter;
 use crate::upload;
 use crate::verifier::SPEC_KIND_LABEL;
@@ -51,7 +54,12 @@ impl Service {
     pub fn open(cfg: Config) -> Result<Self, String> {
         let cfg = Arc::new(cfg);
         let limiter = Arc::new(RateLimiter::per_minute(cfg.rate_per_min));
-        let door = Door::open(&cfg.log_dir, cfg.leg_rate_floor_p, cfg.leg_rate_floor_q)?;
+        let door = Door::open(
+            &cfg.log_dir,
+            cfg.leg_rate_floor_p,
+            cfg.leg_rate_floor_q,
+            cfg.policy(),
+        )?;
         let jobs = JobStore::new(cfg.clone());
         for job in door.unsettled() {
             spawn_thorough(door.clone(), jobs.clone(), job);
@@ -75,6 +83,7 @@ impl Service {
     pub fn router(&self) -> Router {
         Router::new()
             .route("/v1/health", get(health).options(preflight))
+            .route("/v1/policy", get(get_policy).options(preflight))
             .route("/v1/verify", post(post_verify).options(preflight))
             .route("/v1/verify/{job_id}", get(get_verify).options(preflight))
             .route("/v1/sign-in", post(post_sign_in).options(preflight))
@@ -83,6 +92,7 @@ impl Service {
                 get(get_sign_in_result).options(preflight),
             )
             .route("/latest.json", get(get_latest).options(preflight))
+            .route("/log/{day}/{seq}", get(get_line).options(preflight))
             .route("/log/{name}", get(get_day).options(preflight))
             .fallback(unknown_route)
             .layer(axum::extract::DefaultBodyLimit::max(
@@ -108,7 +118,6 @@ struct HealthBody {
 struct ConfigSummary {
     bind: String,
     index_url: String,
-    log_dir: String,
     max_object_bytes: usize,
     job_retention_secs: u64,
     max_jobs: usize,
@@ -121,8 +130,9 @@ struct ConfigSummary {
     leg_rate_floor: FloorSummary,
     bind_threads: usize,
     index_timeout_secs: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    config_path: Option<String>,
+    policy_id: String,
+    min_leg_rate: f64,
+    min_waypoints: u64,
 }
 
 #[derive(Serialize)]
@@ -150,7 +160,6 @@ async fn health(State(svc): State<Service>, headers: HeaderMap) -> Response {
         config: ConfigSummary {
             bind: svc.cfg.bind.to_string(),
             index_url: svc.cfg.index_url.clone(),
-            log_dir: svc.cfg.log_dir.display().to_string(),
             max_object_bytes: svc.cfg.max_object_bytes,
             job_retention_secs: svc.cfg.job_retention.as_secs(),
             max_jobs: svc.cfg.max_jobs,
@@ -166,11 +175,9 @@ async fn health(State(svc): State<Service>, headers: HeaderMap) -> Response {
             },
             bind_threads: svc.cfg.bind_threads,
             index_timeout_secs: svc.cfg.index_timeout.as_secs(),
-            config_path: svc
-                .cfg
-                .config_path
-                .as_ref()
-                .map(|path| path.display().to_string()),
+            policy_id: svc.cfg.policy_id.clone(),
+            min_leg_rate: svc.cfg.min_leg_rate,
+            min_waypoints: svc.cfg.min_waypoints,
         },
         jobs: JobCounts { tracked, in_flight },
     };
@@ -458,6 +465,11 @@ fn locked_response(
 
 fn spawn_locked(door: Door, jobs: JobStore, job: LockedThorough) {
     tokio::spawn(async move {
+        // A prior thorough accept with policy_id skips measurement.
+        if job.prior_accept.is_some() {
+            door.settle_locked(job, Ok(crate::verifier::Report::Unreadable));
+            return;
+        }
         let object = job.object.clone();
         let report = jobs.measure(object).await;
         door.settle_locked(job, report);
@@ -505,6 +517,56 @@ async fn get_latest(State(svc): State<Service>, headers: HeaderMap) -> Response 
     }
 }
 
+async fn get_policy(State(svc): State<Service>, headers: HeaderMap) -> Response {
+    ok_response(&svc, &headers, policy_body(svc.door.policy()))
+}
+
+fn policy_body(policy: &AdmissionPolicy) -> Value {
+    json!({
+        "policy_id": policy.policy_id,
+        "min_leg_rate": policy.min_leg_rate,
+        "min_waypoints": policy.min_waypoints,
+        "waypoints_total": policy::WAYPOINTS_TOTAL,
+        "min_legs": policy::SPEC_MIN_LEGS,
+        "spec": policy::POLICY_SPEC,
+    })
+}
+
+async fn get_line(
+    State(svc): State<Service>,
+    headers: HeaderMap,
+    Path((day, seq)): Path<(String, String)>,
+) -> Response {
+    let Some(day) = utc_date(&day) else {
+        return error_response(
+            &svc,
+            &headers,
+            StatusCode::NOT_FOUND,
+            "not_found",
+            "no such log",
+        );
+    };
+    let Ok(seq) = seq.parse::<u64>() else {
+        return error_response(
+            &svc,
+            &headers,
+            StatusCode::NOT_FOUND,
+            "not_found",
+            "no such log",
+        );
+    };
+    match svc.door.line_bytes(day, seq) {
+        Some(bytes) => bytes_response(&svc, &headers, "application/json", bytes),
+        None => error_response(
+            &svc,
+            &headers,
+            StatusCode::NOT_FOUND,
+            "not_found",
+            "no decision line with that seq falls on that UTC date",
+        ),
+    }
+}
+
 async fn get_day(
     State(svc): State<Service>,
     headers: HeaderMap,
@@ -533,6 +595,10 @@ async fn get_day(
 
 fn utc_day_name(name: &str) -> Option<&str> {
     let day = name.strip_suffix(".jsonl")?;
+    utc_date(day)
+}
+
+fn utc_date(day: &str) -> Option<&str> {
     let bytes = day.as_bytes();
     if bytes.len() == 10
         && bytes[4] == b'-'

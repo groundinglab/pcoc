@@ -51,6 +51,107 @@ pub struct Measured {
     pub record: String,
     /// Verifier notes, in the verifier's words. `earlier version` is one.
     pub verifier_notes: Vec<String>,
+    /// Numbers only. No threshold. A side the verifier did not obtain is `None`.
+    pub measures: Measures,
+}
+
+/// Verifier numbers for one decision line.
+///
+/// Absent means the verifier did not obtain that side. A threshold never
+/// appears here. `waypoints_total` is the spec stage count, 18.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Measures {
+    pub legs: Option<u64>,
+    pub span_s: Option<u64>,
+    pub leg_rate: Option<f64>,
+    pub waypoints_fetched: Option<u64>,
+    pub waypoints_total: u64,
+    pub paths_included: Option<u64>,
+    pub legs_recomputed_ok: Option<u64>,
+}
+
+impl Measures {
+    /// JSON object. A missing side is null.
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "legs": self.legs,
+            "span_s": self.span_s,
+            "leg_rate": self.leg_rate,
+            "waypoints_fetched": self.waypoints_fetched,
+            "waypoints_total": self.waypoints_total,
+            "paths_included": self.paths_included,
+            "legs_recomputed_ok": self.legs_recomputed_ok,
+        })
+    }
+}
+
+/// Keys that are policy, not measurements. A schema test fails if one appears.
+pub const MEASURE_THRESHOLD_KEYS: &[&str] = &[
+    "min_leg_rate",
+    "min_waypoints",
+    "min",
+    "policy_id",
+    "floor",
+    "threshold",
+];
+
+/// Read measures off a reference [`hike::Measurements`]. No judgment.
+pub fn measures_of(measurements: &hike::Measurements) -> Measures {
+    let (legs, span_s, leg_rate) = bookend_measures(&measurements.record_body);
+    let waypoints_fetched = match &measurements.waypoints {
+        hike::Recorded::Obtained(waypoints) => Some(
+            waypoints
+                .anchors
+                .iter()
+                .filter(|anchor| **anchor == hike::Anchor::Anchored)
+                .count() as u64,
+        ),
+        hike::Recorded::NotObtained => None,
+    };
+    let paths_included = match measurements.paths_included {
+        hike::Recorded::Obtained(count) => Some(count),
+        hike::Recorded::NotObtained => None,
+    };
+    let legs_recomputed_ok = match &measurements.six_legs {
+        hike::SixLegs::Rewalked { matches, .. } => {
+            Some(matches.iter().filter(|flag| **flag).count() as u64)
+        }
+        hike::SixLegs::CouldNotDraw
+        | hike::SixLegs::DrawNotObtained
+        | hike::SixLegs::NotObtained => None,
+    };
+    Measures {
+        legs,
+        span_s,
+        leg_rate,
+        waypoints_fetched,
+        waypoints_total: crate::policy::WAYPOINTS_TOTAL,
+        paths_included,
+        legs_recomputed_ok,
+    }
+}
+
+/// `N`, `S`, and `N/S` from a section 14 record body. A word is not a number.
+///
+/// The body starts with a comma. Wrapping it makes one JSON object.
+fn bookend_measures(record_body: &str) -> (Option<u64>, Option<u64>, Option<f64>) {
+    let wrapped;
+    let text = if let Some(rest) = record_body.strip_prefix(',') {
+        wrapped = format!("{{{rest}");
+        wrapped.as_str()
+    } else {
+        record_body
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(text) else {
+        return (None, None, None);
+    };
+    let legs = value.get("N").and_then(serde_json::Value::as_u64);
+    let span_s = value.get("S").and_then(serde_json::Value::as_u64);
+    let leg_rate = match (legs, span_s) {
+        (Some(legs), Some(span)) if span > 0 => Some(legs as f64 / span as f64),
+        _ => None,
+    };
+    (legs, span_s, leg_rate)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -172,6 +273,7 @@ fn linked_measure(object: &[u8], opts: &MeasureOpts) -> Report {
     if beacon_failures.load(Ordering::Relaxed) > 0 && !verifier_notes.is_empty() {
         verifier_notes.push(INDEX_UNREAD_NOTE.to_owned());
     }
+    let measures = measures_of(&measurements);
     let record = hike::verify_record_json("production", &measurements);
     Report::Read(Measured {
         earlier_version: verifier_notes
@@ -180,6 +282,7 @@ fn linked_measure(object: &[u8], opts: &MeasureOpts) -> Report {
         kind: hike::KIND.to_owned(),
         record,
         verifier_notes,
+        measures,
     })
 }
 
@@ -545,6 +648,7 @@ mod tests {
             kind: hike::KIND.to_owned(),
             record,
             verifier_notes: notes,
+            measures: measures_of(&measurements),
         });
         match crate::policy::judge(&report, 1, 4) {
             crate::policy::Judgment::Refuse { reasons, .. } => reasons,
