@@ -14,6 +14,8 @@ The 39-byte tag stays `OP_RETURN` ‖ push-37 ‖ `BARI` ‖ `0x02` ‖ the 32-b
 
 Plants are not a single change chain. Bari spends from a pool of several confirmed operator coins (around six), replenished in batches of roughly 10,000 sats each, so a confirmed coin is always available to fund the next plant. Each plant's funding input is signed by the operator's key, and that signature is the attribution.
 
+Every coin in an operator's pool must be locked to the operator's single published key, so the funding-input signature attributes any plant whichever pool coin was rotated in. Coins on HD-derived distinct addresses would not be attributable by that key.
+
 A rebuild identifies an operator's plants by the operator key on the funding inputs, not by following one change chain. A plant funded by a key the verifier does not attribute to the operator is not that operator's plant. The note does not say such a plant is invalid. Existing plants stay valid under Part A.
 
 ## Several operators
