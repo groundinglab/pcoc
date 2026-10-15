@@ -30,6 +30,8 @@ cargo build --release --locked
 ./target/release/satoshi-hike-verify --input OBJECT --index-url URL
 ```
 
+The default `--profile` is `test`, which will not dial `https://index.groundinglab.io` and reads `PCOC_TEST_INDEX_URL` when `--index-url` is omitted. To verify against the public index, pass `--profile live --index-url https://index.groundinglab.io`. The full usage text (`--help`) has the rules.
+
 `satoshi-hike-verify` writes the section 14 measurement record. It does not apply admission policy.
 
 ## Spec pin
