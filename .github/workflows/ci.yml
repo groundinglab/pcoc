@@ -178,17 +178,11 @@ jobs:
           key: svc-${{ matrix.key }}-${{ runner.os }}-${{ hashFiles(format('{0}/Cargo.lock', matrix.dir)) }}
           restore-keys: svc-${{ matrix.key }}-${{ runner.os }}-
       - if: steps.on.outputs.run == 'true'
-        name: cargo test (git+tag deps fetched with the read-only job token)
+        name: cargo test
         working-directory: ${{ matrix.dir }}
         env:
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # Needed only while the repo is private; harmless once public. Job-scoped git config:
-          # self-hosted HOME persists between jobs, so never write the token to ~/.gitconfig.
-          export GIT_CONFIG_GLOBAL="$RUNNER_TEMP/gitconfig-$GITHUB_JOB"; : > "$GIT_CONFIG_GLOBAL"
-          git config --global "url.https://x-access-token:${GH_TOKEN}@github.com/groundinglab/pcoc.insteadOf" "https://github.com/groundinglab/pcoc"
-          cargo test --locked --release
+        run: cargo test --locked --release
 
   desktop:
     # Not required: ci-ok ignores this job's result.
@@ -216,11 +210,7 @@ jobs:
         working-directory: apps/desktop
         env:
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          export GIT_CONFIG_GLOBAL="$RUNNER_TEMP/gitconfig-$GITHUB_JOB"; : > "$GIT_CONFIG_GLOBAL"
-          git config --global "url.https://x-access-token:${GH_TOKEN}@github.com/groundinglab/pcoc.insteadOf" "https://github.com/groundinglab/pcoc"
-          cargo test --locked -p pcoc-hike-core
+        run: cargo test --locked -p pcoc-hike-core
 
   docs:
     needs: changes

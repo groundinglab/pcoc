@@ -4,7 +4,7 @@ A demonstrator, not part of the specification. The app is a fork of Primal's And
 
 Sign-in is a different door. The phone signs the enrolled object and POSTs the section 15.1 body to `https://admission.groundinglab.io/v1/sign-in`. The Admission Gate decides. The phone shows that decision. A measurement on the verify screen is not a policy decision, and a policy decision is not a verifier result.
 
-The fork is [groundinglab/primal-pcoc](https://github.com/groundinglab/primal-pcoc). Making that repository public is a separate maintainer action. Until it is public, this page is the description. A release built from a named commit will carry the SHA-256 of that build. This page does not publish a hash, because no release here is tied to a named commit yet.
+The fork is [groundinglab/primal-pcoc](https://github.com/groundinglab/primal-pcoc). The current demonstrator build is tag [`android-v3.5.46`](https://github.com/groundinglab/primal-pcoc/tree/android-v3.5.46) (commit `4d35661`). Its debug APK is published on the [demonstrations page](https://groundinglab.io/demonstrations/) with SHA-256 `b211a7d0485b0a11e056976cda83036f6dff821f5afd8d0a0be7391021fb5a79`.
 
 ## Three doors
 
@@ -22,7 +22,7 @@ primal-pcoc is a fork of [PrimalHQ/primal-android-app](https://github.com/Primal
 - Product: [primal.net](https://primal.net). This fork is not an official Primal release and is not endorsed by Primal Systems Inc.
 - groundinglab's changes, as shipped on the fork: the `net.primal.android.pcoc` doors (enroll, local produce, local verify, sign-in), the `pcoc-bridge` JNI crate and its vendored `hike`, and `docs/pcoc/`. The complete file list against the upstream commit is in the fork's README. This page does not guess that list.
 
-The vendored reference on the fork's current main still points at an older private checkout (`pcoc-bridge/Cargo.toml`). A pull request on the fork retargets that vendor to `groundinglab/pcoc` at `ref-rust-v2.0.4` after that tag exists. This repository does not vendor the Android app.
+The vendored reference on the fork (`pcoc-bridge/vendor/hike`) was copied from an earlier private checkout. It is due to be retargeted to [`ref-rust-v2.0.4`](https://github.com/groundinglab/pcoc/tree/ref-rust-v2.0.4) in this repository. This repository does not vendor the Android app.
 
 ## Rebuild and verify
 
@@ -33,7 +33,7 @@ On a machine with the Android SDK, JDK 21, and the NDK:
 ```sh
 git clone https://github.com/groundinglab/primal-pcoc.git
 cd primal-pcoc
-git checkout <commit-the-release-names>
+git checkout android-v3.5.46
 ./pcoc-bridge/build-android.sh
 ./gradlew :app:assembleAospDebug
 ```
