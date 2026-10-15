@@ -573,7 +573,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "hike"
 version = "0.1.0"
-source = "git+https://github.com/groundinglab/pcoc?tag=ref-rust-v2.0.4#a38c72c92ab599b4f35fc43e7a6caebfab890144"
+source = "git+https://github.com/groundinglab/pcoc?tag=ref-rust-v2.0.5#b875df9b9891e21e3d9a10d05f9d3b432d65e7f2"
 dependencies = [
  "getrandom",
  "rayon",
@@ -806,7 +806,7 @@ checksum = "f38d5652c16fde515bb1ecef450ab0f6a219d619a7274976324d5e377f7dceba"
 
 [[package]]
 name = "pcoc-hike"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "async-channel",
  "getrandom",
@@ -818,7 +818,7 @@ dependencies = [
 
 [[package]]
 name = "pcoc-hike-core"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "base64",
  "bech32",

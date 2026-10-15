@@ -57,7 +57,7 @@ mod tests {
     #[test]
     fn pin_is_never_a_branch_and_names_a_commit() {
         assert_eq!(PIN_KIND, "tag");
-        assert_eq!(PIN, "ref-rust-v2.0.4");
+        assert_eq!(PIN, "ref-rust-v2.0.5");
         assert_ne!(PIN_COMMIT, "unresolved");
         assert!(pin_line().contains("not branch main"));
         assert_eq!(OBJECT_KIND, "satoshi-hike-v2.0-object");
