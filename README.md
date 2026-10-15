@@ -45,9 +45,19 @@ The specification and the conformance vectors are the core deliverable. The poin
 | Specification | [spec/](spec/) | The complete, normative definition of how a PCOC is made and checked |
 | Conformance | [spec/conformance/](spec/conformance/v2.0/) | Shared vectors: what a Part A implementation must reproduce |
 | References | [reference/](reference/) | First tested examples in Rust, Go, and Java. A guide, not a requirement. The specification wins if they disagree |
-| Services | [services/](services/) | Bari, the index, and the Admission Gate, built on the Rust reference |
+| Services | [services/](services/) | Bari (the plant), the index (its own reader), and the Admission Gate, built on the Rust reference |
 | Apps | [apps/](apps/) | Desktop demonstrator, and an Android demonstrator described in [apps/android](apps/android/) |
 | Docs | [docs/](docs/README.md) | Plain-language briefs and rationale. Explanatory, not normative |
+
+## Run it yourself
+
+Hosted services are opt-in. `https://index.groundinglab.io` and `https://bari.groundinglab.io` are a convenience, not a dependency. A verifier takes `--index-url`. Omit it on the live profile and the reference uses the hosted index. Pass your own and it does not.
+
+The index is its own component ([services/index](services/index/)). Three ways to have one, each opt-in:
+
+1. Use the hosted index.
+2. Rebuild the files from a public block API. No node: `pcoc-index rebuild --source esplora --from-height N --to-height M --out DIR`, then serve that directory.
+3. Rebuild from a pruned Bitcoin Core (`--source rpc`), or run Bari and let it write the files. A node is what planting needs. Serving and rebuilding an index do not.
 
 ## Where next
 
