@@ -2,7 +2,7 @@
 
 Three independent implementations of the PCOC specification, in Rust, Go, and Java. Each is tested against the shared vectors under [spec/conformance/v2.0](../spec/conformance/v2.0/). That is the evidence the specification is complete enough to build from. They are the first tested examples, a guide, and optional. Where a reference disagrees with the specification, the specification wins and the reference has a bug.
 
-They follow [SPEC_PIN](SPEC_PIN): tag `spec-v2.0.3` (proposed, not yet tagged), and the vector hash recorded on the next line. [tools/check_spec_pin.py](tools/check_spec_pin.py) recomputes that hash from `spec/conformance/` (every file except `spec/conformance/tools/`) and fails on a mismatch. Run it from the repository root: `python3 reference/tools/check_spec_pin.py`.
+They follow [SPEC_PIN](SPEC_PIN): tag `spec-v2.0.3`, and the vector hash recorded on the next line. [tools/check_spec_pin.py](tools/check_spec_pin.py) recomputes that hash from `spec/conformance/` (every file except `spec/conformance/tools/`) and fails on a mismatch. Run it from the repository root: `python3 reference/tools/check_spec_pin.py`.
 
 Verify writes the section 14 measurement record. It does not judge. Judgment is policy (specification section 15) and is not this folder, except `hike-net`, which is network and test-plane policy kept out of the measurement crate.
 

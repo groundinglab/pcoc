@@ -4,6 +4,8 @@ PCOC Hike for Linux makes a PCOC, checks one, and signs in, on your own machine,
 
 A full hike is eighteen stages paced by Bitcoin blocks. That is hours, not a button press. The key stays on the machine. Verify reads the portable index (the live default is the public index). Anyone can bypass that index by checking Bitcoin. The app does not say pass or fail. Sign-in sends the object to a relying party. Accept, refuse, and revoke are that party's policy.
 
+**Mainnet only.** Start hike runs on Bitcoin mainnet and posts each waypoint to the public Bari from your real key. The app has no test plane and no test-plane switch. The app uses one application id. If the Flatpak build is already running, starting a second copy (for example `cargo run`) opens the running Flatpak window instead of a new one. Quit the Flatpak first to run the source build.
+
 Needs GTK 4.14+ and libadwaita 1.5+ (Ubuntu 24.04, Debian 13, Fedora 40 or newer). Rust 1.99.0 comes from `rust-toolchain.toml` in this folder.
 
 ## 1. Get the code
