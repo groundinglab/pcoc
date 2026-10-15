@@ -23,8 +23,10 @@ An earlier-kind object is a measurement (`version` `earlier version`). The Gate'
 ```text
 POST /v1/sign-in           -> locked §15.1 body
 GET  /v1/sign-in/result/{nonce}
-GET  /latest.json          -> tip after a durable line
+GET  /latest.json          -> tip after a durable line, plus policy
 GET  /log/{YYYY-MM-DD}.jsonl
+GET  /log/{YYYY-MM-DD}/{seq}
+GET  /v1/policy            -> policy_id, min_leg_rate, min_waypoints
 POST /v1/verify            -> 202 { "job_id" }
 GET  /v1/verify/{job_id}   -> status, and the section 14 record when the object is v2.0
 GET  /v1/health            -> version, commit, spec, spec_kind, config
@@ -34,7 +36,9 @@ GET  /v1/health            -> version, commit, spec, spec_kind, config
 
 The reference verifier is `linked_measure` in `src/verifier.rs`. It calls `hike::verify_with_bind_threads` from the v2.0 reference crate. Index reads are one shot. An earlier kind is that crate's Rule A5. Policy then judges the measurements.
 
-Policy is not a profile. `leg_rate_floor` in the config is `strict` (7/20), `default` (1/4), or `lenient` (1/8). The floor compares the bookend pair `(N, S)` in the section 14 record. There is no friendly list and no held state. `verify_summary` is that record, including `profile` and the trailing newline.
+Policy is not a profile. `policy_id` names one floor for its life. The default is `gl-admit-v1`: `min_leg_rate` 0.25 leg/s and `min_waypoints` 6 of 18. A change of either number is a new id. The verifier writes `measures`. The gate writes `policy_id` and `policy_checks`. A refusal carries one `reason_code` and a class. `bitcoin_tip_height` is null when unknown. Public health does not show `log_dir` or `config_path`.
+
+`leg_rate_floor` remains `strict` (7/20), `default` (1/4), or `lenient` (1/8) for a resumed provisional. A new sign-in uses `min_leg_rate` and `min_waypoints`. A resumed provisional still stores the section 14 record under `verify_summary`, including `profile` and the trailing newline.
 
 The public log starts empty. The process creates `log_dir`. A chain that is not Satoshi Hike v2.0 is not opened and not served.
 

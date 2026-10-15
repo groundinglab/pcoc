@@ -57,4 +57,6 @@ Build the new binary, replace the file in `ExecStart`, then `sudo systemctl rest
 
 ## Routes
 
-`POST /v1/sign-in`, `POST /v1/verify`, `GET /v1/verify/{job_id}`, `GET /v1/health`, `GET /latest.json`, `GET /log/{YYYY-MM-DD}.jsonl`. Anything else, including `POST /v1/admit`, is HTTP 404. Bodies are in [WIRE.md](../WIRE.md).
+`POST /v1/sign-in`, `POST /v1/verify`, `GET /v1/verify/{job_id}`, `GET /v1/health`, `GET /v1/policy`, `GET /latest.json`, `GET /log/{YYYY-MM-DD}.jsonl`, `GET /log/{YYYY-MM-DD}/{seq}`. Anything else, including `POST /v1/admit`, is HTTP 404. Bodies are in [WIRE.md](../WIRE.md).
+
+`policy_id` defaults to `gl-admit-v1`. It is bound to `min_leg_rate` and `min_waypoints`. Changing either number requires a new id. The process writes that binding to `{log_dir}/policy-bind.json` and exits before it listens when the same id is paired with different numbers.

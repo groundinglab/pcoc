@@ -53,11 +53,14 @@ pub struct DecisionLog {
     lines: Vec<StoredLine>,
     next_seq: u64,
     prev_hash: [u8; 32],
+    /// Copied into `/latest.json` when set. The chain does not store it.
+    policy_hint: Option<Value>,
 }
 
 pub struct DecisionWrite {
     pub time_unix_s: u64,
-    pub bitcoin_tip_height: u64,
+    /// `None` is JSON null. A known height is that integer. Never `0` for unknown.
+    pub bitcoin_tip_height: Option<u64>,
     pub phase: &'static str,
     pub decision: &'static str,
     pub fast_seq: Option<u64>,
@@ -69,8 +72,56 @@ pub struct DecisionWrite {
     pub reason: Option<String>,
     /// Section 14 record bytes, or `{}` when this line has no record.
     /// A real record includes its trailing newline. The encoder splices
-    /// these bytes. It does not parse them.
-    pub summary: String,
+    /// these bytes. It does not parse them. `None` omits `verify_summary`
+    /// and writes `measures` instead.
+    pub summary: Option<String>,
+    /// Verifier numbers. Present only when `summary` is `None`.
+    pub measures: Option<Value>,
+    /// Gate policy id. Omitted on a fast line, a provisional, and a resume
+    /// that still stores the section 14 record.
+    pub policy_id: Option<String>,
+    /// `[{field, min, met}]`. Omitted when this line has no policy.
+    pub policy_checks: Option<Value>,
+    /// One stable snake_case code on a refusal. Never the catch-all `rejected`.
+    pub reason_code: Option<String>,
+    /// `below_policy`, `invalid`, or `operational`.
+    pub class: Option<String>,
+    /// Thorough accept this return points at.
+    pub access_ref_day: Option<String>,
+    pub access_ref_seq: Option<u64>,
+}
+
+impl DecisionWrite {
+    /// A line with no policy, no measures, and an empty `verify_summary`.
+    /// Key order matches the encoder that hashed existing chains.
+    pub fn bare(
+        time_unix_s: u64,
+        bitcoin_tip_height: Option<u64>,
+        phase: &'static str,
+        decision: &'static str,
+    ) -> Self {
+        Self {
+            time_unix_s,
+            bitcoin_tip_height,
+            phase,
+            decision,
+            fast_seq: None,
+            submission_sha256: [0u8; 32],
+            public_key: [0u8; 32],
+            object_sha256: [0u8; 32],
+            object: Vec::new(),
+            reasons: Vec::new(),
+            reason: None,
+            summary: Some("{}".to_owned()),
+            measures: None,
+            policy_id: None,
+            policy_checks: None,
+            reason_code: None,
+            class: None,
+            access_ref_day: None,
+            access_ref_seq: None,
+        }
+    }
 }
 
 impl DecisionLog {
@@ -111,6 +162,7 @@ impl DecisionLog {
             lines: Vec::new(),
             next_seq: 0,
             prev_hash: genesis_hash(),
+            policy_hint: None,
         };
         log.install(parsed.lines)?;
         log.repair_latest()?;
@@ -119,6 +171,15 @@ impl DecisionLog {
 
     pub fn lines(&self) -> &[StoredLine] {
         &self.lines
+    }
+
+    /// Put `policy` on the next `/latest.json`. Rewrites the hint when a line exists.
+    pub fn set_policy_hint(&mut self, policy: Value) -> Result<(), LogError> {
+        self.policy_hint = Some(policy);
+        if self.lines.is_empty() {
+            return Ok(());
+        }
+        self.rewrite_latest()
     }
 
     pub fn object_bytes(&self, sha_hex: &str) -> Option<Vec<u8>> {
@@ -157,7 +218,9 @@ impl DecisionLog {
 
     pub fn append(&mut self, write: &DecisionWrite) -> Result<u64, LogError> {
         if !canon::in_json_bound(write.time_unix_s)
-            || !canon::in_json_bound(write.bitcoin_tip_height)
+            || write
+                .bitcoin_tip_height
+                .is_some_and(|tip| !canon::in_json_bound(tip))
         {
             return Err(LogError::Unusable(
                 "time or tip is outside the JSON integer bound".to_owned(),
@@ -167,7 +230,17 @@ impl DecisionLog {
         publish_new(&self.dir.join("objects").join(&object_sha), &write.object)?;
         let seq = self.next_seq;
         let raw = encode_decision(seq, &hex32(&self.prev_hash), write)?;
-        self.commit_line(raw, write.bitcoin_tip_height)
+        self.commit_line(raw)
+    }
+
+    /// One decision object whose `seq` matches and whose `time_unix_s` falls
+    /// on that UTC day. The bytes are the stored line.
+    pub fn line_on_day(&self, day: &str, seq: u64) -> Option<&StoredLine> {
+        self.lines.iter().find(|line| {
+            let line_seq = line.value.get("seq").and_then(|item| item.as_u64());
+            let time = line.value.get("time_unix_s").and_then(|item| item.as_u64());
+            line_seq == Some(seq) && time.is_some_and(|time| utc_day(time) == day)
+        })
     }
 
     fn install(&mut self, lines: Vec<StoredLine>) -> Result<(), LogError> {
@@ -177,13 +250,10 @@ impl DecisionLog {
                 .get("seq")
                 .and_then(|item| item.as_u64())
                 .ok_or_else(|| LogError::Unusable("seq".to_owned()))?;
-            if line
-                .value
-                .get("bitcoin_tip_height")
-                .and_then(|item| item.as_u64())
-                .is_none()
-            {
-                return Err(LogError::Unusable("bitcoin_tip_height".to_owned()));
+            match line.value.get("bitcoin_tip_height") {
+                Some(Value::Number(number)) if number.as_u64().is_some() => {}
+                Some(Value::Null) => {}
+                _ => return Err(LogError::Unusable("bitcoin_tip_height".to_owned())),
             }
             self.prev_hash = line.hash;
             self.next_seq = seq + 1;
@@ -207,7 +277,7 @@ impl DecisionLog {
         self.rewrite_latest()
     }
 
-    fn commit_line(&mut self, raw: Vec<u8>, _tip: u64) -> Result<u64, LogError> {
+    fn commit_line(&mut self, raw: Vec<u8>) -> Result<u64, LogError> {
         let hash = event_hash(&raw);
         let seq = self.next_seq;
         let path = self.dir.join("chain.jsonl");
@@ -242,6 +312,9 @@ impl DecisionLog {
         let mut map = Map::new();
         map.insert("feed".to_owned(), json!(FEED));
         map.insert("spec".to_owned(), json!(SPEC_NAME));
+        if let Some(policy) = self.policy_hint.as_ref() {
+            map.insert("policy".to_owned(), policy.clone());
+        }
         map.insert("last_seq".to_owned(), json!(last.value["seq"].clone()));
         map.insert("last_event_hash".to_owned(), json!(hex32(&last.hash)));
         map.insert("today".to_owned(), json!(utc_day(time)));
@@ -333,7 +406,10 @@ fn encode_decision(seq: u64, prev: &str, write: &DecisionWrite) -> Result<Vec<u8
     map.insert("time_unix_s".to_owned(), json!(write.time_unix_s));
     map.insert(
         "bitcoin_tip_height".to_owned(),
-        json!(write.bitcoin_tip_height),
+        match write.bitcoin_tip_height {
+            Some(height) => json!(height),
+            None => Value::Null,
+        },
     );
     map.insert("spec".to_owned(), json!(SPEC_NAME));
     map.insert("gate_version".to_owned(), json!(env!("CARGO_PKG_VERSION")));
@@ -359,13 +435,44 @@ fn encode_decision(seq: u64, prev: &str, write: &DecisionWrite) -> Result<Vec<u8
     if let Some(reason) = &write.reason {
         map.insert("reason".to_owned(), json!(reason));
     }
+    if let Some(code) = &write.reason_code {
+        map.insert("reason_code".to_owned(), json!(code));
+    }
+    if let Some(class) = &write.class {
+        map.insert("class".to_owned(), json!(class));
+    }
+    if let Some(policy_id) = &write.policy_id {
+        map.insert("policy_id".to_owned(), json!(policy_id));
+    }
+    if let Some(checks) = &write.policy_checks {
+        map.insert("policy_checks".to_owned(), checks.clone());
+    }
+    if let Some(day) = &write.access_ref_day {
+        map.insert("access_ref_day".to_owned(), json!(day));
+    }
+    if let Some(seq) = write.access_ref_seq {
+        map.insert("access_ref_seq".to_owned(), json!(seq));
+    }
     let mut text = serde_json::to_string(&Value::Object(map))
         .map_err(|err| LogError::Unusable(err.to_string()))?;
-    // The record's trailing newline is inside the object. Re-encoding would
-    // drop it. `profile` stays, and the section 14 key order stays.
+    // New keys are already in the object, immediately before the summary splice.
+    // The splice stays last so a section 14 newline still sits inside the object.
     text.pop();
-    text.push_str(",\"verify_summary\":");
-    text.push_str(&write.summary);
+    match (&write.measures, &write.summary) {
+        (Some(measures), None) => {
+            let encoded = serde_json::to_string(measures)
+                .map_err(|err| LogError::Unusable(err.to_string()))?;
+            text.push_str(",\"measures\":");
+            text.push_str(&encoded);
+        }
+        (_, Some(summary)) => {
+            // The record's trailing newline is inside the object. Re-encoding
+            // would drop it. `profile` stays, and the section 14 key order stays.
+            text.push_str(",\"verify_summary\":");
+            text.push_str(summary);
+        }
+        (None, None) => {}
+    }
     text.push('}');
     Ok(text.into_bytes())
 }
@@ -540,7 +647,7 @@ mod tests {
         let object = b"object-bytes".to_vec();
         DecisionWrite {
             time_unix_s: 1_700_000_000,
-            bitcoin_tip_height: tip,
+            bitcoin_tip_height: Some(tip),
             phase: "fast",
             decision,
             fast_seq: None,
@@ -550,7 +657,14 @@ mod tests {
             object,
             reasons: Vec::new(),
             reason: None,
-            summary: "{}".to_owned(),
+            summary: Some("{}".to_owned()),
+            measures: None,
+            policy_id: None,
+            policy_checks: None,
+            reason_code: None,
+            class: None,
+            access_ref_day: None,
+            access_ref_seq: None,
         }
     }
 
@@ -664,7 +778,7 @@ mod tests {
         let record = "{\"profile\":\"production\",\"shape\":\"match\",\"N\":\"not defined\"}\n";
         let mut write = sample("refuse", 3);
         write.phase = "thorough";
-        write.summary = record.to_owned();
+        write.summary = Some(record.to_owned());
         log.append(&write).unwrap();
         let chain = fs::read(dir.join("chain.jsonl")).unwrap();
         let text = String::from_utf8(chain.clone()).unwrap();

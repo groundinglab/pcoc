@@ -1,15 +1,20 @@
 //! Gate policy. The verifier reports measurements. This module judges them.
 //!
-//! The locked floors scale with the leg: strict 7/20, default 1/4, lenient
-//! 1/8. The config names one of them. Rule B2 compares `q·N ≥ p·S` on the
-//! bookend pair in the section 14 record. A pair that is not numeric is not
-//! compared. When `N` is `not defined` from the object's own bytes, whatever
-//! `S` is, the refusal is immediate (`bookends_not_defined`). A pure `not read`
-//! pair, with no other verifier note, is `held`. `held` is not a refusal and
-//! is not a decision-log event. A `not read` pair that arrives with another
-//! verifier note is still a refusal: the other note wins. An object the
-//! verifier reports as an earlier version is refused as `earlier_version`.
-//! There is no profile file and no friendly list.
+//! `policy_id` names one exact floor for its whole life: `min_leg_rate`
+//! (leg/s) and `min_waypoints` of 18. A change of either number is a new id.
+//! The rate compares `leg_rate` from the verifier. The waypoint count compares
+//! `waypoints_fetched`. Neither number is a measurement.
+//!
+//! The named floors stay for a resumed provisional: strict 7/20, default 1/4,
+//! lenient 1/8. Rule B2 compares `q·N ≥ p·S` on the bookend pair in the
+//! section 14 record. A pair that is not numeric is not compared. When `N` is
+//! `not defined` from the object's own bytes, whatever `S` is, the refusal is
+//! immediate (`bookends_not_defined`). A pure `not read` pair, with no other
+//! verifier note, is `held`. `held` is not a refusal and is not a decision-log
+//! event. A `not read` pair that arrives with another verifier note is still
+//! a refusal: the other note wins. An object the verifier reports as an earlier
+//! version is refused as `earlier_version`. There is no profile file and no
+//! friendly list.
 
 use crate::verifier::{Measured, Report, EARLIER_VERSION_NOTE};
 
@@ -46,6 +51,173 @@ pub const NO_KEY_LINE: &str = "This object has no public key the gate can check.
 /// Sentence for the configured floor `p/q`. The website shows a `reason` that contains a space.
 pub fn leg_rate_line(p: u64, q: u64) -> String {
     format!("The leg rate is below this gate's floor of {p}/{q} leg per second.")
+}
+
+/// `gl-admit-v` plus a positive integer. Bound to one floor for its life.
+pub const DEFAULT_POLICY_ID: &str = "gl-admit-v1";
+
+/// Minimum measured leg rate, leg/s. Christian, 14 Oct 22:33 ACDT.
+pub const DEFAULT_MIN_LEG_RATE: f64 = 0.25;
+
+/// Minimum waypoints fetched and validated, of [`WAYPOINTS_TOTAL`].
+pub const DEFAULT_MIN_WAYPOINTS: u64 = 6;
+
+/// Spec stage count. Not a policy number.
+pub const WAYPOINTS_TOTAL: u64 = 18;
+
+/// Spec rule: at least this many legs. Labelled as spec, not policy.
+pub const SPEC_MIN_LEGS: u64 = 6;
+
+/// Spec name published with the policy.
+pub const POLICY_SPEC: &str = crate::verifier::SPEC_NAME;
+
+/// A return line for one pair is written at most once per this many seconds.
+pub const RETURN_WINDOW_S: u64 = 300;
+
+/// `policy_id` matches `gl-admit-v` plus a positive integer.
+pub fn parse_policy_id(raw: &str) -> Result<String, String> {
+    let id = raw.trim();
+    let Some(rest) = id.strip_prefix("gl-admit-v") else {
+        return Err(format!(
+            "policy_id {raw:?} must be gl-admit-v plus a positive integer"
+        ));
+    };
+    if rest.is_empty() || !rest.bytes().all(|byte| byte.is_ascii_digit()) || rest.starts_with('0')
+    {
+        return Err(format!(
+            "policy_id {raw:?} must be gl-admit-v plus a positive integer"
+        ));
+    }
+    Ok(id.to_owned())
+}
+
+/// One configured floor. A different pair of numbers is a different id.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AdmissionPolicy {
+    pub policy_id: String,
+    pub min_leg_rate: f64,
+    pub min_waypoints: u64,
+}
+
+impl Default for AdmissionPolicy {
+    fn default() -> Self {
+        Self {
+            policy_id: DEFAULT_POLICY_ID.to_owned(),
+            min_leg_rate: DEFAULT_MIN_LEG_RATE,
+            min_waypoints: DEFAULT_MIN_WAYPOINTS,
+        }
+    }
+}
+
+impl AdmissionPolicy {
+    /// `{log_dir}/policy-bind.json` binds this id to these numbers.
+    ///
+    /// The first start writes the file. A later start with the same id and
+    /// different numbers exits. A new id is a new binding. Old lines stay.
+    pub fn bind(&self, log_dir: &std::path::Path) -> Result<(), String> {
+        let path = log_dir.join("policy-bind.json");
+        if path.exists() {
+            let raw = std::fs::read_to_string(&path)
+                .map_err(|err| format!("could not read {}: {err}", path.display()))?;
+            let stored: serde_json::Value = serde_json::from_str(&raw)
+                .map_err(|err| format!("{} is not JSON: {err}", path.display()))?;
+            let key = self.bind_key();
+            if let Some(previous) = stored.get(&self.policy_id) {
+                if previous.as_str() != Some(key.as_str()) {
+                    return Err(format!(
+                        "policy_id {} is already bound to {previous}; a floor change needs a new policy_id",
+                        self.policy_id
+                    ));
+                }
+                return Ok(());
+            }
+            let mut map = stored
+                .as_object()
+                .cloned()
+                .unwrap_or_else(serde_json::Map::new);
+            map.insert(self.policy_id.clone(), serde_json::Value::String(key));
+            write_bind(&path, &serde_json::Value::Object(map))?;
+            return Ok(());
+        }
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|err| format!("could not create {}: {err}", parent.display()))?;
+        }
+        let body = serde_json::json!({ self.policy_id.clone(): self.bind_key() });
+        write_bind(&path, &body)
+    }
+
+    fn bind_key(&self) -> String {
+        format!(
+            "rate={};waypoints={}/{}",
+            format_rate(self.min_leg_rate),
+            self.min_waypoints,
+            WAYPOINTS_TOTAL
+        )
+    }
+}
+
+fn write_bind(path: &std::path::Path, body: &serde_json::Value) -> Result<(), String> {
+    let bytes = serde_json::to_vec(body).map_err(|err| err.to_string())?;
+    std::fs::write(path, bytes).map_err(|err| format!("could not write {}: {err}", path.display()))
+}
+
+/// Decimal with a trailing zero trimmed only after the point, so `0.25` stays.
+pub fn format_rate(rate: f64) -> String {
+    let text = format!("{rate:.6}");
+    let trimmed = text.trim_end_matches('0').trim_end_matches('.');
+    if trimmed.is_empty() {
+        "0".to_owned()
+    } else {
+        trimmed.to_owned()
+    }
+}
+
+/// Measured rate is under the floor. Equality meets it.
+pub fn rate_below(measured: f64, minimum: f64) -> bool {
+    measured < minimum
+}
+
+/// One gate check against a measurement. `min` is policy. `met` is the judgment.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PolicyCheck {
+    pub field: &'static str,
+    pub min: serde_json::Value,
+    pub met: bool,
+}
+
+pub fn policy_checks(measures: &crate::verifier::Measures, policy: &AdmissionPolicy) -> Vec<PolicyCheck> {
+    let mut checks = Vec::new();
+    // An unknown side is omitted. It is not a miss.
+    if let Some(rate) = measures.leg_rate {
+        checks.push(PolicyCheck {
+            field: "leg_rate",
+            min: serde_json::json!(policy.min_leg_rate),
+            met: !rate_below(rate, policy.min_leg_rate),
+        });
+    }
+    if let Some(fetched) = measures.waypoints_fetched {
+        checks.push(PolicyCheck {
+            field: "waypoints_fetched",
+            min: serde_json::json!(policy.min_waypoints),
+            met: fetched >= policy.min_waypoints,
+        });
+    }
+    checks
+}
+
+/// Both floors were measured and both were met.
+pub fn policy_admits(checks: &[PolicyCheck]) -> bool {
+    let rate = checks.iter().any(|check| check.field == "leg_rate" && check.met);
+    let waypoints = checks
+        .iter()
+        .any(|check| check.field == "waypoints_fetched" && check.met);
+    rate && waypoints && checks.iter().all(|check| check.met)
+}
+
+/// `below_policy` when a configured minimum is missed and the proof is otherwise sound.
+pub fn below_policy(checks: &[PolicyCheck]) -> bool {
+    checks.iter().any(|check| !check.met)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -202,6 +374,15 @@ mod tests {
             kind: "satoshi-hike-v2.0-object".to_owned(),
             record: record.to_owned(),
             verifier_notes: notes.iter().map(|note| (*note).to_owned()).collect(),
+            measures: crate::verifier::Measures {
+                legs: None,
+                span_s: None,
+                leg_rate: None,
+                waypoints_fetched: None,
+                waypoints_total: WAYPOINTS_TOTAL,
+                paths_included: None,
+                legs_recomputed_ok: None,
+            },
         }
     }
 
