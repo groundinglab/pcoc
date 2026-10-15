@@ -1,6 +1,6 @@
 # services
 
-Runnable services for Satoshi Hike v2.0. A producer posts waypoints and reads a tip; a verifier checks an object. These folders are separate processes.
+These processes are built on the Rust reference. They add no Part A rules. Bari timestamps waypoints by sealing each tip's pool into one Bitcoin transaction. The plant fee buys position in that transaction, not the hike's work. The index is a read model of what Bari wrote. The Admission Gate applies groundinglab's policy (specification section 15) to the verifier's measurements. Verify still does not say pass or fail.
 
 ## Layout
 
@@ -17,10 +17,10 @@ Every service binds to loopback by default. To serve one publicly, put a reverse
 | Folder | Process | Default bind | Depends on (git tag) | Release tag |
 |---|---|---|---|---|
 | [`bari/`](bari/) | `bari` (crate `pcoc-bari`) | `127.0.0.1:38080` | `hike`, `hike-net` @ `ref-rust-v2.0.3` | `bari-v0.6.5` |
-| [`index/`](index/) | `pcoc-index` | `127.0.0.1:38081` | `pcoc-bari` @ `bari-v0.6.4` (`hike` @ `ref-rust-v2.0.3`) | `index-v0.1.3` |
+| [`index/`](index/) | `pcoc-index` | `127.0.0.1:38081` | `pcoc-bari` @ `bari-v0.6.5` (working-tree pin; `hike` @ `ref-rust-v2.0.3`) | `index-v0.1.3` |
 | [`admission-gate/`](admission-gate/) | `admission-service` (crate `pcoc-admission`) | `127.0.0.1:8787` | `hike` @ `ref-rust-v2.0.3` | `gate-v0.3.2` |
 
-Release tags are `<service>-v<x.y.z>` and point at the commit that ships that release. The table lists the latest tag of each.
+Release tags are `<service>-v<x.y.z>` and point at the commit that ships that release. The table's Release tag column is the latest git tag, not the working-tree dependency pin. The index crate stays at version `0.1.3`. Tag `index-v0.1.3` still records the previous Bari pin. The working tree now pins `bari-v0.6.5`. A new index tag is cut only if a later release needs it.
 
 ## Bari
 
@@ -40,5 +40,3 @@ Release tags are `<service>-v<x.y.z>` and point at the commit that ships that re
 - `GET /v1/health` reports version, commit, spec kind and the config.
 
 The code default for `allowed_origins` is empty (loopback only). A live groundinglab deploy needs `https://groundinglab.io` and `https://www.groundinglab.io` there; the shipped `deploy/gate.toml` sets them. Install is [deploy/DEPLOY.md](admission-gate/deploy/DEPLOY.md). Request and response bodies are in [WIRE.md](admission-gate/WIRE.md).
-
-The gate monitor page is not in this release.

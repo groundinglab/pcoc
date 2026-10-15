@@ -64,9 +64,9 @@ jobs:
         with:
           persist-credentials: false
       - name: sparse worktree (full clone, cone mode, no partial filter)
-        run: git sparse-checkout set spec conformance reference/tools
+        run: git sparse-checkout set spec reference/tools
       - name: ring 1 checks (section 6, sign-in wire, links, manifest hash)
-        run: python3 conformance/tools/ring1_checks.py
+        run: python3 spec/conformance/tools/ring1_checks.py
       - name: spec pin
         run: python3 reference/tools/check_spec_pin.py
 
@@ -80,7 +80,7 @@ jobs:
         with:
           persist-credentials: false
       - name: sparse worktree (full clone, cone mode, no partial filter)
-        run: git sparse-checkout set spec conformance reference
+        run: git sparse-checkout set spec reference
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -105,7 +105,7 @@ jobs:
         with:
           persist-credentials: false
       - name: sparse worktree (full clone, cone mode, no partial filter)
-        run: git sparse-checkout set spec conformance reference
+        run: git sparse-checkout set spec reference
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: reference/go/go.mod
@@ -128,7 +128,7 @@ jobs:
         with:
           persist-credentials: false
       - name: sparse worktree (full clone, cone mode, no partial filter)
-        run: git sparse-checkout set spec conformance reference
+        run: git sparse-checkout set spec reference
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
@@ -199,7 +199,7 @@ jobs:
         with:
           persist-credentials: false
       - name: sparse worktree (full clone, cone mode, no partial filter)
-        run: git sparse-checkout set apps/desktop conformance
+        run: git sparse-checkout set apps/desktop spec/conformance
       - name: GTK dev packages (preinstalled on the runner image; no sudo on self-hosted)
         run: pkg-config --modversion gtk4 libadwaita-1 || echo "::warning::gtk4/libadwaita dev packages missing on this runner image"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -271,7 +271,7 @@ jobs:
           G1_PATTERNS: ${{ secrets.G1_PATTERNS }}
         run: bash .github/scripts/g1.sh
 
-  walk-prose:
+  retired-term:
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, linux, pcoc-pub]
     timeout-minutes: 5
@@ -286,12 +286,12 @@ jobs:
           cd "$RUNNER_TEMP" && curl -sSfL -o "$f" "https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/$f"
           echo "4cf9f2741e6c465ffdb7c26f38056a59e2a2544b51f7cc128ef28337eeae4d8e  $f" | sha256sum -c -
           mkdir -p bin && tar -xzf "$f" --strip-components=1 -C bin "${f%.tar.gz}/rg" && echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: walk-prose check (exact-line allowlist)
-        run: python3 .github/scripts/walk-prose.py
+      - name: retired-term check (exact-line allowlist)
+        run: python3 .github/scripts/retired-term-prose.py
 
   ci-ok:
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    needs: [changes, spec, rust, go, java, services, desktop, docs, gitleaks, g1, walk-prose]
+    needs: [changes, spec, rust, go, java, services, desktop, docs, gitleaks, g1, retired-term]
     runs-on: [self-hosted, linux, pcoc-pub]
     timeout-minutes: 5
     steps:
@@ -328,7 +328,7 @@ jobs:
               bad.append(f"changes={needs['changes']['result']}")
           # always-on scans must succeed; g1 may be skipped only on a fork PR
           fork = os.environ.get("FORK_PR") == "true"
-          for name in ("gitleaks", "g1", "walk-prose"):
+          for name in ("gitleaks", "g1", "retired-term"):
               r = needs[name]["result"]
               if r == "skipped" and name == "g1" and fork:
                   print("g1: skipped on fork PR (accepted)")

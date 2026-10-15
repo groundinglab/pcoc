@@ -10,7 +10,7 @@ import (
 // P9.14. The first tip is already known. The same header after the first leg
 // does not replace the seed, and the next header is I_0.
 func TestStage0StartsOnTheLatestKnownHeader(t *testing.T) {
-	raw, err := os.ReadFile("../../../conformance/v2.0/stage0-start.json")
+	raw, err := os.ReadFile("../../../spec/conformance/v2.0/stage0-start.json")
 	if err != nil {
 		t.Fatal(err)
 	}

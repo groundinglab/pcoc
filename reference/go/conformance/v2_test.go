@@ -35,13 +35,13 @@ func repoRoot(t *testing.T) string {
 	return filepath.Clean(filepath.Join(filepath.Dir(file), "../../.."))
 }
 
-// TestV20Pack measures the published conformance/v2.0 files through
+// TestV20Pack measures the published spec/conformance/v2.0 files through
 // PackRecord. Issue #228 points that function at the section 14 record.
 func TestV20Pack(t *testing.T) {
-	root := filepath.Join(repoRoot(t), "conformance", "v2.0")
+	root := filepath.Join(repoRoot(t), "spec", "conformance", "v2.0")
 	info, err := os.Stat(root)
 	if err != nil || !info.IsDir() {
-		t.Fatal("conformance/v2.0 is not in this checkout")
+		t.Fatal("spec/conformance/v2.0 is not in this checkout")
 	}
 	var manifest struct {
 		Pack  string   `json:"pack"`

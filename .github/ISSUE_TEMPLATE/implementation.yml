@@ -1,0 +1,33 @@
+name: Implementation
+description: A reference, a service, or an app disagrees with the specification or with another reference.
+title: "impl: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The specification wins. A reference that disagrees with the specification has a bug.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What happened
+      options:
+        - A measurement record disagreed across Rust, Go, and Java for the same vector
+        - A policy decision was described as a measurement
+        - A producer or verifier output disagreed with a Part A vector
+        - Something else in a reference, service, or app
+    validations:
+      required: true
+  - type: textarea
+    id: where
+    attributes:
+      label: Where
+      description: Path, language, and commit or tag.
+    validations:
+      required: true
+  - type: textarea
+    id: detail
+    attributes:
+      label: What you ran
+      description: The vector, the command, and what differed. Do not paste a secret.
+    validations:
+      required: true

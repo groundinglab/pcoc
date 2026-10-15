@@ -9,4 +9,4 @@ A plane is four parameters, one value. Produce, path fetch, verify, and admit ar
 | Commitment surface | The index projected by test Bari | The index projected by live Bari |
 | Admit policy | Test gate, test policy only | Live door, live policy only |
 
-An object bound on one plane is not a candidate on the other. Verify measures the object; admit applies that plane's policy to the measurements. A verify pass is not an admit.
+An object bound on one plane is not a candidate on the other. Verify measures the object; admit applies that plane's policy to the measurements. A verify measurement is not an admission decision.

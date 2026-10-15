@@ -1,4 +1,4 @@
-//! The vectors under `tests/vectors/` are pinned copies of `conformance/v2.0/`.
+//! The vectors under `tests/vectors/` are pinned copies of `spec/conformance/v2.0/`.
 //! Each file must match its line in `tests/vectors/SHA256SUMS`, and every
 //! file in that directory must be listed.
 

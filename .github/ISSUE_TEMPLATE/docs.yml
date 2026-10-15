@@ -1,0 +1,18 @@
+name: Docs
+description: A page is wrong, unclear, or out of date.
+title: "docs: "
+body:
+  - type: textarea
+    id: page
+    attributes:
+      label: Page
+      description: Path of the page, and the heading if you have one.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong
+      description: Where the page and the specification disagree, the specification wins. Say which.
+    validations:
+      required: true

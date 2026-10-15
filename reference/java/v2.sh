@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # v2.0 conformance pack for the Java produce and verify port.
-# Reads conformance/v2.0 and compares the section 14 record to the Rust reference.
+# Reads spec/conformance/v2.0 and compares the section 14 record to the Rust reference.
 set -euo pipefail
 cd "$(dirname "$0")"
 out="$(mktemp -d)"

@@ -1,6 +1,6 @@
 //! Conformance pack for Satoshi Hike v2.0, regenerated from this reference.
 //!
-//! `PCOC_REGEN_V2=1` writes `conformance/v2.0/`. Without it, the test reads
+//! `PCOC_REGEN_V2=1` writes `spec/conformance/v2.0/`. Without it, the test reads
 //! those files and checks them against a fresh run of this library.
 
 use hike::{
@@ -19,7 +19,7 @@ use std::fs;
 use std::path::PathBuf;
 
 fn pack_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../conformance/v2.0")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../spec/conformance/v2.0")
 }
 
 fn repo_file(rel: &str) -> PathBuf {
@@ -163,7 +163,7 @@ fn earlier_kind_object() -> Vec<u8> {
 }
 
 fn earlier_record() -> Value {
-    let rel = "conformance/v2.0/earlier-kind.cbor";
+    let rel = "spec/conformance/v2.0/earlier-kind.cbor";
     let bytes = earlier_kind_object();
     assert_eq!(
         fs::read(repo_file(rel)).expect("earlier kind object"),

@@ -1,7 +1,7 @@
 //! Locked sign-in wire, SPEC section 15.1.
 //!
 //! Loads the pinned `tests/vectors/sign-in.json` (a copy of
-//! `conformance/v2.0/sign-in.json`; `tests/vectors.rs` checks its hash). The live door still checks a
+//! `spec/conformance/v2.0/sign-in.json`; `tests/vectors.rs` checks its hash). The live door still checks a
 //! display-order index header hash. This test does not call that door.
 
 #![forbid(unsafe_code)]

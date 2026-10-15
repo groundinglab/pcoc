@@ -2,7 +2,7 @@
 
 Eleven short pages. One question each. They teach the ideas. They do not amend the specification, and they do not invent a check.
 
-Read in any order. The order below is the debt, if you want it.
+Read in any order. The order below is the suggested order.
 
 1. [Where does the trouble start?](where-does-the-trouble-start.md) - Most harms in open systems trace back to issuance.
 2. [How do you make a digital thing scarce?](how-do-you-make-a-digital-thing-scarce.md) - Cost goes in the object, not in a door.

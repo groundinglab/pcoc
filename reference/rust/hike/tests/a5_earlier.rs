@@ -16,7 +16,7 @@ fn earlier_kind_object() -> Vec<u8> {
 #[test]
 fn a5_earlier_kind_records_earlier_version_and_is_not_measured() {
     let bytes = earlier_kind_object();
-    let committed = include_bytes!("../../../../conformance/v2.0/earlier-kind.cbor");
+    let committed = include_bytes!("../../../../spec/conformance/v2.0/earlier-kind.cbor");
     assert_eq!(bytes, committed);
     let record = earlier_record(&bytes);
     assert_eq!(

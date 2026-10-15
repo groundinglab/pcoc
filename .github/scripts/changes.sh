@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Path gate for ci.yml. Usage: changes.sh <base-sha|""> <head-sha>
 # Prints key=value lines (spec rust go java gate bari index desktop docs).
-# Empty, all-zero or unknown base => run everything. spec/, conformance/, .github/ or any
-# unclassified path => run everything. A suite whose directory is absent is always false.
+# Empty, all-zero or unknown base => run everything. spec/ or .github/ or any
+# unclassified path => run everything. spec/* already covers spec/conformance/.
+# A file reintroduced at repo-root conformance/ hits the unclassified arm.
+# A suite whose directory is absent is always false.
 set -euo pipefail
 base="${1:-}"; head="${2:-HEAD}"
 keys=(spec rust go java gate bari index desktop docs)
@@ -17,7 +19,7 @@ else
   mapfile -t files < <(git diff --name-only "$base" "$head")
   for f in "${files[@]}"; do
     case "$f" in
-      spec/*|conformance/*|.github/*) all=true ;;
+      spec/*|.github/*) all=true ;;
       reference/rust/*) on[rust]=true ;;
       reference/go/*) on[go]=true ;;
       reference/java/*) on[java]=true ;;
