@@ -1,6 +1,6 @@
 # bari
 
-One binary, `bari`. Crate `pcoc-bari`, library `pcoc_bari`, version 0.6.6, tag `bari-v0.6.6` (cut on the merge commit of the ref-rust-v2.0.4 pin bump; the previous tag is `bari-v0.6.5`).
+One binary, `bari`. Crate `pcoc-bari`, library `pcoc_bari`, version 0.6.6, tag `bari-v0.6.6`.
 
 It accepts 32-byte waypoints and later serves a Merkle path. It writes the index cache. It does not serve `GET /index`. The index HTTP reader is [services/index](../index/).
 
