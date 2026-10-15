@@ -300,7 +300,13 @@ async fn outcome_of(lab: &Lab, nonce: &[u8; 32]) -> String {
                 assert!(
                     matches!(
                         key.as_str(),
-                        "outcome" | "public_key" | "object_sha256" | "legs" | "span_s"
+                        "outcome"
+                            | "public_key"
+                            | "object_sha256"
+                            | "legs"
+                            | "span_s"
+                            | "log_day"
+                            | "log_seq"
                     ),
                     "unexpected result field {key} in {body}"
                 );
@@ -636,14 +642,17 @@ async fn the_new_wire_hides_the_floor_and_still_enforces_it() {
     assert_eq!(health_status, StatusCode::OK);
     assert_eq!(health["config"]["leg_rate_floor"]["p"], 1);
     assert_eq!(health["config"]["leg_rate_floor"]["q"], 4);
+    assert!(health["config"].get("log_dir").is_none(), "{health}");
+    assert!(health["config"].get("config_path").is_none(), "{health}");
 
-    // The public decision line uses the token. It does not carry the floor
-    // sentence, a verifier note, or a retry instruction.
+    // The public decision line names one reason_code. It does not write the
+    // catch-all rejected, a floor sentence, a verifier note, or a retry instruction.
     let chain = std::fs::read_to_string(lab.dir.join("chain.jsonl")).expect("chain");
     assert!(
-        chain.contains("\"reason\":\"rejected\""),
-        "the public reason is the token: {chain}"
+        !chain.contains("\"reason\":\"rejected\""),
+        "the catch-all rejected is not a log reason: {chain}"
     );
+    assert!(chain.contains("\"reason_code\":"), "{chain}");
     assert!(
         !chain.contains("leg per second")
             && !chain.contains("1/4")

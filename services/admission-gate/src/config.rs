@@ -4,6 +4,7 @@
 //! `deploy/DEPLOY.md`. Unknown keys are an error, so a retired flag cannot
 //! be turned back on by leaving it in the file.
 
+use crate::policy::{self, AdmissionPolicy};
 use serde::Deserialize;
 use std::fs;
 use std::net::SocketAddr;
@@ -54,10 +55,17 @@ pub struct Config {
     /// Decision log directory. The process creates it. A v1.35 chain here is
     /// not loaded.
     pub log_dir: PathBuf,
-    /// `strict`, `default`, or `lenient`.
+    /// `strict`, `default`, or `lenient`. Used when a provisional line resumes.
     pub leg_rate_floor: String,
     pub leg_rate_floor_p: u64,
     pub leg_rate_floor_q: u64,
+    /// `gl-admit-vN`. Bound to [`Self::min_leg_rate`] and [`Self::min_waypoints`].
+    /// A change of either number requires a new id.
+    pub policy_id: String,
+    /// Minimum measured leg rate, leg/s. Default 0.25.
+    pub min_leg_rate: f64,
+    /// Minimum waypoints fetched and validated, of 18. Default 6.
+    pub min_waypoints: u64,
     /// Checkpoint binding threads. The process does not read `PCOC_BIND_THREADS`.
     pub bind_threads: usize,
     /// One-shot index read. A timeout, a 5xx, or a refused connection is not retried.
@@ -82,6 +90,12 @@ struct FileConfig {
     leg_rate_floor: String,
     bind_threads: usize,
     index_timeout_secs: u64,
+    /// Immutable id for the floor below. A value change requires a new id.
+    policy_id: String,
+    /// Minimum measured leg rate, leg/s.
+    min_leg_rate: f64,
+    /// Minimum waypoints fetched and validated, of 18.
+    min_waypoints: u64,
 }
 
 impl Default for FileConfig {
@@ -104,6 +118,9 @@ impl Default for FileConfig {
             leg_rate_floor: DEFAULT_LEG_RATE_FLOOR.to_owned(),
             bind_threads: DEFAULT_BIND_THREADS,
             index_timeout_secs: DEFAULT_INDEX_TIMEOUT_SECS,
+            policy_id: policy::DEFAULT_POLICY_ID.to_owned(),
+            min_leg_rate: policy::DEFAULT_MIN_LEG_RATE,
+            min_waypoints: policy::DEFAULT_MIN_WAYPOINTS,
         }
     }
 }
@@ -154,6 +171,16 @@ impl Config {
             return Err("index_timeout_secs must be at least 1".to_owned());
         }
         let (floor_name, floor_p, floor_q) = parse_leg_rate_floor(&file.leg_rate_floor)?;
+        let policy_id = policy::parse_policy_id(&file.policy_id)?;
+        if !(file.min_leg_rate.is_finite() && file.min_leg_rate > 0.0) {
+            return Err("min_leg_rate must be a positive finite number".to_owned());
+        }
+        if file.min_waypoints > policy::WAYPOINTS_TOTAL {
+            return Err(format!(
+                "min_waypoints must be at most {}",
+                policy::WAYPOINTS_TOTAL
+            ));
+        }
         let bind = file
             .bind
             .parse()
@@ -184,10 +211,21 @@ impl Config {
             leg_rate_floor: floor_name,
             leg_rate_floor_p: floor_p,
             leg_rate_floor_q: floor_q,
+            policy_id,
+            min_leg_rate: file.min_leg_rate,
+            min_waypoints: file.min_waypoints,
             bind_threads: file.bind_threads,
             index_timeout: Duration::from_secs(file.index_timeout_secs),
             config_path: source,
         })
+    }
+
+    pub fn policy(&self) -> AdmissionPolicy {
+        AdmissionPolicy {
+            policy_id: self.policy_id.clone(),
+            min_leg_rate: self.min_leg_rate,
+            min_waypoints: self.min_waypoints,
+        }
     }
 
     /// A config for tests: empty temp log, limiter off, the given index origin.
@@ -270,6 +308,9 @@ mod tests {
         assert_eq!(cfg.leg_rate_floor, "default");
         assert_eq!(cfg.leg_rate_floor_p, 1);
         assert_eq!(cfg.leg_rate_floor_q, 4);
+        assert_eq!(cfg.policy_id, "gl-admit-v1");
+        assert_eq!(cfg.min_leg_rate, 0.25);
+        assert_eq!(cfg.min_waypoints, 6);
         assert_eq!(cfg.bind_threads, 6);
         assert_eq!(cfg.index_timeout, Duration::from_secs(5));
         assert_eq!(
@@ -337,6 +378,9 @@ mod tests {
         assert_eq!(cfg.leg_rate_floor, "default");
         assert_eq!(cfg.leg_rate_floor_p, 1);
         assert_eq!(cfg.leg_rate_floor_q, 4);
+        assert_eq!(cfg.policy_id, "gl-admit-v1");
+        assert_eq!(cfg.min_leg_rate, 0.25);
+        assert_eq!(cfg.min_waypoints, 6);
         assert_eq!(cfg.bind_threads, 6);
         assert_eq!(
             cfg.allowed_origins,

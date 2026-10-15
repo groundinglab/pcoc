@@ -10,9 +10,10 @@
 
 use crate::canon::{self, hex32};
 use crate::log::{self, DecisionLog, DecisionWrite, LogError};
-use crate::policy::{self, Judgment};
+use crate::policy::{self, AdmissionPolicy, Judgment};
+use crate::reasons;
 use crate::signin_row::{Replay, SignInRows};
-use crate::verifier::{self, Class, Report};
+use crate::verifier::{self, Class, Measures, Report};
 use crate::wire::{self, ClientClass, LockedBody};
 use axum::http::StatusCode;
 use serde_json::{json, Value};
@@ -28,9 +29,7 @@ pub struct Door {
     rows: Arc<SignInRows>,
     floor_p: u64,
     floor_q: u64,
-    /// This build does not refuse at once for fewer than two of `W_1`–`W_16`,
-    /// so the locked wire does not emit `too_few_waypoints_anchored`.
-    enforces_waypoint_bar: bool,
+    policy: AdmissionPolicy,
 }
 
 struct Inner {
@@ -54,6 +53,16 @@ pub struct LockedThorough {
     pub submission: [u8; 32],
     pub public_key: [u8; 32],
     pub object_sha: [u8; 32],
+    /// A prior thorough accept with `policy_id` covers this pair.
+    /// Measurement is skipped. `None` means measure.
+    pub prior_accept: Option<AccessRef>,
+}
+
+#[derive(Clone, Debug)]
+pub struct AccessRef {
+    pub day: Option<String>,
+    pub seq: Option<u64>,
+    pub policy_id: String,
 }
 
 pub struct ThoroughJob {
@@ -62,23 +71,46 @@ pub struct ThoroughJob {
     pub submission: [u8; 32],
     pub public_key: [u8; 32],
     pub object_sha: [u8; 32],
-    pub tip_height: u64,
+    pub tip_height: Option<u64>,
 }
 
 impl Door {
-    pub fn open(dir: &Path, floor_p: u64, floor_q: u64) -> Result<Self, String> {
-        let log = DecisionLog::open(dir).map_err(show_log)?;
+    pub fn open(dir: &Path, floor_p: u64, floor_q: u64, policy: AdmissionPolicy) -> Result<Self, String> {
+        policy.bind(dir)?;
+        let mut log = DecisionLog::open(dir).map_err(show_log)?;
+        log.set_policy_hint(policy_document(&policy))
+            .map_err(show_log)?;
         Ok(Self {
             inner: Arc::new(Mutex::new(Inner { log, now: None })),
             rows: Arc::new(SignInRows::new()),
             floor_p,
             floor_q,
-            enforces_waypoint_bar: false,
+            policy,
         })
+    }
+
+    pub fn policy(&self) -> &AdmissionPolicy {
+        &self.policy
     }
 
     pub fn consumed_nonce(&self, nonce: &[u8; 32]) -> bool {
         self.rows.consumed(nonce)
+    }
+
+    /// Test seam. Consumes a nonce the way step 9 does, without a signature.
+    pub fn consume_for_test(&self, nonce: &[u8; 32], object_sha: [u8; 32], now: u64) {
+        let body = crate::wire::LockedBody {
+            origin: crate::wire::ORIGIN.to_owned(),
+            nonce: *nonce,
+            exp: now.saturating_add(120),
+            object_sha,
+            object: Vec::new(),
+            signature: [0u8; 64],
+        };
+        let _ = self
+            .rows
+            .consume(&body, ClientClass::DeliveryOk, wire::OUTCOME_PENDING, now);
+        self.rows.note_holder(nonce, [0u8; 32]);
     }
 
     /// Pin the sign-in clock. `None` reads the process clock.
@@ -184,11 +216,7 @@ impl Door {
                 );
                 continue;
             };
-            let tip_height = line
-                .value
-                .get("bitcoin_tip_height")
-                .and_then(|item| item.as_u64())
-                .unwrap_or(0);
+            let tip_height = line.value.get("bitcoin_tip_height").and_then(|item| item.as_u64());
             jobs.push(ThoroughJob {
                 object,
                 fast_seq: seq,
@@ -283,6 +311,22 @@ impl Door {
             Err(replay) => replay_response(replay),
             Ok(()) => {
                 self.rows.note_holder(&body.nonce, public_key);
+                let prior_accept = {
+                    let inner = self.lock();
+                    prior_accept(&inner.log, &public_key, &body.object_sha).map(|line| {
+                        let (day, seq) = line_ref(&line.value);
+                        AccessRef {
+                            day,
+                            seq,
+                            policy_id: line
+                                .value
+                                .get("policy_id")
+                                .and_then(|item| item.as_str())
+                                .unwrap_or("")
+                                .to_owned(),
+                        }
+                    })
+                };
                 LockedSignIn {
                     status: StatusCode::OK,
                     body: json!({ "delivery": "ok" }),
@@ -292,6 +336,7 @@ impl Door {
                         submission,
                         public_key,
                         object_sha: body.object_sha,
+                        prior_accept,
                     }),
                 }
             }
@@ -318,66 +363,131 @@ impl Door {
         }
     }
 
-    /// Policy on a consumed v2.0 nonce.
+    /// Policy on a consumed v2.0 nonce, under the decision-log lock.
     ///
-    /// The website token is `accepted`, `pending` while unsettled, or
-    /// `rejected`. This build does not emit `too_few_waypoints_anchored`.
-    /// The public decision line uses that same token. It does not carry the
-    /// leg-rate fraction, a threshold, a verifier note, or a retry sentence.
+    /// A prior thorough accept of the same `(pubkey, object_sha256)` that
+    /// carries `policy_id` writes one `return` line and skips measurement.
+    /// A return already written for that pair inside 300 s is echoed: the
+    /// website outcome is `accepted` and no new line is written. A pair whose
+    /// only thorough accepts lack `policy_id` falls through and is measured.
+    /// A new key has no return. A different object is measured.
+    ///
+    /// The website token stays `accepted`, `pending`, or `rejected`. The log
+    /// stores one `reason_code` and a class. It does not store `rejected`.
     pub fn settle_locked(&self, job: LockedThorough, report: Result<Report, String>) {
         let now = self.now_unix_s();
-        if let Ok(Report::Read(measured)) = &report {
-            let (legs, span_s) = bookends_from_record(&measured.record);
-            self.rows.note_bookends(&job.nonce, legs, span_s);
+        if let Some(prior) = &job.prior_accept {
+            let mut inner = self.lock();
+            if let Some(echo) = recent_return(&inner.log, &job.public_key, &job.object_sha, now) {
+                let (day, seq) = line_ref(&echo.value);
+                drop(inner);
+                self.rows.note_bookends(&job.nonce, None, None);
+                self.rows.note_access(&job.nonce, day, seq);
+                self.rows.settle(&job.nonce, wire::OUTCOME_ACCEPTED, now);
+                return;
+            }
+            let mut write = DecisionWrite::bare(now, None, "return", "return");
+            write.submission_sha256 = job.submission;
+            write.public_key = job.public_key;
+            write.object_sha256 = job.object_sha;
+            write.object = job.object;
+            write.reasons = vec![wire::OUTCOME_ACCEPTED.to_owned()];
+            write.summary = None;
+            write.policy_id = Some(prior.policy_id.clone());
+            write.policy_checks = Some(serde_json::json!([]));
+            write.access_ref_day = prior.day.clone();
+            write.access_ref_seq = prior.seq;
+            match inner.log.append(&write) {
+                Ok(new_seq) => {
+                    let day = log::utc_day(now);
+                    drop(inner);
+                    self.rows.note_bookends(&job.nonce, None, None);
+                    self.rows.note_access(&job.nonce, Some(day), Some(new_seq));
+                    self.rows.settle(&job.nonce, wire::OUTCOME_ACCEPTED, now);
+                }
+                Err(error) => {
+                    eprintln!(
+                        "admission-service return was not written: {}",
+                        show_log(error)
+                    );
+                }
+            }
+            return;
         }
+
+        let measured = match &report {
+            Ok(Report::Read(measured)) => Some(measured.measures.clone()),
+            _ => None,
+        };
+        if let Some(measures) = &measured {
+            self.rows
+                .note_bookends(&job.nonce, measures.legs.map(|n| n as i64), measures.span_s.map(|n| n as i64));
+        }
+        let checks = measured
+            .as_ref()
+            .map(|measures| policy::policy_checks(measures, &self.policy))
+            .unwrap_or_default();
+        let checks_met = policy::policy_admits(&checks);
+        let unmet = checks.iter().any(|check| !check.met);
+        let held = match &report {
+            Ok(report) => {
+                matches!(policy::judge(report, self.floor_p, self.floor_q), Judgment::Held { .. })
+            }
+            Err(_) => false,
+        };
+        // A measured miss is a refusal. An unread pair with no other note stays held.
+        let held = held && !unmet;
         let outcome = match &report {
-            Ok(report) => website_outcome(
-                report,
-                self.floor_p,
-                self.floor_q,
-                self.enforces_waypoint_bar,
-            ),
+            Ok(report) => reasons::website_outcome(report, checks_met, held),
             Err(_) => wire::OUTCOME_REJECTED,
         };
         if outcome == wire::OUTCOME_PENDING {
             return;
         }
-        self.rows.settle(&job.nonce, outcome, now);
-        // The public line uses the website token. `verify_summary` stays `{}`
-        // so a section 14 sentence cannot ride out on this wire.
-        let (decision, reason, summary) = match outcome {
-            wire::OUTCOME_ACCEPTED => ("accept", None, "{}".to_owned()),
-            wire::OUTCOME_TOO_FEW => (
-                "refuse",
-                Some(wire::OUTCOME_TOO_FEW.to_owned()),
-                "{}".to_owned(),
-            ),
-            _ => (
-                "refuse",
-                Some(wire::OUTCOME_REJECTED.to_owned()),
-                "{}".to_owned(),
-            ),
+        let reason = match &report {
+            Ok(report) => reasons::from_report(report, &checks, &self.policy),
+            Err(_) => reasons::verifier_error(),
         };
+        let accept = outcome == wire::OUTCOME_ACCEPTED;
+        // Settle only after the log line is written, so an accepted result
+        // already carries log_day and log_seq when the browser reads it.
+        let mut write = DecisionWrite::bare(
+            now,
+            None,
+            "thorough",
+            if accept { "accept" } else { "refuse" },
+        );
+        write.submission_sha256 = job.submission;
+        write.public_key = job.public_key;
+        write.object_sha256 = job.object_sha;
+        write.object = job.object;
+        write.reasons = vec![outcome.to_owned()];
+        write.summary = None;
+        write.measures = Some(measured.unwrap_or_else(unknown_measures).to_json());
+        write.policy_id = Some(self.policy.policy_id.clone());
+        write.policy_checks = Some(checks_json(&checks));
+        if !accept {
+            write.reason = Some(reason.line.clone());
+            write.reason_code = Some(reason.code.to_owned());
+            write.class = Some(reason.class.to_owned());
+        }
         let mut inner = self.lock();
-        let write = DecisionWrite {
-            time_unix_s: now,
-            bitcoin_tip_height: 0,
-            phase: "thorough",
-            decision,
-            fast_seq: None,
-            submission_sha256: job.submission,
-            public_key: job.public_key,
-            object_sha256: job.object_sha,
-            object: job.object,
-            reasons: vec![outcome.to_owned()],
-            reason,
-            summary,
-        };
-        if let Err(error) = inner.log.append(&write) {
-            eprintln!(
-                "admission-service locked thorough was not written: {}",
-                show_log(error)
-            );
+        match inner.log.append(&write) {
+            Ok(seq) => {
+                let day = log::utc_day(now);
+                drop(inner);
+                if accept {
+                    self.rows.note_access(&job.nonce, Some(day), Some(seq));
+                }
+                self.rows.settle(&job.nonce, outcome, now);
+            }
+            Err(error) => {
+                eprintln!(
+                    "admission-service locked thorough was not written: {}",
+                    show_log(error)
+                );
+                self.rows.settle(&job.nonce, outcome, now);
+            }
         }
     }
 
@@ -406,20 +516,28 @@ impl Door {
         if already_settled(&inner.log, job.fast_seq) {
             return;
         }
-        let write = DecisionWrite {
-            time_unix_s: log::unix_now(),
-            bitcoin_tip_height: job.tip_height,
-            phase: "thorough",
+        let mut write = DecisionWrite::bare(
+            log::unix_now(),
+            job.tip_height,
+            "thorough",
             decision,
-            fast_seq: Some(job.fast_seq),
-            submission_sha256: job.submission,
-            public_key: job.public_key,
-            object_sha256: job.object_sha,
-            object: job.object,
-            reasons,
-            reason: line,
-            summary,
-        };
+        );
+        write.fast_seq = Some(job.fast_seq);
+        write.submission_sha256 = job.submission;
+        write.public_key = job.public_key;
+        write.object_sha256 = job.object_sha;
+        write.object = job.object;
+        write.reason = line;
+        write.summary = Some(summary);
+        if decision == "refuse" {
+            let code = reasons
+                .first()
+                .map(|note| reasons::code_of_note(note))
+                .unwrap_or(reasons::CODE_VERIFIER_ERROR);
+            write.reason_code = Some(code.to_owned());
+            write.class = Some(reasons::class_of(code).to_owned());
+        }
+        write.reasons = reasons;
         if let Err(error) = inner.log.append(&write) {
             eprintln!(
                 "admission-service thorough fast_seq={} was not written: {}",
@@ -437,9 +555,130 @@ impl Door {
         self.lock().log.day_bytes(day)
     }
 
+    /// Whether a thorough accept with `policy_id` already covers this pair.
+    /// Tests and the sign-in path share this lookup.
+    pub fn prior_accept_ref(&self, public_key: &[u8; 32], object_sha: &[u8; 32]) -> Option<AccessRef> {
+        let inner = self.lock();
+        prior_accept(&inner.log, public_key, object_sha).map(|line| {
+            let (day, seq) = line_ref(&line.value);
+            AccessRef {
+                day,
+                seq,
+                policy_id: line
+                    .value
+                    .get("policy_id")
+                    .and_then(|item| item.as_str())
+                    .unwrap_or("")
+                    .to_owned(),
+            }
+        })
+    }
+
+    /// One decision object. `None` when `seq` is missing or its time is another day.
+    pub fn line_bytes(&self, day: &str, seq: u64) -> Option<Vec<u8>> {
+        self.lock()
+            .log
+            .line_on_day(day, seq)
+            .map(|line| line.raw.clone())
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
         self.inner.lock().expect("admission log")
     }
+}
+
+fn policy_document(policy: &AdmissionPolicy) -> Value {
+    json!({
+        "policy_id": policy.policy_id,
+        "min_leg_rate": policy.min_leg_rate,
+        "min_waypoints": policy.min_waypoints,
+        "waypoints_total": policy::WAYPOINTS_TOTAL,
+        "min_legs": policy::SPEC_MIN_LEGS,
+        "spec": policy::POLICY_SPEC,
+    })
+}
+
+fn checks_json(checks: &[policy::PolicyCheck]) -> Value {
+    Value::Array(
+        checks
+            .iter()
+            .map(|check| {
+                json!({
+                    "field": check.field,
+                    "min": check.min,
+                    "met": check.met,
+                })
+            })
+            .collect(),
+    )
+}
+
+fn unknown_measures() -> Measures {
+    Measures {
+        legs: None,
+        span_s: None,
+        leg_rate: None,
+        waypoints_fetched: None,
+        waypoints_total: policy::WAYPOINTS_TOTAL,
+        paths_included: None,
+        legs_recomputed_ok: None,
+    }
+}
+
+/// A thorough accept of this pair that carries a non-empty `policy_id`.
+fn prior_accept<'a>(
+    log: &'a DecisionLog,
+    public_key: &[u8; 32],
+    object_sha: &[u8; 32],
+) -> Option<&'a log::StoredLine> {
+    let key = hex32(public_key);
+    let object = hex32(object_sha);
+    log.lines().iter().find(|line| {
+        line.value.get("phase").and_then(|item| item.as_str()) == Some("thorough")
+            && line.value.get("decision").and_then(|item| item.as_str()) == Some("accept")
+            && line.value.get("public_key").and_then(|item| item.as_str()) == Some(key.as_str())
+            && line.value.get("object_sha256").and_then(|item| item.as_str()) == Some(object.as_str())
+            && line
+                .value
+                .get("policy_id")
+                .and_then(|item| item.as_str())
+                .is_some_and(|id| !id.is_empty())
+    })
+}
+
+/// A return for this pair whose time is inside the last 300 s, inclusive.
+fn recent_return<'a>(
+    log: &'a DecisionLog,
+    public_key: &[u8; 32],
+    object_sha: &[u8; 32],
+    now: u64,
+) -> Option<&'a log::StoredLine> {
+    let key = hex32(public_key);
+    let object = hex32(object_sha);
+    log.lines().iter().rev().find(|line| {
+        if line.value.get("decision").and_then(|item| item.as_str()) != Some("return") {
+            return false;
+        }
+        if line.value.get("public_key").and_then(|item| item.as_str()) != Some(key.as_str()) {
+            return false;
+        }
+        if line.value.get("object_sha256").and_then(|item| item.as_str()) != Some(object.as_str()) {
+            return false;
+        }
+        let Some(time) = line.value.get("time_unix_s").and_then(|item| item.as_u64()) else {
+            return false;
+        };
+        now.saturating_sub(policy::RETURN_WINDOW_S) <= time && time <= now
+    })
+}
+
+fn line_ref(value: &Value) -> (Option<String>, Option<u64>) {
+    let seq = value.get("seq").and_then(|item| item.as_u64());
+    let day = value
+        .get("time_unix_s")
+        .and_then(|item| item.as_u64())
+        .map(log::utc_day);
+    (day, seq)
 }
 
 fn already_settled(log: &DecisionLog, fast_seq: u64) -> bool {
@@ -468,56 +707,10 @@ fn hike_public_key(object: &[u8]) -> Option<[u8; 32]> {
     }
 }
 
-fn website_outcome(
-    report: &Report,
-    floor_p: u64,
-    floor_q: u64,
-    waypoint_bar: bool,
-) -> &'static str {
-    match policy::judge(report, floor_p, floor_q) {
-        Judgment::Admit { .. } => wire::OUTCOME_ACCEPTED,
-        Judgment::Held { .. } => wire::OUTCOME_PENDING,
-        Judgment::Refuse { reasons, .. } => {
-            if waypoint_bar
-                && reasons
-                    .iter()
-                    .any(|reason| wire::TOO_FEW_WAYPOINTS_REASONS.contains(&reason.as_str()))
-            {
-                wire::OUTCOME_TOO_FEW
-            } else {
-                wire::OUTCOME_REJECTED
-            }
-        }
-    }
-}
-
 fn replay_response(replay: Replay) -> LockedSignIn {
     match replay {
         Replay::Same { client, .. } => locked_client(client, None),
         Replay::Other => locked_client(ClientClass::Malformed, None),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::bookends_from_record;
-
-    #[test]
-    fn numeric_bookends_parse_and_words_do_not() {
-        assert_eq!(
-            bookends_from_record(r#"{"N":1348,"S":5294}"#),
-            (Some(1348), Some(5294))
-        );
-        assert_eq!(
-            bookends_from_record("{\"N\":\"not defined\",\"S\":\"not defined\"}\n"),
-            (None, None)
-        );
-        assert_eq!(
-            bookends_from_record(r#"{"N":"not read","S":"not read"}"#),
-            (None, None)
-        );
-        assert_eq!(bookends_from_record("not json"), (None, None));
-        assert_eq!(bookends_from_record(r#"{"N":7}"#), (Some(7), None));
     }
 }
 
@@ -544,5 +737,28 @@ fn show_log(error: LogError) -> String {
     match error {
         LogError::Io(error) => format!("the decision log could not be written: {error}"),
         LogError::NotThisLineage(message) | LogError::Unusable(message) => message,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bookends_from_record;
+
+    #[test]
+    fn numeric_bookends_parse_and_words_do_not() {
+        assert_eq!(
+            bookends_from_record(r#"{"N":1348,"S":5294}"#),
+            (Some(1348), Some(5294))
+        );
+        assert_eq!(
+            bookends_from_record("{\"N\":\"not defined\",\"S\":\"not defined\"}\n"),
+            (None, None)
+        );
+        assert_eq!(
+            bookends_from_record(r#"{"N":"not read","S":"not read"}"#),
+            (None, None)
+        );
+        assert_eq!(bookends_from_record("not json"), (None, None));
+        assert_eq!(bookends_from_record(r#"{"N":7}"#), (Some(7), None));
     }
 }

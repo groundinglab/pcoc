@@ -100,20 +100,13 @@ fn append_line(
 ) {
     use pcoc_admission::log::{DecisionLog, DecisionWrite};
     let mut log = DecisionLog::open(dir).unwrap();
-    log.append(&DecisionWrite {
-        time_unix_s: 1_700_000_000,
-        bitcoin_tip_height: tip,
-        phase,
-        decision,
-        fast_seq: if phase == "thorough" { Some(0) } else { None },
-        submission_sha256: submission,
-        public_key: [3u8; 32],
-        object_sha256: sha256_bytes(&object),
-        object,
-        reasons: Vec::new(),
-        reason: None,
-        summary: "{}".to_owned(),
-    })
+    let mut write = DecisionWrite::bare(1_700_000_000, Some(tip), phase, decision);
+    write.fast_seq = if phase == "thorough" { Some(0) } else { None };
+    write.submission_sha256 = submission;
+    write.public_key = [3u8; 32];
+    write.object_sha256 = sha256_bytes(&object);
+    write.object = object;
+    log.append(&write)
     .unwrap();
 }
 
@@ -388,7 +381,10 @@ async fn health_reports_version_commit_spec_and_config() {
     assert_eq!(body["spec"], "Satoshi Hike v2.0");
     assert_eq!(body["spec_kind"], "v2.0");
     assert_eq!(body["config"]["index_url"], "https://index.example");
-    assert_eq!(body["config"]["log_dir"], dir.display().to_string());
+    assert!(body["config"].get("log_dir").is_none(), "{body}");
+    assert!(body["config"].get("config_path").is_none(), "{body}");
+    assert!(!body.to_string().contains("log_dir"), "{body}");
+    assert!(!body.to_string().contains("config_path"), "{body}");
     assert_eq!(body["config"]["leg_rate_floor"]["name"], "default");
     assert_eq!(body["config"]["leg_rate_floor"]["p"], 1);
     assert_eq!(body["config"]["leg_rate_floor"]["q"], 4);
@@ -396,6 +392,21 @@ async fn health_reports_version_commit_spec_and_config() {
     let origins = body["config"]["allowed_origins"].as_array().unwrap();
     assert!(origins.is_empty(), "the default names no site");
     assert_eq!(body["config"]["bind"], "127.0.0.1:8787");
+    assert_eq!(body["config"]["policy_id"], "gl-admit-v1");
+    assert_eq!(body["config"]["min_leg_rate"], 0.25);
+    assert_eq!(body["config"]["min_waypoints"], 6);
+    let (policy_status, policy) = send(
+        &router,
+        Request::get("/v1/policy").body(Body::empty()).unwrap(),
+    )
+    .await;
+    assert_eq!(policy_status, StatusCode::OK);
+    assert_eq!(policy["policy_id"], "gl-admit-v1");
+    assert_eq!(policy["min_leg_rate"], 0.25);
+    assert_eq!(policy["min_waypoints"], 6);
+    assert_eq!(policy["waypoints_total"], 18);
+    assert_eq!(policy["min_legs"], 6);
+    assert_eq!(policy["spec"], "Satoshi Hike v2.0");
     let text = body.to_string();
     assert!(!text.contains("friendly_list"));
     assert!(!text.contains("GL_VERIFY_"));
@@ -636,6 +647,28 @@ async fn latest_json_matches_the_chain_after_restart() {
     assert_eq!(status, StatusCode::OK, "{latest}");
     assert_eq!(latest["last_seq"], 1);
     assert_eq!(latest["feed"], "pcoc-gate-feed-v2");
+    assert_eq!(latest["policy"]["policy_id"], "gl-admit-v1");
+    assert_eq!(latest["policy"]["min_leg_rate"], 0.25);
+    assert_eq!(latest["policy"]["min_waypoints"], 6);
+    let day = pcoc_admission::log::utc_day(1_700_000_000);
+    let (line_status, line) = send(
+        &router,
+        Request::get(format!("/log/{day}/1"))
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(line_status, StatusCode::OK, "{line}");
+    assert_eq!(line["seq"], 1);
+    assert_eq!(line["decision"], "accept");
+    let (miss_status, _) = send(
+        &router,
+        Request::get("/log/2023-11-15/1")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(miss_status, StatusCode::NOT_FOUND);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -727,20 +760,21 @@ async fn the_http_record_and_the_decision_log_match_the_pack() {
 
     let log_dir = scratch("pack-log");
     let mut log = pcoc_admission::log::DecisionLog::open(&log_dir).unwrap();
-    log.append(&pcoc_admission::log::DecisionWrite {
-        time_unix_s: 1_700_000_000,
-        bitcoin_tip_height: 4,
-        phase: "thorough",
-        decision: "refuse",
-        fast_seq: Some(0),
-        submission_sha256: [1u8; 32],
-        public_key: [2u8; 32],
-        object_sha256: sha256_bytes(&object),
-        object,
-        reasons: vec!["bookends_not_defined".to_owned()],
-        reason: Some("N and S are not defined.".to_owned()),
-        summary: measured.record,
-    })
+    let mut write = pcoc_admission::log::DecisionWrite::bare(
+        1_700_000_000,
+        Some(4),
+        "thorough",
+        "refuse",
+    );
+    write.fast_seq = Some(0);
+    write.submission_sha256 = [1u8; 32];
+    write.public_key = [2u8; 32];
+    write.object_sha256 = sha256_bytes(&object);
+    write.object = object;
+    write.reasons = vec!["bookends_not_defined".to_owned()];
+    write.reason = Some("N and S are not defined.".to_owned());
+    write.summary = Some(measured.record);
+    log.append(&write)
     .unwrap();
     let chain = std::fs::read_to_string(log_dir.join("chain.jsonl")).unwrap();
     assert_record_bytes(&chain, "\"verify_summary\":", &reference);

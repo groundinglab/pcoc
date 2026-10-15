@@ -56,9 +56,18 @@ allowed_origins = ["https://groundinglab.io", "https://www.groundinglab.io"]
 # Further exact CORS origins, no trailing slash.
 extra_origins = []
 
-# Policy floor. One of strict (7/20), default (1/4), lenient (1/8).
-# Compared in integers on the bookend pair (N, S) from the section 14 record:
-# q·N >= p·S meets the floor. A pair that is not two numbers is not compared.
-# When the object's own bytes leave N and S `not defined`, the gate refuses
-# at once. `not read` is not that refusal. This is gate policy, not a measurement.
+# Named floor for a resumed provisional line. One of strict (7/20), default
+# (1/4), lenient (1/8). A new sign-in uses min_leg_rate and min_waypoints.
 leg_rate_floor = "default"
+
+# Admission policy. policy_id names this exact floor for its whole life.
+# A change of min_leg_rate or min_waypoints requires a new id (gl-admit-v2, …).
+# The first start writes {log_dir}/policy-bind.json. A later start with the
+# same id and different numbers exits before it listens.
+policy_id = "gl-admit-v1"
+
+# Minimum measured leg rate, leg/s. Default 0.25. Equality meets the floor.
+min_leg_rate = 0.25
+
+# Minimum waypoints fetched and validated, of 18. Default 6.
+min_waypoints = 6

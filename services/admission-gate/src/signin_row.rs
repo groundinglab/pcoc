@@ -28,6 +28,9 @@ pub struct Row {
     pub legs: Option<i64>,
     /// Bookend `S` when the verifier record has a number.
     pub span_s: Option<i64>,
+    /// Decision line that opens a claim window. Set on accept, return, and echo.
+    pub log_day: Option<String>,
+    pub log_seq: Option<u64>,
 }
 
 pub struct SignInRows {
@@ -82,6 +85,8 @@ impl SignInRows {
                         public_key: None,
                         legs: None,
                         span_s: None,
+                        log_day: None,
+                        log_seq: None,
                     },
                 );
             }
@@ -121,6 +126,8 @@ impl SignInRows {
                 public_key: None,
                 legs: None,
                 span_s: None,
+                log_day: None,
+                log_seq: None,
             },
         );
         None
@@ -159,6 +166,8 @@ impl SignInRows {
             public_key: None,
             legs: None,
             span_s: None,
+            log_day: None,
+            log_seq: None,
         };
         rows.insert(body.nonce, next);
         Ok(())
@@ -208,6 +217,19 @@ impl SignInRows {
         row.span_s = span_s;
     }
 
+    /// The line that opens the claim window. A return and an echo omit measurements.
+    pub fn note_access(&self, nonce: &[u8; 32], day: Option<String>, seq: Option<u64>) {
+        let mut rows = self.rows.lock().expect("sign-in rows");
+        let Some(row) = rows.get_mut(nonce) else {
+            return;
+        };
+        if !row.consumed {
+            return;
+        }
+        row.log_day = day;
+        row.log_seq = seq;
+    }
+
     /// `GET /v1/sign-in/result/<nonce>`.
     ///
     /// An unknown nonce is exactly `{"outcome":"pending"}`. A consumed row
@@ -237,6 +259,12 @@ impl SignInRows {
             }
             if let Some(span_s) = row.span_s {
                 body.insert("span_s".to_owned(), json!(span_s));
+            }
+            if let Some(day) = &row.log_day {
+                body.insert("log_day".to_owned(), json!(day));
+            }
+            if let Some(seq) = row.log_seq {
+                body.insert("log_seq".to_owned(), json!(seq));
             }
         }
         Value::Object(body)
