@@ -6,7 +6,7 @@ Rust is the program that generates the conformance vectors. `PCOC_REGEN_V2=1` re
 
 ## Tag
 
-Services, the index (through `bari-v0.6.6`) and the desktop app pin `ref-rust-v2.0.4`.
+Services, the index (through `bari-v0.6.7`) and the desktop app pin `ref-rust-v2.0.4`.
 
 ## Toolchain
 
@@ -36,7 +36,7 @@ The default `--profile` is `test`, which will not dial `https://index.groundingl
 
 ## Spec pin
 
-[../SPEC_PIN](../SPEC_PIN) names `spec-v2.0.2` and the vector hash. Check it with `python3 ../tools/check_spec_pin.py` from `reference/`.
+[../SPEC_PIN](../SPEC_PIN) names `spec-v2.0.2` and the vector hash. Check it with `python3 reference/tools/check_spec_pin.py`, run from the repository root.
 
 ## Demo keys
 

@@ -2,7 +2,7 @@
 
 Status: PROPOSED, not normative.
 
-This note does not change Satoshi Hike v2.0, the conformance vectors, or verifier behaviour. Part A still compares a plant by `root`, `txid`, `vout`, `block_hash`, and `block_height` (specification P14.5). `tree_size` is not compared. A verifier does not read who paid for the plant.
+This note does not change Satoshi Hike v2.0, the conformance vectors, or verifier behaviour. Part A still compares a plant by `root`, `txid`, `vout`, `block_hash`, and `block_height` (specification §14.3). `tree_size` is not compared. A verifier does not read who paid for the plant.
 
 ## Initial release
 
@@ -24,4 +24,4 @@ A verifier chooses which operators to trust. Trusting none, one, or several is t
 
 ## What a check still ignores
 
-`tree_size` and the time Bari observed the header are off-chain. A chain rebuild of the portable index omits both. The verifier ignores both today: `tree_size` is not a plant comparison (P14.5), and header measurement reads `header.hash`, `header.height`, and `header.time` (section 9). `header.timestamp_unix_ms` is the observation clock. It is not the header time.
+`tree_size` and the time Bari observed the header are off-chain. A chain rebuild of the portable index omits both. The verifier ignores both today: `tree_size` is not a plant comparison (§14.3), and header measurement reads `header.hash`, `header.height`, and `header.time` (section 9). `header.timestamp_unix_ms` is the observation clock. It is not the header time.

@@ -34,7 +34,7 @@ The default `--profile` is `test`, which will not dial `https://index.groundingl
 
 ## Spec pin
 
-[../SPEC_PIN](../SPEC_PIN) names `spec-v2.0.2` and the vector hash. Check it with `python3 ../tools/check_spec_pin.py` from `reference/`.
+[../SPEC_PIN](../SPEC_PIN) names `spec-v2.0.2` and the vector hash. Check it with `python3 reference/tools/check_spec_pin.py`, run from the repository root.
 
 ## Demo keys
 
