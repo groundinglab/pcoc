@@ -510,7 +510,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 [[package]]
 name = "pcoc-bari"
 version = "0.6.6"
-source = "git+https://github.com/groundinglab/pcoc?tag=bari-v0.6.6#8f1deac98b7ce42b72997a554abb32a6cabdd770"
+source = "git+https://github.com/groundinglab/pcoc?tag=bari-v0.6.7#e1dd4d1aaecaccb419793545ab3adcb3cb7e1d9e"
 dependencies = [
  "axum",
  "base64",

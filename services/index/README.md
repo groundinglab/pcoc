@@ -2,7 +2,7 @@
 
 `pcoc-index` serves the portable index: one JSON file per block height. A verifier reads `GET /index/{height}` and treats that body as the stand-in for Bitcoin. Anyone can skip the service and read Bitcoin.
 
-The pin of `pcoc-bari` is `bari-v0.6.6` (`hike` @ `ref-rust-v2.0.4`). Crate version `0.1.4`, tag `index-v0.1.4`.
+The pin of `pcoc-bari` is `bari-v0.6.7` (`hike` @ `ref-rust-v2.0.4`). Crate version `0.1.4`, tag `index-v0.1.4`.
 
 Default bind `127.0.0.1:38081`. No arguments, or `pcoc-index serve`, serves the cache. `pcoc-index rebuild` writes the cache from public chain data.
 
