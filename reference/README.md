@@ -24,7 +24,7 @@ Each tag below is cut.
 
 | Language | Tag | Toolchain | Test | Binaries |
 |---|---|---|---|---|
-| Rust | `ref-rust-v2.0.4` (services and desktop pin it; the index through `bari-v0.6.7`) | Rust 1.99.0 (`rust/rust-toolchain.toml`). Crate `rust-version` 1.83 (`rust/hike/Cargo.toml`) | `cargo test --locked --release` in `reference/rust` | `satoshi-hike-produce`, `satoshi-hike-verify` |
+| Rust | `ref-rust-v2.0.5` (bari, the gate and the desktop app pin it; the index still reaches hike through `bari-v0.6.7`) | Rust 1.99.0 (`rust/rust-toolchain.toml`). Crate `rust-version` 1.83 (`rust/hike/Cargo.toml`) | `cargo test --locked --release` in `reference/rust` | `satoshi-hike-produce`, `satoshi-hike-verify` |
 | Go | `reference/go/v2.0.3`. The module path forces this tag shape (`go/go.mod`, module `github.com/groundinglab/pcoc/reference/go/v2`). There is no `ref-go-` tag | Go 1.22 (`go/go.mod`). No third-party dependencies | `go vet ./...` and `go test ./...` in `reference/go` | `cmd/satoshi-hike-produce`, `cmd/satoshi-hike-verify` |
 | Java | `ref-java-v2.0.2` | Java 21. No build tool. `javac --release 21` (`java/v2.sh`) | `bash reference/java/v2.sh` | `pcoc.cli.Produce`, `pcoc.cli.Verify` (`v2.sh` runs `pcoc.conformance.V2Pack` and `pcoc.hike.Spec6Pins`) |
 
