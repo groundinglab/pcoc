@@ -239,7 +239,9 @@ impl Door {
         let hash_matches = canon::sha256(&body.object) == body.object_sha;
 
         // 2. Origin, field grammar, or the window.
-        if body.origin != wire::ORIGIN || !wire::window_accepts(now, body.exp) {
+        if !wire::origin_served(&[wire::ORIGIN], &body.origin)
+            || !wire::window_accepts(now, body.exp)
+        {
             self.rows
                 .note_unconsumed(&body.nonce, hash_matches, wire::OUTCOME_MALFORMED, now);
             return locked_client(ClientClass::Malformed, None);

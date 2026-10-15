@@ -1163,7 +1163,7 @@ Key order, omitting a key this section says is omitted:
 4. Checked: `event`, `waypoint`, `checked`.
 5. Fetch: `event`, `waypoint`, `worked`, then `status` only when the producer has one, then `block` and `block_height` only when the body names that block, then `miss` only when the body is exactly one of the five phrases and no other bytes.
 
-The log does not choose a Bari URL. `{bari-url}` stays the URL section 13 already uses. On the live profile the built-in default stays `https://bari.groundinglab.io`. This section does not define a path that skips Bari.
+The log does not choose a Bari URL. `{bari-url}` stays the URL section 13 already uses. On the live profile the reference implementation's built-in default stays `https://bari.groundinglab.io`, an example deployment, not a requirement; a producer may name any Bari operator's https origin. This section does not define a path that skips Bari.
 
 ## 14. Verify
 
@@ -1575,11 +1575,11 @@ The bytes of a kept example stay where they were published. This rule does not r
 
 ## 15. Admission service policy
 
-**Normative for the admission service only. Part B.** Rule B9 is normative. The three `leg_rate_floor` values are locked. `provisional_action_cap` is fixed at 0. The re-verify rule dated 2026-10-07 is locked. Rules B0–B8, other than those three floors, remain candidates. Locked 2026-10-10: the section 15.1 sign-in wire. That wire is the challenge link, `challenge_bytes`, the BIP-340 message, the origin display, the lifetime and the clock skew, the submit request, the client response codes, and the website outcome tokens. This lock does not add a leg-rate policy or an admission bar beyond the three floors the Gate already enforces. It does not lock the other candidate figures in section 15.5.
+**Normative for the admission service only. Part B.** Rule B9 is normative. The three `leg_rate_floor` values are locked. `provisional_action_cap` is fixed at 0. The re-verify rule dated 2026-10-07 is locked. Rules B0–B8, other than those three floors, remain candidates. Locked 2026-10-10: the section 15.1 sign-in wire. Amended 2026-10-16: the signed origin is the requesting site's own origin, compared exactly (section 15.1 **Origin**); `https://groundinglab.io` is an example deployment. That wire is the challenge link, `challenge_bytes`, the BIP-340 message, the origin display, the lifetime and the clock skew, the submit request, the client response codes, and the website outcome tokens. This lock does not add a leg-rate policy or an admission bar beyond the three floors the Gate already enforces. It does not lock the other candidate figures in section 15.5.
 
 Part A records and measures. This section is the only judgment. The producer in section 13 records evidence and does not judge. The verifier in section 14 outputs a verify record of measurements and does not judge. The admission service applies this section.
 
-The admission service is the actor in this section. The groundinglab Admission Gate (Gate) is the deployment name of that service. It is not a second specification. The signing client uses one route, `POST /v1/sign-in`, at the default door named in section 15.1. `POST /v1/sign-in/challenge`, `POST /v1/challenge`, and `POST /v1/admit` are not routes. The website mints the challenge link and owns the browser session. That session is not a field of the hike object and not a field of the verify record. The grant named later in this section is not placed in the link and is not returned to the signing client. A deployment of the admission service may spell `refuse` as `deny` on its wire. The word in this file is `refuse`.
+The admission service is the actor in this section. Any service that meets this section conforms to it. The groundinglab Admission Gate (Gate) is one implementation, run for the example deployment. It is not a second specification. The signing client uses one route, `POST /v1/sign-in`, at the default door named in section 15.1. `POST /v1/sign-in/challenge`, `POST /v1/challenge`, and `POST /v1/admit` are not routes. The website mints the challenge link and owns the browser session. That session is not a field of the hike object and not a field of the verify record. The grant named later in this section is not placed in the link and is not returned to the signing client. A deployment of the admission service may spell `refuse` as `deny` on its wire. The word in this file is `refuse`.
 
 A threshold here can change without changing section 13 and without changing the measurements in section 14. No order among B0–B8 is locked. Section 15.5 lists the numeric candidates. It does not lock them, other than the three `leg_rate_floor` values.
 
@@ -1604,7 +1604,15 @@ The challenge is a hard cut from a signature over a display-order index header h
 
 **Domain.** The domain is the 19 ASCII bytes `pcoc-gate-signin-v1`. There is no trailing NUL in the tag.
 
-**Origin.** `origin` is the UTF-8 web origin in the WebAuthn spelling: lowercase scheme and host, no userinfo, no port, and no trailing slash. The only signature origin is `https://groundinglab.io`. Length `n` is 23. The signature binds to that origin. `https://www.groundinglab.io` is not the Sign-in origin. The door host is not the Sign-in origin.
+**Origin.** `origin` is the origin of the requesting site: the site that minted the challenge link and that the signature is for. It is the ASCII serialization of a web origin under RFC 6454 section 6.2: the lowercase scheme `https`, then `://`, then the host in lowercase (an internationalized host in its A-label form), then `:` and the port in shortest decimal only when the port is not 443. It has no userinfo, no path, no query, no fragment, and no trailing slash. `n` is its byte length, from 1 through 255.
+
+Comparison is exact. Two origins are the same only when their serialized bytes are equal. Nothing is case-folded, trimmed, decoded, or completed with a default port before the comparison.
+
+- A signing client MUST take `origin` from the scheme, host, and port of the challenge link it signs, serialized as above. It MUST NOT substitute a built-in value. It MUST NOT sign when the link's origin is not in serialized form.
+- Any operator MAY run an admission service. An admission service MUST accept a signed `origin` only when it is byte-for-byte equal to an origin that service is built or set to serve. It MUST NOT accept any other value. It MUST NOT normalize the received value first.
+- A received `origin` that is not equal to a served origin is check-order step 2: client `malformed`, unchanged from the check order below.
+
+`https://groundinglab.io` is one example deployment. It is not a requirement and is not special: for it, `n` is 23. `https://www.groundinglab.io`, `https://groundinglab.io/`, `http://groundinglab.io`, and `https://groundinglab.io:443` are not equal to it. The door host is not the Sign-in origin. Vectors: `spec/conformance/v2.0/sign-in-origins.json` signs the same challenge for `https://example.com` and for near misses, and gives what a service that serves only `https://example.com` returns for each.
 
 **Other fields.** `nonce` is 32 bytes. The website draws them from a CSPRNG when it mints the link. `expiry_unix_s` is a `u64` count of Unix seconds, not milliseconds. `object_sha256` is the 32-byte SHA-256 of the exact object bytes that are submitted. The preimage does not carry an IP address, a Cloudflare token, a session cookie, a user-agent, or a second copy of `public_key`.
 
@@ -1623,7 +1631,7 @@ challenge_bytes =
   ‖ object_sha256[32]
 ```
 
-The length is `93 + n` bytes. For `https://groundinglab.io`, `n = 23` and the length is 116.
+The length is `93 + n` bytes. Examples: `https://groundinglab.io` gives `n = 23` and 116 bytes; `https://example.com` gives `n = 19` and 112 bytes.
 
 **BIP-340 message.**
 
@@ -1633,23 +1641,27 @@ bip340_message_32 = SHA-256(challenge_bytes)
 
 That 32-byte digest is the BIP-340 message. The signer must not hash it again. `SHA-256(bip340_message_32)` is not the message. The signature is 64 bytes under the object's x-only `public_key`. Verify is `bip340_verify(public_key, bip340_message_32, signature)`.
 
-**Challenge link.** One canonical form. The Android QR encodes that same UTF-8 string, with no byte-order mark. The production host is `groundinglab.io`. The path is `/sign-in/` with the trailing slash. The query order is fixed. There is no extra parameter, no fragment, no userinfo, and no port. The link does not name the door. The link does not name an object.
+**Challenge link.** One canonical form. The Android QR encodes that same UTF-8 string, with no byte-order mark. The link starts with the requesting site's origin, exactly as serialized under **Origin**; `groundinglab.io` is the example deployment's host. The path is `/sign-in/` with the trailing slash. The query order is fixed. There is no extra parameter, no fragment, no userinfo, and no port other than one that is part of the origin. The link does not name the door. The link does not name an object.
 
 ```text
-https://groundinglab.io/sign-in/?v=1&nonce=<64 lowercase hex>&exp=<decimal>
+<origin>/sign-in/?v=1&nonce=<64 lowercase hex>&exp=<decimal>
 ```
 
-`v` stays `1`. It names the challenge-bytes domain `pcoc-gate-signin-v1`. The object hash is not a link parameter. The client binds `object_sha256` from the hike object it chooses. `nonce` is 64 lowercase hex digits of the 32 nonce bytes. `exp` is `expiry_unix_s` in the shortest decimal form: no sign, and no leading zero except the value 0. A paste trims only leading and trailing ASCII whitespace: space, tab, CR, and LF. The remainder equals that string. Uppercase hex, `http`, `www.groundinglab.io`, an extra parameter, a parameter named `object`, a swapped parameter order, a fragment, a bare 64-hex string, a leading zero on `exp`, an `exp` that is not a `u64`, and a leading U+00A0 are not links. The client stops before any POST. The website does not emit `object=`. A link that carries `object=` is not a link. Clients do not accept it. The form `https://groundinglab.io/sign-in/?h=` plus 64 hex digits is retired. A signature over a display-order index header hash is retired.
+Example deployment: `https://groundinglab.io/sign-in/?v=1&nonce=<64 lowercase hex>&exp=<decimal>`.
 
-**Origin display.** Before the signature is produced, the client shows the WebAuthn origin `https://groundinglab.io`. It shows no path, no query, and no door host. On Android that origin is the only confirmation. The client then signs and POSTs, with no second control. On desktop the sign control stays disabled until the origin is shown. One press signs and POSTs once. The client chooses the hike object. That object is the current or selected produced object on the device. When the device holds several, the client lets the user pick. The chosen object's SHA-256 is `object_sha256` in `challenge_bytes` and in the POST body. When the device holds none, the client does not sign and does not POST. That stop is local. It is not a Gate token.
+`v` stays `1`. It names the challenge-bytes domain `pcoc-gate-signin-v1`. The object hash is not a link parameter. The client binds `object_sha256` from the hike object it chooses. `nonce` is 64 lowercase hex digits of the 32 nonce bytes. `exp` is `expiry_unix_s` in the shortest decimal form: no sign, and no leading zero except the value 0. A paste trims only leading and trailing ASCII whitespace: space, tab, CR, and LF. The remainder equals that string. Uppercase hex, `http`, an origin that is not in serialized form, an extra parameter, a parameter named `object`, a swapped parameter order, a fragment, a bare 64-hex string, a leading zero on `exp`, an `exp` that is not a `u64`, and a leading U+00A0 are not links. The client stops before any POST. The website does not emit `object=`. A link that carries `object=` is not a link. Clients do not accept it. The form `<origin>/sign-in/?h=` plus 64 hex digits is retired. The link classes in `sign-in.json` are given for the example origin `https://groundinglab.io`; there, `www.groundinglab.io` is another origin, not that site's link. A signature over a display-order index header hash is retired.
 
-**Submit.** Every signing client POSTs once to `POST https://admission.groundinglab.io/v1/sign-in`. The content type is `application/json`. The client does not follow a redirect. The POST target is that door. It is not the scanned URL. The body is one JSON object with each of these keys once:
+**Origin display.** Before the signature is produced, the client shows the origin taken from the link (example deployment: `https://groundinglab.io`). It shows no path, no query, and no door host. On Android that origin is the only confirmation. The client then signs and POSTs, with no second control. On desktop the sign control stays disabled until the origin is shown. One press signs and POSTs once. The client chooses the hike object. That object is the current or selected produced object on the device. When the device holds several, the client lets the user pick. The chosen object's SHA-256 is `object_sha256` in `challenge_bytes` and in the POST body. When the device holds none, the client does not sign and does not POST. That stop is local. It is not a Gate token.
+
+**Submit.** Every signing client POSTs once to the Sign-in door of the deployment that serves the requesting origin. In the example deployment that door is `POST https://admission.groundinglab.io/v1/sign-in`. The content type is `application/json`. The client does not follow a redirect. The POST target is that door. It is not the scanned URL. The body is one JSON object with each of these keys once:
+
+Example deployment:
 
 ```json
 {"origin":"https://groundinglab.io","nonce":"<64 lowercase hex>","exp":<u64>,"object":"<64 lowercase hex>","object_b64":"<standard base64, with padding, no whitespace>","signature":"<128 lowercase hex>"}
 ```
 
-`exp` is a JSON integer in the `u64` range, not a string. `object_b64` is standard base64 of the exact object bytes, with `=` padding and with no whitespace. Any other key, a missing key, a repeated key, `exp` as a string, or uppercase hex is `malformed`. The Gate rebuilds `challenge_bytes` from `origin`, `nonce`, `exp`, and `object`. The signature origin is `https://groundinglab.io` only. The origin is the body field. It is not the caller's `Origin` header.
+`exp` is a JSON integer in the `u64` range, not a string. `object_b64` is standard base64 of the exact object bytes, with `=` padding and with no whitespace. Any other key, a missing key, a repeated key, `exp` as a string, or uppercase hex is `malformed`. The Gate rebuilds `challenge_bytes` from `origin`, `nonce`, `exp`, and `object`. The signature origin is accepted only under **Origin**. The origin is the body field. It is not the caller's `Origin` header.
 
 **Client response.** The client class is one of three. These sentences are the only sign-in sentences the client shows: `Sign-in submitted`, `bad signature`, and `malformed`.
 
@@ -1661,7 +1673,7 @@ A redirect (HTTP 3xx) is not followed and is not delivery OK. An HTTP 400 whose 
 
 A BIP-340 failure is an error named `bad_signature`. It is not a section 15 decision and it is not a fast final `refuse`. There is no decision line. An append-only hash-chained log entry may record it. v1 has no signed head and no signed receipt. This file does not write the entry.
 
-**Website outcome.** The website reads `GET /v1/sign-in/result/<64 lowercase hex nonce>`. The response is HTTP 200 and the body is `{"outcome":"<token>"}` with no other field. An unknown nonce, and a nonce the Gate has not stored, is `pending`. That read does not create a row. The signing client does not call this route. The website at `https://groundinglab.io` is the reader.
+**Website outcome.** The website reads `GET /v1/sign-in/result/<64 lowercase hex nonce>`. The response is HTTP 200 and the body is `{"outcome":"<token>"}` with no other field. An unknown nonce, and a nonce the Gate has not stored, is `pending`. That read does not create a row. The signing client does not call this route. The website of the requesting origin is the reader (example deployment: `https://groundinglab.io`).
 
 | `outcome` | Words on the website |
 |---|---|
@@ -1683,7 +1695,7 @@ A BIP-340 failure is an error named `bad_signature`. It is not a section 15 deci
 **Check order.** The door applies these steps in order and returns on the first step that decides.
 
 1. The body is not one JSON object, or `nonce` is not 64 lowercase hex digits. The client code is `malformed`. There is no result row. The nonce is not consumed.
-2. `origin` is not `https://groundinglab.io`, a field breaks the **Submit** grammar, or the window does not accept the challenge. The client code is `malformed`. The nonce is not consumed. When the object bytes hash to `object` and this nonce has no consumed row, the website outcome is `malformed`. Otherwise the website outcome stays as it was.
+2. `origin` is not byte-for-byte equal to an origin this service serves (see **Origin**), a field breaks the **Submit** grammar, or the window does not accept the challenge. The client code is `malformed`. The nonce is not consumed. When the object bytes hash to `object` and this nonce has no consumed row, the website outcome is `malformed`. Otherwise the website outcome stays as it was.
 3. SHA-256 of the object bytes is not `object`. The client code is `bad_signature`. The body does not say which check missed. The nonce is not consumed. The website outcome stays as it was.
 4. A consumed row exists for this nonce. The same `object` and the same signature return the original client class and the original website outcome. Policy does not run again. Any other object or signature is client `malformed`, and the stored website outcome stays. A `submission_sha256` of the same submission returns the original outcome and does not mint a grant.
 5. The object is shorter than 32 bytes. The website outcome is `too_short`. The client class is delivery OK. The nonce is consumed.

@@ -26,7 +26,7 @@ After `v2.sh` has compiled (or the same `javac --release 21` line), the classes 
 
 ## Spec pin
 
-[../SPEC_PIN](../SPEC_PIN) names `spec-v2.0.2` and the vector hash. Check it with `python3 reference/tools/check_spec_pin.py` from the repository root.
+[../SPEC_PIN](../SPEC_PIN) names `spec-v2.0.3` (proposed, not yet tagged) and the vector hash. Check it with `python3 reference/tools/check_spec_pin.py` from the repository root.
 
 ## Demo keys
 
