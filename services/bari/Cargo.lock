@@ -324,7 +324,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 [[package]]
 name = "hike"
 version = "0.1.0"
-source = "git+https://github.com/groundinglab/pcoc?tag=ref-rust-v2.0.4#a38c72c92ab599b4f35fc43e7a6caebfab890144"
+source = "git+https://github.com/groundinglab/pcoc?tag=ref-rust-v2.0.5#b875df9b9891e21e3d9a10d05f9d3b432d65e7f2"
 dependencies = [
  "getrandom 0.2.17",
  "rayon",
@@ -340,7 +340,7 @@ dependencies = [
 [[package]]
 name = "hike-net"
 version = "0.1.0"
-source = "git+https://github.com/groundinglab/pcoc?tag=ref-rust-v2.0.4#a38c72c92ab599b4f35fc43e7a6caebfab890144"
+source = "git+https://github.com/groundinglab/pcoc?tag=ref-rust-v2.0.5#b875df9b9891e21e3d9a10d05f9d3b432d65e7f2"
 dependencies = [
  "hike",
  "serde_json",
@@ -529,7 +529,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "pcoc-bari"
-version = "0.6.7"
+version = "0.6.8"
 dependencies = [
  "axum",
  "base64",
