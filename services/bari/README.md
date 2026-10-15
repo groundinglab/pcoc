@@ -22,7 +22,7 @@ Bari timestamps waypoints by sealing each tip's pool into one Bitcoin transactio
 
 ## Pins
 
-`hike` and `hike-net` stay at `ref-rust-v2.0.3` until a later pin bump. This page does not move them.
+`hike` and `hike-net` are pinned at `ref-rust-v2.0.4`. No new `bari-` release tag is cut for this pin bump.
 
 ## More
 

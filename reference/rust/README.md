@@ -6,7 +6,7 @@ Rust is the program that generates the conformance vectors. `PCOC_REGEN_V2=1` re
 
 ## Tag
 
-Services and the desktop app pin `ref-rust-v2.0.3` today. `ref-rust-v2.0.4` is cut on the merge commit of the publication branch. It is not cut in this tree.
+Services and the desktop app pin `ref-rust-v2.0.4`. The index still reaches `ref-rust-v2.0.3` through its `bari-v0.6.5` pin.
 
 ## Toolchain
 

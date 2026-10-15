@@ -1,6 +1,6 @@
 # PCOC Hike for Linux
 
-PCOC Hike for Linux makes a PCOC, checks one, and signs in, on your own machine, using the Rust reference at git tag `ref-rust-v2.0.3` (`Cargo.toml`). A demonstrator, not part of the specification.
+PCOC Hike for Linux makes a PCOC, checks one, and signs in, on your own machine, using the Rust reference at git tag `ref-rust-v2.0.4` (`Cargo.toml`). A demonstrator, not part of the specification.
 
 A full hike is eighteen stages paced by Bitcoin blocks. That is hours, not a button press. The key stays on the machine. Verify reads the portable index (the live default is the public index). Anyone can bypass that index by checking Bitcoin. The app does not say pass or fail. Sign-in sends the object to a relying party. Accept, refuse, and revoke are that party's policy.
 

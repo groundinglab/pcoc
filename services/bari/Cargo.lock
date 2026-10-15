@@ -324,7 +324,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 [[package]]
 name = "hike"
 version = "0.1.0"
-source = "git+https://github.com/groundinglab/pcoc?tag=ref-rust-v2.0.3#ad98171b5697c397f304414e67c2f54f88a72a7d"
+source = "git+https://github.com/groundinglab/pcoc?tag=ref-rust-v2.0.4#a38c72c92ab599b4f35fc43e7a6caebfab890144"
 dependencies = [
  "getrandom 0.2.17",
  "rayon",
@@ -340,7 +340,7 @@ dependencies = [
 [[package]]
 name = "hike-net"
 version = "0.1.0"
-source = "git+https://github.com/groundinglab/pcoc?tag=ref-rust-v2.0.3#ad98171b5697c397f304414e67c2f54f88a72a7d"
+source = "git+https://github.com/groundinglab/pcoc?tag=ref-rust-v2.0.4#a38c72c92ab599b4f35fc43e7a6caebfab890144"
 dependencies = [
  "hike",
  "serde_json",

@@ -1,6 +1,6 @@
 # groundinglab Admission Gate
 
-groundinglab's Admission Gate is a standalone service built on the Rust reference (`ref-rust-v2.0.3`). It applies groundinglab's admission policy (specification Part B) to the verifier's measurements. It adds no Part A rule. Accept, refuse, and revoke are this relying party's decisions. They are not pass or fail.
+groundinglab's Admission Gate is a standalone service built on the Rust reference (`ref-rust-v2.0.4`). It applies groundinglab's admission policy (specification Part B) to the verifier's measurements. It adds no Part A rule. Accept, refuse, and revoke are this relying party's decisions. They are not pass or fail.
 
 The groundinglab Admission Gate (`admission-service`, crate `pcoc-admission`) checks a Satoshi Hike v2.0 object. It reads one config file. It does not run v1.35 verify and it does not load a v1.35 profile.
 
@@ -38,7 +38,7 @@ Policy is not a profile. `leg_rate_floor` in the config is `strict` (7/20), `def
 
 The public log starts empty. The process creates `log_dir`. A chain that is not Satoshi Hike v2.0 is not opened and not served.
 
-This directory is a standalone crate with its own `Cargo.lock`. It depends on the v2.0 reference crate `hike` from this repository at tag `ref-rust-v2.0.3`. Build and test from this directory:
+This directory is a standalone crate with its own `Cargo.lock`. It depends on the v2.0 reference crate `hike` from this repository at tag `ref-rust-v2.0.4`. Build and test from this directory:
 
 ```bash
 cargo build --locked --release
