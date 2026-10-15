@@ -61,6 +61,8 @@ This page is the map. It does not add a second construction. The file is [Satosh
 
 `services/admission-gate/WIRE.md` is the Gate's decision-log contract. It is a companion to §15. It is not part of this folder and it is not a second construction.
 
+[plant-attribution.md](plant-attribution.md) is a proposed note on how a plant is attributed to an operator by the operator key on its funding inputs. Status: PROPOSED, not normative. It does not change Part A, the vectors, or the verifier.
+
 ## Licence
 
 Prose in this folder, including this page: CC BY 4.0 ([LICENSE-DOCS.md](../LICENSE-DOCS.md)).

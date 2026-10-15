@@ -28,7 +28,7 @@ Release tags are `<service>-v<x.y.z>` and point at the commit that ships that re
 
 ## Index
 
-[index/](index/) is the read-only portable-index HTTP reader over the cache Bari writes: `GET /index` (tip), `GET /index/{height}`, and `GET /index/since` (NDJSON catch-up). The verifier's checkpoint measurement reads `GET {index-url}/index/{beacon_height}`; on the live profile an omitted URL means `https://index.groundinglab.io`. See [index/README.md](index/README.md).
+[index/](index/) is its own service. It serves the portable-index files: `GET /index` (tip), `GET /index/{height}`, and `GET /index/since` (NDJSON catch-up). Bari can write those files. `pcoc-index rebuild` can write them from a public block API, or from a pruned node, with no plant and no wallet RPC. The verifier's checkpoint measurement reads `GET {index-url}/index/{beacon_height}`. On the live profile an omitted URL means `https://index.groundinglab.io`. That host is opt-in. See [index/README.md](index/README.md).
 
 ## Admission Gate
 

@@ -17,12 +17,16 @@ path = "src/lib.rs"
 
 [dependencies]
 axum = "0.8"
+base64 = "0.22"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 pcoc-bari = { git = "https://github.com/groundinglab/pcoc", tag = "bari-v0.6.6" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal"] }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
+# Same pin as bari. 2.12.1 is the last 2.x this toolchain builds.
+ureq = { version = "=2.12.1", features = ["json"] }
 # Same pin as bari: 3.25+ can pull getrandom 0.4 (edition 2024).
 tempfile = "=3.24.0"
