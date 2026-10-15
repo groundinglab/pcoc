@@ -6,7 +6,7 @@ Rust is the program that generates the conformance vectors. `PCOC_REGEN_V2=1` re
 
 ## Tag
 
-Services and the desktop app pin `ref-rust-v2.0.4`. The index follows once `bari-v0.6.6` is tagged; until then it reaches `ref-rust-v2.0.3` through `bari-v0.6.5`.
+Services, the index (through `bari-v0.6.6`) and the desktop app pin `ref-rust-v2.0.4`.
 
 ## Toolchain
 

@@ -2,7 +2,7 @@
 
 This is the read-only HTTP reader over the cache Bari writes. Anyone can bypass it by reading Bitcoin. Crate and binary name `pcoc-index`.
 
-The working-tree pin of `pcoc-bari` is `bari-v0.6.5`. The latest git tag of this crate is `index-v0.1.3`, cut when the pin was `bari-v0.6.4`. The crate version stays `0.1.3`. A new index tag is cut only if a later release needs it.
+The pin of `pcoc-bari` is `bari-v0.6.6` (`hike` @ `ref-rust-v2.0.4`). Crate version `0.1.4`, tag `index-v0.1.4`.
 
 `GET /index` is the current tip. `GET /index/{height}` is one retained height. `GET /index/since` streams retained mainnet heights as newline-delimited JSON. These GETs do not use Hashcash. Default bind `127.0.0.1:38081`.
 
