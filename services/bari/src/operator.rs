@@ -2463,6 +2463,16 @@ fn footer_html(view: &OpsView) -> String {
     )
 }
 
+/// Lightning address that receives contributions toward plant fees.
+pub const FEES_LIGHTNING_ADDRESS: &str = "spottedpuma570@walletofsatoshi.com";
+
+fn fees_html() -> String {
+    format!(
+        "<aside class=\"contrib\" aria-label=\"Contribute to fees\"><a class=\"contrib-addr\" href=\"lightning:{a}\"><code>{a}</code></a><p class=\"contrib-note\">Contribute to fees</p></aside>",
+        a = FEES_LIGHTNING_ADDRESS
+    )
+}
+
 fn age_script(now_unix_ms: u64) -> String {
     format!(
         "<script>(function(){{var at={now_unix_ms};function mark(){{var age=Math.floor((Date.now()-at)/60000);if(age<5)return;var host=document.querySelector('.banners');if(!host||host.querySelector('.js-age'))return;var banner=document.createElement('div');banner.className='banner js-age';banner.innerHTML='<b>This view is '+age+' min old.</b> Reload for the current tip.';host.prepend(banner);}}setInterval(mark,15000);mark();}})();</script>"
@@ -2484,7 +2494,7 @@ pub fn render(view: &OpsView) -> String {
         banners.push_str(&format!("<div class=\"{class}\">{}</div>", banner.html));
     }
     let body = format!(
-        "{}<main><div class=\"banners\">{banners}</div>{}{}{}<div class=\"tiles\">{}{}{}</div></main>{}{}",
+        "{}<main><div class=\"banners\">{banners}</div>{}{}{}<div class=\"tiles\">{}{}{}</div></main>{}{}{}",
         header_html(view.tip, &view.instance, view.explorer),
         pipeline_html(view),
         ledger_html(view, &view.ledger, &sub),
@@ -2493,6 +2503,7 @@ pub fn render(view: &OpsView) -> String {
         wallet_html(&view.wallet),
         system_html(&view.system),
         footer_html(view),
+        fees_html(),
         age_script(view.now_unix)
     );
     page(
@@ -3199,6 +3210,11 @@ th { position: sticky; top: 0; z-index: 1; background: var(--panel); color: var(
 .tile h2 { margin-bottom: 8px; }
 
 .foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 24px; padding: 4px 24px 24px; color: var(--faint); font-size: 12px; }
+.contrib { padding: 0 24px 24px; text-align: center; }
+.contrib-addr { color: var(--text); text-decoration: none; user-select: all; }
+.contrib-addr:hover code, .contrib-addr:focus-visible code { text-decoration: underline; }
+.contrib-addr:focus-visible { outline: 1px solid var(--text); outline-offset: 2px; }
+.contrib-note { margin: 2px 0 0; color: var(--muted); font-size: 11px; line-height: 1.2; }
 .foot details summary { cursor: pointer; }
 .foot ul { margin: 6px 0 0; padding-left: 18px; }
 
@@ -3970,6 +3986,17 @@ mod tests {
         let r9 = check(&same_view, "R9");
         assert!(r4.holds, "included − sent of 0 is not labelled on time");
         assert!(!r9.holds, "included must be after sent");
+    }
+
+    #[test]
+    fn ops_page_ends_with_the_fees_lightning_address() {
+        let html = render(&fixture_view("example-host", "0123456"));
+        let addr = html
+            .find("href=\"lightning:spottedpuma570@walletofsatoshi.com\"")
+            .expect("address link");
+        let note = html.find("Contribute to fees</p>").expect("note");
+        assert!(addr < note);
+        assert!(html.find("<footer").unwrap() < addr);
     }
 
     #[test]
