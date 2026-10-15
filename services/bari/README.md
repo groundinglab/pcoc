@@ -1,6 +1,6 @@
 # bari
 
-One binary, `bari`. Crate `pcoc-bari`, library `pcoc_bari`, version 0.6.7, tag `bari-v0.6.7`.
+One binary, `bari`. Crate `pcoc-bari`, library `pcoc_bari`, version 0.6.8, tag `bari-v0.6.8`.
 
 It accepts 32-byte waypoints and later serves a Merkle path. It writes the index cache. It does not serve `GET /index`. The index HTTP reader is [services/index](../index/).
 
@@ -22,7 +22,7 @@ Bari timestamps waypoints by sealing each tip's pool into one Bitcoin transactio
 
 ## Pins
 
-`hike` and `hike-net` are pinned at `ref-rust-v2.0.4`. No new `bari-` release tag is cut for this pin bump.
+`hike` and `hike-net` are pinned at `ref-rust-v2.0.5`.
 
 ## More
 
