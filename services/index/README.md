@@ -132,7 +132,7 @@ Each file is named `height-` plus a ten-digit zero-padded height, then `.json`. 
 
 Retention is an operator choice. A height that is not on disk is **404**. The response is the document this cache retained for that height. It is the copy in this directory.
 
-A `PCOC_INDEX_DATA_DIR` that does not exist yet is created. `GET /index` and `GET /index/{height}` answer **404** until files appear. `GET /index/since` answers **200** with an empty body. A path that exists and is not a directory exits 1.
+A `PCOC_INDEX_DATA_DIR` that does not exist yet is created. `GET /index` and `GET /index/{height}` answer **404** until files appear. `GET /index/since` answers **200** with an empty body. A path that exists and is not a directory exits 1. Creation is silent, so a mistyped path starts an empty index on a new directory: check the `data_dir=` in the startup line.
 
 ## Body
 

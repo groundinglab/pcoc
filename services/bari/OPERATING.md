@@ -86,7 +86,7 @@ BARI_OPS_FIXTURE=1 BARI_BIND_ADDR=127.0.0.1:38080 \
   cargo run --locked --manifest-path services/bari/Cargo.toml --bin bari
 ```
 
-Open `http://127.0.0.1:38080/ops`. The fixture is the design seed: tip 970700, the same arrivals and fee runs as the mockup, and several trees in the mempool at once because an eligible block sends. The 970682 tree is Late +8. Held rows are the fee cap. The open pool is collecting and the next block will fire. No data directory and no Bitcoin node. `BARI_INSTANCE` names the instance in the header. Unset, it says `local`. `BARI_COMMIT` names the commit. Unset, it says `unknown`.
+Open `http://127.0.0.1:38080/ops`. The fixture is the design seed: tip 970700, the same arrivals and fee runs as the mockup, and several trees in the mempool at once because an eligible block sends. The 970682 tree is Late +8. Held rows are the fee cap. The open pool is collecting and the next block will fire. No data directory and no Bitcoin node. `BARI_INSTANCE` names the instance in the header. Unset, it says `local`. `BARI_COMMIT` names the commit. Unset, it says `unknown`. The fixture mounts only `GET /ops`, `GET /states` and `GET /health`. `POST /waypoint` answers 404 there. To accept waypoints without a node, use the test plane (`BARI_TIP_SOURCE=synth`).
 
 ## Restart
 
