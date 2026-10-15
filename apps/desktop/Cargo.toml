@@ -10,7 +10,7 @@ publish = false
 
 [workspace.dependencies]
 # The Rust reference (Satoshi Hike v2.0), pinned to a release tag.
-hike = { git = "https://github.com/groundinglab/pcoc", tag = "ref-rust-v2.0.3" }
+hike = { git = "https://github.com/groundinglab/pcoc", tag = "ref-rust-v2.0.4" }
 
 base64 = "0.22"
 bech32 = "=0.9.1"

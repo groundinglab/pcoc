@@ -20,13 +20,13 @@ Rule A4.3 checkpoint comparisons run together. `PCOC_BIND_THREADS` sets how many
 
 ## Languages
 
-The tag in the tree today is the one services and desktop pin, or the module’s current tag. The next tag is cut on the merge commit of this branch. It is not cut here.
+Each tag below is cut.
 
-| Language | Tag (existing; the new tag is cut at merge) | Toolchain | Test | Binaries |
+| Language | Tag | Toolchain | Test | Binaries |
 |---|---|---|---|---|
-| Rust | `ref-rust-v2.0.3` is what services and desktop pin today. `ref-rust-v2.0.4` is cut on the merge commit of this branch | Rust 1.99.0 (`rust/rust-toolchain.toml`). Crate `rust-version` 1.83 (`rust/hike/Cargo.toml`) | `cargo test --locked --release` in `reference/rust` | `satoshi-hike-produce`, `satoshi-hike-verify` |
-| Go | `reference/go/v2.0.2` today. Next is `reference/go/v2.0.3`. The module path forces this tag shape (`go/go.mod`, module `github.com/groundinglab/pcoc/reference/go/v2`). There is no `ref-go-` tag | Go 1.22 (`go/go.mod`). No third-party dependencies | `go vet ./...` and `go test ./...` in `reference/go` | `cmd/satoshi-hike-produce`, `cmd/satoshi-hike-verify` |
-| Java | `ref-java-v2.0.1` today. Next is `ref-java-v2.0.2` | Java 21. No build tool. `javac --release 21` (`java/v2.sh`) | `bash reference/java/v2.sh` | `pcoc.cli.Produce`, `pcoc.cli.Verify` (`v2.sh` runs `pcoc.conformance.V2Pack` and `pcoc.hike.Spec6Pins`) |
+| Rust | `ref-rust-v2.0.4` (services and desktop pin it; the index follows once `bari-v0.6.6` is tagged) | Rust 1.99.0 (`rust/rust-toolchain.toml`). Crate `rust-version` 1.83 (`rust/hike/Cargo.toml`) | `cargo test --locked --release` in `reference/rust` | `satoshi-hike-produce`, `satoshi-hike-verify` |
+| Go | `reference/go/v2.0.3`. The module path forces this tag shape (`go/go.mod`, module `github.com/groundinglab/pcoc/reference/go/v2`). There is no `ref-go-` tag | Go 1.22 (`go/go.mod`). No third-party dependencies | `go vet ./...` and `go test ./...` in `reference/go` | `cmd/satoshi-hike-produce`, `cmd/satoshi-hike-verify` |
+| Java | `ref-java-v2.0.2` | Java 21. No build tool. `javac --release 21` (`java/v2.sh`) | `bash reference/java/v2.sh` | `pcoc.cli.Produce`, `pcoc.cli.Verify` (`v2.sh` runs `pcoc.conformance.V2Pack` and `pcoc.hike.Spec6Pins`) |
 
 ## Index
 
@@ -38,7 +38,7 @@ The tag in the tree today is the one services and desktop pin, or the module’s
 | [rust/nip06/](rust/nip06/) | DEMO keys only. BIP-39 English 12-word, empty passphrase, NIP-06 path, BIP-340 x-only. Not the hike's `production_seed`. |
 | [rust/satoshi-hike-produce/](rust/satoshi-hike-produce/) | Reference produce program. Lab `--demo-mnemonic` derives the x-only key. |
 | [rust/satoshi-hike-verify/](rust/satoshi-hike-verify/) | Reference verify program. Calls `hike::verify`. |
-| [go/](go/) | Go port. Module path `github.com/groundinglab/pcoc/reference/go/v2`; current tag `reference/go/v2.0.2`. |
+| [go/](go/) | Go port. Module path `github.com/groundinglab/pcoc/reference/go/v2`; current tag `reference/go/v2.0.3`. |
 | [java/](java/) | Java port. `reference/java/v2.sh` runs the conformance pack. |
 
 ## Steer
