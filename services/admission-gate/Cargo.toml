@@ -31,5 +31,6 @@ url = "2.5.4"
 hike = { git = "https://github.com/groundinglab/pcoc", tag = "ref-rust-v2.0.4" }
 
 [dev-dependencies]
+nip06 = { git = "https://github.com/groundinglab/pcoc", tag = "ref-rust-v2.0.4" }
 http-body-util = "0.1"
 tower = { version = "0.5", features = ["util"] }
