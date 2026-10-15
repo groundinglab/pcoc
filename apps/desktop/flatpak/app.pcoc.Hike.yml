@@ -1,0 +1,62 @@
+# Flatpak manifest for PCOC Hike.
+#
+# GNOME 47 and 48 are past Flathub support. This build uses GNOME 50, which
+# still supplies GTK 4.14 and libadwaita 1.5. The sandbox build is offline.
+# apps/desktop/flatpak/build-bundle.sh vendors Cargo.lock first, including
+# the pinned hike git revision, and writes cargo-config.toml. The build
+# copies that file to .cargo/config.toml at the repository root, which is
+# the directory cargo runs in.
+id: app.pcoc.Hike
+runtime: org.gnome.Platform
+runtime-version: "50"
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: pcoc-hike
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # Produce dials Bitcoin gossip and Bari. Verify reads the portable index.
+  # Sign-in and test admission POST to the admission gate. Send uses Nostr relays.
+  - --share=network
+  # The data folder. Other places go through the file chooser portal.
+  - --filesystem=~/PCOC:create
+build-options:
+  # The bundle ships the program, not debuginfo. Skipping it also means the
+  # build does not need host debugedit or eu-strip.
+  no-debuginfo: true
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/pcoc-hike/cargo
+    CARGO_NET_OFFLINE: "true"
+    CARGO_BUILD_JOBS: "3"
+modules:
+  - name: pcoc-hike
+    buildsystem: simple
+    build-commands:
+      - rustc --version
+      - test -s apps/desktop/flatpak/cargo-config.toml
+      - test -d apps/desktop/flatpak/cargo-vendor
+      # Build commands run at the repository root. Cargo reads .cargo/config.toml
+      # from that directory, not from apps/desktop.
+      - install -Dm644 apps/desktop/flatpak/cargo-config.toml .cargo/config.toml
+      - cargo --offline build --release --locked --manifest-path apps/desktop/Cargo.toml -p pcoc-hike
+      - install -Dm755 apps/desktop/target/release/pcoc-hike /app/bin/pcoc-hike
+      - install -Dm644 apps/desktop/data/app.pcoc.Hike.desktop /app/share/applications/app.pcoc.Hike.desktop
+      - install -Dm644 apps/desktop/data/app.pcoc.Hike.metainfo.xml /app/share/metainfo/app.pcoc.Hike.metainfo.xml
+      - install -Dm644 apps/desktop/data/app.pcoc.Hike.svg /app/share/icons/hicolor/scalable/apps/app.pcoc.Hike.svg
+    sources:
+      - type: dir
+        path: ../../..
+        skip:
+          - .git
+          - apps/desktop/target
+          - apps/desktop/flatpak/.flatpak-builder
+          - apps/desktop/flatpak/build-dir
+          - apps/desktop/flatpak/repo
+          - apps/desktop/flatpak/out
+          - reference/rust/target
+          - services/target
+          - qa/stage-loop/target

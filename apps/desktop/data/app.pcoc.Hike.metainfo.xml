@@ -26,6 +26,11 @@
     <display_length compare="ge">720</display_length>
   </requires>
   <releases>
+    <release version="0.1.2" date="2026-10-15">
+      <description>
+        <p>Flatpak packaging is in this repository; the published bundle is built from this tag.</p>
+      </description>
+    </release>
     <release version="0.1.1" date="2026-10-15">
       <description>
         <p>Built on the Rust reference ref-rust-v2.0.4.</p>

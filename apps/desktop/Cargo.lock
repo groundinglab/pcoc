@@ -806,7 +806,7 @@ checksum = "f38d5652c16fde515bb1ecef450ab0f6a219d619a7274976324d5e377f7dceba"
 
 [[package]]
 name = "pcoc-hike"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-channel",
  "getrandom",
@@ -818,7 +818,7 @@ dependencies = [
 
 [[package]]
 name = "pcoc-hike-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "base64",
  "bech32",
