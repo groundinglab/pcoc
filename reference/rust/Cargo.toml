@@ -7,3 +7,8 @@ members = [
     "satoshi-hike-produce",
     "satoshi-hike-verify",
 ]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
