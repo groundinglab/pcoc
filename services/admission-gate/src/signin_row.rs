@@ -31,6 +31,18 @@ pub struct Row {
     /// Decision line that opens a claim window. Set on accept, return, and echo.
     pub log_day: Option<String>,
     pub log_seq: Option<u64>,
+    /// Thorough progress, published once the walks finish.
+    pub deep: Option<Deep>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Deep {
+    pub runs_done: u64,
+    pub legs_matched: u64,
+    pub legs_total: u64,
+    pub salt: String,
+    pub indices: Vec<Vec<u64>>,
+    pub commitment: String,
 }
 
 pub struct SignInRows {
@@ -87,6 +99,7 @@ impl SignInRows {
                         span_s: None,
                         log_day: None,
                         log_seq: None,
+                        deep: None,
                     },
                 );
             }
@@ -128,6 +141,7 @@ impl SignInRows {
                 span_s: None,
                 log_day: None,
                 log_seq: None,
+                deep: None,
             },
         );
         None
@@ -168,6 +182,7 @@ impl SignInRows {
             span_s: None,
             log_day: None,
             log_seq: None,
+            deep: None,
         };
         rows.insert(body.nonce, next);
         Ok(())
@@ -268,6 +283,16 @@ impl SignInRows {
             }
         }
         Value::Object(body)
+    }
+
+    pub fn note_deep(&self, nonce: &[u8; 32], deep: Deep) {
+        let mut rows = self.rows.lock().expect("sign-in rows");
+        let Some(row) = rows.get_mut(nonce) else {
+            return;
+        };
+        if row.consumed {
+            row.deep = Some(deep);
+        }
     }
 
     pub fn consumed(&self, nonce: &[u8; 32]) -> bool {

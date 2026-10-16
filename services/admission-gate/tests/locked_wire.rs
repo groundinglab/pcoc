@@ -28,8 +28,7 @@ use tower::ServiceExt;
 const NOW_2026_10_10: u64 = 1_791_590_400;
 
 fn vector() -> Value {
-    let path =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/vectors/sign-in.json");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/vectors/sign-in.json");
     serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
 }
 
@@ -259,10 +258,8 @@ fn earlier_kind_with_key(secret: &[u8; 32]) -> Vec<u8> {
 }
 
 fn v135_object() -> Vec<u8> {
-    std::fs::read(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/vectors/earlier-kind.cbor"),
-    )
-    .expect("earlier kind")
+    std::fs::read(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/vectors/earlier-kind.cbor"))
+        .expect("earlier kind")
 }
 
 fn assert_only_code(status: StatusCode, body: &Value, text: &str, code: &str) {
@@ -615,7 +612,7 @@ async fn the_new_wire_hides_the_floor_and_still_enforces_it() {
     };
     let (status, body, text) = post_json(&lab, &signed.body()).await;
     assert_delivery(status, &body);
-    assert!(!text.contains("1/4"), "{text}");
+    assert!(!text.contains("1/5"), "{text}");
     assert!(!text.contains("leg"), "{text}");
     assert!(!text.contains("Submit again"), "{text}");
     let token = settled(&lab, &signed.nonce).await;
@@ -629,19 +626,19 @@ async fn the_new_wire_hides_the_floor_and_still_enforces_it() {
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(value.as_object().unwrap().len(), 1, "{raw}");
-    assert!(!raw.contains("1/4"), "{raw}");
+    assert!(!raw.contains("1/5"), "{raw}");
     assert!(!raw.contains("floor"), "{raw}");
     assert!(!raw.contains("verifier"), "{raw}");
     assert!(!raw.contains("Submit again"), "{raw}");
-    // The three floors stay the config. This build's default is 1/4.
+    // Health echoes the policy id. The fraction stays off this wire.
     let (health_status, health, _) = send(
         &lab,
         Request::get("/v1/health").body(Body::empty()).unwrap(),
     )
     .await;
     assert_eq!(health_status, StatusCode::OK);
-    assert_eq!(health["config"]["leg_rate_floor"]["p"], 1);
-    assert_eq!(health["config"]["leg_rate_floor"]["q"], 4);
+    assert_eq!(health["config"]["policy_id"], "gl-admit-v5");
+    assert!(health["config"].get("leg_rate_floor").is_none(), "{health}");
     assert!(health["config"].get("log_dir").is_none(), "{health}");
     assert!(health["config"].get("config_path").is_none(), "{health}");
 
@@ -655,7 +652,7 @@ async fn the_new_wire_hides_the_floor_and_still_enforces_it() {
     assert!(chain.contains("\"reason_code\":"), "{chain}");
     assert!(
         !chain.contains("leg per second")
-            && !chain.contains("1/4")
+            && !chain.contains("1/5")
             && !chain.contains("Submit again")
             && !chain.contains("N and S"),
         "the public log leaked a floor or a retry: {chain}"

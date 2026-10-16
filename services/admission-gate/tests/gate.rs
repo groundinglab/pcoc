@@ -69,8 +69,7 @@ fn service(index_url: &str) -> (Router, PathBuf) {
 }
 
 fn v135_object() -> Vec<u8> {
-    let path =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/vectors/earlier-kind.cbor");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/vectors/earlier-kind.cbor");
     std::fs::read(&path).expect("earlier kind object")
 }
 
@@ -106,8 +105,7 @@ fn append_line(
     write.public_key = [3u8; 32];
     write.object_sha256 = sha256_bytes(&object);
     write.object = object;
-    log.append(&write)
-    .unwrap();
+    log.append(&write).unwrap();
 }
 
 fn sha256_bytes(bytes: &[u8]) -> [u8; 32] {
@@ -385,27 +383,23 @@ async fn health_reports_version_commit_spec_and_config() {
     assert!(body["config"].get("config_path").is_none(), "{body}");
     assert!(!body.to_string().contains("log_dir"), "{body}");
     assert!(!body.to_string().contains("config_path"), "{body}");
-    assert_eq!(body["config"]["leg_rate_floor"]["name"], "default");
-    assert_eq!(body["config"]["leg_rate_floor"]["p"], 1);
-    assert_eq!(body["config"]["leg_rate_floor"]["q"], 4);
+    assert!(body["config"].get("leg_rate_floor").is_none(), "{body}");
+    assert_eq!(body["config"]["policy_id"], "gl-admit-v5");
     assert_eq!(body["config"]["bind_threads"], 6);
     let origins = body["config"]["allowed_origins"].as_array().unwrap();
     assert!(origins.is_empty(), "the default names no site");
     assert_eq!(body["config"]["bind"], "127.0.0.1:8787");
-    assert_eq!(body["config"]["policy_id"], "gl-admit-v1");
-    assert_eq!(body["config"]["min_leg_rate"], 0.25);
-    assert_eq!(body["config"]["min_waypoints"], 6);
     let (policy_status, policy) = send(
         &router,
         Request::get("/v1/policy").body(Body::empty()).unwrap(),
     )
     .await;
     assert_eq!(policy_status, StatusCode::OK);
-    assert_eq!(policy["policy_id"], "gl-admit-v1");
-    assert_eq!(policy["min_leg_rate"], 0.25);
-    assert_eq!(policy["min_waypoints"], 6);
-    assert_eq!(policy["waypoints_total"], 18);
-    assert_eq!(policy["min_legs"], 6);
+    assert_eq!(policy["policy_id"], "gl-admit-v5");
+    assert_eq!(policy["leg_rate_floor"]["p"], 1);
+    assert_eq!(policy["leg_rate_floor"]["q"], 5);
+    assert_eq!(policy["min_anchored_paths"], 6);
+    assert_eq!(policy["source"], "recommendation, not specification");
     assert_eq!(policy["spec"], "Satoshi Hike v2.0");
     let text = body.to_string();
     assert!(!text.contains("friendly_list"));
@@ -647,9 +641,13 @@ async fn latest_json_matches_the_chain_after_restart() {
     assert_eq!(status, StatusCode::OK, "{latest}");
     assert_eq!(latest["last_seq"], 1);
     assert_eq!(latest["feed"], "pcoc-gate-feed-v2");
-    assert_eq!(latest["policy"]["policy_id"], "gl-admit-v1");
-    assert_eq!(latest["policy"]["min_leg_rate"], 0.25);
-    assert_eq!(latest["policy"]["min_waypoints"], 6);
+    assert_eq!(latest["policy"]["policy_id"], "gl-admit-v5");
+    assert_eq!(latest["policy"]["leg_rate_floor"]["p"], 1);
+    assert_eq!(latest["policy"]["leg_rate_floor"]["q"], 5);
+    assert_eq!(
+        latest["policy"]["source"],
+        "recommendation, not specification"
+    );
     let day = pcoc_admission::log::utc_day(1_700_000_000);
     let (line_status, line) = send(
         &router,
@@ -715,8 +713,7 @@ async fn the_http_record_and_the_decision_log_match_the_pack() {
     );
     let pack: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("tests/vectors/anchor-window.json"),
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/vectors/anchor-window.json"),
         )
         .unwrap(),
     )
@@ -760,12 +757,8 @@ async fn the_http_record_and_the_decision_log_match_the_pack() {
 
     let log_dir = scratch("pack-log");
     let mut log = pcoc_admission::log::DecisionLog::open(&log_dir).unwrap();
-    let mut write = pcoc_admission::log::DecisionWrite::bare(
-        1_700_000_000,
-        Some(4),
-        "thorough",
-        "refuse",
-    );
+    let mut write =
+        pcoc_admission::log::DecisionWrite::bare(1_700_000_000, Some(4), "thorough", "refuse");
     write.fast_seq = Some(0);
     write.submission_sha256 = [1u8; 32];
     write.public_key = [2u8; 32];
@@ -774,8 +767,7 @@ async fn the_http_record_and_the_decision_log_match_the_pack() {
     write.reasons = vec!["bookends_not_defined".to_owned()];
     write.reason = Some("N and S are not defined.".to_owned());
     write.summary = Some(measured.record);
-    log.append(&write)
-    .unwrap();
+    log.append(&write).unwrap();
     let chain = std::fs::read_to_string(log_dir.join("chain.jsonl")).unwrap();
     assert_record_bytes(&chain, "\"verify_summary\":", &reference);
     assert_record_bytes(&chain, "\"verify_summary\":", stored);

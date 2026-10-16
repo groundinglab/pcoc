@@ -205,6 +205,10 @@ impl JobStore {
         jobs.get(job_id).map(Job::to_json_string)
     }
 
+    pub fn log_dir(&self) -> std::path::PathBuf {
+        self.cfg.log_dir.clone()
+    }
+
     pub fn counts(&self) -> (usize, usize) {
         let jobs = self.jobs.lock().expect("job map");
         let live = jobs.values().filter(|job| !job.state.is_terminal()).count();
@@ -222,8 +226,8 @@ impl JobStore {
             Report::Read(measured) => {
                 let judgment = policy::judge(
                     &Report::Read(measured.clone()),
-                    self.cfg.leg_rate_floor_p,
-                    self.cfg.leg_rate_floor_q,
+                    self.cfg.policy.leg_rate_floor.p,
+                    self.cfg.policy.leg_rate_floor.q,
                 );
                 let record = measured.record;
                 match judgment {

@@ -5,7 +5,7 @@ These processes are built on the Rust reference, plus one Cloudflare Worker. The
 ## Specification, policy, operations
 
 - **Specification** (`spec/`) defines measurements and the admission service model. It may discuss thresholds but never sets a threshold value.
-- **Policy** chooses values. The admission gate's companion, [admission-gate/POLICY.md](admission-gate/POLICY.md), holds groundinglab's argued default (`gl-admit-v4`). It is a recommendation, not authority. Anyone may choose their own, and a policy id encodes its values.
+- **Policy** chooses values. The admission gate's companion, [admission-gate/POLICY.md](admission-gate/POLICY.md), holds groundinglab's argued default (`gl-admit-v5`). It is a recommendation, not authority. Anyone may choose their own, and a policy id encodes its values.
 - **Operations** is a deployed instance's own config: hosts, origins, the active policy, secrets. groundinglab's is private and is not in this repository. Files here that name groundinglab hosts (`deploy/`, `wrangler.jsonc`) are examples of one deployment.
 
 ## What is here

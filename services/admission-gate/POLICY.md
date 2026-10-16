@@ -1,18 +1,18 @@
 # Admission policy companion
 
-This is the policy companion to the admission gate service. It holds groundinglab's argued defaults for one policy, `gl-admit-v4` ([policy/gl-admit-v4.toml](policy/gl-admit-v4.toml)).
+This is the policy companion to the admission gate service. It holds groundinglab's argued defaults for one policy, `gl-admit-v5` ([policy/gl-admit-v5.toml](policy/gl-admit-v5.toml)).
 
 ## Where policy sits
 
 | Layer | What it holds | Where |
 |---|---|---|
 | Specification | Measurements (Part A, §1–§14) and the admission service model (Part B, §15): parameter names, comparisons, states. It may discuss thresholds. **It never sets a threshold value.** It defers values to a policy. | `spec/satoshi-hike-v2.0/` |
-| Policy companion (this file) | One argued default policy. It is the intended out-of-the-box default for the next gate build, so a new gate has a reasoned starting point; gate v0.4.1 still defaults to `gl-admit-v1` (see below). **It is a recommendation, not authority.** Anyone may choose their own. A policy's name encodes its values: change any value and the id changes. | `services/admission-gate/POLICY.md`, `policy/` |
+| Policy companion (this file) | One argued default policy. It is the out-of-the-box default for this gate build. **It is a recommendation, not authority.** Anyone may choose their own. A policy's name encodes its values: change any value and the id changes. | `services/admission-gate/POLICY.md`, `policy/` |
 | Operations (private) | groundinglab's decided, deployed instance config: which policy id is active, origins, hosts, secrets. Opinionated. | Not in this repository |
 
 The admission gate is a service. groundinglab's gate is one configured instance of it. While it is the only public gate, its public page states the live policy it runs. That position is temporary and confers no authority on these values.
 
-## gl-admit-v4
+## gl-admit-v5
 
 | Parameter (§15.4 name) | Value | Argument |
 |---|---|---|
@@ -30,8 +30,12 @@ A six-leg or checkpoint-digest `mismatch` is an invariant `revoke` in the specif
 
 ## Choosing your own
 
-Copy `policy/gl-admit-v4.toml`, change the values, and give it a new id that encodes them. The specification's §15.5 lists other informative examples (for instance leg-rate floors `7/20`, `1/4`, `1/8`).
+Copy `policy/gl-admit-v5.toml`, change the values, and give it a new id that encodes them. The specification's §15.5 lists other informative examples (for instance leg-rate floors `7/20`, `1/4`, `1/8`).
 
-## Where this policy runs today
+## Where this policy runs
 
-groundinglab's live gate is set to `gl-admit-v4` in its `gate.toml` and enforces two of its values today: `min_leg_rate` 0.2 legs/s and `min_waypoints` 6. The code default is still `gl-admit-v1` (0.25, 6). Gate v0.4.1 reads only `policy_id`, `min_leg_rate` and `min_waypoints`. It does not yet implement the first/last rule, three runs with early stop, the draw commitment, `held` for an unread closing header (it refuses `bookends_not_read`), the integer comparison, or the key ban. See [STATUS.md](STATUS.md).
+This build reads `policy/gl-admit-v5.toml`, or an inline `policy_table` with the same keys. The code default is `gl-admit-v5`. The comparison is the integer `q·N ≥ p·S` on the bookend pair. Anchored waypoints are counted among `W_1` … `W_16`, and `W_1` and `W_16` must both be anchored. The fast phase issues `provisional`. A `not read` is held and retried. Thorough runs three six-leg draws, commits the draw before walking, recomputes the checkpoint digests, and bans the public key on a fake leg. See [STATUS.md](STATUS.md).
+
+Why v5, not v4. On groundinglab's live gate the id `gl-admit-v4` is already bound (policy-bind.json) to gate 0.4.1's two-value table (0.2 leg/s, 6 waypoints of 18). The full table here binds differently, so it takes a new id; a bound id is never reused with different values.
+
+v1 history. Through gate 0.4.1 the code default was `gl-admit-v1`: a float `min_leg_rate` of 0.25 leg/s, `min_waypoints` 6 of 18, and a named `leg_rate_floor` (`strict` 7/20, `default` 1/4, `lenient` 1/8) used only when a provisional line resumed. Those keys are not read. A resumed provisional is re-judged under the active policy id. The startup log records that move.

@@ -56,9 +56,9 @@ impl Service {
         let limiter = Arc::new(RateLimiter::per_minute(cfg.rate_per_min));
         let door = Door::open(
             &cfg.log_dir,
-            cfg.leg_rate_floor_p,
-            cfg.leg_rate_floor_q,
             cfg.policy(),
+            &cfg.index_url,
+            cfg.index_timeout,
         )?;
         let jobs = JobStore::new(cfg.clone());
         for job in door.unsettled() {
@@ -127,19 +127,9 @@ struct ConfigSummary {
     client_ip_header: Option<String>,
     allowed_origins: Vec<String>,
     extra_origins: Vec<String>,
-    leg_rate_floor: FloorSummary,
     bind_threads: usize,
     index_timeout_secs: u64,
     policy_id: String,
-    min_leg_rate: f64,
-    min_waypoints: u64,
-}
-
-#[derive(Serialize)]
-struct FloorSummary {
-    name: String,
-    p: u64,
-    q: u64,
 }
 
 #[derive(Serialize)]
@@ -168,16 +158,9 @@ async fn health(State(svc): State<Service>, headers: HeaderMap) -> Response {
             client_ip_header: svc.cfg.client_ip_header.clone(),
             allowed_origins: svc.cfg.allowed_origins.clone(),
             extra_origins: svc.cfg.extra_origins.clone(),
-            leg_rate_floor: FloorSummary {
-                name: svc.cfg.leg_rate_floor.clone(),
-                p: svc.cfg.leg_rate_floor_p,
-                q: svc.cfg.leg_rate_floor_q,
-            },
             bind_threads: svc.cfg.bind_threads,
             index_timeout_secs: svc.cfg.index_timeout.as_secs(),
-            policy_id: svc.cfg.policy_id.clone(),
-            min_leg_rate: svc.cfg.min_leg_rate,
-            min_waypoints: svc.cfg.min_waypoints,
+            policy_id: svc.cfg.policy.policy_id.clone(),
         },
         jobs: JobCounts { tracked, in_flight },
     };
@@ -433,6 +416,10 @@ fn sign_in_locked(svc: &Service, headers: &HeaderMap, bytes: &[u8]) -> Response 
     }
     let result = svc.door.sign_in_locked(locked);
     if let Some(job) = result.thorough.clone() {
+        // A banned key is ignored after the signature: no fast phase, no line.
+        if svc.door.banned(&job.public_key) {
+            return locked_response(svc, headers, result.status, result.body);
+        }
         spawn_locked(svc.door.clone(), svc.jobs.clone(), job);
     }
     locked_response(svc, headers, result.status, result.body)
@@ -465,14 +452,39 @@ fn locked_response(
 
 fn spawn_locked(door: Door, jobs: JobStore, job: LockedThorough) {
     tokio::spawn(async move {
+        let source = job.origin.clone();
         // A prior thorough accept with policy_id skips measurement.
         if job.prior_accept.is_some() {
             door.settle_locked(job, Ok(crate::verifier::Report::Unreadable));
+            door.end_pending(&source);
             return;
         }
-        let object = job.object.clone();
-        let report = jobs.measure(object).await;
-        door.settle_locked(job, report);
+        match door.settle_fast(&job) {
+            crate::door::FastPhase::Provisional => {
+                let object = job.object.clone();
+                let object_sha = job.object_sha;
+                let public_key = job.public_key;
+                let log_dir = jobs.log_dir();
+                let policy = door.policy().clone();
+                let seq = door.last_seq();
+                let walked = tokio::task::spawn_blocking(move || {
+                    crate::thorough::run(&log_dir, seq, &object, &object_sha, &policy)
+                })
+                .await;
+                match walked {
+                    Ok(Ok(out)) => door.settle_thorough(&job, out),
+                    _ => {
+                        let report = jobs.measure(job.object.clone()).await;
+                        door.settle_locked(job, report);
+                    }
+                }
+                let _ = public_key;
+            }
+            crate::door::FastPhase::Held
+            | crate::door::FastPhase::Done
+            | crate::door::FastPhase::Sticky => {}
+        }
+        door.end_pending(&source);
     });
 }
 
@@ -522,14 +534,7 @@ async fn get_policy(State(svc): State<Service>, headers: HeaderMap) -> Response 
 }
 
 fn policy_body(policy: &AdmissionPolicy) -> Value {
-    json!({
-        "policy_id": policy.policy_id,
-        "min_leg_rate": policy.min_leg_rate,
-        "min_waypoints": policy.min_waypoints,
-        "waypoints_total": policy::WAYPOINTS_TOTAL,
-        "min_legs": policy::SPEC_MIN_LEGS,
-        "spec": policy::POLICY_SPEC,
-    })
+    policy::public_document(policy)
 }
 
 async fn get_line(
@@ -761,7 +766,10 @@ mod tests {
     #[test]
     fn unrelated_origin_is_refused() {
         assert!(!origin_allowed(&cfg(), "https://evil.example"));
-        assert!(!origin_allowed(&cfg(), "http://groundinglab.io.evil.example"));
+        assert!(!origin_allowed(
+            &cfg(),
+            "http://groundinglab.io.evil.example"
+        ));
     }
 
     #[test]

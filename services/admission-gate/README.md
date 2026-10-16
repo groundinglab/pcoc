@@ -5,7 +5,7 @@ The admission gate is a standalone service built on the Rust reference (`ref-rus
 Three layers stay separate:
 
 - **Specification** defines measurements and the admission model. It sets no threshold values.
-- **Policy** chooses values. [POLICY.md](POLICY.md) is the companion. groundinglab's recommended policy is `gl-admit-v4`, a recommendation, not authority. This build's code default is still `gl-admit-v1`. Choose your own.
+- **Policy** chooses values. [POLICY.md](POLICY.md) is the companion. groundinglab's recommended policy is `gl-admit-v5`, a recommendation, not authority. This build's code default is `gl-admit-v5`. Choose your own.
 - **Operations** is a deployed instance's own config. groundinglab's instance config is private and is not in this repository.
 
 groundinglab runs one configured instance ("the groundinglab Admission Gate"). While it is the only public gate, its public page states its live policy.
@@ -28,7 +28,7 @@ An earlier-kind object is a measurement (`version` `earlier version`). The Gate'
 | Directory | `services/admission-gate/` |
 | Binary | `admission-service` |
 | Config | one TOML file, `--config` or `GATE_CONFIG` |
-| Crate version | `0.4.1` |
+| Crate version | `0.5.0` |
 
 ```text
 POST /v1/sign-in           -> locked §15.1 body
@@ -36,7 +36,7 @@ GET  /v1/sign-in/result/{nonce}
 GET  /latest.json          -> tip after a durable line, plus policy
 GET  /log/{YYYY-MM-DD}.jsonl
 GET  /log/{YYYY-MM-DD}/{seq}
-GET  /v1/policy            -> policy_id, min_leg_rate, min_waypoints
+GET  /v1/policy            -> the full policy table, plus source
 POST /v1/verify            -> 202 { "job_id" }
 GET  /v1/verify/{job_id}   -> status, and the section 14 record when the object is v2.0
 GET  /v1/health            -> version, commit, spec, spec_kind, config
@@ -46,9 +46,7 @@ GET  /v1/health            -> version, commit, spec, spec_kind, config
 
 The reference verifier is `linked_measure` in `src/verifier.rs`. It calls `hike::verify_with_bind_threads` from the v2.0 reference crate. Index reads are one shot. An earlier kind is that crate's Rule A5. Policy then judges the measurements.
 
-Policy values come from the config, not from the specification. This build reads `policy_id`, `min_leg_rate` (leg/s) and `min_waypoints`. A change of either number needs a new id. The **code default** is still `gl-admit-v1` (0.25, 6). groundinglab's recommended policy is `gl-admit-v4` (one leg per 5 seconds, 6 anchored waypoints). See [POLICY.md](POLICY.md) for it and for what this build does not yet enforce. The verifier writes `measures`. The gate writes `policy_id` and `policy_checks`. A refusal carries one `reason_code` and a class. `bitcoin_tip_height` is null when unknown. Public health does not show `log_dir` or `config_path`.
-
-The legacy `leg_rate_floor` setting (`strict`, `default`, `lenient`) is read only to settle a provisional line resumed at restart. A new sign-in uses `min_leg_rate` and `min_waypoints`.
+Policy values come from the policy file, not from the specification. This build reads `policy/gl-admit-v5.toml` or an inline `policy_table`. A change of any value needs a new id. The code default is `gl-admit-v5` (one leg per 5 seconds, 6 anchored waypoints among `W_1` … `W_16`). See [POLICY.md](POLICY.md). The verifier writes `measures`. The gate writes `policy_id` and `policy_checks`. A refusal carries one `reason_code` and a class. `bitcoin_tip_height` is null when unknown. Public health does not show `log_dir` or `config_path`. Health echoes the policy id.
 
 The public log starts empty. The process creates `log_dir`. A chain that is not Satoshi Hike v2.0 is not opened and not served.
 

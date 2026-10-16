@@ -89,6 +89,9 @@ pub struct DecisionWrite {
     /// Thorough accept this return points at.
     pub access_ref_day: Option<String>,
     pub access_ref_seq: Option<u64>,
+    /// Thorough result: runs, legs matched, revealed draw and commitment.
+    /// Monitor feed only; not on the sign-in result body.
+    pub deep: Option<Value>,
 }
 
 impl DecisionWrite {
@@ -120,6 +123,7 @@ impl DecisionWrite {
             class: None,
             access_ref_day: None,
             access_ref_seq: None,
+            deep: None,
         }
     }
 }
@@ -167,6 +171,10 @@ impl DecisionLog {
         log.install(parsed.lines)?;
         log.repair_latest()?;
         Ok(log)
+    }
+
+    pub fn dir(&self) -> &Path {
+        &self.dir
     }
 
     pub fn lines(&self) -> &[StoredLine] {
@@ -453,6 +461,9 @@ fn encode_decision(seq: u64, prev: &str, write: &DecisionWrite) -> Result<Vec<u8
     if let Some(seq) = write.access_ref_seq {
         map.insert("access_ref_seq".to_owned(), json!(seq));
     }
+    if let Some(deep) = &write.deep {
+        map.insert("deep".to_owned(), deep.clone());
+    }
     let mut text = serde_json::to_string(&Value::Object(map))
         .map_err(|err| LogError::Unusable(err.to_string()))?;
     // New keys are already in the object, immediately before the summary splice.
@@ -665,6 +676,7 @@ mod tests {
             class: None,
             access_ref_day: None,
             access_ref_seq: None,
+            deep: None,
         }
     }
 

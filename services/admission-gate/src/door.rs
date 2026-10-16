@@ -9,6 +9,7 @@
 //! no friendly list. A pure bookend `not read` writes no thorough line.
 
 use crate::canon::{self, hex32};
+use crate::fast::{self, FastDecision};
 use crate::log::{self, DecisionLog, DecisionWrite, LogError};
 use crate::policy::{self, AdmissionPolicy, Judgment};
 use crate::reasons;
@@ -27,15 +28,23 @@ const VERIFIER_ERROR: &str = "verifier_error";
 pub struct Door {
     inner: Arc<Mutex<Inner>>,
     rows: Arc<SignInRows>,
-    floor_p: u64,
-    floor_q: u64,
     policy: AdmissionPolicy,
+    index_url: String,
+    index_timeout: std::time::Duration,
 }
 
 struct Inner {
     log: DecisionLog,
     /// Unix second the locked wire uses. `None` reads the process clock.
     now: Option<u64>,
+    /// Public keys this gate ignores. A fake leg writes one. The value is
+    /// the seq of the revoke that banned it.
+    banned: std::collections::HashMap<[u8; 32], u64>,
+    /// Open fast or thorough work, counted for the pending caps.
+    pending_global: u64,
+    pending_by_source: std::collections::HashMap<String, u64>,
+    /// How many times a banned key was ignored. Not a decision line.
+    ban_ignored: u64,
 }
 
 /// One locked-wire POST, after the transport edge.
@@ -49,6 +58,7 @@ pub struct LockedSignIn {
 #[derive(Clone)]
 pub struct LockedThorough {
     pub nonce: [u8; 32],
+    pub origin: String,
     pub object: Vec<u8>,
     pub submission: [u8; 32],
     pub public_key: [u8; 32],
@@ -75,18 +85,172 @@ pub struct ThoroughJob {
 }
 
 impl Door {
-    pub fn open(dir: &Path, floor_p: u64, floor_q: u64, policy: AdmissionPolicy) -> Result<Self, String> {
+    pub fn open(
+        dir: &Path,
+        policy: AdmissionPolicy,
+        index_url: &str,
+        index_timeout: std::time::Duration,
+    ) -> Result<Self, String> {
         policy.bind(dir)?;
         let mut log = DecisionLog::open(dir).map_err(show_log)?;
-        log.set_policy_hint(policy_document(&policy))
+        log.set_policy_hint(policy::public_document(&policy))
             .map_err(show_log)?;
+        let banned = load_bans(log.dir());
         Ok(Self {
-            inner: Arc::new(Mutex::new(Inner { log, now: None })),
+            inner: Arc::new(Mutex::new(Inner {
+                log,
+                now: None,
+                banned,
+                pending_global: 0,
+                pending_by_source: std::collections::HashMap::new(),
+                ban_ignored: 0,
+            })),
             rows: Arc::new(SignInRows::new()),
-            floor_p,
-            floor_q,
             policy,
+            index_url: index_url.to_owned(),
+            index_timeout,
         })
+    }
+
+    /// A banned public key is ignored. No verify, no decision line.
+    /// The counter is the only record of the ignore.
+    pub fn banned(&self, public_key: &[u8; 32]) -> bool {
+        let mut inner = self.lock();
+        if inner.banned.contains_key(public_key) {
+            inner.ban_ignored = inner.ban_ignored.saturating_add(1);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn last_seq(&self) -> u64 {
+        self.lock()
+            .log
+            .lines()
+            .last()
+            .and_then(|line| line.value.get("seq").and_then(|item| item.as_u64()))
+            .unwrap_or(0)
+    }
+
+    /// Thorough finished. A match is `accept`. A mismatch is `revoke` because
+    /// the fast phase already issued `provisional`, and the public key is banned.
+    pub fn settle_thorough(&self, job: &LockedThorough, out: crate::thorough::ThoroughOut) {
+        self.rows.note_deep(
+            &job.nonce,
+            crate::signin_row::Deep {
+                runs_done: out.runs_done,
+                legs_matched: out.legs_matched,
+                legs_total: out.legs_total,
+                salt: out.salt.clone(),
+                indices: out.indices.clone(),
+                commitment: out.commitment.clone(),
+            },
+        );
+        let now = self.now_unix_s();
+        let mut write = if out.matched {
+            DecisionWrite::bare(now, None, "thorough", "accept")
+        } else {
+            DecisionWrite::bare(now, None, "thorough", "revoke")
+        };
+        write.fast_seq = Some(self.last_seq());
+        write.submission_sha256 = job.submission;
+        write.public_key = job.public_key;
+        write.object_sha256 = job.object_sha;
+        write.object = job.object.clone();
+        write.reasons = vec![if out.matched {
+            wire::OUTCOME_ACCEPTED.to_owned()
+        } else {
+            "revoke".to_owned()
+        }];
+        write.summary = Some("{}".to_owned());
+        write.policy_id = Some(self.policy.policy_id.clone());
+        write.deep = Some(serde_json::json!({
+            "runs_done": out.runs_done,
+            "legs_matched": out.legs_matched,
+            "legs_total": out.legs_total,
+            "salt": out.salt,
+            "indices": out.indices,
+            "commitment": out.commitment,
+        }));
+        if !out.matched {
+            let note = if out.digest_mismatch {
+                "checkpoint mismatch"
+            } else {
+                "a recomputed leg result differs"
+            };
+            write.reason = Some(note.to_owned());
+            write.reason_code = Some(reasons::code_of_note(note).to_owned());
+            write.class = Some(reasons::class_of(reasons::code_of_note(note)).to_owned());
+        }
+        let seq = {
+            let mut inner = self.lock();
+            inner.log.append(&write).ok()
+        };
+        if out.matched {
+            self.rows.settle(&job.nonce, wire::OUTCOME_ACCEPTED, now);
+        } else {
+            // The website token stays `rejected`. `revoked` is not a §15.1 token.
+            self.rows.settle(&job.nonce, wire::OUTCOME_REJECTED, now);
+            if self.policy.ban_key_on_fake_leg {
+                self.ban_key(&job.public_key, seq.unwrap_or(0));
+            }
+        }
+    }
+
+    pub fn note_deep(&self, nonce: &[u8; 32], out: crate::thorough::ThoroughOut) {
+        self.rows.note_deep(
+            nonce,
+            crate::signin_row::Deep {
+                runs_done: out.runs_done,
+                legs_matched: out.legs_matched,
+                legs_total: out.legs_total,
+                salt: out.salt,
+                indices: out.indices,
+                commitment: out.commitment,
+            },
+        );
+    }
+
+    pub fn ban_ignored(&self) -> u64 {
+        self.lock().ban_ignored
+    }
+
+    /// Pending caps. Over a cap the nonce is not consumed and nothing is logged.
+    pub fn over_pending_cap(&self, source: &str) -> bool {
+        let inner = self.lock();
+        if inner.pending_global >= self.policy.pending_global {
+            return true;
+        }
+        inner.pending_by_source.get(source).copied().unwrap_or(0) >= self.policy.pending_per_source
+    }
+
+    pub fn begin_pending(&self, source: &str) {
+        let mut inner = self.lock();
+        inner.pending_global = inner.pending_global.saturating_add(1);
+        *inner
+            .pending_by_source
+            .entry(source.to_owned())
+            .or_insert(0) += 1;
+    }
+
+    pub fn end_pending(&self, source: &str) {
+        let mut inner = self.lock();
+        inner.pending_global = inner.pending_global.saturating_sub(1);
+        if let Some(count) = inner.pending_by_source.get_mut(source) {
+            *count = count.saturating_sub(1);
+        }
+    }
+
+    /// Write a ban for the public key only. The seed is not stored.
+    pub fn ban_key(&self, public_key: &[u8; 32], seq: u64) {
+        let mut inner = self.lock();
+        inner.banned.insert(*public_key, seq);
+        let dir = inner.log.dir().to_path_buf();
+        drop(inner);
+        if let Err(err) = store_ban(&dir, public_key, seq) {
+            eprintln!("admission-service ban was not stored: {err}");
+        }
     }
 
     pub fn policy(&self) -> &AdmissionPolicy {
@@ -216,7 +380,10 @@ impl Door {
                 );
                 continue;
             };
-            let tip_height = line.value.get("bitcoin_tip_height").and_then(|item| item.as_u64());
+            let tip_height = line
+                .value
+                .get("bitcoin_tip_height")
+                .and_then(|item| item.as_u64());
             jobs.push(ThoroughJob {
                 object,
                 fast_seq: seq,
@@ -303,6 +470,16 @@ impl Door {
             );
         }
 
+        // Pending caps, before the nonce is consumed. Over a cap the website
+        // stays `pending` (the locked token; a `held` token is not in §15.1)
+        // and this function returns no thorough job.
+        if self.over_pending_cap(&body.origin) {
+            // No row. The nonce is not consumed. The result read of an
+            // unknown nonce is `pending`, which is the locked token.
+            return locked_client(ClientClass::DeliveryOk, None);
+        }
+        self.begin_pending(&body.origin);
+
         // 9. v2.0. Consume when this step starts. Policy settles later.
         let submission =
             wire::submission_sha256(&body.object_sha, &public_key, &message, &body.signature);
@@ -334,6 +511,7 @@ impl Door {
                     body: json!({ "delivery": "ok" }),
                     thorough: Some(LockedThorough {
                         nonce: body.nonce,
+                        origin: body.origin.clone(),
                         object: body.object,
                         submission,
                         public_key,
@@ -422,8 +600,11 @@ impl Door {
             _ => None,
         };
         if let Some(measures) = &measured {
-            self.rows
-                .note_bookends(&job.nonce, measures.legs.map(|n| n as i64), measures.span_s.map(|n| n as i64));
+            self.rows.note_bookends(
+                &job.nonce,
+                measures.legs.map(|n| n as i64),
+                measures.span_s.map(|n| n as i64),
+            );
         }
         let checks = measured
             .as_ref()
@@ -432,9 +613,14 @@ impl Door {
         let checks_met = policy::policy_admits(&checks);
         let unmet = checks.iter().any(|check| !check.met);
         let held = match &report {
-            Ok(report) => {
-                matches!(policy::judge(report, self.floor_p, self.floor_q), Judgment::Held { .. })
-            }
+            Ok(report) => matches!(
+                policy::judge(
+                    report,
+                    self.policy.leg_rate_floor.p,
+                    self.policy.leg_rate_floor.q,
+                ),
+                Judgment::Held { .. }
+            ),
             Err(_) => false,
         };
         // A measured miss is a refusal. An unread pair with no other note stays held.
@@ -495,7 +681,11 @@ impl Door {
 
     pub async fn settle(&self, job: ThoroughJob, report: Result<Report, String>) {
         let judgment = match report {
-            Ok(report) => Ok(policy::judge(&report, self.floor_p, self.floor_q)),
+            Ok(report) => Ok(policy::judge(
+                &report,
+                self.policy.leg_rate_floor.p,
+                self.policy.leg_rate_floor.q,
+            )),
             Err(error) => Err(error),
         };
         let (decision, reasons, line, summary) = match judgment {
@@ -518,12 +708,7 @@ impl Door {
         if already_settled(&inner.log, job.fast_seq) {
             return;
         }
-        let mut write = DecisionWrite::bare(
-            log::unix_now(),
-            job.tip_height,
-            "thorough",
-            decision,
-        );
+        let mut write = DecisionWrite::bare(log::unix_now(), job.tip_height, "thorough", decision);
         write.fast_seq = Some(job.fast_seq);
         write.submission_sha256 = job.submission;
         write.public_key = job.public_key;
@@ -549,6 +734,156 @@ impl Door {
         }
     }
 
+    /// Fast phase for a consumed v2.0 object. A settled refuse writes the
+    /// thorough-less line and does not start a walk. `provisional` is the
+    /// grant. `held` writes no line.
+    pub fn settle_fast(&self, job: &LockedThorough) -> FastPhase {
+        if let Some(phase) = self.sticky_phase(job) {
+            return phase;
+        }
+        self.finish_fast(
+            job,
+            fast::decide(&job.object, &self.policy, &self.index_client()),
+        )
+    }
+
+    /// [`settle_fast`] at `conformance-small` sizes.
+    ///
+    /// The profile is not offered to production. [`settle_fast`] always uses
+    /// section 6. A test builds the smallest conformance object and runs the
+    /// same index client through this entry.
+    #[cfg(test)]
+    pub fn settle_fast_small(&self, job: &LockedThorough) -> FastPhase {
+        if let Some(phase) = self.sticky_phase(job) {
+            return phase;
+        }
+        self.finish_fast(
+            job,
+            fast::decide_small(&job.object, &self.policy, &self.index_client()),
+        )
+    }
+
+    /// A stored refuse or revoke for this pair. No index read.
+    fn sticky_phase(&self, job: &LockedThorough) -> Option<FastPhase> {
+        let stored = self.sticky(&job.public_key, &job.object_sha)?;
+        self.rows.settle(&job.nonce, &stored, self.now_unix_s());
+        Some(FastPhase::Sticky)
+    }
+
+    fn index_client(&self) -> verifier::IndexClient {
+        verifier::IndexClient::open(&self.index_url, self.index_timeout)
+    }
+
+    fn finish_fast(&self, job: &LockedThorough, decision: FastDecision) -> FastPhase {
+        match decision {
+            FastDecision::Refuse {
+                website,
+                reasons,
+                line,
+                record,
+            } => {
+                self.write_fast_refuse(job, &reasons, &line, &record);
+                self.rows.settle(&job.nonce, website, self.now_unix_s());
+                FastPhase::Done
+            }
+            FastDecision::Held { .. } => {
+                // Website token stays pending. The locked table has no `held`.
+                FastPhase::Held
+            }
+            FastDecision::Provisional { record } => {
+                self.write_provisional(job, &record);
+                FastPhase::Provisional
+            }
+        }
+    }
+
+    fn sticky(&self, public_key: &[u8; 32], object_sha: &[u8; 32]) -> Option<String> {
+        let inner = self.lock();
+        let key = hex32(public_key);
+        let object = hex32(object_sha);
+        let mut found = None;
+        for line in inner.log.lines() {
+            let same = line.value.get("public_key").and_then(|item| item.as_str())
+                == Some(key.as_str())
+                && line
+                    .value
+                    .get("object_sha256")
+                    .and_then(|item| item.as_str())
+                    == Some(object.as_str())
+                && line.value.get("policy_id").and_then(|item| item.as_str())
+                    == Some(self.policy.policy_id.as_str());
+            if !same {
+                continue;
+            }
+            let decision = line.value.get("decision").and_then(|item| item.as_str());
+            if decision == Some("refuse") || decision == Some("revoke") {
+                found = line
+                    .value
+                    .get("reasons")
+                    .and_then(|item| item.as_array())
+                    .and_then(|items| items.first())
+                    .and_then(|item| item.as_str())
+                    .map(str::to_owned);
+            }
+        }
+        found
+    }
+
+    fn write_fast_refuse(
+        &self,
+        job: &LockedThorough,
+        reasons: &[String],
+        line: &str,
+        record: &str,
+    ) {
+        let now = self.now_unix_s();
+        let mut write = DecisionWrite::bare(now, None, "fast", "refuse");
+        write.submission_sha256 = job.submission;
+        write.public_key = job.public_key;
+        write.object_sha256 = job.object_sha;
+        write.object = job.object.clone();
+        write.reasons = reasons.to_vec();
+        write.reason = Some(line.to_owned());
+        write.summary = Some(record.to_owned());
+        write.policy_id = Some(self.policy.policy_id.clone());
+        let code = reasons
+            .first()
+            .map(|note| reasons::code_of_note(note))
+            .unwrap_or(reasons::CODE_SHAPE_MISMATCH);
+        write.reason_code = Some(code.to_owned());
+        write.class = Some(reasons::class_of(code).to_owned());
+        let mut inner = self.lock();
+        if let Err(error) = inner.log.append(&write) {
+            eprintln!(
+                "admission-service fast refuse was not written: {}",
+                show_log(error)
+            );
+        }
+    }
+
+    fn write_provisional(&self, job: &LockedThorough, record: &str) {
+        let now = self.now_unix_s();
+        let mut write = DecisionWrite::bare(now, None, "fast", "provisional");
+        write.submission_sha256 = job.submission;
+        write.public_key = job.public_key;
+        write.object_sha256 = job.object_sha;
+        write.object = job.object.clone();
+        write.reasons = vec!["provisional".to_owned()];
+        write.summary = Some(if record.is_empty() {
+            "{}".to_owned()
+        } else {
+            record.to_owned()
+        });
+        write.policy_id = Some(self.policy.policy_id.clone());
+        let mut inner = self.lock();
+        if let Err(error) = inner.log.append(&write) {
+            eprintln!(
+                "admission-service provisional was not written: {}",
+                show_log(error)
+            );
+        }
+    }
+
     pub fn latest_bytes(&self) -> Option<Vec<u8>> {
         self.lock().log.latest_bytes()
     }
@@ -559,7 +894,11 @@ impl Door {
 
     /// Whether a thorough accept with `policy_id` already covers this pair.
     /// Tests and the sign-in path share this lookup.
-    pub fn prior_accept_ref(&self, public_key: &[u8; 32], object_sha: &[u8; 32]) -> Option<AccessRef> {
+    pub fn prior_accept_ref(
+        &self,
+        public_key: &[u8; 32],
+        object_sha: &[u8; 32],
+    ) -> Option<AccessRef> {
         let inner = self.lock();
         prior_accept(&inner.log, public_key, object_sha).map(|line| {
             let (day, seq) = line_ref(&line.value);
@@ -587,17 +926,6 @@ impl Door {
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
         self.inner.lock().expect("admission log")
     }
-}
-
-fn policy_document(policy: &AdmissionPolicy) -> Value {
-    json!({
-        "policy_id": policy.policy_id,
-        "min_leg_rate": policy.min_leg_rate,
-        "min_waypoints": policy.min_waypoints,
-        "waypoints_total": policy::WAYPOINTS_TOTAL,
-        "min_legs": policy::SPEC_MIN_LEGS,
-        "spec": policy::POLICY_SPEC,
-    })
 }
 
 fn checks_json(checks: &[policy::PolicyCheck]) -> Value {
@@ -639,7 +967,11 @@ fn prior_accept<'a>(
         line.value.get("phase").and_then(|item| item.as_str()) == Some("thorough")
             && line.value.get("decision").and_then(|item| item.as_str()) == Some("accept")
             && line.value.get("public_key").and_then(|item| item.as_str()) == Some(key.as_str())
-            && line.value.get("object_sha256").and_then(|item| item.as_str()) == Some(object.as_str())
+            && line
+                .value
+                .get("object_sha256")
+                .and_then(|item| item.as_str())
+                == Some(object.as_str())
             && line
                 .value
                 .get("policy_id")
@@ -664,7 +996,12 @@ fn recent_return<'a>(
         if line.value.get("public_key").and_then(|item| item.as_str()) != Some(key.as_str()) {
             return false;
         }
-        if line.value.get("object_sha256").and_then(|item| item.as_str()) != Some(object.as_str()) {
+        if line
+            .value
+            .get("object_sha256")
+            .and_then(|item| item.as_str())
+            != Some(object.as_str())
+        {
             return false;
         }
         let Some(time) = line.value.get("time_unix_s").and_then(|item| item.as_u64()) else {
@@ -735,6 +1072,51 @@ fn locked_client(client: ClientClass, _outcome: Option<&str>) -> LockedSignIn {
     }
 }
 
+/// What the fast phase did with a consumed nonce.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FastPhase {
+    /// A grant was issued. Thorough runs.
+    Provisional,
+    /// `not read`. No line. The website stays `pending`.
+    Held,
+    /// A settled refuse, or a sticky stored outcome. Thorough does not run.
+    Done,
+    Sticky,
+}
+
+fn load_bans(dir: &Path) -> std::collections::HashMap<[u8; 32], u64> {
+    let mut out = std::collections::HashMap::new();
+    let path = dir.join("banned_keys.json");
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        return out;
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return out;
+    };
+    let Some(map) = value.as_object() else {
+        return out;
+    };
+    for (key, seq) in map {
+        if let (Some(bytes), Some(seq)) = (log::parse_hex32(key), seq.as_u64()) {
+            out.insert(bytes, seq);
+        }
+    }
+    out
+}
+
+fn store_ban(dir: &Path, public_key: &[u8; 32], seq: u64) -> Result<(), String> {
+    let path = dir.join("banned_keys.json");
+    let mut map = if path.exists() {
+        let raw = std::fs::read_to_string(&path).map_err(|err| err.to_string())?;
+        serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&raw).unwrap_or_default()
+    } else {
+        serde_json::Map::new()
+    };
+    map.insert(hex32(public_key), serde_json::json!(seq));
+    let bytes = serde_json::to_vec(&map).map_err(|err| err.to_string())?;
+    std::fs::write(&path, bytes).map_err(|err| err.to_string())
+}
+
 fn show_log(error: LogError) -> String {
     match error {
         LogError::Io(error) => format!("the decision log could not be written: {error}"),
@@ -745,6 +1127,18 @@ fn show_log(error: LogError) -> String {
 #[cfg(test)]
 mod tests {
     use super::bookends_from_record;
+    use super::{Door, FastPhase, LockedThorough};
+    use crate::canon;
+    use crate::config::Config;
+    use crate::thorough;
+    use crate::wire;
+    use std::collections::HashMap;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::Arc;
+    use std::time::Duration;
 
     #[test]
     fn numeric_bookends_parse_and_words_do_not() {
@@ -762,5 +1156,503 @@ mod tests {
         );
         assert_eq!(bookends_from_record("not json"), (None, None));
         assert_eq!(bookends_from_record(r#"{"N":7}"#), (Some(7), None));
+    }
+
+    /// (a) Every index read matches. The fast phase grants `provisional`,
+    /// and that line is the thorough job a restart would start.
+    #[test]
+    fn honest_index_reads_are_provisional_and_thorough_is_enqueued() {
+        let built = small_honest();
+        let (url, hits) = serve(&built.docs, Mirror::Honest);
+        let (door, dir) = open_at(&url);
+        let job = job_of(&built.bytes, 1);
+        let phase = door.settle_fast_small(&job);
+        assert_eq!(phase, FastPhase::Provisional, "{}", chain_text(&dir));
+        let pending = door.unsettled();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].object_sha, job.object_sha);
+        assert_eq!(pending[0].public_key, job.public_key);
+        let lines = chain(&dir);
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert_eq!(lines[0]["decision"], "provisional");
+        assert_eq!(lines[0]["phase"], "fast");
+        assert_eq!(hits.fresh.load(Ordering::Relaxed), 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// (b) A refused connection is `not read`, so the state is held.
+    #[test]
+    fn index_down_is_held() {
+        let built = small_honest();
+        let (door, dir) = open_at("http://127.0.0.1:9");
+        let phase = door.settle_fast_small(&job_of(&built.bytes, 1));
+        assert_eq!(phase, FastPhase::Held);
+        assert!(door.unsettled().is_empty());
+        assert_eq!(door.last_seq(), 0);
+        assert!(!dir.join("chain.jsonl").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// (c) Both plant reads disagree. That confirmed mismatch refuses.
+    #[test]
+    fn a_confirmed_plant_mismatch_refuses() {
+        let built = small_honest();
+        let (url, hits) = serve(&built.docs, Mirror::PlantConfirmed(built.plant_height));
+        let (door, dir) = open_at(&url);
+        let phase = door.settle_fast_small(&job_of(&built.bytes, 1));
+        assert_eq!(phase, FastPhase::Done, "{}", chain_text(&dir));
+        assert!(door.unsettled().is_empty());
+        let lines = chain(&dir);
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert_eq!(lines[0]["decision"], "refuse");
+        assert_eq!(lines[0]["phase"], "fast");
+        let reasons = lines[0]["reasons"].to_string();
+        assert!(
+            reasons.contains("present path does not match the plant"),
+            "{reasons}"
+        );
+        assert!(hits.fresh.load(Ordering::Relaxed) >= 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// (d) The mirror mismatches and the fresh read does not. Held, no line.
+    #[test]
+    fn an_unconfirmed_plant_mismatch_is_held() {
+        let built = small_honest();
+        let (url, hits) = serve(&built.docs, Mirror::PlantUnconfirmed(built.plant_height));
+        let (door, dir) = open_at(&url);
+        let phase = door.settle_fast_small(&job_of(&built.bytes, 1));
+        assert_eq!(phase, FastPhase::Held, "{}", chain_text(&dir));
+        assert!(door.unsettled().is_empty());
+        assert_eq!(door.last_seq(), 0);
+        assert!(hits.fresh.load(Ordering::Relaxed) >= 1);
+        assert!(hits.normal.load(Ordering::Relaxed) >= 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A stored header that still disagrees on the fresh read is a refuse.
+    #[test]
+    fn a_confirmed_header_mismatch_refuses() {
+        let built = small_honest();
+        let (url, hits) = serve(&built.docs, Mirror::HeaderConfirmed(built.header_height));
+        let (door, dir) = open_at(&url);
+        let phase = door.settle_fast_small(&job_of(&built.bytes, 1));
+        assert_eq!(phase, FastPhase::Done, "{}", chain_text(&dir));
+        let lines = chain(&dir);
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert_eq!(lines[0]["decision"], "refuse");
+        let reasons = lines[0]["reasons"].to_string();
+        assert!(reasons.contains("checkpoint mismatch"), "{reasons}");
+        assert!(hits.fresh.load(Ordering::Relaxed) >= 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A header mismatch the fresh read does not repeat is held.
+    #[test]
+    fn an_unconfirmed_header_mismatch_is_held() {
+        let built = small_honest();
+        let (url, hits) = serve(&built.docs, Mirror::HeaderUnconfirmed(built.header_height));
+        let (door, dir) = open_at(&url);
+        let phase = door.settle_fast_small(&job_of(&built.bytes, 1));
+        assert_eq!(phase, FastPhase::Held, "{}", chain_text(&dir));
+        assert_eq!(door.last_seq(), 0);
+        assert!(hits.fresh.load(Ordering::Relaxed) >= 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// AC3. A small honest object is accepted. A faked leg revokes and bans
+    /// the public key. A later submit from that key is ignored: no fast phase
+    /// and no decision line. `conformance-small` is not a production profile;
+    /// the walk uses the test-only entry.
+    #[test]
+    fn ac3_fake_leg_revokes_bans_the_key_and_ignores_a_resubmit() {
+        let built = small_honest();
+        let (url, _) = serve(&built.docs, Mirror::Honest);
+        let (door, dir) = open_at(&url);
+        let honest = job_of(&built.bytes, 1);
+        assert_eq!(
+            door.settle_fast_small(&honest),
+            FastPhase::Provisional,
+            "{}",
+            chain_text(&dir)
+        );
+        let out = thorough::run_for_test(
+            &dir,
+            door.last_seq(),
+            &built.hike,
+            &honest.object_sha,
+            door.policy(),
+        )
+        .unwrap();
+        assert!(
+            out.matched,
+            "runs {} matched {}",
+            out.runs_done, out.legs_matched
+        );
+        door.settle_thorough(&honest, out);
+        let lines = chain(&dir);
+        assert_eq!(lines.last().unwrap()["decision"], "accept");
+        assert!(!dir.join("banned_keys.json").exists());
+
+        let mut fake_hike = built.hike.clone();
+        fake_hike.stages[0].leg_results[0][0] ^= 0xff;
+        let fake_bytes = hike::encode_hike_sized(&fake_hike, hike::Sizes::conformance_small());
+        let fake = job_of(&fake_bytes, 2);
+        assert_eq!(door.settle_fast_small(&fake), FastPhase::Provisional);
+        let bad = thorough::run_for_test(
+            &dir,
+            door.last_seq(),
+            &fake_hike,
+            &fake.object_sha,
+            door.policy(),
+        )
+        .unwrap();
+        assert!(!bad.matched);
+        door.settle_thorough(&fake, bad);
+        let lines = chain(&dir);
+        assert_eq!(lines.last().unwrap()["decision"], "revoke");
+        assert_eq!(
+            lines.last().unwrap()["public_key"],
+            canon::hex32(&honest.public_key)
+        );
+        let ban = std::fs::read_to_string(dir.join("banned_keys.json")).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&ban).unwrap();
+        let keys: Vec<_> = parsed.as_object().unwrap().keys().cloned().collect();
+        assert_eq!(keys, vec![canon::hex32(&honest.public_key)]);
+        assert!(!ban.contains(&canon::hex32(&built.hike.seed_beacon)));
+
+        // The sign-in task calls `banned` before `settle_fast`. That call is
+        // the ignore: the counter moves, and no decision line is written.
+        let seq = door.last_seq();
+        assert!(door.banned(&honest.public_key));
+        assert_eq!(door.last_seq(), seq);
+        assert_eq!(door.ban_ignored(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    struct Hits {
+        normal: AtomicU64,
+        fresh: AtomicU64,
+    }
+
+    #[derive(Clone, Copy)]
+    enum Mirror {
+        Honest,
+        PlantConfirmed(u64),
+        PlantUnconfirmed(u64),
+        HeaderConfirmed(u64),
+        HeaderUnconfirmed(u64),
+    }
+
+    struct SmallHonest {
+        hike: hike::Hike,
+        bytes: Vec<u8>,
+        docs: HashMap<u64, String>,
+        plant_height: u64,
+        header_height: u64,
+    }
+
+    fn open_at(index_url: &str) -> (Door, PathBuf) {
+        static N: AtomicU64 = AtomicU64::new(0);
+        let n = N.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("pcoc-gate-fast-{}-{n}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let cfg = Config::for_tests(dir.clone(), index_url);
+        let door = Door::open(
+            &cfg.log_dir,
+            cfg.policy(),
+            &cfg.index_url,
+            cfg.index_timeout,
+        )
+        .unwrap();
+        (door, dir)
+    }
+
+    fn job_of(bytes: &[u8], nonce_byte: u8) -> LockedThorough {
+        let mut nonce = [0u8; 32];
+        nonce[0] = nonce_byte;
+        LockedThorough {
+            nonce,
+            origin: wire::ORIGIN.to_owned(),
+            object: bytes.to_vec(),
+            submission: [nonce_byte; 32],
+            public_key: [0x42; 32],
+            object_sha: canon::sha256(bytes),
+            prior_accept: None,
+        }
+    }
+
+    fn chain(dir: &Path) -> Vec<serde_json::Value> {
+        // A section 14 record keeps its newline inside the decision object,
+        // so a split on `\n` is not one decision.
+        let Ok(log) = crate::log::DecisionLog::open(dir) else {
+            return Vec::new();
+        };
+        log.lines().iter().map(|line| line.value.clone()).collect()
+    }
+
+    fn chain_text(dir: &Path) -> String {
+        std::fs::read_to_string(dir.join("chain.jsonl")).unwrap_or_default()
+    }
+
+    fn serve(docs: &HashMap<u64, String>, mode: Mirror) -> (String, Arc<Hits>) {
+        let docs = Arc::new(docs.clone());
+        let hits = Arc::new(Hits {
+            normal: AtomicU64::new(0),
+            fresh: AtomicU64::new(0),
+        });
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let hits_task = Arc::clone(&hits);
+        std::thread::spawn(move || {
+            for conn in listener.incoming() {
+                let Ok(mut stream) = conn else {
+                    continue;
+                };
+                let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+                let _ = answer(&mut stream, &docs, mode, &hits_task);
+            }
+        });
+        (format!("http://127.0.0.1:{port}"), hits)
+    }
+
+    fn answer(
+        stream: &mut std::net::TcpStream,
+        docs: &HashMap<u64, String>,
+        mode: Mirror,
+        hits: &Hits,
+    ) -> std::io::Result<()> {
+        let mut got = Vec::new();
+        let mut buf = [0u8; 2048];
+        loop {
+            let n = stream.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            got.extend_from_slice(&buf[..n]);
+            if got.windows(4).any(|window| window == b"\r\n\r\n") {
+                break;
+            }
+            if got.len() > 65536 {
+                break;
+            }
+        }
+        let text = String::from_utf8_lossy(&got);
+        let fresh = text
+            .to_ascii_lowercase()
+            .contains("cache-control: no-cache");
+        if fresh {
+            hits.fresh.fetch_add(1, Ordering::Relaxed);
+        } else {
+            hits.normal.fetch_add(1, Ordering::Relaxed);
+        }
+        let path = text.lines().next().unwrap_or("");
+        let height = path
+            .split_whitespace()
+            .nth(1)
+            .unwrap_or("")
+            .trim_start_matches("/index/")
+            .parse::<u64>()
+            .unwrap_or(0);
+        let body = docs
+            .get(&height)
+            .map(|honest| mirror_body(honest, height, fresh, mode));
+        let raw = match body {
+            Some(body) => format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            ),
+            None => "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                .to_owned(),
+        };
+        stream.write_all(raw.as_bytes())?;
+        stream.flush()
+    }
+
+    fn mirror_body(honest: &str, height: u64, fresh: bool, mode: Mirror) -> String {
+        match mode {
+            Mirror::Honest => honest.to_owned(),
+            Mirror::PlantConfirmed(target) if height == target => bad_root(honest),
+            Mirror::PlantUnconfirmed(target) if height == target && !fresh => bad_root(honest),
+            Mirror::HeaderConfirmed(target) if height == target => bad_hash(honest),
+            Mirror::HeaderUnconfirmed(target) if height == target && !fresh => bad_hash(honest),
+            _ => honest.to_owned(),
+        }
+    }
+
+    fn bad_root(body: &str) -> String {
+        replace_hex_field(body, "\"root\":\"", &"00".repeat(32))
+    }
+
+    fn bad_hash(body: &str) -> String {
+        replace_hex_field(body, "\"hash\":\"", &"aa".repeat(32))
+    }
+
+    fn replace_hex_field(body: &str, key: &str, next: &str) -> String {
+        let start = body.find(key).expect(key) + key.len();
+        let mut out = body.to_owned();
+        out.replace_range(start..start + 64, next);
+        out
+    }
+
+    /// Eighteen stages, one real leg each, six anchored paths (`W_1`…`W_5`
+    /// and `W_16`). Section 6 sizes are not filled.
+    fn small_honest() -> SmallHonest {
+        use sha2::{Digest, Sha256};
+        let sizes = hike::Sizes::conformance_small();
+        let public_key = [0x42u8; 32];
+        let mut beacons = [[0u8; 32]; 18];
+        let mut heights = [0u64; 18];
+        for g in 0..18 {
+            beacons[g][0] = g as u8 + 1;
+            beacons[g][1] = 0xA0;
+            heights[g] = 1000 + g as u64;
+        }
+        let seed_beacon = beacons[0];
+        let seed = hike::production_seed(&public_key, &seed_beacon);
+        let mut seed_value = [0u8; 32];
+        seed_value.copy_from_slice(&Sha256::digest(seed));
+        let terrain = hike::fill_terrain_sized(hike::fill_pin(&seed), sizes);
+        let mut limb = seed_value;
+        let mut stages = Vec::with_capacity(18);
+        for g in 0..18 {
+            let previous = limb;
+            let leg = hike::leg_result_sized(&terrain, &previous, sizes);
+            let sample = hike::terrain_sample_sized(&terrain, &previous, sizes);
+            let digest = hike::checkpoint_sized(&previous, &limb, &sample, leg, sizes);
+            let path = anchor_path(g, &limb, &beacons, &heights);
+            stages.push(hike::Stage {
+                beacon: beacons[g],
+                beacon_height: heights[g],
+                leg_count: 1,
+                waypoint: limb,
+                path,
+                checkpoints: vec![digest],
+                leg_results: vec![leg.to_le_bytes()],
+                checkpoint_rows_defined: true,
+                leg_result_missing: Vec::new(),
+            });
+            if g < 17 {
+                limb = hike::successor_waypoint_sized(
+                    &terrain,
+                    &beacons[g + 1],
+                    &previous,
+                    &[digest],
+                    sizes,
+                );
+            }
+        }
+        let mut last = [0u8; 32];
+        last[0] = 0x63;
+        last[1] = 0xA0;
+        let last_height = 1018u64;
+        let hike = hike::Hike {
+            public_key,
+            seed_beacon,
+            stages,
+            last_interrupt: last,
+            last_interrupt_height: last_height,
+            last_interrupt_absent: false,
+            last_interrupt_hash_absent: false,
+            last_interrupt_height_absent: false,
+        };
+        let bytes = hike::encode_hike_sized(&hike, sizes);
+        let mut docs = HashMap::new();
+        let mut plants: HashMap<u64, Vec<hike::PathLocators>> = HashMap::new();
+        for stage in hike.stages.iter().skip(1) {
+            if stage.path.is_empty() {
+                continue;
+            }
+            let loc = hike::path_locators(&stage.path).expect("path");
+            plants
+                .entry(u64::from(loc.block_height))
+                .or_default()
+                .push(loc);
+        }
+        for stage in &hike.stages {
+            let time = 1_700_000_000 + stage.beacon_height;
+            docs.insert(
+                stage.beacon_height,
+                index_document(
+                    &stage.beacon,
+                    stage.beacon_height,
+                    time,
+                    plants
+                        .get(&stage.beacon_height)
+                        .map(Vec::as_slice)
+                        .unwrap_or(&[]),
+                ),
+            );
+        }
+        docs.insert(
+            last_height,
+            index_document(
+                &last,
+                last_height,
+                1_700_000_000 + last_height,
+                plants.get(&last_height).map(Vec::as_slice).unwrap_or(&[]),
+            ),
+        );
+        let plant_height = u64::from(
+            hike::path_locators(&hike.stages[1].path)
+                .expect("W_1 path")
+                .block_height,
+        );
+        SmallHonest {
+            plant_height,
+            header_height: hike.stages[0].beacon_height,
+            hike,
+            bytes,
+            docs,
+        }
+    }
+
+    fn anchor_path(
+        g: usize,
+        waypoint: &[u8; 32],
+        beacons: &[[u8; 32]; 18],
+        heights: &[u64; 18],
+    ) -> Vec<u8> {
+        let anchored = matches!(g, 1 | 2 | 3 | 4 | 5 | 16);
+        if !anchored {
+            return Vec::new();
+        }
+        if g == 16 {
+            let mut last = [0u8; 32];
+            last[0] = 0x63;
+            last[1] = 0xA0;
+            return hike::encode_path_for_block(waypoint, &last, 1018);
+        }
+        let target = g + 2;
+        hike::encode_path_for_block(waypoint, &beacons[target], heights[target] as u32)
+    }
+
+    fn index_document(
+        natural: &[u8; 32],
+        height: u64,
+        time: u64,
+        plants: &[hike::PathLocators],
+    ) -> String {
+        let hash = hike::pathchain::display_hex(natural);
+        let mut body = format!(
+            "{{\"network\":\"synthetic\",\"header\":{{\"hash\":\"{hash}\",\"height\":{height},\"time\":{time}}}"
+        );
+        if let Some(loc) = plants.first() {
+            body.push_str(",\"plant\":");
+            body.push_str(&plant_json(loc));
+        }
+        body.push('}');
+        body
+    }
+
+    fn plant_json(loc: &hike::PathLocators) -> String {
+        format!(
+            "{{\"root\":\"{}\",\"txid\":\"{}\",\"vout\":{},\"block_hash\":\"{}\",\"block_height\":{}}}",
+            hike::encode_hex32(&loc.root),
+            hike::pathchain::display_hex(&loc.txid),
+            loc.vout,
+            hike::pathchain::display_hex(&loc.block_hash),
+            loc.block_height
+        )
     }
 }

@@ -1,0 +1,35 @@
+# groundinglab admission policy gl-admit-v5. A RECOMMENDATION, not specification.
+# Argued in ../POLICY.md. Anyone may choose their own values; a policy id must
+# change whenever any value changes.
+#
+# This file is the policy the gate reads. A gate.toml `policy` path points
+# here, or the same keys sit inline as [policy_table]. Unknown keys are an
+# error. v1 history: gate 0.4.1 read a float min_leg_rate. That key is gone.
+
+policy_id = "gl-admit-v5"
+
+# Rule B2. Leg-rate floor p/q in legs (checkpoints) per second on the bookend
+# pair (N, S): meets when q*N >= p*S. 1/5 = one leg every 5 seconds.
+leg_rate_floor = { p = 1, q = 5 }
+
+# Rule B4. Anchored waypoints among W_1..W_16 (W_17 is never fetched).
+min_anchored_paths = 6
+# The anchored set must include W_1 and W_16, so the bookends span the hike.
+require_first_anchored = 1   # bookend a must be 1
+require_last_anchored = 16   # bookend b must be 16
+
+# Section 15.4 / Rule A4.4. Three six-leg runs, each a fresh draw of 6
+# distinct legs uniform over every leg of the hike from the gate's own
+# OS CSPRNG. Stop at the first mismatch.
+thorough_six_leg_runs = 3
+thorough_early_stop = true
+draw_commitment = "sha256(draw || salt), revealed with the result"
+
+# Section 15.3.
+provisional = "on"                # the fast phase issues provisional, never accept
+held_on_not_read = true           # a connection miss is held and retried, not refused
+
+# Gate rule of this policy (not specification): a six-leg or checkpoint-digest
+# mismatch revokes the grant AND bans the public key at this gate. A banned key
+# is ignored at this gate without verification.
+ban_key_on_fake_leg = true
