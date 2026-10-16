@@ -31,6 +31,7 @@ mod verify;
 mod walk;
 
 pub use admit::{admit, failure_facts};
+pub use audit::{draw_distinct, Entropy, OsEntropy};
 pub use args::{
     absolute_http_without_trailing_slash, apply_live_gossip_env, apply_test_index_env,
     apply_test_produce_env, parse_produce, parse_verify, AdmitPolicy, GossipDial, MeasureProfile,
@@ -61,10 +62,14 @@ pub use http::{
     PATH_404_PAUSE,
 };
 pub use object::{
-    earlier_object_kind, encode_hike, encode_hike_sized, object_public_key, structural_object,
-    yielded_public_key, Hike, Stage, YieldedKey,
+    canonical_object, decoded_hike, earlier_object_kind, encode_hike, encode_hike_sized,
+    object_public_key,
+    structural_object, yielded_public_key, Hike, Stage, YieldedKey,
 };
-pub use pathbody::{encode_path_in_block, encode_single_leaf, path_locators, PathError, PathLocators};
+pub use pathbody::{
+    encode_path_for_block, encode_path_in_block, encode_single_leaf, path_locators, PathError,
+    PathLocators,
+};
 pub use pathchain::{direct_facts, direct_matches, proxy_matches, DirectFacts, MAINNET_NETWORK};
 pub use plane::live_plane_host;
 pub use produce::{
@@ -77,12 +82,13 @@ pub use subscribe::{
     publish_verify, verify_events, Found, VerifyEvent, VerifyLog, VerifyObservation,
     VerifySubscriber, CHECK_ORDER,
 };
-pub use terrain::{fill_pin, fill_terrain, fill_terrain_sized, production_seed};
+pub use terrain::{fill_pin, fill_terrain, fill_terrain_sized, production_seed, terrain_builds};
 pub use verify::{
-    verify, verify_record_json, verify_record_sha256, verify_sized, verify_with_bind_threads,
-    verify_with_bind_threads_sized, Anchor, AuditDraw, ChainRead, CheckpointMeasurement, LegRate,
-    Measurements, ObjectLineage, Recorded, SixLegs, StageClock, StageMeasurement, StageReport,
-    StoredGap, StoredRate, WaypointMeasurement,
+    screen_fast, verify, verify_fast, verify_fast_sized, verify_record_json, verify_record_sha256,
+    verify_sized, FastScreen,
+    verify_with_bind_threads, verify_with_bind_threads_sized, Anchor, AuditDraw, ChainRead,
+    CheckpointMeasurement, LegRate, Measurements, ObjectLineage, Recorded, SixLegs, StageClock,
+    StageMeasurement, StageReport, StoredGap, StoredRate, WaypointMeasurement,
 };
 pub use walk::{leg_result, leg_result_sized};
 

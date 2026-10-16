@@ -7,6 +7,12 @@ pub trait Entropy {
     fn fill(&mut self, dest: &mut [u8]) -> Result<(), ()>;
 }
 
+impl dyn Entropy + '_ {
+    pub fn fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), ()> {
+        self.fill(dest)
+    }
+}
+
 pub struct OsEntropy;
 
 impl Entropy for OsEntropy {

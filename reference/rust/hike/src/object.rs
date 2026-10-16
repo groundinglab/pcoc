@@ -137,6 +137,17 @@ pub fn encode_hike(hike: &Hike) -> Vec<u8> {
     encode_hike_sized(hike, Sizes::production())
 }
 
+/// Canonical re-encode of a definite-length object (§7.3).
+///
+/// `Ok(true)` when `bytes` already are that encoding. `Ok(false)` when they
+/// decode and the canonical bytes differ. `Err` when they do not decode as a
+/// hike object. A non-canonical copy is a second `object_sha256` of the same
+/// hike, so the gate refuses it `malformed` before it measures.
+pub fn canonical_object(bytes: &[u8]) -> Result<bool, ()> {
+    let value = cbor::decode_one(bytes).map_err(|_| ())?;
+    Ok(cbor::encode(&value) == bytes)
+}
+
 /// Encode with the profile in force. SPEC §16.1 may change only the four size
 /// integers and the derived `n_slots`. The object gains no new field.
 pub fn encode_hike_sized(hike: &Hike, sizes: Sizes) -> Vec<u8> {
@@ -586,6 +597,14 @@ fn read_measured_map(value: &Cbor, trailing: bool, sizes: Sizes) -> Result<Measu
             last_interrupt_height_absent: last_interrupt_height.is_none(),
         },
     })
+}
+
+/// The hike a definite-length object carries, even when shape is `mismatch`.
+///
+/// The thorough walk reads checkpoints and leg results from this value.
+/// Shape is judged earlier. `Err` is bytes that are not a hike map.
+pub fn decoded_hike(bytes: &[u8]) -> Result<Hike, ()> {
+    read_measured_object(bytes).map(|measured| measured.hike).map_err(|_| ())
 }
 
 pub fn decode_hike(bytes: &[u8]) -> Result<Hike, Fail> {

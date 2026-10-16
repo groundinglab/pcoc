@@ -12,6 +12,7 @@
 
 pub mod canon;
 pub mod config;
+pub mod fast;
 pub mod door;
 pub mod http;
 pub mod ids;
@@ -21,6 +22,7 @@ pub mod policy;
 pub mod ratelimit;
 pub mod reasons;
 pub mod signin_row;
+pub mod thorough;
 pub mod upload;
 pub mod verifier;
 pub mod wire;
