@@ -60,6 +60,7 @@ extra_origins = []
 # (1/4), lenient (1/8). A new sign-in uses min_leg_rate and min_waypoints.
 leg_rate_floor = "default"
 
+# Example deploy of one instance; values are policy, see ../POLICY.md.
 # Admission policy. policy_id names this exact floor for its whole life.
 # A change of min_leg_rate or min_waypoints requires a new id (gl-admit-v2, …).
 # The first start writes {log_dir}/policy-bind.json. A later start with the

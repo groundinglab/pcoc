@@ -5,7 +5,7 @@ The admission gate is a standalone service built on the Rust reference (`ref-rus
 Three layers stay separate:
 
 - **Specification** defines measurements and the admission model. It sets no threshold values.
-- **Policy** chooses values. [POLICY.md](POLICY.md) is the companion. The out-of-the-box default is tuned to groundinglab's recommended policy `gl-admit-v4`, as a recommendation for interoperability, not authority. Choose your own.
+- **Policy** chooses values. [POLICY.md](POLICY.md) is the companion. groundinglab's recommended policy is `gl-admit-v4`, a recommendation, not authority. This build's code default is still `gl-admit-v1`. Choose your own.
 - **Operations** is a deployed instance's own config. groundinglab's instance config is private and is not in this repository.
 
 groundinglab runs one configured instance ("the groundinglab Admission Gate"). While it is the only public gate, its public page states its live policy.

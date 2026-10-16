@@ -7,7 +7,7 @@ This is the policy companion to the admission gate service. It holds groundingla
 | Layer | What it holds | Where |
 |---|---|---|
 | Specification | Measurements (Part A, §1–§14) and the admission service model (Part B, §15): parameter names, comparisons, states. It may discuss thresholds. **It never sets a threshold value.** It defers values to a policy. | `spec/satoshi-hike-v2.0/` |
-| Policy companion (this file) | One argued default policy. The gate ships tuned to it so a new gate has a reasoned starting point. **It is a recommendation, not authority.** Anyone may choose their own. A policy's name encodes its values: change any value and the id changes. | `services/admission-gate/POLICY.md`, `policy/` |
+| Policy companion (this file) | One argued default policy. It is the intended out-of-the-box default for the next gate build, so a new gate has a reasoned starting point; gate v0.4.1 still defaults to `gl-admit-v1` (see below). **It is a recommendation, not authority.** Anyone may choose their own. A policy's name encodes its values: change any value and the id changes. | `services/admission-gate/POLICY.md`, `policy/` |
 | Operations (private) | groundinglab's decided, deployed instance config: which policy id is active, origins, hosts, secrets. Opinionated. | Not in this repository |
 
 The admission gate is a service. groundinglab's gate is one configured instance of it. While it is the only public gate, its public page states the live policy it runs. That position is temporary and confers no authority on these values.
@@ -16,10 +16,10 @@ The admission gate is a service. groundinglab's gate is one configured instance 
 
 | Parameter (§15.4 name) | Value | Argument |
 |---|---|---|
-| `leg_rate_floor` (B2) | `1/5` legs per second: one leg every 5 seconds | This default asks for at least one leg every 5 seconds on average across the timed span `S`, and refuses slower hikes; see the [evidence note](EVIDENCE.md) for the honest-host margin. The comparison is integer-only on the bookend pair, `5·N ≥ S`. |
+| `leg_rate_floor` (B2) | `1/5` legs per second: one leg every 5 seconds | This default asks for at least one leg every 5 seconds on average across the timed span `S`, and refuses slower hikes; the honest-host margin is in the [evidence note](EVIDENCE.md). The comparison is integer-only on the bookend pair, `5·N ≥ S`. Threshold evidence is a follow-up (see [EVIDENCE.md](EVIDENCE.md)). |
 | `min_anchored_paths` (B4) | 6 anchored among `W_1` … `W_16` | Enough waypoints to time the hike without punishing a weak connection. |
 | First and last anchored | `W_1` and `W_16` must both be anchored (bookends `a = 1`, `b = 16`) | The timed span `S` then is the widest span the construction anchors (`W_1` to `W_16`), not a chosen slice. This is a policy parameter beyond the §15.4 candidates (`min_last_bookend` names only the last). |
-| `thorough_six_leg_runs` (§15.4, Rule A4.4) | 3 runs, 18 leg results | Each run is a fresh draw of 6 distinct legs, uniform over every leg, from the gate's own OS CSPRNG (A4.4). Stop at the first mismatch (a B9 invariant). A hike that skipped 25% of its legs is caught with probability about `1 − 0.75^18 ≈ 99.4%` (derived from the draw size; not a measured catch rate). The figure is approximate because runs may repeat an index. |
+| `thorough_six_leg_runs` (§15.4, Rule A4.4) | 3 runs, 18 leg results | Each run is a fresh draw of 6 distinct legs, uniform over every leg, from the gate's own OS CSPRNG (A4.4). Stop at the first mismatch (a B9 invariant). A hike missing 25% of its leg results is caught with probability about `1 − 0.75^18 ≈ 99.4%` (derived from the draw size; not a measured catch rate). The figure is approximate because runs may repeat an index. |
 | Draw commitment | log `H(draw ‖ salt)` at draw, reveal with the result | Anyone can check afterwards that the draw was not chosen against the submitter. This is a decision-log extension, not part of the specification. |
 | `provisional` (§15.3) | `on` | Cheap checks first, then a fast `provisional` grant. It is never `accept`. `provisional_action_cap` is 0 by the specification. Only the thorough phase accepts. |
 | Not read (§15.3) | `held`, then retry | A missing waypoint read is likely a connection problem: "try again", not a refusal or a ban. A count settled by the object's own bytes is a plain refusal. |
