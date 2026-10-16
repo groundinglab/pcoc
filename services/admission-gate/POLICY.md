@@ -16,7 +16,7 @@ The admission gate is a service. groundinglab's gate is one configured instance 
 
 | Parameter (§15.4 name) | Value | Argument |
 |---|---|---|
-| `leg_rate_floor` (B2) | `1/5` legs per second: one leg every 5 seconds | This default asks for at least one leg every 5 seconds on average across the timed span `S`, and refuses slower hikes; the honest-host margin is in the [evidence note](EVIDENCE.md). The comparison is integer-only on the bookend pair, `5·N ≥ S`. Threshold evidence is a follow-up (see [EVIDENCE.md](EVIDENCE.md)). |
+| `leg_rate_floor` (B2) | `1/5` legs per second: one leg every 5 seconds | This default asks for at least one leg every 5 seconds on average across the timed span `S`, and refuses slower hikes. The comparison is integer-only on the bookend pair, `5·N ≥ S`. Threshold evidence is a follow-up (see [EVIDENCE.md](EVIDENCE.md)). |
 | `min_anchored_paths` (B4) | 6 anchored among `W_1` … `W_16` | Enough waypoints to time the hike without punishing a weak connection. |
 | First and last anchored | `W_1` and `W_16` must both be anchored (bookends `a = 1`, `b = 16`) | The timed span `S` then is the widest span the construction anchors (`W_1` to `W_16`), not a chosen slice. This is a policy parameter beyond the §15.4 candidates (`min_last_bookend` names only the last). |
 | `thorough_six_leg_runs` (§15.4, Rule A4.4) | 3 runs, 18 leg results | Each run is a fresh draw of 6 distinct legs, uniform over every leg, from the gate's own OS CSPRNG (A4.4). Stop at the first mismatch (a B9 invariant). A hike missing 25% of its leg results is caught with probability about `1 − 0.75^18 ≈ 99.4%` (derived from the draw size; not a measured catch rate). The figure is approximate because runs may repeat an index. |
@@ -34,4 +34,4 @@ Copy `policy/gl-admit-v4.toml`, change the values, and give it a new id that enc
 
 ## Where this policy runs today
 
-groundinglab's live gate already runs `gl-admit-v4` through its `gate.toml`: `min_leg_rate` 0.2 legs/s and `min_waypoints` 6. The code default is still `gl-admit-v1` (0.25, 6). Gate v0.4.1 reads only `policy_id`, `min_leg_rate` and `min_waypoints`. It does not yet implement the first/last rule, three runs with early stop, the draw commitment, `held` for an unread closing header (it refuses `bookends_not_read`), the integer comparison, or the key ban. See [STATUS.md](STATUS.md).
+groundinglab's live gate is set to `gl-admit-v4` in its `gate.toml` and enforces two of its values today: `min_leg_rate` 0.2 legs/s and `min_waypoints` 6. The code default is still `gl-admit-v1` (0.25, 6). Gate v0.4.1 reads only `policy_id`, `min_leg_rate` and `min_waypoints`. It does not yet implement the first/last rule, three runs with early stop, the draw commitment, `held` for an unread closing header (it refuses `bookends_not_read`), the integer comparison, or the key ban. See [STATUS.md](STATUS.md).
