@@ -357,6 +357,7 @@ mod tests {
             version: crate::verify::ObjectLineage::Current,
             shape: true,
             checkpoints: Recorded::Obtained(CheckpointMeasurement {
+                header_not_read: false,
                 beacon_matches_index: vec![true; 18],
                 digest_matches: vec![vec![true]; 18],
                 mismatch: false,

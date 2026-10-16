@@ -2,13 +2,13 @@
 
 This pack is regenerated from the Rust reference. It is the byte record that every implementation is checked against, including the three references and the Gate's pinned copies.
 
-What conforms is Part A only. See [Conformance vectors](../README.md). The locked leg-rate floors in `constants.json` are labelled `Part B (§15)`. They are not a conformance target. `sign-in.json` is the locked §15.1 wire. Matching it is not Part A conformance.
+What conforms is Part A only. See [Conformance vectors](../README.md). The leg-rate figures in `constants.json` are informative §15.5 examples. They are not a conformance target. `sign-in.json` is the locked §15.1 wire. Matching it is not Part A conformance.
 
 ## What the files are
 
 | File | Record |
 | --- | --- |
-| `constants.json` | Section 6 values the reference compiles in, and the anchor-window offsets. `DEFAULT_BIND_THREADS` is a non-normative reference default (section 14.6), not a conformance constant. `LEG_RATE_FLOOR` is Part B (section 15). A section 13 producer and a section 14 verifier are not expected to carry it |
+| `constants.json` | Section 6 values the reference compiles in, and the anchor-window offsets. `DEFAULT_BIND_THREADS` is a non-normative reference default (section 14.6), not a conformance constant. `LEG_RATE_FLOOR` holds informative §15.5 examples. A section 13 producer and a section 14 verifier are not expected to carry it |
 | `checkpoint-preimage.json` | `preimage_hex`, the bytes of one checkpoint preimage, plus that preimage’s length and SHA-256 |
 | `anchor-window.json` | One verify record covering a path inside the window, a path outside it, a header that is not in the object, and no path. The hike object is `object_hex`. `header_reads` are the Rule A4.2 bodies (`null` when no document returns). `plant_reads` is the one issued plant GET. That body has `network` and `plant` and no `header` member, so the header token at that height is `not read` and the plant token is `match`. `index_reads` is the ordered list of heights for which a plant GET was issued. It does not include the nineteen header heights. A path outside the window, and a path whose header is not stored, are `plant` `not read` because the read was not issued |
 | `anchor-w16-i17.json` | `W_16` included in `last_interrupt` (`I_17`). The hike object is `object_hex`. The verify record’s `anchors` token for that waypoint is `anchored`. `index_reads` is that one issued plant height |

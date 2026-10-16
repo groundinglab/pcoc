@@ -64,6 +64,22 @@ pub(crate) fn record_tail<F>(input: &RecordInput<'_>, beacon_at: &mut F) -> Stri
 where
     F: FnMut(u64) -> Result<IndexBeacon, ()>,
 {
+    record_tail_mode(input, beacon_at, false)
+}
+
+/// Fast-phase record. `checkpoints[*].legs[*].result`, `six_leg`, and
+/// `six_leg_runs` are absent. Every other section 14 key stays.
+pub(crate) fn record_tail_fast<F>(input: &RecordInput<'_>, beacon_at: &mut F) -> String
+where
+    F: FnMut(u64) -> Result<IndexBeacon, ()>,
+{
+    record_tail_mode(input, beacon_at, true)
+}
+
+fn record_tail_mode<F>(input: &RecordInput<'_>, beacon_at: &mut F, fast: bool) -> String
+where
+    F: FnMut(u64) -> Result<IndexBeacon, ()>,
+{
     let mut out = String::new();
     push_pair(
         &mut out,
@@ -76,7 +92,7 @@ where
     push_pair(
         &mut out,
         "checkpoints",
-        &checkpoints_json(input.digest_matches, input.checkpoint_rows_defined),
+        &checkpoints_json(input.digest_matches, input.checkpoint_rows_defined, fast),
     );
     push_pair(
         &mut out,
@@ -92,8 +108,10 @@ where
     push_pair(&mut out, "skip_list", &skip_list(input.paths));
     let book = bookends(input, &anchored, beacon_at);
     push_book(&mut out, &book);
-    push_pair(&mut out, "six_leg", &six_leg_json(input.six));
-    push_pair(&mut out, "six_leg_runs", &six_runs_json(input.six));
+    if !fast {
+        push_pair(&mut out, "six_leg", &six_leg_json(input.six));
+        push_pair(&mut out, "six_leg_runs", &six_runs_json(input.six));
+    }
     push_pair(&mut out, "analysis", &analysis_json(input, &book));
     out.push('}');
     out
@@ -250,10 +268,15 @@ fn header_json(fact: Option<&HeaderFact>) -> String {
     ])
 }
 
-fn checkpoints_json(digests: Option<&[Vec<bool>]>, rows_defined: &[bool]) -> String {
+fn checkpoints_json(digests: Option<&[Vec<bool>]>, rows_defined: &[bool], fast: bool) -> String {
     let mut parts = Vec::with_capacity(18);
     for g in 0..18 {
         let defined = rows_defined.get(g).copied().unwrap_or(false);
+        // The fast record keeps `g` and omits `legs`. The digest has not run.
+        if fast {
+            parts.push(obj(&[("g", &g.to_string())]));
+            continue;
+        }
         let legs = if !defined {
             "\"not defined\"".to_owned()
         } else if let Some(legs) = digests.and_then(|rows| rows.get(g)) {

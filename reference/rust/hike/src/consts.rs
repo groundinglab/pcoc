@@ -28,7 +28,8 @@ pub const ANCHOR_WINDOW_OFFSETS: [u64; 3] = [2, 3, 4];
 /// How many Rule A4.3 checkpoint comparisons run at once when `PCOC_BIND_THREADS` is unset.
 pub const DEFAULT_BIND_THREADS: usize = 6;
 
-/// Section 15.5. `leg_rate_floor` as `(p, q)` legs per second. The three floors scale with the leg.
+/// Section 15.5 informative examples, not conformance and not a gate default.
+/// `leg_rate_floor` as `(p, q)` legs per second: 7/20, 1/4, 1/8. A policy sets the value.
 pub const LEG_RATE_FLOOR_STRICT: (u64, u64) = (7, 20);
 pub const LEG_RATE_FLOOR_DEFAULT: (u64, u64) = (1, 4);
 pub const LEG_RATE_FLOOR_LENIENT: (u64, u64) = (1, 8);
@@ -228,7 +229,8 @@ mod tests {
         assert!(!small.is_production());
     }
 
-    /// Rule A4.9 and Rule B2. The record holds integers. The floor is `q·N ≥ p·S`.
+    /// Rule A4.9 and Rule B2. The record holds integers. The comparison is `q·N ≥ p·S`.
+    /// The three pairs are §15.5 informative examples.
     #[test]
     fn a4_9_rate_floor_compares_integers() {
         let below = |p: u64, q: u64, n: u64, s: u64| q * n < p * s;
