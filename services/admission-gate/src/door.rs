@@ -188,6 +188,11 @@ impl Door {
             inner.log.append(&write).ok()
         };
         if out.matched {
+            // The thorough accept line opens the claim window, like a return.
+            if let Some(seq) = seq {
+                self.rows
+                    .note_access(&job.nonce, Some(log::utc_day(now)), Some(seq));
+            }
             self.rows.settle(&job.nonce, wire::OUTCOME_ACCEPTED, now);
         } else {
             // The website token stays `rejected`. `revoked` is not a §15.1 token.
@@ -1270,6 +1275,7 @@ mod tests {
         let (url, _) = serve(&built.docs, Mirror::Honest);
         let (door, dir) = open_at(&url);
         let honest = job_of(&built.bytes, 1);
+        door.consume_for_test(&honest.nonce, honest.object_sha, door.now_unix_s());
         assert_eq!(
             door.settle_fast_small(&honest),
             FastPhase::Provisional,
@@ -1292,6 +1298,14 @@ mod tests {
         door.settle_thorough(&honest, out);
         let lines = chain(&dir);
         assert_eq!(lines.last().unwrap()["decision"], "accept");
+        // The accepted result cites the thorough accept line for claims.
+        let result = door.sign_in_result(&honest.nonce);
+        assert_eq!(result["outcome"], "accepted");
+        assert_eq!(result["log_seq"], serde_json::json!(door.last_seq()));
+        assert_eq!(
+            result["log_day"],
+            serde_json::json!(log::utc_day(door.now_unix_s()))
+        );
         assert!(!dir.join("banned_keys.json").exists());
 
         let mut fake_hike = built.hike.clone();
