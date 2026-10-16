@@ -296,22 +296,148 @@ fn index_agent(timeout: Duration) -> ureq::Agent {
         .build()
 }
 
+/// Header and plant reads for one fast phase.
+///
+/// Each measurement is one shot, bounded by the timeout passed to [`IndexClient::open`].
+/// A failed read is [`hike::ChainRead::NotRead`] (a header failure is `Err`).
+/// [`IndexRead::beacon_fresh`] and [`IndexRead::plant_fresh`] skip the mirror
+/// cache and send `Cache-Control: no-cache`. A plant or header `mismatch` is
+/// refused only when that second read confirms it (§15.3, Rule B9).
+pub trait IndexRead {
+    fn beacon(&self, height: u64) -> Result<hike::IndexBeacon, ()>;
+    fn beacon_fresh(&self, height: u64) -> Result<hike::IndexBeacon, ()>;
+    fn plant(&self, loc: &hike::PathLocators) -> hike::ChainRead;
+    fn plant_fresh(&self, loc: &hike::PathLocators) -> hike::ChainRead;
+}
+
+#[derive(Clone)]
+enum Cached {
+    Body(String),
+    /// The shot failed. A later read of the same measurement does not retry it.
+    Unread,
+}
+
+/// One-shot client for `GET {index_url}/index/{height}`.
+///
+/// The cache is this phase's mirror of `{index_url}`. Header reads and plant
+/// reads are separate shots, so they do not share a cache entry. A fresh read
+/// does not consult the cache and does not fill it.
+#[derive(Clone)]
+pub struct IndexClient {
+    agent: ureq::Agent,
+    url: String,
+    cache: Arc<std::sync::Mutex<std::collections::HashMap<String, Cached>>>,
+}
+
+impl IndexClient {
+    pub fn open(url: &str, timeout: Duration) -> Self {
+        Self {
+            agent: index_agent(timeout),
+            url: url.to_owned(),
+            cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+        }
+    }
+
+    fn url_at(&self, height: u64) -> String {
+        format!("{}/index/{height}", self.url)
+    }
+
+    fn read_body(&self, url: &str, kind: &str, fresh: bool) -> Result<String, ()> {
+        let key = format!("{kind} {url}");
+        if !fresh {
+            let cache = self.cache.lock().expect("index cache");
+            if let Some(hit) = cache.get(&key) {
+                return match hit {
+                    Cached::Body(body) => Ok(body.clone()),
+                    Cached::Unread => Err(()),
+                };
+            }
+        }
+        let fetched = fetch_body(&self.agent, url, fresh);
+        if !fresh {
+            let slot = match &fetched {
+                Ok(body) => Cached::Body(body.clone()),
+                Err(()) => Cached::Unread,
+            };
+            self.cache.lock().expect("index cache").insert(key, slot);
+        }
+        fetched
+    }
+
+    fn plant_at(&self, loc: &hike::PathLocators, fresh: bool) -> hike::ChainRead {
+        let url = self.url_at(u64::from(loc.block_height));
+        let body = match self.read_body(&url, "plant", fresh) {
+            Ok(body) => body,
+            Err(()) => return hike::ChainRead::NotRead,
+        };
+        // A returned document with no matching plant is `mismatch`. A body
+        // that is not a JSON object was not a document: `not read`.
+        if !returned_document(&body) {
+            return hike::ChainRead::NotRead;
+        }
+        match hike::proxy_matches(&body, loc) {
+            Ok(()) => hike::ChainRead::Match,
+            Err(()) => hike::ChainRead::Mismatch,
+        }
+    }
+}
+
+impl IndexRead for IndexClient {
+    fn beacon(&self, height: u64) -> Result<hike::IndexBeacon, ()> {
+        let body = self.read_body(&self.url_at(height), "header", false)?;
+        hike::parse_index_beacon(&body).map_err(|_| ())
+    }
+
+    fn beacon_fresh(&self, height: u64) -> Result<hike::IndexBeacon, ()> {
+        let body = self.read_body(&self.url_at(height), "header", true)?;
+        hike::parse_index_beacon(&body).map_err(|_| ())
+    }
+
+    fn plant(&self, loc: &hike::PathLocators) -> hike::ChainRead {
+        self.plant_at(loc, false)
+    }
+
+    fn plant_fresh(&self, loc: &hike::PathLocators) -> hike::ChainRead {
+        self.plant_at(loc, true)
+    }
+}
+
+/// A JSON object is a returned document. Anything else, including bytes that
+/// are not JSON, is not a document.
+fn returned_document(body: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(body).is_ok_and(|value| value.is_object())
+}
+
 fn fetch_beacon(
     agent: &ureq::Agent,
     index_url: &str,
     height: u64,
 ) -> Result<hike::IndexBeacon, ()> {
-    let body = fetch_body(agent, &format!("{index_url}/index/{height}"))?;
+    let body = fetch_body(agent, &format!("{index_url}/index/{height}"), false)?;
     hike::parse_index_beacon(&body).map_err(|_| ())
 }
 
 fn fetch_path(agent: &ureq::Agent, index_url: &str, loc: &hike::PathLocators) -> Result<(), ()> {
-    let body = fetch_body(agent, &format!("{index_url}/index/{}", loc.block_height))?;
+    let body = fetch_body(
+        agent,
+        &format!("{index_url}/index/{}", loc.block_height),
+        false,
+    )?;
     hike::proxy_matches(&body, loc)
 }
 
-fn fetch_body(agent: &ureq::Agent, url: &str) -> Result<String, ()> {
-    let response = agent.get(url).call().map_err(|_| ())?;
+fn fetch_body(agent: &ureq::Agent, url: &str, fresh: bool) -> Result<String, ()> {
+    let request = agent.get(url);
+    // A fresh read bypasses a cache in front of `{index_url}`. The mirror
+    // cache inside [`IndexClient`] is skipped by the caller.
+    let request = if fresh {
+        request
+            .set("Cache-Control", "no-cache")
+            .set("Pragma", "no-cache")
+    } else {
+        request
+    };
+    let response = request.call().map_err(|_| ())?;
     if response.status() != 200 {
         return Err(());
     }
@@ -560,8 +686,8 @@ mod tests {
     /// This does not open a socket and does not call the live service.
     #[test]
     fn b2_test_3leg_record_matches_the_committed_vector() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/vectors/test-3leg.json");
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/vectors/test-3leg.json");
         let text = std::fs::read_to_string(&path).expect("test-3leg vector");
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
         let object = hex::decode(doc["object_hex"].as_str().unwrap()).unwrap();

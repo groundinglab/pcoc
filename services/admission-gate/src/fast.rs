@@ -9,10 +9,14 @@
 //!
 //! A settled miss returns before terrain is built. A `not read` is `held`.
 //! A pass is `provisional`. This module does not issue `accept`.
+//!
+//! Header and plant reads use [`verifier::IndexRead`]. A failed read is
+//! `not read` and the state is `held`. A plant or header `mismatch` is held
+//! until a second read that bypasses the mirror cache confirms it. Only that
+//! confirmed mismatch refuses (§15.3, Rule B9).
 
 use crate::policy::{self, AdmissionPolicy};
-use crate::verifier::{self, MeasureOpts, Report};
-use hike::IndexBeacon;
+use crate::verifier::{self, IndexRead, MeasureOpts, Report};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Terrain builds observed by this process. [`hike::terrain_builds`] counts
@@ -40,21 +44,35 @@ pub enum FastDecision {
     Held { record: String },
 }
 
-/// Run the fast phase. `beacon_at` and `path_chain` are the local mirror.
-/// A height the mirror does not hold is `Err`, which the record stores as
-/// `not read`.
-pub fn decide<F, C, R>(
+/// Run the fast phase against `{index_url}`.
+///
+/// The reader is shared by the screen and the fast record. It is `Fn`, not
+/// `Copy`: the index client is not `Copy`. A height the reader does not hold
+/// is `not read`.
+pub fn decide(object: &[u8], policy: &AdmissionPolicy, index: &impl IndexRead) -> FastDecision {
+    decide_at(object, policy, index, hike::Sizes::production())
+}
+
+/// Same phase at `conformance-small` sizes.
+///
+/// The profile is not offered on the production path. [`decide`] always uses
+/// section 6. Tests use this so a small object can reach the index reads
+/// without filling the production terrain.
+#[cfg(test)]
+pub(crate) fn decide_small(
     object: &[u8],
     policy: &AdmissionPolicy,
-    beacon_at: F,
-    path_chain: C,
-) -> FastDecision
-where
-    F: FnMut(u64) -> Result<IndexBeacon, ()>,
-    C: FnMut(&hike::PathLocators) -> R,
-    R: Into<hike::ChainRead>,
-    C: Copy,
-{
+    index: &impl IndexRead,
+) -> FastDecision {
+    decide_at(object, policy, index, hike::Sizes::conformance_small())
+}
+
+fn decide_at(
+    object: &[u8],
+    policy: &AdmissionPolicy,
+    index: &impl IndexRead,
+    sizes: hike::Sizes,
+) -> FastDecision {
     TERRAIN_BEFORE.store(hike::terrain_builds(), Ordering::Relaxed);
     if !canonical(object) {
         return FastDecision::Refuse {
@@ -64,18 +82,92 @@ where
             website: crate::wire::OUTCOME_REJECTED,
         };
     }
+    // An unconfirmed plant mismatch is reported as `not read`, so the screen
+    // holds it. A second mismatch is the confirmed refuse.
+    let plant = |loc: &hike::PathLocators| -> hike::ChainRead {
+        match index.plant(loc) {
+            hike::ChainRead::Mismatch => match index.plant_fresh(loc) {
+                hike::ChainRead::Mismatch => hike::ChainRead::Mismatch,
+                _ => hike::ChainRead::NotRead,
+            },
+            other => other,
+        }
+    };
+    let beacon = |height: u64| index.beacon(height);
     // Shape, seed, plant, and the anchor window do not need terrain.
     // A miss those checks settle does not call verify_fast.
-    let screen = hike::screen_fast(object, path_chain);
+    let screen = hike::screen_fast_sized(object, &plant, sizes);
     if let Some(decision) = settled_without_terrain(&screen, policy) {
         return decision;
     }
-    let measurements = hike::verify_fast(object, beacon_at, path_chain);
-    judge_fast(&measurements, policy)
+    let measurements = hike::verify_fast_sized(object, &beacon, &plant, sizes);
+    let profile = if sizes.is_production() {
+        "production"
+    } else {
+        "conformance-small"
+    };
+    let decision = judge_fast(&measurements, policy, profile);
+    if let FastDecision::Refuse {
+        reasons, record, ..
+    } = &decision
+    {
+        // Earlier refuses (shape, seed, successor, a confirmed plant) return
+        // before this reason. An unconfirmed header mismatch is held.
+        if reasons.iter().any(|reason| reason == "checkpoint mismatch")
+            && !header_mismatch_confirmed(record, index)
+        {
+            return FastDecision::Held {
+                record: record.clone(),
+            };
+        }
+    }
+    decision
+}
+
+/// `true` when a fresh read still disagrees with a stored header.
+fn header_mismatch_confirmed(record: &str, index: &impl IndexRead) -> bool {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(record.trim_end()) else {
+        return false;
+    };
+    let Some(headers) = value.get("headers").and_then(|item| item.as_array()) else {
+        return false;
+    };
+    for header in headers {
+        if header
+            .get("index_comparison")
+            .and_then(|item| item.as_str())
+            != Some("mismatch")
+        {
+            continue;
+        }
+        let Some(height) = header.get("stored_height").and_then(|item| item.as_u64()) else {
+            continue;
+        };
+        let Some(stored) = header.get("stored_hash").and_then(|item| item.as_str()) else {
+            continue;
+        };
+        let Ok(bytes) = hex::decode(stored) else {
+            continue;
+        };
+        if bytes.len() != 32 {
+            continue;
+        }
+        let mut hash = [0u8; 32];
+        hash.copy_from_slice(&bytes);
+        if let Ok(beacon) = index.beacon_fresh(height) {
+            if beacon.natural != hash || beacon.height != height {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// A refuse the object's own bytes, or a confirmed plant mismatch, already settle.
-fn settled_without_terrain(screen: &hike::FastScreen, policy: &AdmissionPolicy) -> Option<FastDecision> {
+fn settled_without_terrain(
+    screen: &hike::FastScreen,
+    policy: &AdmissionPolicy,
+) -> Option<FastDecision> {
     if !screen.shape {
         return Some(refuse_now(
             vec!["shape is false".to_owned()],
@@ -138,8 +230,12 @@ fn canonical(object: &[u8]) -> bool {
     matches!(hike::canonical_object(object), Ok(true))
 }
 
-fn judge_fast(measurements: &hike::Measurements, policy: &AdmissionPolicy) -> FastDecision {
-    let record = hike::verify_record_json("production", measurements);
+fn judge_fast(
+    measurements: &hike::Measurements,
+    policy: &AdmissionPolicy,
+    profile: &str,
+) -> FastDecision {
+    let record = hike::verify_record_json(profile, measurements);
     if !measurements.shape {
         return refuse_now(
             vec!["shape is false".to_owned()],
@@ -189,7 +285,7 @@ fn judge_fast(measurements: &hike::Measurements, policy: &AdmissionPolicy) -> Fa
         }
     }
 
-    let legs = total_legs(measurements);
+    let legs = total_legs(measurements, profile);
     if legs.is_some_and(|n| n < policy::SPEC_MIN_LEGS) {
         return refuse_now(
             vec!["fewer than 6 legs, so the six indices could not be drawn".to_owned()],
@@ -199,7 +295,7 @@ fn judge_fast(measurements: &hike::Measurements, policy: &AdmissionPolicy) -> Fa
         );
     }
 
-    match anchored_judgment(measurements, policy) {
+    match anchored_judgment(measurements, policy, profile) {
         Anchored::SettledShort => {
             return refuse_now(
                 vec![policy::REFUSE_TOO_FEW.to_owned()],
@@ -286,8 +382,12 @@ enum Anchored {
     NotRead,
 }
 
-fn anchored_judgment(measurements: &hike::Measurements, policy: &AdmissionPolicy) -> Anchored {
-    let Some(value) = record_json(measurements) else {
+fn anchored_judgment(
+    measurements: &hike::Measurements,
+    policy: &AdmissionPolicy,
+    profile: &str,
+) -> Anchored {
+    let Some(value) = record_json(measurements, profile) else {
         return Anchored::NotRead;
     };
     let anchors = value.get("anchors").and_then(|item| item.as_array());
@@ -312,10 +412,7 @@ fn anchored_judgment(measurements: &hike::Measurements, policy: &AdmissionPolicy
     }
     let first = policy.require_first_anchored.saturating_sub(1) as usize;
     let last = policy.require_last_anchored.saturating_sub(1) as usize;
-    let first_ok = anchors
-        .get(first)
-        .and_then(|item| item.as_str())
-        == Some("anchored");
+    let first_ok = anchors.get(first).and_then(|item| item.as_str()) == Some("anchored");
     let last_ok = anchors.get(last).and_then(|item| item.as_str()) == Some("anchored");
     let first_possible = anchor_could(anchors.get(first));
     let last_possible = anchor_could(anchors.get(last));
@@ -329,16 +426,19 @@ fn anchored_judgment(measurements: &hike::Measurements, policy: &AdmissionPolicy
 }
 
 fn anchor_could(token: Option<&serde_json::Value>) -> bool {
-    matches!(token.and_then(|item| item.as_str()), Some("anchored") | Some("not read"))
+    matches!(
+        token.and_then(|item| item.as_str()),
+        Some("anchored") | Some("not read")
+    )
 }
 
-fn record_json(measurements: &hike::Measurements) -> Option<serde_json::Value> {
-    let record = hike::verify_record_json("production", measurements);
+fn record_json(measurements: &hike::Measurements, profile: &str) -> Option<serde_json::Value> {
+    let record = hike::verify_record_json(profile, measurements);
     serde_json::from_str(record.trim_end()).ok()
 }
 
-fn total_legs(measurements: &hike::Measurements) -> Option<u64> {
-    let value = record_json(measurements)?;
+fn total_legs(measurements: &hike::Measurements, profile: &str) -> Option<u64> {
+    let value = record_json(measurements, profile)?;
     // `analysis.whole_hike_legs` is the checkpoint count. It does not read `leg_count`.
     match value.pointer("/analysis/whole_hike_legs") {
         Some(serde_json::Value::Number(n)) => n.as_u64(),
@@ -382,6 +482,23 @@ pub fn measure_thorough(object: &[u8], opts: &MeasureOpts) -> Report {
 mod tests {
     use super::*;
 
+    struct ClosedIndex;
+
+    impl IndexRead for ClosedIndex {
+        fn beacon(&self, _: u64) -> Result<hike::IndexBeacon, ()> {
+            Err(())
+        }
+        fn beacon_fresh(&self, _: u64) -> Result<hike::IndexBeacon, ()> {
+            Err(())
+        }
+        fn plant(&self, _: &hike::PathLocators) -> hike::ChainRead {
+            hike::ChainRead::NotRead
+        }
+        fn plant_fresh(&self, _: &hike::PathLocators) -> hike::ChainRead {
+            hike::ChainRead::NotRead
+        }
+    }
+
     fn policy() -> AdmissionPolicy {
         AdmissionPolicy::default()
     }
@@ -391,7 +508,7 @@ mod tests {
     fn a_settled_short_anchored_count_builds_no_terrain() {
         let object = quiet(1);
         let before = hike::terrain_builds();
-        let decision = decide(&object, &policy(), |_| Err(()), |_| hike::ChainRead::NotRead);
+        let decision = decide(&object, &policy(), &ClosedIndex);
         assert!(
             matches!(decision, FastDecision::Refuse { website, .. } if website == "too_few_waypoints_anchored"),
             "{decision:?}"

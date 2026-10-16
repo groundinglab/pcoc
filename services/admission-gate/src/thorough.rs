@@ -10,7 +10,7 @@
 
 use crate::canon::{self, hex32};
 use crate::policy::AdmissionPolicy;
-use hike::{draw_distinct, leg_result, Entropy, OsEntropy};
+use hike::{draw_distinct, Entropy, OsEntropy};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::Write;
@@ -61,7 +61,48 @@ pub fn run(
     policy: &AdmissionPolicy,
 ) -> Result<ThoroughOut, String> {
     let hike = hike_of(object)?;
-    let legs = leg_total(&hike).ok_or_else(|| "leg total".to_owned())?;
+    walk(
+        log_dir,
+        seq,
+        &hike,
+        object_sha,
+        policy,
+        hike::Sizes::production(),
+    )
+}
+
+/// [`run`] at `conformance-small` sizes, on a hike the test already built.
+///
+/// Production [`run`] decodes with section 6 and walks that terrain. This
+/// entry is not in the service binary. A conformance-small object is not
+/// offered to production.
+#[cfg(test)]
+pub(crate) fn run_for_test(
+    log_dir: &Path,
+    seq: u64,
+    hike: &hike::Hike,
+    object_sha: &[u8; 32],
+    policy: &AdmissionPolicy,
+) -> Result<ThoroughOut, String> {
+    walk(
+        log_dir,
+        seq,
+        hike,
+        object_sha,
+        policy,
+        hike::Sizes::conformance_small(),
+    )
+}
+
+fn walk(
+    log_dir: &Path,
+    seq: u64,
+    hike: &hike::Hike,
+    object_sha: &[u8; 32],
+    policy: &AdmissionPolicy,
+    sizes: hike::Sizes,
+) -> Result<ThoroughOut, String> {
+    let legs = leg_total(hike).ok_or_else(|| "leg total".to_owned())?;
     let path = draw_path(log_dir, seq);
     let draw = if path.is_file() {
         load_draw(&path, seq, object_sha)?
@@ -71,7 +112,7 @@ pub fn run(
         draw
     };
     let pin = hike::fill_pin(&hike::production_seed(&hike.public_key, &hike.seed_beacon));
-    let terrain = hike::fill_terrain(pin);
+    let terrain = hike::fill_terrain_sized(pin, sizes);
     let seed = canon::sha256(&hike::production_seed(&hike.public_key, &hike.seed_beacon));
     let mut runs_done = 0u64;
     let mut legs_matched = 0u64;
@@ -81,10 +122,10 @@ pub fn run(
         runs_done += 1;
         let mut run_failed = false;
         for index in indices {
-            match eval_leg(&hike, &terrain, *index, &seed) {
+            match eval_leg(hike, &terrain, *index, &seed, sizes) {
                 Ok(true) => legs_matched += 1,
                 Ok(false) => {
-                    failed = Some(hit(&hike, run_index as u64, *index));
+                    failed = Some(hit(hike, run_index as u64, *index));
                     run_failed = true;
                     break;
                 }
@@ -98,7 +139,7 @@ pub fn run(
             break;
         }
     }
-    let digest_mismatch = failed.is_none() && digest_miss(&hike, &terrain, &seed);
+    let digest_mismatch = failed.is_none() && digest_miss(hike, &terrain, &seed, sizes);
     Ok(ThoroughOut {
         matched: failed.is_none() && !digest_mismatch,
         runs_done,
@@ -218,7 +259,13 @@ fn leg_total(hike: &hike::Hike) -> Option<u64> {
     })
 }
 
-fn eval_leg(hike: &hike::Hike, terrain: &[u8], index: u64, seed: &[u8; 32]) -> Result<bool, String> {
+fn eval_leg(
+    hike: &hike::Hike,
+    terrain: &[u8],
+    index: u64,
+    seed: &[u8; 32],
+    sizes: hike::Sizes,
+) -> Result<bool, String> {
     let (stage_index, j) = locate(hike, index).ok_or_else(|| format!("leg {index}"))?;
     let stage = &hike.stages[stage_index];
     if j >= stage.leg_results.len() || j >= stage.checkpoints.len() {
@@ -234,7 +281,7 @@ fn eval_leg(hike: &hike::Hike, terrain: &[u8], index: u64, seed: &[u8; 32]) -> R
         stage.checkpoints[j - 1]
     };
     let stored = u64::from_le_bytes(stage.leg_results[j]);
-    Ok(leg_result(terrain, &previous) == stored)
+    Ok(hike::leg_result_sized(terrain, &previous, sizes) == stored)
 }
 
 fn locate(hike: &hike::Hike, q: u64) -> Option<(usize, usize)> {
@@ -266,8 +313,7 @@ fn hit(hike: &hike::Hike, run: u64, index: u64) -> LegHit {
     }
 }
 
-fn digest_miss(hike: &hike::Hike, terrain: &[u8], seed: &[u8; 32]) -> bool {
-    let sizes = hike::Sizes::production();
+fn digest_miss(hike: &hike::Hike, terrain: &[u8], seed: &[u8; 32], sizes: hike::Sizes) -> bool {
     for (stage_index, stage) in hike.stages.iter().enumerate() {
         for (j, stored) in stage.checkpoints.iter().enumerate() {
             if j >= stage.leg_results.len() {
@@ -316,7 +362,9 @@ mod tests {
         let mut entropy = OsEntropy;
         let runs = vec![draw_distinct(20, 6, &mut entropy).unwrap()];
         let mut salt = [0u8; 32];
-        (&mut entropy as &mut dyn Entropy).fill_bytes(&mut salt).unwrap();
+        (&mut entropy as &mut dyn Entropy)
+            .fill_bytes(&mut salt)
+            .unwrap();
         let digest = commitment(3, &object, &salt, &runs);
         let draw = DrawFile {
             seq: 3,

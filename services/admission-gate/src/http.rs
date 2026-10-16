@@ -54,7 +54,12 @@ impl Service {
     pub fn open(cfg: Config) -> Result<Self, String> {
         let cfg = Arc::new(cfg);
         let limiter = Arc::new(RateLimiter::per_minute(cfg.rate_per_min));
-        let door = Door::open(&cfg.log_dir, cfg.policy())?;
+        let door = Door::open(
+            &cfg.log_dir,
+            cfg.policy(),
+            &cfg.index_url,
+            cfg.index_timeout,
+        )?;
         let jobs = JobStore::new(cfg.clone());
         for job in door.unsettled() {
             spawn_thorough(door.clone(), jobs.clone(), job);
@@ -475,7 +480,9 @@ fn spawn_locked(door: Door, jobs: JobStore, job: LockedThorough) {
                 }
                 let _ = public_key;
             }
-            crate::door::FastPhase::Held | crate::door::FastPhase::Done | crate::door::FastPhase::Sticky => {}
+            crate::door::FastPhase::Held
+            | crate::door::FastPhase::Done
+            | crate::door::FastPhase::Sticky => {}
         }
         door.end_pending(&source);
     });
@@ -759,7 +766,10 @@ mod tests {
     #[test]
     fn unrelated_origin_is_refused() {
         assert!(!origin_allowed(&cfg(), "https://evil.example"));
-        assert!(!origin_allowed(&cfg(), "http://groundinglab.io.evil.example"));
+        assert!(!origin_allowed(
+            &cfg(),
+            "http://groundinglab.io.evil.example"
+        ));
     }
 
     #[test]
