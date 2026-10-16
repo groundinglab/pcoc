@@ -1,18 +1,22 @@
-# Evidence status
+# Service status
 
-This note does not change the admission wire. The wire is [WIRE.md](WIRE.md).
+Admission gate service, crate `pcoc-admission` 0.4.1, tag `gate-v0.4.1`. This page is the service's status. Evidence and withdrawn claims are in [EVIDENCE.md](EVIDENCE.md). Policy is in [POLICY.md](POLICY.md). The wire is in [WIRE.md](WIRE.md).
 
-## Produce and verify measured evidence
+## Implemented
 
-**Not fully closed.** Measured produce and verify cost for Satoshi Hike v2.0 on bare metal, timed against the released `satoshi-hike-verify`, is a follow-up. This item is not waived, and it is not treated as unmeasured.
+- Sign-in door `POST /v1/sign-in` (§15.1 locked wire), result poll, public hash-chained decision log, `POST /v1/verify` (section 14 record, no admission), `GET /v1/policy`, `GET /v1/health`.
+- Policy keys read from `gate.toml`: `policy_id`, `min_leg_rate` (a float, leg/s), `min_waypoints`. The code defaults are `gl-admit-v1`, 0.25 and 6. groundinglab's live gate is set to `gl-admit-v4` in its `gate.toml` and enforces two of its values today: `min_leg_rate` 0.2 legs/s and `min_waypoints` 6. A changed value needs a new id (`policy-bind.json`).
+- Legacy `leg_rate_floor` (`strict`/`default`/`lenient`) is used only to settle a provisional line resumed at restart.
 
-The construction is Satoshi Hike v2.0 (`spec/satoshi-hike-v2.0/` in this repository). The programs are `satoshi-hike-produce` and `satoshi-hike-verify` under `reference/rust/`.
+## Not yet implemented (relative to `gl-admit-v4` and §15)
 
-## Killed slogans
+- A separate fast phase issuing `provisional` before thorough. The thorough checks currently run before the decision.
+- `held` for a `not read` pair. An unread closing header is refused as `bookends_not_read`.
+- The refuse-at-once for fewer than two anchored of `W_1` … `W_16` (`too_few_waypoints_anchored` is not emitted).
+- `min_waypoints` is counted "of 18" in code (`WAYPOINTS_TOTAL`). §14.5 counts anchored among 16.
+- First and last anchored, three six-leg runs with early stop, the draw commitment, and the key ban.
+- An integer leg-rate comparison (`q·N ≥ p·S`). The build compares a float.
 
-These sentences are not claims of this gate.
+## Monitor
 
-- “K=2 catches 90% of 10% shaves” — killed. On `N = 18`, a 10% shave is not an integer count of unpaid leg results (`0.10 × 18 = 1.8`). The nearest row is `F = 2` unpaid leg results and `K = 2`, catch `11/51` (about 22%). Catch at or above 90% on that row needs `K = 12`.
-- “Forges failed ⇒ economic security / cost won’t amortize proven” — killed as a public claim. A red-team run is a miss mechanism. It does not prove economic security, and it does not prove that a cost will not amortize.
-- Farm-scale dollar deterrence — not established.
-- “A tip-hold or a hike-CPU shave is a ≤0.9× produce-dollar win” — killed. Two unpaid leg results are a negligible share of a tip-dominated wall; that is not a produce-dollar win.
+The gate monitor page has no code in this repository. It reads the gate's public routes.

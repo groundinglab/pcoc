@@ -6,7 +6,7 @@ The point is interoperability. A PCOC made by one implementation must check the 
 
 Anyone, or their AI agents, can build a producer, a verifier, a service, or an app from the specification and the vectors alone, with no groundinglab code, service, or account.
 
-`reference/SPEC_PIN` names `spec-v2.0.3`, the current release (section 15.1 origin amendment and `sign-in-origins.json`). `spec-v2.0.2` is the release on the merge commit that moved the vectors under `spec/conformance/`. `spec-v2.0.1` is the previous release and still resolves at the old vector paths.
+`reference/SPEC_PIN` names `spec-v2.0.4`, the proposed release (2026-10-16 policy boundary: the specification sets no threshold value; not yet tagged). `spec-v2.0.3` is the previous release (section 15.1 origin amendment and `sign-in-origins.json`). `spec-v2.0.2` is the release on the merge commit that moved the vectors under `spec/conformance/`. `spec-v2.0.1` is the previous release and still resolves at the old vector paths.
 
 ## What "conforms" means
 
@@ -14,7 +14,7 @@ Conformance is Part A only (§1–§14 and §16). A producer or a verifier confo
 
 Part A is the construction: the hike object, terrain, legs and leg results, stages, checkpoints, waypoints, the Bitcoin clock, how to produce (§13), and the verify record (§14). Part A has no pass, fail, accept, refuse, or revoke.
 
-Part B (§15) is admission policy. It is groundinglab's example, with the locked leg-rate floors labelled: strict `7/20`, default `1/4`, lenient `1/8` (specification line that states the lock, and §15.5). Other relying parties may set their own policy on the same Part A measurements. Part B is not a conformance target. `spec/conformance/v2.0/sign-in.json` is the locked sign-in wire. It is not a section 14 record, and matching it is not Part A conformance.
+Part B (§15) is the admission service: its inputs, states, two-phase async, and the named policy parameters and comparisons. The specification may discuss thresholds but never sets a threshold value; it defers values to a policy. §15.5 figures (including leg-rate floors `7/20`, `1/4`, `1/8`) are informative examples. groundinglab's recommended default policy is a companion document beside the gate service, `services/admission-gate/POLICY.md`, and is not part of the specification. Other relying parties choose their own policy on the same Part A measurements. Part B is not a conformance target. `spec/conformance/v2.0/sign-in.json` is the locked sign-in wire. It is not a section 14 record, and matching it is not Part A conformance.
 
 The vectors are worked inputs and exact outputs. A text/vector disagreement is a defect in the specification (§16). Open an issue. Do not pick a side.
 
@@ -42,7 +42,7 @@ Only hash-bound values are evidence. The portable index stands in for Bitcoin an
 | 12 | Stage and waypoint | Checkpoints, fold, waypoint |
 | 13 | Produce | Producer procedure. Anchor offsets 2, 3, 4 |
 | 14 | Verify | The verify record: keys, tokens, encoding |
-| 15 | Admission service policy | **Part B.** Locked floors and `earlier_version`. Not a conformance target |
+| 15 | Admission service policy | **Part B.** Policy parameters (no values set) and `earlier_version`. Not a conformance target |
 | 16 | Conformance | What "conforms" means, and the vectors |
 | 17 | Closed | Settled items |
 | 18 | Wording notes | Informative, except item 9 (verify CLI), which is locked |

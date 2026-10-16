@@ -8,7 +8,8 @@ What is specified, what has been measured, and what is open. This page is not th
 |---|---|---|
 | Satoshi Hike v2.0 construction | locked in the specification, 2026-10-08 | `spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md` |
 | `STEPS_PER_LEG` 2000000, eighteen stages, anchor offsets 2, 3, 4 | locked, Part A | specification §6 and §13.1 |
-| Leg-rate floors strict 7/20, default 1/4, lenient 1/8 | locked policy thresholds, Part B, not a conformance target | specification §15, stated at the status list |
+| Leg-rate floor | a Part B parameter; the specification sets no value (amended 2026-10-16). Example figures 7/20, 1/4, 1/8 are informative | specification §15.4, §15.5 |
+| groundinglab's recommended default policy `gl-admit-v4` | a recommendation, not specification | [services/admission-gate/POLICY.md](services/admission-gate/POLICY.md) |
 | Part A conformance | the vectors under `spec/conformance/v2.0/` | §16 |
 
 ## Measured
@@ -22,7 +23,7 @@ The Admission Gate publishes a decision log (`GET /latest.json` and `GET /log/{Y
 ## Open
 
 - Cost at scale. Linear cost ("many cost many times one", as a measured result) is unmeasured for v2.0.
-- Catch rates. Not established. Withdrawn slogans stay in the Gate's own note and are not repeated as numbers here.
+- Catch rates. Not established.
 - Economic security. Not established.
 - Many-channel parallelism. The question of whether a host with many memory channels changes the cost is open. No such measurement is published.
 - Android build reproducibility. Not achieved. See [apps/android/VERIFY.md](apps/android/VERIFY.md).
