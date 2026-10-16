@@ -1,0 +1,21 @@
+# Keeping Open Systems Open Without Giving Control Away
+
+Open systems are valuable because they stay open. Anyone can create an identifier and start using the system without asking permission. That low barrier is the point. It is also the problem. When creating additional identifiers costs almost nothing, bots and farms can generate as many as they need. Openness becomes an attack surface. An open system still has to work when many of its identifiers are fake. The pressure to raise the cost of multiplicity is real.
+
+For nearly a decade the self-sovereign identity community has treated certain properties as non-negotiable. Christopher Allen's 2016 principles, [The Path to Self-Sovereign Identity](https://www.lifewithalacrity.com/article/the-path-to-self-soverereign-identity/), stated the core: the individual remains the ultimate authority over their own identity, must consent to its use, can minimize what is disclosed, and is protected when those priorities conflict with the needs of a network. These remain the criteria against which later designs are measured. They correctly identify what must not be given away. They do not, by themselves, create a cost for producing additional identifiers.
+
+When open systems face large numbers of low-cost identifiers, the common responses move the decision of who may participate away from the individual. An issuer decides which identifiers are valid. A biometric check requires the user to submit a physical measurement to an external service. A social-graph method scores accounts according to connections the scoring system observes. A detection system continuously updates rules the individual neither controls nor fully sees. In each case the system gains a way to reduce bots. In each case the individual loses a measure of control over the identifier itself. The cost of creating additional identifiers is no longer paid by the maker alone. It is replaced by a requirement to satisfy an external condition.
+
+Bots and AI agents make this pressure everyday and visible. One actor can produce thousands of identifiers in the time an ordinary user needs for one. The question is whether the cost of each additional identifier can be raised without relocating the decision away from the individual.
+
+A resource commitment performed by the maker raises that cost without creating a new issuer. The maker spends a scarce local resource, time and occupancy of memory, to produce a small file. Anyone can check the file cheaply and independently. The check confirms that the resource was spent. It discloses no personal data and requires no trust in the maker or in any central service. Because the cost sits in the making of the object, producing many identifiers requires repeating the commitment many times. Each relying system still decides for itself whether a given commitment is sufficient for admission. The maker keeps control of the identifier. The system keeps the policy. The cost of multiplicity is paid by the party who wants the additional identifiers.
+
+We have published a specification for an interoperable resource commitment of this kind. The specification can be bound to other credential systems as a rate-limiting component on the issuance of identifiers. A PCOC is an object made under that specification. We provide reference implementations and a working demonstration on Nostr. Making one takes a resource commitment, paced by Bitcoin blocks. The result is a small file that anyone can verify. Verification is cheaper than making. Each service that accepts the file still sets its own admission policy. If the mechanism can raise the cost of additional identifiers inside an open system as large and permissionless as Nostr while leaving control with the maker, the same approach can be used by other open systems that intend to keep the same constraints.
+
+## Open questions
+
+- The economics of large-scale farms are not yet settled.
+- Individual systems will choose different policies for when and how to require a commitment.
+- The relationship between this resource-commitment approach and other uniqueness mechanisms will depend on the specific threats open systems face.
+
+Read the specification at [groundinglab.io](https://groundinglab.io/technical/spec/), or see the code at [github.com/groundinglab/pcoc](https://github.com/groundinglab/pcoc).
