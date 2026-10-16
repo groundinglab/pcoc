@@ -429,7 +429,7 @@ fn pack() -> Vec<(&'static str, Value)> {
                     "default": {"p": LEG_RATE_FLOOR_DEFAULT.0, "q": LEG_RATE_FLOOR_DEFAULT.1},
                     "lenient": {"p": LEG_RATE_FLOOR_LENIENT.0, "q": LEG_RATE_FLOOR_LENIENT.1},
                 },
-                "LEG_RATE_FLOOR_NOTE": "Part B (§15)",
+                "LEG_RATE_FLOOR_NOTE": "Informative example values from §15.5 (Part B). Not a conformance target; policy sets the value.",
             }),
         ),
         ("checkpoint-preimage.json", checkpoint_kat()),

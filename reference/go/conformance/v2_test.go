@@ -102,7 +102,7 @@ func TestV20Pack(t *testing.T) {
 			doc.Floor.Lenient.P != hike.LegRateFloorLenient.P || doc.Floor.Lenient.Q != hike.LegRateFloorLenient.Q {
 			t.Fatalf("floors %+v", doc.Floor)
 		}
-		if doc.BindNote != "non-normative reference default" || doc.FloorNote != "Part B (§15)" {
+		if doc.BindNote != "non-normative reference default" || doc.FloorNote != "Informative example values from §15.5 (Part B). Not a conformance target; policy sets the value." {
 			t.Fatalf("notes %q %q", doc.BindNote, doc.FloorNote)
 		}
 	})

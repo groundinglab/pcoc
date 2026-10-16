@@ -1,6 +1,6 @@
 package pcoc.hike;
 
-/** Names fixed by sections 6 and 8, plus the locked v2.0 tokens from #206. */
+/** Names fixed by sections 6 and 8. The leg-rate pairs are §15.5 examples. */
 public final class Hike {
     public static final int STAGES = 18;
     public static final int HASH_BYTES = 32;
@@ -24,7 +24,7 @@ public final class Hike {
      */
     public static final int DEFAULT_BIND_THREADS = 6;
     public static final long JSON_INT_MAX = Index.JSON_INT_MAX;
-    /** Locked count of blocks in the path-ask window. */
+    /** Count of blocks in the path-ask window. */
     public static final int ANCHOR_WINDOW = 3;
     /**
      * SPEC v2.0 P13.2, written once. A plant posted at H is asked at H+2,
@@ -32,11 +32,10 @@ public final class Hike {
      */
     private static final int[] ANCHOR_OFFSETS_AFTER_POST = {2, 3, 4};
     /**
-     * Section 15.5 leg-rate floors, legs per second as {@code p/q}.
-     * Strict 7/20, default 1/4, lenient 1/8. They scale with the leg.
-     * The comparison {@code q·N ≥ p·S_eff} is Gate policy. These constants
-     * are named and are not applied. {@code LEG_RATE_FLOOR_P} and
-     * {@code LEG_RATE_FLOOR_Q} are the default pair.
+     * Section 15.5 informative examples, legs per second as {@code p/q}.
+     * 7/20, 1/4, and 1/8. They are not conformance and they are not applied.
+     * A policy sets the value. {@code LEG_RATE_FLOOR_P} and
+     * {@code LEG_RATE_FLOOR_Q} name the 1/4 example.
      */
     public static final int LEG_RATE_FLOOR_STRICT_P = 7;
     public static final int LEG_RATE_FLOOR_STRICT_Q = 20;

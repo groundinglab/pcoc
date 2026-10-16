@@ -6,7 +6,7 @@ The point is interoperability. A PCOC made by one implementation must check the 
 
 Anyone, or their AI agents, can build a producer, a verifier, a service, or an app from the specification and the vectors alone, with no groundinglab code, service, or account.
 
-`reference/SPEC_PIN` names `spec-v2.0.4`, the proposed release (2026-10-16 policy boundary: the specification sets no threshold value; not yet tagged). `spec-v2.0.3` is the previous release (section 15.1 origin amendment and `sign-in-origins.json`). `spec-v2.0.2` is the release on the merge commit that moved the vectors under `spec/conformance/`. `spec-v2.0.1` is the previous release and still resolves at the old vector paths.
+`reference/SPEC_PIN` names `spec-v2.0.5`, the proposed release (2026-10-17: conformance `constants.json` labels the §15.5 leg-rate figures as informative examples; no normative change; not yet tagged). `spec-v2.0.4` is the previous release (policy boundary: the specification sets no threshold value). `spec-v2.0.3` is the release before that (section 15.1 origin amendment and `sign-in-origins.json`). `spec-v2.0.2` is the release on the merge commit that moved the vectors under `spec/conformance/`. `spec-v2.0.1` is the previous release and still resolves at the old vector paths.
 
 ## What "conforms" means
 

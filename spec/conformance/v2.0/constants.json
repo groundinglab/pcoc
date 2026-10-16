@@ -28,7 +28,7 @@
       "q": 20
     }
   },
-  "LEG_RATE_FLOOR_NOTE": "Part B (§15)",
+  "LEG_RATE_FLOOR_NOTE": "Informative example values from §15.5 (Part B). Not a conformance target; policy sets the value.",
   "LEG_RESULT_BYTES": 8,
   "MIX_ADD": "0x9E3779B97F4A7C15",
   "MIX_MUL1": "0xBF58476D1CE4E5B9",

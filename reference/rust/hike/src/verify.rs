@@ -41,6 +41,10 @@ pub struct CheckpointMeasurement {
     /// True when the stored checkpoint matches the recomputed digest.
     pub digest_matches: Vec<Vec<bool>>,
     pub mismatch: bool,
+    /// A stored header whose index read was `not read`. Not a mismatch.
+    /// [`verify`] leaves this false: an unread beacon is folded into `mismatch`
+    /// there, and that record stays byte-identical. [`verify_fast`] sets it.
+    pub header_not_read: bool,
 }
 
 /// Section 13.1 window record for one of `W_1` … `W_16`.
@@ -761,6 +765,274 @@ fn earlier_measurements(kind: String) -> Measurements {
     }
 }
 
+/// What the fast phase can decide without building terrain.
+///
+/// Shape, the seed value, the anchor window, and the plant comparison do not
+/// read terrain. Waypoint rehash does. A caller that already has a settled
+/// miss from this screen does not call [`verify_fast`].
+#[derive(Clone, Debug)]
+pub struct FastScreen {
+    pub shape: bool,
+    pub shape_notes: Vec<&'static str>,
+    pub seed_matches: Option<bool>,
+    /// `Some(true)` when the fold of stored checkpoints, with the slot sample
+    /// still unread, cannot be checked yet. The successor itself is compared
+    /// only by [`verify_fast`]. This flag is `Some(false)` when a stage pair
+    /// is present. It does not claim the rehash matched.
+    pub successors_present: bool,
+    pub plant_mismatch: bool,
+    pub plant_not_read: bool,
+    /// Anchored count among `W_1` … `W_16`, plus how many could still become
+    /// anchored if every `not read` plant came back `match`.
+    pub anchored: u64,
+    pub anchored_possible: u64,
+    /// Index in `1..=16` of each waypoint that is anchored now.
+    pub anchored_indices: Vec<u64>,
+    /// Index in `1..=16` of each waypoint that could still become anchored.
+    pub possible_indices: Vec<u64>,
+    pub legs: Option<u64>,
+    pub record_body: String,
+}
+
+/// Shape, seed, plant, and anchor window. No terrain. No leg.
+pub fn screen_fast<C, R>(bytes: &[u8], path_chain: C) -> FastScreen
+where
+    C: FnMut(&crate::pathbody::PathLocators) -> R,
+    R: Into<ChainRead>,
+{
+    screen_fast_sized(bytes, path_chain, Sizes::production())
+}
+
+pub fn screen_fast_sized<C, R>(bytes: &[u8], mut path_chain: C, sizes: Sizes) -> FastScreen
+where
+    C: FnMut(&crate::pathbody::PathLocators) -> R,
+    R: Into<ChainRead>,
+{
+    let measured = match read_measured_object_sized(bytes, sizes) {
+        Ok(item) => item,
+        Err(fail) => {
+            return FastScreen {
+                shape: false,
+                shape_notes: vec![fail.0],
+                seed_matches: None,
+                successors_present: false,
+                plant_mismatch: false,
+                plant_not_read: false,
+                anchored: 0,
+                anchored_possible: 0,
+                anchored_indices: Vec::new(),
+                possible_indices: Vec::new(),
+                legs: None,
+                record_body: crate::section14::undecoded_tail(&[fail.0]),
+            };
+        }
+    };
+    let hike = &measured.hike;
+    let seed = computed_seed(hike);
+    let seed_matches = hike.stages.first().map(|stage| stage.waypoint == seed);
+    let successors_present = if sizes.is_production() {
+        successor_inputs_present(hike)
+    } else {
+        !hike.stages.is_empty()
+    };
+    let bound = bound_paths(hike, &mut path_chain);
+    let mut anchored = 0u64;
+    let mut anchored_possible = 0u64;
+    let mut anchored_indices = Vec::new();
+    let mut possible_indices = Vec::new();
+    let mut plant_mismatch = false;
+    let mut plant_not_read = false;
+    for (offset, path) in bound.iter().take(16).enumerate() {
+        let index = (offset + 1) as u64;
+        if path.anchor == Anchor::Anchored {
+            anchored += 1;
+            anchored_possible += 1;
+            anchored_indices.push(index);
+            possible_indices.push(index);
+        } else if matches!(path.fact.plant, crate::section14::Plant::NotRead) && !path.fact.empty
+        {
+            // A re-read of this plant could still anchor the waypoint.
+            anchored_possible += 1;
+            possible_indices.push(index);
+            plant_not_read = true;
+        }
+        if path.differs {
+            plant_mismatch = true;
+        }
+    }
+    let legs = hike.stages.iter().try_fold(0u64, |sum, stage| {
+        if stage.checkpoint_rows_defined {
+            sum.checked_add(stage.checkpoints.len() as u64)
+        } else {
+            None
+        }
+    });
+    FastScreen {
+        shape: measured.shape,
+        shape_notes: measured.shape_notes,
+        seed_matches,
+        successors_present,
+        plant_mismatch,
+        plant_not_read,
+        anchored,
+        anchored_possible,
+        anchored_indices,
+        possible_indices,
+        legs,
+        record_body: String::new(),
+    }
+}
+
+/// Fast-phase record. Same section 14 measurements as [`verify`] except the
+/// two thorough-only checks: Rule A4.3 checkpoint digests and Rule A4.4 legs.
+///
+/// Waypoint rehash still runs, so terrain is built for the slot sample. No
+/// leg is walked and no checkpoint digest is recomputed. The record omits
+/// `checkpoints[*].legs[*].result`, `six_leg`, and `six_leg_runs`. Those keys
+/// are absent. They are not filled with `not defined`.
+///
+/// [`verify`] is unchanged. The CLI still writes that record.
+pub fn verify_fast<F, C, R>(bytes: &[u8], beacon_at: F, path_chain: C) -> Measurements
+where
+    F: FnMut(u64) -> Result<IndexBeacon, ()>,
+    C: FnMut(&crate::pathbody::PathLocators) -> R,
+    R: Into<ChainRead>,
+{
+    verify_fast_sized(bytes, beacon_at, path_chain, Sizes::production())
+}
+
+/// [`verify_fast`] at a chosen size set. `conformance-small` uses the small set.
+pub fn verify_fast_sized<F, C, R>(
+    bytes: &[u8],
+    mut beacon_at: F,
+    mut path_chain: C,
+    sizes: Sizes,
+) -> Measurements
+where
+    F: FnMut(u64) -> Result<IndexBeacon, ()>,
+    C: FnMut(&crate::pathbody::PathLocators) -> R,
+    R: Into<ChainRead>,
+{
+    if let Some(kind) = earlier_object_kind(bytes) {
+        return earlier_measurements(kind);
+    }
+    let measured = match read_measured_object_sized(bytes, sizes) {
+        Ok(item) => item,
+        Err(fail) => {
+            return Measurements {
+                version: ObjectLineage::Current,
+                shape: false,
+                checkpoints: Recorded::NotObtained,
+                waypoints: Recorded::NotObtained,
+                leg_rate: LegRate::NotRead,
+                paths_included: Recorded::NotObtained,
+                six_legs: SixLegs::NotObtained,
+                stages: StageReport::NotRead,
+                record_body: crate::section14::undecoded_tail(&[fail.0]),
+            };
+        }
+    };
+    let shape = measured.shape;
+    let hike = &measured.hike;
+    let (beacon_matches_index, times, observed, headers) = beacon_records(hike, &mut beacon_at);
+    let header_mismatch = headers
+        .iter()
+        .any(|header| matches!(header.cmp, crate::section14::IndexCmp::Mismatch));
+    let header_not_read = headers
+        .iter()
+        .any(|header| matches!(header.cmp, crate::section14::IndexCmp::NotRead));
+    let bound = bound_paths(hike, &mut path_chain);
+    let measure_successors = if sizes.is_production() {
+        successor_inputs_present(hike)
+    } else {
+        !hike.stages.is_empty()
+    };
+    // The slot sample in the waypoint rehash is terrain. Legs are not walked.
+    let terrain = if measure_successors {
+        Some(terrain_of(hike, sizes))
+    } else {
+        None
+    };
+    let waypoints = if measure_successors {
+        Recorded::Obtained(waypoint_records(
+            hike,
+            terrain.as_deref().expect("waypoint rehash reads terrain"),
+            &bound,
+            sizes,
+        ))
+    } else {
+        Recorded::NotObtained
+    };
+    let stages = StageReport::Read(stored_beacon_stages(
+        hike,
+        &times,
+        &observed,
+    ));
+    let paths_included = Recorded::Obtained(count_paths_included(hike));
+    let seed_value = computed_seed(hike);
+    let opening_match = hike
+        .stages
+        .first()
+        .map(|stage| stage.waypoint == seed_value);
+    let successor = match &waypoints {
+        Recorded::Obtained(found) => Some(found.successor_differs.as_slice()),
+        Recorded::NotObtained => None,
+    };
+    let anchor_rows = match &waypoints {
+        Recorded::Obtained(found) => found.anchors.clone(),
+        Recorded::NotObtained => bound.iter().take(16).map(|path| path.anchor).collect(),
+    };
+    let counts: Vec<Option<u64>> = (0..STAGES)
+        .map(|index| {
+            hike.stages.get(index).and_then(|stage| {
+                stage
+                    .checkpoint_rows_defined
+                    .then_some(stage.checkpoints.len() as u64)
+            })
+        })
+        .collect();
+    let rows_defined: Vec<bool> = (0..STAGES)
+        .map(|index| {
+            hike.stages
+                .get(index)
+                .is_some_and(|stage| stage.checkpoint_rows_defined)
+        })
+        .collect();
+    let facts: Vec<crate::section14::PathFact> = bound.iter().map(|path| path.fact).collect();
+    let record_body = crate::section14::record_tail_fast(
+        &crate::section14::RecordInput {
+            shape,
+            shape_notes: measured.shape_notes.as_slice(),
+            headers: &headers,
+            opening_match,
+            digest_matches: None,
+            checkpoint_rows_defined: &rows_defined,
+            successor_differs: successor,
+            paths: &facts,
+            anchors: &anchor_rows,
+            checkpoint_counts: &counts,
+            six: &SixLegs::NotObtained,
+        },
+        &mut beacon_at,
+    );
+    Measurements {
+        version: ObjectLineage::Current,
+        shape,
+        checkpoints: Recorded::Obtained(CheckpointMeasurement {
+            mismatch: header_mismatch,
+            header_not_read,
+            beacon_matches_index,
+            digest_matches: Vec::new(),
+        }),
+        waypoints,
+        leg_rate: LegRate::NotRead,
+        paths_included,
+        six_legs: SixLegs::NotObtained,
+        stages,
+        record_body,
+    }
+}
+
 /// Record section 14. Rule A4.3 uses [`configured_bind_threads`].
 pub fn verify<F, C, R>(bytes: &[u8], draw: AuditDraw, beacon_at: F, path_chain: C) -> Measurements
 where
@@ -889,6 +1161,7 @@ where
                 beacon_matches_index,
                 digest_matches,
                 mismatch,
+                header_not_read: false,
             }),
             Some(times),
             Some(observed),

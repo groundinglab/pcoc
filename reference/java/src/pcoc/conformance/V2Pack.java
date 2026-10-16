@@ -963,7 +963,7 @@ public final class V2Pack {
             throw new IllegalStateException("floors");
         }
         if (!"non-normative reference default".equals(text(doc, "DEFAULT_BIND_THREADS_NOTE"))
-                || !"Part B (§15)".equals(text(doc, "LEG_RATE_FLOOR_NOTE"))) {
+                || !"Informative example values from §15.5 (Part B). Not a conformance target; policy sets the value.".equals(text(doc, "LEG_RATE_FLOOR_NOTE"))) {
             throw new IllegalStateException("constant notes");
         }
     }

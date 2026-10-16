@@ -1,4 +1,15 @@
 use crate::consts::*;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// How many times this process has built a terrain.
+///
+/// The fast phase must not increment it. A test reads it before and after a
+/// settled refuse. Production does not branch on the count.
+static TERRAIN_BUILDS: AtomicU64 = AtomicU64::new(0);
+
+pub fn terrain_builds() -> u64 {
+    TERRAIN_BUILDS.load(Ordering::Relaxed)
+}
 
 pub fn mix64(x: u64) -> u64 {
     let mut y = x.wrapping_add(MIX_ADD);
@@ -42,6 +53,7 @@ pub fn fill_terrain(fill_pin: u64) -> Vec<u8> {
 
 /// dag2 terrain at `sizes`. Slot 0 is counter words only. The parent rules are section 10.
 pub fn fill_terrain_sized(fill_pin: u64, sizes: Sizes) -> Vec<u8> {
+    TERRAIN_BUILDS.fetch_add(1, Ordering::Relaxed);
     let words_per_slot = sizes.words_per_slot();
     let slot_bytes = sizes.slot_bytes;
     let mut terrain = vec![0u8; sizes.terrain_bytes];
