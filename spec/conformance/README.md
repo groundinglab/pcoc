@@ -2,7 +2,7 @@
 
 Shared test vectors for the PCOC specification. They live in this tree because they are part of the specification, not a side folder. Current pack: [v2.0](v2.0/). The spec tag that covers this tree is named in [spec/README.md](../README.md) and in `reference/SPEC_PIN`.
 
-Any producer or verifier that reproduces the Part A vectors agrees with the specification. "Conforms" means Part A only: every Part A output byte for byte, and the same section 14 measurement tokens. Part B (§15) is policy. The locked leg-rate floors in `v2.0/constants.json` are labelled `Part B (§15)`. They are not a conformance target. `v2.0/sign-in.json` is the locked §15.1 wire. Matching it is not Part A conformance.
+Any producer or verifier that reproduces the Part A vectors agrees with the specification. "Conforms" means Part A only: every Part A output byte for byte, and the same section 14 measurement tokens. Part B (§15) is policy. The leg-rate figures in `v2.0/constants.json` are informative §15.5 examples. They are not a conformance target. `v2.0/sign-in.json` is the locked §15.1 wire. Matching it is not Part A conformance.
 
 Where a vector and a sentence of the specification disagree, that is a specification defect. Open an issue. Do not pick a side.
 
