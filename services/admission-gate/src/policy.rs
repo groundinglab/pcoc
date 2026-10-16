@@ -1,7 +1,7 @@
 //! Gate policy. The verifier reports measurements. This module judges them.
 //!
 //! `policy_id` names one exact table for its whole life. The table is the
-//! keys in `policy/gl-admit-v4.toml`. A change of any value is a new id.
+//! keys in `policy/gl-admit-v5.toml`. A change of any value is a new id.
 //! The rate compares the bookend pair `(N, S)` from the section 14 record
 //! as integers: `q·N ≥ p·S`. The waypoint count compares `anchored_total`
 //! among `W_1` … `W_16`. Neither number is a measurement.
@@ -10,7 +10,7 @@
 //! `min_leg_rate` of 0.25 leg/s and `min_waypoints` 6 of 18. That float and
 //! the named floors (`strict` 7/20, `default` 1/4, `lenient` 1/8) are gone.
 //! Those three fractions stay informative examples in spec §15.5. They are
-//! not a policy key. The code default is now `gl-admit-v4`.
+//! not a policy key. The code default is now `gl-admit-v5`.
 //!
 //! When `N` is `not defined` from the object's own bytes, whatever `S` is,
 //! the refusal is immediate (`bookends_not_defined`). A pure `not read` pair,
@@ -69,7 +69,7 @@ pub fn leg_rate_line(p: u64, q: u64) -> String {
 }
 
 /// `gl-admit-v` plus a positive integer. Bound to one table for its life.
-pub const DEFAULT_POLICY_ID: &str = "gl-admit-v4";
+pub const DEFAULT_POLICY_ID: &str = "gl-admit-v5";
 
 /// `W_1` … `W_16`. `W_17` is never fetched and is not in the anchored count.
 pub const ANCHORED_SPAN: u64 = 16;
@@ -99,8 +99,7 @@ pub fn parse_policy_id(raw: &str) -> Result<String, String> {
             "policy_id {raw:?} must be gl-admit-v plus a positive integer"
         ));
     };
-    if rest.is_empty() || !rest.bytes().all(|byte| byte.is_ascii_digit()) || rest.starts_with('0')
-    {
+    if rest.is_empty() || !rest.bytes().all(|byte| byte.is_ascii_digit()) || rest.starts_with('0') {
         return Err(format!(
             "policy_id {raw:?} must be gl-admit-v plus a positive integer"
         ));
@@ -117,7 +116,7 @@ pub struct RateFloor {
 
 /// One configured policy table. A different value is a different id.
 ///
-/// The fields are the keys of `policy/gl-admit-v4.toml`, plus the pending
+/// The fields are the keys of `policy/gl-admit-v5.toml`, plus the pending
 /// caps the plan names (F3) and the held-retry budgets §15.3 names.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct AdmissionPolicy {
@@ -230,7 +229,10 @@ pub struct PolicyCheck {
     pub met: bool,
 }
 
-pub fn policy_checks(measures: &crate::verifier::Measures, policy: &AdmissionPolicy) -> Vec<PolicyCheck> {
+pub fn policy_checks(
+    measures: &crate::verifier::Measures,
+    policy: &AdmissionPolicy,
+) -> Vec<PolicyCheck> {
     let mut checks = Vec::new();
     if let (Some(n), Some(s)) = (measures.legs, measures.span_s) {
         checks.push(PolicyCheck {
@@ -259,7 +261,9 @@ pub fn policy_checks(measures: &crate::verifier::Measures, policy: &AdmissionPol
 
 /// Both floors were measured and both were met.
 pub fn policy_admits(checks: &[PolicyCheck]) -> bool {
-    let rate = checks.iter().any(|check| check.field == "leg_rate" && check.met);
+    let rate = checks
+        .iter()
+        .any(|check| check.field == "leg_rate" && check.met);
     let waypoints = checks
         .iter()
         .any(|check| check.field == "anchored_total" && check.met);
@@ -300,10 +304,7 @@ pub fn bookend_below_floor(n: i128, s: i128, p: u64, q: u64) -> bool {
     let (Ok(n), Ok(s)) = (u128::try_from(n), u128::try_from(s)) else {
         return true;
     };
-    match (
-        u128::from(q).checked_mul(n),
-        u128::from(p).checked_mul(s),
-    ) {
+    match (u128::from(q).checked_mul(n), u128::from(p).checked_mul(s)) {
         (Some(left), Some(right)) => left < right,
         _ => true,
     }
@@ -436,10 +437,7 @@ pub fn public_document(policy: &AdmissionPolicy) -> Value {
             Value::String("recommendation, not specification".to_owned()),
         );
         map.insert("spec".to_owned(), Value::String(POLICY_SPEC.to_owned()));
-        map.insert(
-            "anchored_span".to_owned(),
-            serde_json::json!(ANCHORED_SPAN),
-        );
+        map.insert("anchored_span".to_owned(), serde_json::json!(ANCHORED_SPAN));
     }
     value
 }

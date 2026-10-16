@@ -152,7 +152,8 @@ fn policy_reason(checks: &[PolicyCheck], policy: &AdmissionPolicy) -> Option<Rea
             class: CLASS_BELOW_POLICY,
             line: format!(
                 "Valid, fewer than {} of {} waypoints among W_1 through W_16 were anchored.",
-                policy.min_anchored_paths, policy::ANCHORED_SPAN
+                policy.min_anchored_paths,
+                policy::ANCHORED_SPAN
             ),
         });
     }
@@ -160,7 +161,10 @@ fn policy_reason(checks: &[PolicyCheck], policy: &AdmissionPolicy) -> Option<Rea
 }
 
 fn from_notes(notes: &[String], measures: &Measures) -> Reason {
-    let note = notes.first().map(String::as_str).unwrap_or(CODE_SHAPE_MISMATCH);
+    let note = notes
+        .first()
+        .map(String::as_str)
+        .unwrap_or(CODE_SHAPE_MISMATCH);
     let code = code_of_note(note);
     let class = class_of(code);
     let line = sentence(code, measures);
@@ -244,7 +248,11 @@ mod tests {
     fn every_inventory_code_is_snake_case_and_not_rejected() {
         assert!(INVENTORY.len() >= 10);
         for (code, class) in INVENTORY {
-            assert!(code.chars().all(|ch| ch.is_ascii_lowercase() || ch == '_' || ch.is_ascii_digit()), "{code}");
+            assert!(
+                code.chars()
+                    .all(|ch| ch.is_ascii_lowercase() || ch == '_' || ch.is_ascii_digit()),
+                "{code}"
+            );
             assert_ne!(*code, "rejected");
             assert!(matches!(
                 *class,

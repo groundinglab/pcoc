@@ -165,6 +165,14 @@ impl Door {
         }];
         write.summary = Some("{}".to_owned());
         write.policy_id = Some(self.policy.policy_id.clone());
+        write.deep = Some(serde_json::json!({
+            "runs_done": out.runs_done,
+            "legs_matched": out.legs_matched,
+            "legs_total": out.legs_total,
+            "salt": out.salt,
+            "indices": out.indices,
+            "commitment": out.commitment,
+        }));
         if !out.matched {
             let note = if out.digest_mismatch {
                 "checkpoint mismatch"

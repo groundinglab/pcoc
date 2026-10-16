@@ -37,7 +37,7 @@ pub const DEFAULT_MAX_JOBS: usize = 256;
 pub const DEFAULT_MAX_CONCURRENT: usize = 2;
 pub const DEFAULT_RATE_PER_MIN: u32 = 12;
 /// Shipped recommendation. The process reads this file when `policy` is omitted.
-pub const DEFAULT_POLICY_FILE: &str = "policy/gl-admit-v4.toml";
+pub const DEFAULT_POLICY_FILE: &str = "policy/gl-admit-v5.toml";
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -55,7 +55,7 @@ pub struct Config {
     /// Decision log directory. The process creates it. A v1.35 chain here is
     /// not loaded.
     pub log_dir: PathBuf,
-    /// The full policy table. The code default is `gl-admit-v4`.
+    /// The full policy table. The code default is `gl-admit-v5`.
     pub policy: AdmissionPolicy,
     /// Checkpoint binding threads. The process does not read `PCOC_BIND_THREADS`.
     pub bind_threads: usize,
@@ -82,9 +82,9 @@ struct FileConfig {
     index_timeout_secs: u64,
     /// Path of a policy file, relative to this config file. When omitted, and
     /// [`Self::policy_table`] is also omitted, the process reads
-    /// `policy/gl-admit-v4.toml` beside this file.
+    /// `policy/gl-admit-v5.toml` beside this file.
     policy: Option<String>,
-    /// Inline policy table. The keys are those of `gl-admit-v4.toml`.
+    /// Inline policy table. The keys are those of `gl-admit-v5.toml`.
     /// Unknown keys are an error. Mutually exclusive with [`Self::policy`].
     #[serde(default, rename = "policy_table")]
     policy_table: Option<PolicyFile>,
@@ -115,7 +115,7 @@ impl Default for FileConfig {
     }
 }
 
-/// The keys of `policy/gl-admit-v4.toml`. Unknown keys are an error.
+/// The keys of `policy/gl-admit-v5.toml`. Unknown keys are an error.
 ///
 /// `min_leg_rate` is not a key. Gate 0.4.1 read that float. A log line at
 /// startup records the move from that float to this integer floor.
@@ -270,9 +270,7 @@ fn normalize_origins(origins: Vec<String>) -> Vec<String> {
 
 fn resolve_policy(file: &FileConfig, source: Option<&Path>) -> Result<AdmissionPolicy, String> {
     if file.policy.is_some() && file.policy_table.is_some() {
-        return Err(
-            "policy path and an inline [policy_table] are both set; use one".to_owned(),
-        );
+        return Err("policy path and an inline [policy_table] are both set; use one".to_owned());
     }
     let table = if let Some(inline) = &file.policy_table {
         inline.clone()
@@ -280,7 +278,8 @@ fn resolve_policy(file: &FileConfig, source: Option<&Path>) -> Result<AdmissionP
         let path = policy_path(file.policy.as_deref(), source)?;
         let raw = fs::read_to_string(&path)
             .map_err(|err| format!("could not read policy {}: {err}", path.display()))?;
-        toml::from_str(&raw).map_err(|err| format!("policy {} is not usable: {err}", path.display()))?
+        toml::from_str(&raw)
+            .map_err(|err| format!("policy {} is not usable: {err}", path.display()))?
     };
     policy_from_file(table, file.max_concurrent)
 }
@@ -339,9 +338,9 @@ fn policy_from_file(file: PolicyFile, max_concurrent: usize) -> Result<Admission
     let pending_per_source = file
         .pending_per_source
         .unwrap_or(policy::DEFAULT_PENDING_PER_SOURCE);
-    let pending_global = file.pending_global.unwrap_or(
-        (max_concurrent as u64).saturating_mul(policy::DEFAULT_PENDING_GLOBAL_FACTOR),
-    );
+    let pending_global = file
+        .pending_global
+        .unwrap_or((max_concurrent as u64).saturating_mul(policy::DEFAULT_PENDING_GLOBAL_FACTOR));
     if pending_per_source == 0 || pending_global == 0 {
         return Err("pending caps must each be at least 1".to_owned());
     }
@@ -413,7 +412,7 @@ mod tests {
         assert_eq!(cfg.max_object_bytes, DEFAULT_MAX_OBJECT_BYTES);
         assert_eq!(cfg.max_concurrent_verify, 2);
         assert_eq!(cfg.rate_per_min, 12);
-        assert_eq!(cfg.policy.policy_id, "gl-admit-v4");
+        assert_eq!(cfg.policy.policy_id, "gl-admit-v5");
         assert_eq!(cfg.policy.leg_rate_floor.p, 1);
         assert_eq!(cfg.policy.leg_rate_floor.q, 5);
         assert_eq!(cfg.policy.min_anchored_paths, 6);
@@ -430,10 +429,7 @@ mod tests {
         assert_eq!(cfg.policy.pending_global, 4);
         assert_eq!(cfg.bind_threads, 6);
         assert_eq!(cfg.index_timeout, Duration::from_secs(5));
-        assert_eq!(
-            cfg.allowed_origins,
-            Vec::<String>::new()
-        );
+        assert_eq!(cfg.allowed_origins, Vec::<String>::new());
         assert!(cfg.client_ip_header.is_none());
         let raw = 260_000usize;
         let b64 = raw.saturating_add(2) / 3 * 4;
@@ -525,7 +521,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(cfg.policy.policy_id, "gl-admit-v9");
-        assert_eq!((cfg.policy.leg_rate_floor.p, cfg.policy.leg_rate_floor.q), (7, 20));
+        assert_eq!(
+            (cfg.policy.leg_rate_floor.p, cfg.policy.leg_rate_floor.q),
+            (7, 20)
+        );
         assert_eq!(cfg.policy.min_anchored_paths, 8);
         assert_eq!(cfg.policy.require_last_anchored, 14);
         assert_eq!(cfg.policy.thorough_six_leg_runs, 2);
@@ -572,7 +571,7 @@ mod tests {
         let error = load_text(
             r#"
             [policy_table]
-            policy_id = "gl-admit-v4"
+            policy_id = "gl-admit-v5"
             leg_rate_floor = { p = 1, q = 5 }
             min_anchored_paths = 6
             require_first_anchored = 1

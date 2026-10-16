@@ -57,7 +57,7 @@ allowed_origins = ["https://groundinglab.io", "https://www.groundinglab.io"]
 extra_origins = []
 
 # Admission policy file, relative to this file. The keys are those of
-# gl-admit-v4.toml. An inline [policy] table is the other form. The two
+# gl-admit-v5.toml. An inline [policy] table is the other form. The two
 # cannot both be set. Unknown keys are an error.
 #
 # v1 → v4: gate 0.4.1 read policy_id, a float min_leg_rate, and min_waypoints,
@@ -68,4 +68,4 @@ extra_origins = []
 # The first start writes {log_dir}/policy-bind.json, a hash of the full
 # table. A later start with the same id and a different table exits before
 # it listens. A value change needs a new id.
-policy = "../policy/gl-admit-v4.toml"
+policy = "../policy/gl-admit-v5.toml"

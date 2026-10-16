@@ -282,19 +282,6 @@ impl SignInRows {
                 body.insert("log_seq".to_owned(), json!(seq));
             }
         }
-        if let Some(deep) = &row.deep {
-            body.insert(
-                "deep".to_owned(),
-                json!({
-                    "runs_done": deep.runs_done,
-                    "legs_matched": deep.legs_matched,
-                    "legs_total": deep.legs_total,
-                    "salt": deep.salt,
-                    "indices": deep.indices,
-                    "commitment": deep.commitment,
-                }),
-            );
-        }
         Value::Object(body)
     }
 

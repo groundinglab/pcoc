@@ -28,8 +28,7 @@ use tower::ServiceExt;
 const NOW_2026_10_10: u64 = 1_791_590_400;
 
 fn vector() -> Value {
-    let path =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/vectors/sign-in.json");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/vectors/sign-in.json");
     serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
 }
 
@@ -259,10 +258,8 @@ fn earlier_kind_with_key(secret: &[u8; 32]) -> Vec<u8> {
 }
 
 fn v135_object() -> Vec<u8> {
-    std::fs::read(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/vectors/earlier-kind.cbor"),
-    )
-    .expect("earlier kind")
+    std::fs::read(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/vectors/earlier-kind.cbor"))
+        .expect("earlier kind")
 }
 
 fn assert_only_code(status: StatusCode, body: &Value, text: &str, code: &str) {
@@ -640,7 +637,7 @@ async fn the_new_wire_hides_the_floor_and_still_enforces_it() {
     )
     .await;
     assert_eq!(health_status, StatusCode::OK);
-    assert_eq!(health["config"]["policy_id"], "gl-admit-v4");
+    assert_eq!(health["config"]["policy_id"], "gl-admit-v5");
     assert!(health["config"].get("leg_rate_floor").is_none(), "{health}");
     assert!(health["config"].get("log_dir").is_none(), "{health}");
     assert!(health["config"].get("config_path").is_none(), "{health}");

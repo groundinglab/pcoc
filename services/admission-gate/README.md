@@ -5,7 +5,7 @@ The admission gate is a standalone service built on the Rust reference (`ref-rus
 Three layers stay separate:
 
 - **Specification** defines measurements and the admission model. It sets no threshold values.
-- **Policy** chooses values. [POLICY.md](POLICY.md) is the companion. groundinglab's recommended policy is `gl-admit-v4`, a recommendation, not authority. This build's code default is `gl-admit-v4`. Choose your own.
+- **Policy** chooses values. [POLICY.md](POLICY.md) is the companion. groundinglab's recommended policy is `gl-admit-v5`, a recommendation, not authority. This build's code default is `gl-admit-v5`. Choose your own.
 - **Operations** is a deployed instance's own config. groundinglab's instance config is private and is not in this repository.
 
 groundinglab runs one configured instance ("the groundinglab Admission Gate"). While it is the only public gate, its public page states its live policy.
@@ -46,7 +46,7 @@ GET  /v1/health            -> version, commit, spec, spec_kind, config
 
 The reference verifier is `linked_measure` in `src/verifier.rs`. It calls `hike::verify_with_bind_threads` from the v2.0 reference crate. Index reads are one shot. An earlier kind is that crate's Rule A5. Policy then judges the measurements.
 
-Policy values come from the policy file, not from the specification. This build reads `policy/gl-admit-v4.toml` or an inline `policy_table`. A change of any value needs a new id. The code default is `gl-admit-v4` (one leg per 5 seconds, 6 anchored waypoints among `W_1` … `W_16`). See [POLICY.md](POLICY.md). The verifier writes `measures`. The gate writes `policy_id` and `policy_checks`. A refusal carries one `reason_code` and a class. `bitcoin_tip_height` is null when unknown. Public health does not show `log_dir` or `config_path`. Health echoes the policy id.
+Policy values come from the policy file, not from the specification. This build reads `policy/gl-admit-v5.toml` or an inline `policy_table`. A change of any value needs a new id. The code default is `gl-admit-v5` (one leg per 5 seconds, 6 anchored waypoints among `W_1` … `W_16`). See [POLICY.md](POLICY.md). The verifier writes `measures`. The gate writes `policy_id` and `policy_checks`. A refusal carries one `reason_code` and a class. `bitcoin_tip_height` is null when unknown. Public health does not show `log_dir` or `config_path`. Health echoes the policy id.
 
 The public log starts empty. The process creates `log_dir`. A chain that is not Satoshi Hike v2.0 is not opened and not served.
 

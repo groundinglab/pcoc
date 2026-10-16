@@ -12,8 +12,8 @@
 
 pub mod canon;
 pub mod config;
-pub mod fast;
 pub mod door;
+pub mod fast;
 pub mod http;
 pub mod ids;
 pub mod jobs;
