@@ -1,8 +1,18 @@
-# groundinglab Admission Gate
+# Admission gate service
 
-groundinglab's Admission Gate is a standalone service built on the Rust reference (`ref-rust-v2.0.5`). It applies groundinglab's admission policy (specification Part B) to the verifier's measurements. It adds no Part A rule. Accept, refuse, and revoke are this relying party's decisions. They are not pass or fail.
+The admission gate is a standalone service built on the Rust reference (`ref-rust-v2.0.5`). It implements the specification's admission service model (Part B, §15) and applies a configured **policy** to the verifier's measurements. It adds no Part A rule. Accept, refuse, and revoke are the operating relying party's decisions. They are not pass or fail.
 
-The groundinglab Admission Gate (`admission-service`, crate `pcoc-admission`) checks a Satoshi Hike v2.0 object. It reads one config file. It does not run v1.35 verify and it does not load a v1.35 profile.
+Three layers stay separate:
+
+- **Specification** defines measurements and the admission model. It sets no threshold values.
+- **Policy** chooses values. [POLICY.md](POLICY.md) is the companion. The out-of-the-box default is tuned to groundinglab's recommended policy `gl-admit-v4`, as a recommendation for interoperability, not authority. Choose your own.
+- **Operations** is a deployed instance's own config. groundinglab's instance config is private and is not in this repository.
+
+groundinglab runs one configured instance ("the groundinglab Admission Gate"). While it is the only public gate, its public page states its live policy.
+
+Service status: [STATUS.md](STATUS.md). Evidence: [EVIDENCE.md](EVIDENCE.md).
+
+The admission gate (`admission-service`, crate `pcoc-admission`) checks a Satoshi Hike v2.0 object. It reads one config file. It does not run v1.35 verify and it does not load a v1.35 profile.
 
 Install is [deploy/DEPLOY.md](deploy/DEPLOY.md) (systemd unit, `env.example`, `gate.toml`). Request and response bodies are [WIRE.md](WIRE.md).
 
@@ -12,7 +22,7 @@ An earlier-kind object is a measurement (`version` `earlier version`). The Gate'
 
 | Piece | Name |
 |---|---|
-| Service | groundinglab Admission Gate |
+| Service | admission gate (groundinglab runs one instance) |
 | Spec | Satoshi Hike v2.0 (`spec_kind` `v2.0`) |
 | Cargo package | `pcoc-admission` |
 | Directory | `services/admission-gate/` |
@@ -36,9 +46,9 @@ GET  /v1/health            -> version, commit, spec, spec_kind, config
 
 The reference verifier is `linked_measure` in `src/verifier.rs`. It calls `hike::verify_with_bind_threads` from the v2.0 reference crate. Index reads are one shot. An earlier kind is that crate's Rule A5. Policy then judges the measurements.
 
-Policy is not a profile. `policy_id` names one floor for its life. The default is `gl-admit-v1`: `min_leg_rate` 0.25 leg/s and `min_waypoints` 6 of 18. A change of either number is a new id. The verifier writes `measures`. The gate writes `policy_id` and `policy_checks`. A refusal carries one `reason_code` and a class. `bitcoin_tip_height` is null when unknown. Public health does not show `log_dir` or `config_path`.
+Policy values come from the config, not from the specification. This build reads `policy_id`, `min_leg_rate` (leg/s) and `min_waypoints`. A change of either number needs a new id. The **code default** is still `gl-admit-v1` (0.25, 6). groundinglab's recommended policy is `gl-admit-v4` (one leg per 5 seconds, 6 anchored waypoints). See [POLICY.md](POLICY.md) for it and for what this build does not yet enforce. The verifier writes `measures`. The gate writes `policy_id` and `policy_checks`. A refusal carries one `reason_code` and a class. `bitcoin_tip_height` is null when unknown. Public health does not show `log_dir` or `config_path`.
 
-`leg_rate_floor` remains `strict` (7/20), `default` (1/4), or `lenient` (1/8) for a resumed provisional. A new sign-in uses `min_leg_rate` and `min_waypoints`. A resumed provisional still stores the section 14 record under `verify_summary`, including `profile` and the trailing newline.
+The legacy `leg_rate_floor` setting (`strict`, `default`, `lenient`) is read only to settle a provisional line resumed at restart. A new sign-in uses `min_leg_rate` and `min_waypoints`.
 
 The public log starts empty. The process creates `log_dir`. A chain that is not Satoshi Hike v2.0 is not opened and not served.
 
