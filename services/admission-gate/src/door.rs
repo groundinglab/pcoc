@@ -1304,7 +1304,7 @@ mod tests {
         assert_eq!(result["log_seq"], serde_json::json!(door.last_seq()));
         assert_eq!(
             result["log_day"],
-            serde_json::json!(log::utc_day(door.now_unix_s()))
+            serde_json::json!(crate::log::utc_day(door.now_unix_s()))
         );
         assert!(!dir.join("banned_keys.json").exists());
 
