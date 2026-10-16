@@ -23,7 +23,7 @@ The Admission Gate publishes a decision log (`GET /latest.json` and `GET /log/{Y
 ## Open
 
 - Cost at scale. Linear cost ("many cost many times one", as a measured result) is unmeasured for v2.0.
-- Catch rates. Not established. Withdrawn slogans stay in the Gate's own note and are not repeated as numbers here.
+- Catch rates. Not established.
 - Economic security. Not established.
 - Many-channel parallelism. The question of whether a host with many memory channels changes the cost is open. No such measurement is published.
 - Android build reproducibility. Not achieved. See [apps/android/VERIFY.md](apps/android/VERIFY.md).

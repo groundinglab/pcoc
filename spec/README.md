@@ -42,7 +42,7 @@ Only hash-bound values are evidence. The portable index stands in for Bitcoin an
 | 12 | Stage and waypoint | Checkpoints, fold, waypoint |
 | 13 | Produce | Producer procedure. Anchor offsets 2, 3, 4 |
 | 14 | Verify | The verify record: keys, tokens, encoding |
-| 15 | Admission service policy | **Part B.** Locked floors and `earlier_version`. Not a conformance target |
+| 15 | Admission service policy | **Part B.** Policy parameters (no values set) and `earlier_version`. Not a conformance target |
 | 16 | Conformance | What "conforms" means, and the vectors |
 | 17 | Closed | Settled items |
 | 18 | Wording notes | Informative, except item 9 (verify CLI), which is locked |

@@ -1,6 +1,6 @@
 # services
 
-These processes are built on the Rust reference, plus one Cloudflare Worker. They add no Part A rules. Verify still does not say pass or fail.
+These processes are built on the Rust reference, plus one Cloudflare Worker. They add no Part A rules. Verify does not say pass or fail.
 
 ## Specification, policy, operations
 
