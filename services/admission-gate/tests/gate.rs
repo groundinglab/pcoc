@@ -385,27 +385,23 @@ async fn health_reports_version_commit_spec_and_config() {
     assert!(body["config"].get("config_path").is_none(), "{body}");
     assert!(!body.to_string().contains("log_dir"), "{body}");
     assert!(!body.to_string().contains("config_path"), "{body}");
-    assert_eq!(body["config"]["leg_rate_floor"]["name"], "default");
-    assert_eq!(body["config"]["leg_rate_floor"]["p"], 1);
-    assert_eq!(body["config"]["leg_rate_floor"]["q"], 4);
+    assert!(body["config"].get("leg_rate_floor").is_none(), "{body}");
+    assert_eq!(body["config"]["policy_id"], "gl-admit-v4");
     assert_eq!(body["config"]["bind_threads"], 6);
     let origins = body["config"]["allowed_origins"].as_array().unwrap();
     assert!(origins.is_empty(), "the default names no site");
     assert_eq!(body["config"]["bind"], "127.0.0.1:8787");
-    assert_eq!(body["config"]["policy_id"], "gl-admit-v1");
-    assert_eq!(body["config"]["min_leg_rate"], 0.25);
-    assert_eq!(body["config"]["min_waypoints"], 6);
     let (policy_status, policy) = send(
         &router,
         Request::get("/v1/policy").body(Body::empty()).unwrap(),
     )
     .await;
     assert_eq!(policy_status, StatusCode::OK);
-    assert_eq!(policy["policy_id"], "gl-admit-v1");
-    assert_eq!(policy["min_leg_rate"], 0.25);
-    assert_eq!(policy["min_waypoints"], 6);
-    assert_eq!(policy["waypoints_total"], 18);
-    assert_eq!(policy["min_legs"], 6);
+    assert_eq!(policy["policy_id"], "gl-admit-v4");
+    assert_eq!(policy["leg_rate_floor"]["p"], 1);
+    assert_eq!(policy["leg_rate_floor"]["q"], 5);
+    assert_eq!(policy["min_anchored_paths"], 6);
+    assert_eq!(policy["source"], "recommendation, not specification");
     assert_eq!(policy["spec"], "Satoshi Hike v2.0");
     let text = body.to_string();
     assert!(!text.contains("friendly_list"));
@@ -647,9 +643,10 @@ async fn latest_json_matches_the_chain_after_restart() {
     assert_eq!(status, StatusCode::OK, "{latest}");
     assert_eq!(latest["last_seq"], 1);
     assert_eq!(latest["feed"], "pcoc-gate-feed-v2");
-    assert_eq!(latest["policy"]["policy_id"], "gl-admit-v1");
-    assert_eq!(latest["policy"]["min_leg_rate"], 0.25);
-    assert_eq!(latest["policy"]["min_waypoints"], 6);
+    assert_eq!(latest["policy"]["policy_id"], "gl-admit-v4");
+    assert_eq!(latest["policy"]["leg_rate_floor"]["p"], 1);
+    assert_eq!(latest["policy"]["leg_rate_floor"]["q"], 5);
+    assert_eq!(latest["policy"]["source"], "recommendation, not specification");
     let day = pcoc_admission::log::utc_day(1_700_000_000);
     let (line_status, line) = send(
         &router,

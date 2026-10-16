@@ -54,12 +54,7 @@ impl Service {
     pub fn open(cfg: Config) -> Result<Self, String> {
         let cfg = Arc::new(cfg);
         let limiter = Arc::new(RateLimiter::per_minute(cfg.rate_per_min));
-        let door = Door::open(
-            &cfg.log_dir,
-            cfg.leg_rate_floor_p,
-            cfg.leg_rate_floor_q,
-            cfg.policy(),
-        )?;
+        let door = Door::open(&cfg.log_dir, cfg.policy())?;
         let jobs = JobStore::new(cfg.clone());
         for job in door.unsettled() {
             spawn_thorough(door.clone(), jobs.clone(), job);
@@ -127,19 +122,9 @@ struct ConfigSummary {
     client_ip_header: Option<String>,
     allowed_origins: Vec<String>,
     extra_origins: Vec<String>,
-    leg_rate_floor: FloorSummary,
     bind_threads: usize,
     index_timeout_secs: u64,
     policy_id: String,
-    min_leg_rate: f64,
-    min_waypoints: u64,
-}
-
-#[derive(Serialize)]
-struct FloorSummary {
-    name: String,
-    p: u64,
-    q: u64,
 }
 
 #[derive(Serialize)]
@@ -168,16 +153,9 @@ async fn health(State(svc): State<Service>, headers: HeaderMap) -> Response {
             client_ip_header: svc.cfg.client_ip_header.clone(),
             allowed_origins: svc.cfg.allowed_origins.clone(),
             extra_origins: svc.cfg.extra_origins.clone(),
-            leg_rate_floor: FloorSummary {
-                name: svc.cfg.leg_rate_floor.clone(),
-                p: svc.cfg.leg_rate_floor_p,
-                q: svc.cfg.leg_rate_floor_q,
-            },
             bind_threads: svc.cfg.bind_threads,
             index_timeout_secs: svc.cfg.index_timeout.as_secs(),
-            policy_id: svc.cfg.policy_id.clone(),
-            min_leg_rate: svc.cfg.min_leg_rate,
-            min_waypoints: svc.cfg.min_waypoints,
+            policy_id: svc.cfg.policy.policy_id.clone(),
         },
         jobs: JobCounts { tracked, in_flight },
     };
@@ -522,14 +500,7 @@ async fn get_policy(State(svc): State<Service>, headers: HeaderMap) -> Response 
 }
 
 fn policy_body(policy: &AdmissionPolicy) -> Value {
-    json!({
-        "policy_id": policy.policy_id,
-        "min_leg_rate": policy.min_leg_rate,
-        "min_waypoints": policy.min_waypoints,
-        "waypoints_total": policy::WAYPOINTS_TOTAL,
-        "min_legs": policy::SPEC_MIN_LEGS,
-        "spec": policy::POLICY_SPEC,
-    })
+    policy::public_document(policy)
 }
 
 async fn get_line(

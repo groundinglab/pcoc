@@ -56,19 +56,16 @@ allowed_origins = ["https://groundinglab.io", "https://www.groundinglab.io"]
 # Further exact CORS origins, no trailing slash.
 extra_origins = []
 
-# Named floor for a resumed provisional line. One of strict (7/20), default
-# (1/4), lenient (1/8). A new sign-in uses min_leg_rate and min_waypoints.
-leg_rate_floor = "default"
-
-# Example deploy of one instance; values are policy, see ../POLICY.md.
-# Admission policy. policy_id names this exact floor for its whole life.
-# A change of min_leg_rate or min_waypoints requires a new id (gl-admit-v2, …).
-# The first start writes {log_dir}/policy-bind.json. A later start with the
-# same id and different numbers exits before it listens.
-policy_id = "gl-admit-v1"
-
-# Minimum measured leg rate, leg/s. Default 0.25. Equality meets the floor.
-min_leg_rate = 0.25
-
-# Minimum waypoints fetched and validated, of 18. Default 6.
-min_waypoints = 6
+# Admission policy file, relative to this file. The keys are those of
+# gl-admit-v4.toml. An inline [policy] table is the other form. The two
+# cannot both be set. Unknown keys are an error.
+#
+# v1 → v4: gate 0.4.1 read policy_id, a float min_leg_rate, and min_waypoints,
+# and a named leg_rate_floor (strict / default / lenient) for a resumed
+# provisional. Those keys are not read. The active floor is the integer p/q
+# in the policy file. A resumed provisional is re-judged under that id.
+#
+# The first start writes {log_dir}/policy-bind.json, a hash of the full
+# table. A later start with the same id and a different table exits before
+# it listens. A value change needs a new id.
+policy = "../policy/gl-admit-v4.toml"

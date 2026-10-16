@@ -27,8 +27,6 @@ const VERIFIER_ERROR: &str = "verifier_error";
 pub struct Door {
     inner: Arc<Mutex<Inner>>,
     rows: Arc<SignInRows>,
-    floor_p: u64,
-    floor_q: u64,
     policy: AdmissionPolicy,
 }
 
@@ -75,16 +73,14 @@ pub struct ThoroughJob {
 }
 
 impl Door {
-    pub fn open(dir: &Path, floor_p: u64, floor_q: u64, policy: AdmissionPolicy) -> Result<Self, String> {
+    pub fn open(dir: &Path, policy: AdmissionPolicy) -> Result<Self, String> {
         policy.bind(dir)?;
         let mut log = DecisionLog::open(dir).map_err(show_log)?;
-        log.set_policy_hint(policy_document(&policy))
+        log.set_policy_hint(policy::public_document(&policy))
             .map_err(show_log)?;
         Ok(Self {
             inner: Arc::new(Mutex::new(Inner { log, now: None })),
             rows: Arc::new(SignInRows::new()),
-            floor_p,
-            floor_q,
             policy,
         })
     }
@@ -432,9 +428,14 @@ impl Door {
         let checks_met = policy::policy_admits(&checks);
         let unmet = checks.iter().any(|check| !check.met);
         let held = match &report {
-            Ok(report) => {
-                matches!(policy::judge(report, self.floor_p, self.floor_q), Judgment::Held { .. })
-            }
+            Ok(report) => matches!(
+                policy::judge(
+                    report,
+                    self.policy.leg_rate_floor.p,
+                    self.policy.leg_rate_floor.q,
+                ),
+                Judgment::Held { .. }
+            ),
             Err(_) => false,
         };
         // A measured miss is a refusal. An unread pair with no other note stays held.
@@ -495,7 +496,11 @@ impl Door {
 
     pub async fn settle(&self, job: ThoroughJob, report: Result<Report, String>) {
         let judgment = match report {
-            Ok(report) => Ok(policy::judge(&report, self.floor_p, self.floor_q)),
+            Ok(report) => Ok(policy::judge(
+                &report,
+                self.policy.leg_rate_floor.p,
+                self.policy.leg_rate_floor.q,
+            )),
             Err(error) => Err(error),
         };
         let (decision, reasons, line, summary) = match judgment {
@@ -587,17 +592,6 @@ impl Door {
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
         self.inner.lock().expect("admission log")
     }
-}
-
-fn policy_document(policy: &AdmissionPolicy) -> Value {
-    json!({
-        "policy_id": policy.policy_id,
-        "min_leg_rate": policy.min_leg_rate,
-        "min_waypoints": policy.min_waypoints,
-        "waypoints_total": policy::WAYPOINTS_TOTAL,
-        "min_legs": policy::SPEC_MIN_LEGS,
-        "spec": policy::POLICY_SPEC,
-    })
 }
 
 fn checks_json(checks: &[policy::PolicyCheck]) -> Value {

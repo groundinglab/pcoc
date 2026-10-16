@@ -1,22 +1,28 @@
 //! Gate policy. The verifier reports measurements. This module judges them.
 //!
-//! `policy_id` names one exact floor for its whole life: `min_leg_rate`
-//! (leg/s) and `min_waypoints` of 18. A change of either number is a new id.
-//! The rate compares `leg_rate` from the verifier. The waypoint count compares
-//! `waypoints_fetched`. Neither number is a measurement.
+//! `policy_id` names one exact table for its whole life. The table is the
+//! keys in `policy/gl-admit-v4.toml`. A change of any value is a new id.
+//! The rate compares the bookend pair `(N, S)` from the section 14 record
+//! as integers: `q·N ≥ p·S`. The waypoint count compares `anchored_total`
+//! among `W_1` … `W_16`. Neither number is a measurement.
 //!
-//! The named floors stay for a resumed provisional: strict 7/20, default 1/4,
-//! lenient 1/8. Rule B2 compares `q·N ≥ p·S` on the bookend pair in the
-//! section 14 record. A pair that is not numeric is not compared. When `N` is
-//! `not defined` from the object's own bytes, whatever `S` is, the refusal is
-//! immediate (`bookends_not_defined`). A pure `not read` pair, with no other
-//! verifier note, is `held`. `held` is not a refusal and is not a decision-log
-//! event. A `not read` pair that arrives with another verifier note is still
-//! a refusal: the other note wins. An object the verifier reports as an earlier
-//! version is refused as `earlier_version`. There is no profile file and no
-//! friendly list.
+//! v1 history: through gate 0.4.1 the code default was `gl-admit-v1`, a float
+//! `min_leg_rate` of 0.25 leg/s and `min_waypoints` 6 of 18. That float and
+//! the named floors (`strict` 7/20, `default` 1/4, `lenient` 1/8) are gone.
+//! Those three fractions stay informative examples in spec §15.5. They are
+//! not a policy key. The code default is now `gl-admit-v4`.
+//!
+//! When `N` is `not defined` from the object's own bytes, whatever `S` is,
+//! the refusal is immediate (`bookends_not_defined`). A pure `not read` pair,
+//! with no other verifier note, is `held`. `held` is not a refusal and is not
+//! a decision-log event. A `not read` pair that arrives with another verifier
+//! note is still a refusal: the other note wins. An object the verifier
+//! reports as an earlier version is refused as `earlier_version`.
 
+use crate::canon;
 use crate::verifier::{Measured, Report, EARLIER_VERSION_NOTE};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 pub const REFUSE_EARLIER: &str = "earlier_version";
 pub const REFUSE_LEG_RATE: &str = "leg_rate_floor";
@@ -29,10 +35,19 @@ pub const BOOKENDS_LINE: &str = "N and S are not defined.";
 /// A bookend pair that is not two numbers, and `N` is not `not defined`,
 /// when another verifier note is already a refusal.
 ///
-/// A pure `not read` pair is [`Judgment::Held`], not this reason.
+/// A pure `not read` pair is [`Judgment::Held`], not this reason. The website
+/// outcome for that hold stays the locked `pending` token. See STOP-AND-REPORT
+/// in the build notes: adding a `held` website token would change §15.1.
 pub const REFUSE_BOOKENDS_NOT_READ: &str = "bookends_not_read";
 pub const BOOKENDS_NOT_READ_LINE: &str =
     "The bookend headers were not read from the index. Submit again.";
+
+/// Settled shortfall of anchored waypoints among `W_1` … `W_16`.
+pub const REFUSE_TOO_FEW: &str = "too_few_waypoints_anchored";
+pub const TOO_FEW_LINE: &str = "Too few waypoints among W_1 through W_16 are anchored.";
+
+/// Budget exhausted while a measurement stayed `not read`.
+pub const REFUSE_HELD_BOUND: &str = "held_bound";
 
 /// Sentence the current website shows for [`REFUSE_EARLIER`].
 ///
@@ -53,16 +68,13 @@ pub fn leg_rate_line(p: u64, q: u64) -> String {
     format!("The leg rate is below this gate's floor of {p}/{q} leg per second.")
 }
 
-/// `gl-admit-v` plus a positive integer. Bound to one floor for its life.
-pub const DEFAULT_POLICY_ID: &str = "gl-admit-v1";
+/// `gl-admit-v` plus a positive integer. Bound to one table for its life.
+pub const DEFAULT_POLICY_ID: &str = "gl-admit-v4";
 
-/// Minimum measured leg rate, leg/s. Christian, 14 Oct 22:33 ACDT.
-pub const DEFAULT_MIN_LEG_RATE: f64 = 0.25;
+/// `W_1` … `W_16`. `W_17` is never fetched and is not in the anchored count.
+pub const ANCHORED_SPAN: u64 = 16;
 
-/// Minimum waypoints fetched and validated, of [`WAYPOINTS_TOTAL`].
-pub const DEFAULT_MIN_WAYPOINTS: u64 = 6;
-
-/// Spec stage count. Not a policy number.
+/// Stage count on the object. Not the anchored count.
 pub const WAYPOINTS_TOTAL: u64 = 18;
 
 /// Spec rule: at least this many legs. Labelled as spec, not policy.
@@ -73,6 +85,11 @@ pub const POLICY_SPEC: &str = crate::verifier::SPEC_NAME;
 
 /// A return line for one pair is written at most once per this many seconds.
 pub const RETURN_WINDOW_S: u64 = 300;
+
+/// Default pending caps (Rule B7 / F3). Over a cap the website outcome stays
+/// the locked `pending` token and the nonce is not consumed.
+pub const DEFAULT_PENDING_PER_SOURCE: u64 = 1;
+pub const DEFAULT_PENDING_GLOBAL_FACTOR: u64 = 2;
 
 /// `policy_id` matches `gl-admit-v` plus a positive integer.
 pub fn parse_policy_id(raw: &str) -> Result<String, String> {
@@ -91,29 +108,69 @@ pub fn parse_policy_id(raw: &str) -> Result<String, String> {
     Ok(id.to_owned())
 }
 
-/// One configured floor. A different pair of numbers is a different id.
-#[derive(Clone, Debug, PartialEq)]
+/// Integer leg-rate floor `p/q`. Meets when `q·N ≥ p·S`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RateFloor {
+    pub p: u64,
+    pub q: u64,
+}
+
+/// One configured policy table. A different value is a different id.
+///
+/// The fields are the keys of `policy/gl-admit-v4.toml`, plus the pending
+/// caps the plan names (F3) and the held-retry budgets §15.3 names.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct AdmissionPolicy {
     pub policy_id: String,
-    pub min_leg_rate: f64,
-    pub min_waypoints: u64,
+    pub leg_rate_floor: RateFloor,
+    pub min_anchored_paths: u64,
+    pub require_first_anchored: u64,
+    pub require_last_anchored: u64,
+    pub thorough_six_leg_runs: u64,
+    pub thorough_early_stop: bool,
+    /// `on` or `off`. `on` means the fast phase issues `provisional`.
+    pub provisional: String,
+    pub held_on_not_read: bool,
+    pub ban_key_on_fake_leg: bool,
+    /// Draw commitment spelling published with the table. The bytes are
+    /// `H("pcoc-deep-v1" ‖ seq ‖ object_sha ‖ salt ‖ indices)`.
+    pub draw_commitment: String,
+    pub reverify_max_attempts: u64,
+    pub max_held_blocks: u64,
+    pub pending_per_source: u64,
+    /// `None` means `max_concurrent × 2`, filled when the config is built.
+    pub pending_global: u64,
+    pub verify_cap_per_door_session: u64,
 }
 
 impl Default for AdmissionPolicy {
     fn default() -> Self {
         Self {
             policy_id: DEFAULT_POLICY_ID.to_owned(),
-            min_leg_rate: DEFAULT_MIN_LEG_RATE,
-            min_waypoints: DEFAULT_MIN_WAYPOINTS,
+            leg_rate_floor: RateFloor { p: 1, q: 5 },
+            min_anchored_paths: 6,
+            require_first_anchored: 1,
+            require_last_anchored: 16,
+            thorough_six_leg_runs: 3,
+            thorough_early_stop: true,
+            provisional: "on".to_owned(),
+            held_on_not_read: true,
+            ban_key_on_fake_leg: true,
+            draw_commitment: "sha256(draw || salt), revealed with the result".to_owned(),
+            reverify_max_attempts: 3,
+            max_held_blocks: 6,
+            pending_per_source: DEFAULT_PENDING_PER_SOURCE,
+            pending_global: 4,
+            verify_cap_per_door_session: 3,
         }
     }
 }
 
 impl AdmissionPolicy {
-    /// `{log_dir}/policy-bind.json` binds this id to these numbers.
+    /// `{log_dir}/policy-bind.json` binds this id to a hash of the full table.
     ///
     /// The first start writes the file. A later start with the same id and
-    /// different numbers exits. A new id is a new binding. Old lines stay.
+    /// a different table exits. A new id is a new binding. Old lines stay.
     pub fn bind(&self, log_dir: &std::path::Path) -> Result<(), String> {
         let path = log_dir.join("policy-bind.json");
         if path.exists() {
@@ -125,7 +182,7 @@ impl AdmissionPolicy {
             if let Some(previous) = stored.get(&self.policy_id) {
                 if previous.as_str() != Some(key.as_str()) {
                     return Err(format!(
-                        "policy_id {} is already bound to {previous}; a floor change needs a new policy_id",
+                        "policy_id {} is already bound to {previous}; a value change needs a new policy_id",
                         self.policy_id
                     ));
                 }
@@ -147,35 +204,22 @@ impl AdmissionPolicy {
         write_bind(&path, &body)
     }
 
-    fn bind_key(&self) -> String {
-        format!(
-            "rate={};waypoints={}/{}",
-            format_rate(self.min_leg_rate),
-            self.min_waypoints,
-            WAYPOINTS_TOTAL
-        )
+    /// SHA-256 of the canonical full table. Two ids with the same table share
+    /// this digest; a changed value does not.
+    pub fn bind_key(&self) -> String {
+        let value = serde_json::to_value(self).expect("policy table");
+        let bytes = canon::jcs(&value).expect("policy jcs");
+        hex::encode(canon::sha256(&bytes))
+    }
+
+    pub fn provisional_on(&self) -> bool {
+        self.provisional == "on"
     }
 }
 
 fn write_bind(path: &std::path::Path, body: &serde_json::Value) -> Result<(), String> {
     let bytes = serde_json::to_vec(body).map_err(|err| err.to_string())?;
     std::fs::write(path, bytes).map_err(|err| format!("could not write {}: {err}", path.display()))
-}
-
-/// Decimal with a trailing zero trimmed only after the point, so `0.25` stays.
-pub fn format_rate(rate: f64) -> String {
-    let text = format!("{rate:.6}");
-    let trimmed = text.trim_end_matches('0').trim_end_matches('.');
-    if trimmed.is_empty() {
-        "0".to_owned()
-    } else {
-        trimmed.to_owned()
-    }
-}
-
-/// Measured rate is under the floor. Equality meets it.
-pub fn rate_below(measured: f64, minimum: f64) -> bool {
-    measured < minimum
 }
 
 /// One gate check against a measurement. `min` is policy. `met` is the judgment.
@@ -188,19 +232,26 @@ pub struct PolicyCheck {
 
 pub fn policy_checks(measures: &crate::verifier::Measures, policy: &AdmissionPolicy) -> Vec<PolicyCheck> {
     let mut checks = Vec::new();
-    // An unknown side is omitted. It is not a miss.
-    if let Some(rate) = measures.leg_rate {
+    if let (Some(n), Some(s)) = (measures.legs, measures.span_s) {
         checks.push(PolicyCheck {
             field: "leg_rate",
-            min: serde_json::json!(policy.min_leg_rate),
-            met: !rate_below(rate, policy.min_leg_rate),
+            min: serde_json::json!({
+                "p": policy.leg_rate_floor.p,
+                "q": policy.leg_rate_floor.q,
+            }),
+            met: !bookend_below_floor(
+                i128::from(n),
+                i128::from(s),
+                policy.leg_rate_floor.p,
+                policy.leg_rate_floor.q,
+            ),
         });
     }
-    if let Some(fetched) = measures.waypoints_fetched {
+    if let Some(anchored) = measures.waypoints_fetched {
         checks.push(PolicyCheck {
-            field: "waypoints_fetched",
-            min: serde_json::json!(policy.min_waypoints),
-            met: fetched >= policy.min_waypoints,
+            field: "anchored_total",
+            min: serde_json::json!(policy.min_anchored_paths),
+            met: anchored >= policy.min_anchored_paths,
         });
     }
     checks
@@ -211,7 +262,7 @@ pub fn policy_admits(checks: &[PolicyCheck]) -> bool {
     let rate = checks.iter().any(|check| check.field == "leg_rate" && check.met);
     let waypoints = checks
         .iter()
-        .any(|check| check.field == "waypoints_fetched" && check.met);
+        .any(|check| check.field == "anchored_total" && check.met);
     rate && waypoints && checks.iter().all(|check| check.met)
 }
 
@@ -242,9 +293,17 @@ pub enum Judgment {
 
 /// Rule B2. The pair is below the floor when `q·N ≥ p·S` does not hold.
 ///
-/// `S` of 0 meets the floor when `N` is not negative: `q·N ≥ 0`.
+/// Compared in `u128` so a large pair does not wrap. `S` of 0 meets the
+/// floor when `N` is not negative: `q·N ≥ 0`. A negative side, or a product
+/// that does not fit in `u128`, is below the floor.
 pub fn bookend_below_floor(n: i128, s: i128, p: u64, q: u64) -> bool {
-    match (i128::from(q).checked_mul(n), i128::from(p).checked_mul(s)) {
+    let (Ok(n), Ok(s)) = (u128::try_from(n), u128::try_from(s)) else {
+        return true;
+    };
+    match (
+        u128::from(q).checked_mul(n),
+        u128::from(p).checked_mul(s),
+    ) {
         (Some(left), Some(right)) => left < right,
         _ => true,
     }
@@ -282,9 +341,14 @@ fn bookend_pair(record: &str) -> Bookend {
     }
 }
 
-fn json_i128(value: &serde_json::Value) -> Option<i128> {
-    let number = value.as_i64()?;
-    Some(i128::from(number))
+fn json_i128(value: &Value) -> Option<i128> {
+    if let Some(number) = value.as_i64() {
+        return Some(i128::from(number));
+    }
+    if let Some(number) = value.as_u64() {
+        return Some(i128::from(number));
+    }
+    None
 }
 
 pub fn judge(report: &Report, floor_p: u64, floor_q: u64) -> Judgment {
@@ -363,6 +427,23 @@ fn judge_measured(measured: &Measured, floor_p: u64, floor_q: u64) -> Judgment {
     }
 }
 
+/// The public policy document. `source` says this table is a recommendation.
+pub fn public_document(policy: &AdmissionPolicy) -> Value {
+    let mut value = serde_json::to_value(policy).expect("policy table");
+    if let Some(map) = value.as_object_mut() {
+        map.insert(
+            "source".to_owned(),
+            Value::String("recommendation, not specification".to_owned()),
+        );
+        map.insert("spec".to_owned(), Value::String(POLICY_SPEC.to_owned()));
+        map.insert(
+            "anchored_span".to_owned(),
+            serde_json::json!(ANCHORED_SPAN),
+        );
+    }
+    value
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -392,23 +473,35 @@ mod tests {
     }
 
     #[test]
-    fn the_locked_floor_is_one_quarter_leg_per_second() {
-        assert!(!bookend_below_floor(1, 4, 1, 4));
-        assert!(bookend_below_floor(1, 5, 1, 4));
-        assert!(!bookend_below_floor(2, 4, 1, 4));
-        assert!(!bookend_below_floor(1, 0, 1, 4));
-        assert!(bookend_below_floor(0, 5, 1, 4));
+    fn a_configured_fraction_is_the_floor() {
+        // 1/5: one leg every five seconds. Equality meets it.
+        assert!(!bookend_below_floor(1, 5, 1, 5));
+        assert!(bookend_below_floor(1, 6, 1, 5));
+        assert!(!bookend_below_floor(2, 5, 1, 5));
+        assert!(!bookend_below_floor(1, 0, 1, 5));
+        assert!(bookend_below_floor(0, 5, 1, 5));
+        // The same function applies a caller-chosen p/q. 7/20 is not a default.
+        assert!(bookend_below_floor(1, 4, 7, 20));
+        assert!(!bookend_below_floor(7, 20, 7, 20));
+    }
+
+    #[test]
+    fn the_product_is_compared_in_u128() {
+        let n = i128::from(u64::MAX);
+        let s = i128::from(u64::MAX);
+        assert!(!bookend_below_floor(n, s, 1, 5));
+        assert!(bookend_below_floor(1, s, u64::MAX, 5));
     }
 
     #[test]
     fn a_numeric_pair_under_the_floor_is_refused() {
-        let record = pair_record("1", "5");
-        let judgment = judge_measured(&measured(&record, &[]), 1, 4);
+        let record = pair_record("1", "6");
+        let judgment = judge_measured(&measured(&record, &[]), 1, 5);
         assert_eq!(
             judgment,
             Judgment::Refuse {
                 reasons: vec!["leg_rate_floor".to_owned()],
-                line: leg_rate_line(1, 4),
+                line: leg_rate_line(1, 5),
                 record: record.clone(),
             }
         );
@@ -417,27 +510,27 @@ mod tests {
     }
 
     #[test]
-    fn the_three_locked_floors_compare_the_bookend_pair() {
-        let meets = pair_record("1", "4");
+    fn a_configured_pq_is_applied_to_the_bookend_pair() {
+        let meets = pair_record("1", "5");
         assert!(matches!(
-            judge_measured(&measured(&meets, &[]), 1, 4),
+            judge_measured(&measured(&meets, &[]), 1, 5),
             Judgment::Admit { record } if record == meets
         ));
-        match judge_measured(&measured(&meets, &[]), 7, 20) {
+        match judge_measured(&measured(&meets, &[]), 1, 4) {
             Judgment::Refuse {
                 reasons,
                 line,
                 record,
             } => {
                 assert_eq!(reasons, vec!["leg_rate_floor".to_owned()]);
-                assert_eq!(line, leg_rate_line(7, 20));
+                assert_eq!(line, leg_rate_line(1, 4));
                 assert_eq!(record, meets);
             }
-            other => panic!("strict floor should refuse N=1 S=4, got {other:?}"),
+            other => panic!("1/4 should refuse N=1 S=5, got {other:?}"),
         }
-        let lenient_ok = pair_record("1", "8");
+        let wide = pair_record("1", "8");
         assert!(matches!(
-            judge_measured(&measured(&lenient_ok, &[]), 1, 8),
+            judge_measured(&measured(&wide, &[]), 1, 8),
             Judgment::Admit { .. }
         ));
         match judge_measured(&measured(&pair_record("1", "9"), &[]), 1, 8) {
@@ -445,14 +538,14 @@ mod tests {
                 assert_eq!(reasons, vec!["leg_rate_floor".to_owned()]);
                 assert_eq!(line, leg_rate_line(1, 8));
             }
-            other => panic!("lenient floor should refuse N=1 S=9, got {other:?}"),
+            other => panic!("1/8 should refuse N=1 S=9, got {other:?}"),
         }
     }
 
     #[test]
     fn an_object_settled_not_defined_pair_is_refused_without_a_floor_sentence() {
         let record = pair_record("\"not defined\"", "\"not defined\"");
-        match judge_measured(&measured(&record, &["shape is false"]), 1, 4) {
+        match judge_measured(&measured(&record, &["shape is false"]), 1, 5) {
             Judgment::Refuse {
                 reasons,
                 line,
@@ -466,7 +559,7 @@ mod tests {
                     ]
                 );
                 assert_eq!(line, BOOKENDS_LINE);
-                assert!(!line.contains("1/4"));
+                assert!(!line.contains("1/5"));
                 assert!(!line.contains("leg per second"));
                 assert_eq!(stored, record);
             }
@@ -478,7 +571,7 @@ mod tests {
     fn a_not_read_pair_is_held() {
         for (n, s) in [("\"not read\"", "\"not read\""), ("4", "\"not read\"")] {
             let record = pair_record(n, s);
-            match judge_measured(&measured(&record, &[]), 1, 4) {
+            match judge_measured(&measured(&record, &[]), 1, 5) {
                 Judgment::Held { record: stored } => {
                     assert_eq!(stored, record, "{n},{s}");
                     assert!(!stored.contains("bookends_not_read"), "{n},{s}");
@@ -510,7 +603,7 @@ mod tests {
     #[test]
     fn a_floor_refusal_keeps_the_other_notes() {
         let record = pair_record("0", "5");
-        match judge_measured(&measured(&record, &["shape is false"]), 1, 4) {
+        match judge_measured(&measured(&record, &["shape is false"]), 1, 5) {
             Judgment::Refuse {
                 reasons,
                 line,
@@ -520,7 +613,7 @@ mod tests {
                     reasons,
                     vec!["leg_rate_floor".to_owned(), "shape is false".to_owned()]
                 );
-                assert!(line.contains("1/4"));
+                assert!(line.contains("1/5"));
                 assert_eq!(stored, record);
             }
             other => panic!("expected a refusal, got {other:?}"),
@@ -535,5 +628,18 @@ mod tests {
         assert!(!UNREADABLE_LINE
             .to_ascii_lowercase()
             .contains("could not be read"));
+    }
+
+    #[test]
+    fn the_bind_key_covers_the_whole_table() {
+        let policy = AdmissionPolicy::default();
+        let same = AdmissionPolicy::default();
+        assert_eq!(policy.bind_key(), same.bind_key());
+        let mut other = policy.clone();
+        other.leg_rate_floor.q = 4;
+        assert_ne!(policy.bind_key(), other.bind_key());
+        let mut runs = policy.clone();
+        runs.thorough_six_leg_runs = 1;
+        assert_ne!(policy.bind_key(), runs.bind_key());
     }
 }

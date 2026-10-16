@@ -40,11 +40,7 @@ fn measures(rate: f64, waypoints: u64) -> Measures {
 }
 
 fn policy() -> AdmissionPolicy {
-    AdmissionPolicy {
-        policy_id: "gl-admit-v1".to_owned(),
-        min_leg_rate: 0.25,
-        min_waypoints: 6,
-    }
+    AdmissionPolicy::default()
 }
 
 fn write_line(log: &mut DecisionLog, write: &DecisionWrite) -> Value {
@@ -70,11 +66,12 @@ fn ac1_measures_hold_no_threshold() {
     assert!(!text.contains("threshold"));
 }
 
-/// AC2. 0.24 refuses, 5 of 18 refuses, 0.25 with 6 of 18 accepts.
+/// A configured p/q is applied. 1/5 refuses N=19 over S=100 (0.19) and admits N=20.
+/// Five anchored of sixteen refuses. Six admits.
 #[test]
 fn ac2_configured_floor_is_enforced() {
     let policy = policy();
-    let slow = measures(0.24, 6);
+    let slow = measures(0.19, 6);
     let checks = policy::policy_checks(&slow, &policy);
     assert!(!checks.iter().find(|check| check.field == "leg_rate").unwrap().met);
     let reason = policy_miss(&checks, &policy);
@@ -86,14 +83,14 @@ fn ac2_configured_floor_is_enforced() {
     assert!(checks.iter().find(|check| check.field == "leg_rate").unwrap().met);
     assert!(!checks
         .iter()
-        .find(|check| check.field == "waypoints_fetched")
+        .find(|check| check.field == "anchored_total")
         .unwrap()
         .met);
     let reason = policy_miss(&checks, &policy);
     assert_eq!(reason.class, reasons::CLASS_BELOW_POLICY);
     assert_eq!(reason.code, reasons::CODE_BELOW_WAYPOINTS);
 
-    let ok = measures(0.25, 6);
+    let ok = measures(0.20, 6);
     let checks = policy::policy_checks(&ok, &policy);
     assert!(checks.iter().all(|check| check.met));
 
@@ -136,11 +133,12 @@ fn ac3_every_new_line_names_its_policy() {
         .map(|check| json!({"field": check.field, "min": check.min, "met": check.met}))
         .collect::<Vec<_>>()));
     let line = write_line(&mut log, &write);
-    assert_eq!(line["policy_id"], "gl-admit-v1");
+    assert_eq!(line["policy_id"], "gl-admit-v4");
     assert_eq!(line["policy_checks"][0]["field"], "leg_rate");
-    assert_eq!(line["policy_checks"][0]["min"], 0.25);
+    assert_eq!(line["policy_checks"][0]["min"]["p"], 1);
+    assert_eq!(line["policy_checks"][0]["min"]["q"], 5);
     assert_eq!(line["policy_checks"][0]["met"], true);
-    assert_eq!(line["policy_checks"][1]["field"], "waypoints_fetched");
+    assert_eq!(line["policy_checks"][1]["field"], "anchored_total");
     assert_eq!(line["policy_checks"][1]["min"], 6);
     assert!(line.get("verify_summary").is_none(), "{line}");
     assert_eq!(line["measures"]["waypoints_total"], 18);
@@ -186,13 +184,12 @@ fn ac5_unknown_tip_is_null_and_health_hides_paths() {
     assert_ne!(line["bitcoin_tip_height"], 0);
 
     let cfg = Config::for_tests(dir.clone(), "http://127.0.0.1:9");
-    let door = Door::open(&cfg.log_dir, cfg.leg_rate_floor_p, cfg.leg_rate_floor_q, cfg.policy())
-        .unwrap();
+    let door = Door::open(&cfg.log_dir, cfg.policy()).unwrap();
     let _ = door;
     let health = serde_json::to_value(json!({
         "config": {
             "bind": cfg.bind.to_string(),
-            "policy_id": cfg.policy_id,
+            "policy_id": cfg.policy.policy_id,
         }
     }))
     .unwrap();
@@ -239,7 +236,7 @@ fn an_old_numeric_tip_still_opens() {
 fn ac2b_return_line_skips_measurement() {
     let dir = scratch("ac2b");
     let cfg = Config::for_tests(dir.clone(), "http://127.0.0.1:9");
-    let door = Door::open(&cfg.log_dir, cfg.leg_rate_floor_p, cfg.leg_rate_floor_q, cfg.policy())
+    let door = Door::open(&cfg.log_dir, cfg.policy())
         .unwrap();
     let now = 1_800_000_000u64;
     door.set_now_unix_s(Some(now));
@@ -262,14 +259,14 @@ fn ac2b_return_line_skips_measurement() {
         accept.reasons = vec!["accepted".to_owned()];
         accept.summary = None;
         accept.measures = Some(measures(0.25, 6).to_json());
-        accept.policy_id = Some("gl-admit-v1".to_owned());
+        accept.policy_id = Some("gl-admit-v4".to_owned());
         accept.policy_checks = Some(json!([
-            {"field": "leg_rate", "min": 0.25, "met": true},
+            {"field": "leg_rate", "min": {"p": 1, "q": 5}, "met": true},
             {"field": "waypoints_fetched", "min": 6, "met": true}
         ]));
         log.append(&accept).unwrap();
     }
-    let door = Door::open(&cfg.log_dir, cfg.leg_rate_floor_p, cfg.leg_rate_floor_q, cfg.policy())
+    let door = Door::open(&cfg.log_dir, cfg.policy())
         .unwrap();
     door.set_now_unix_s(Some(now));
 
@@ -283,7 +280,7 @@ fn ac2b_return_line_skips_measurement() {
     let ret = &lines[1];
     assert_eq!(ret["decision"], "return");
     assert_eq!(ret["phase"], "return");
-    assert_eq!(ret["policy_id"], "gl-admit-v1");
+    assert_eq!(ret["policy_id"], "gl-admit-v4");
     assert_eq!(ret["access_ref_seq"], 0);
     assert!(ret.get("measures").is_none(), "{ret}");
     assert!(ret.get("legs").is_none(), "{ret}");
@@ -317,7 +314,7 @@ fn ac2b_return_line_skips_measurement() {
         bare.object = b"old".to_vec();
         log.append(&bare).unwrap();
     }
-    let door = Door::open(&cfg.log_dir, cfg.leg_rate_floor_p, cfg.leg_rate_floor_q, cfg.policy())
+    let door = Door::open(&cfg.log_dir, cfg.policy())
         .unwrap();
     let old = thorough(&door, [7u8; 32], [6u8; 32], 5);
     assert!(old.prior_accept.is_none(), "a line without policy_id opens nothing");

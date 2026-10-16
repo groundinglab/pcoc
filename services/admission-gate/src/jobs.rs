@@ -222,8 +222,8 @@ impl JobStore {
             Report::Read(measured) => {
                 let judgment = policy::judge(
                     &Report::Read(measured.clone()),
-                    self.cfg.leg_rate_floor_p,
-                    self.cfg.leg_rate_floor_q,
+                    self.cfg.policy.leg_rate_floor.p,
+                    self.cfg.policy.leg_rate_floor.q,
                 );
                 let record = measured.record;
                 match judgment {

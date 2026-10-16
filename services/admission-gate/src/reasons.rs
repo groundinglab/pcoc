@@ -136,15 +136,14 @@ pub fn from_report(report: &Report, checks: &[PolicyCheck], policy: &AdmissionPo
 
 fn policy_reason(checks: &[PolicyCheck], policy: &AdmissionPolicy) -> Option<Reason> {
     let rate = checks.iter().find(|check| check.field == "leg_rate")?;
-    let waypoints = checks.iter().find(|check| check.field == "waypoints_fetched")?;
+    let waypoints = checks
+        .iter()
+        .find(|check| check.field == "anchored_total" || check.field == "waypoints_fetched")?;
     if !rate.met {
         return Some(Reason {
             code: CODE_BELOW_LEG_RATE,
             class: CLASS_BELOW_POLICY,
-            line: format!(
-                "Valid, measured below groundinglab's {} leg/s minimum.",
-                policy::format_rate(policy.min_leg_rate)
-            ),
+            line: policy::leg_rate_line(policy.leg_rate_floor.p, policy.leg_rate_floor.q),
         });
     }
     if !waypoints.met {
@@ -152,9 +151,8 @@ fn policy_reason(checks: &[PolicyCheck], policy: &AdmissionPolicy) -> Option<Rea
             code: CODE_BELOW_WAYPOINTS,
             class: CLASS_BELOW_POLICY,
             line: format!(
-                "Valid, fewer than {} of {} waypoints were fetched and validated.",
-                policy.min_waypoints,
-                policy::WAYPOINTS_TOTAL
+                "Valid, fewer than {} of {} waypoints among W_1 through W_16 were anchored.",
+                policy.min_anchored_paths, policy::ANCHORED_SPAN
             ),
         });
     }
