@@ -9,6 +9,7 @@
 //! no friendly list. A pure bookend `not read` writes no thorough line.
 
 use crate::canon::{self, hex32};
+use crate::fast::{self, FastDecision};
 use crate::log::{self, DecisionLog, DecisionWrite, LogError};
 use crate::policy::{self, AdmissionPolicy, Judgment};
 use crate::reasons;
@@ -34,6 +35,14 @@ struct Inner {
     log: DecisionLog,
     /// Unix second the locked wire uses. `None` reads the process clock.
     now: Option<u64>,
+    /// Public keys this gate ignores. A fake leg writes one. The value is
+    /// the seq of the revoke that banned it.
+    banned: std::collections::HashMap<[u8; 32], u64>,
+    /// Open fast or thorough work, counted for the pending caps.
+    pending_global: u64,
+    pending_by_source: std::collections::HashMap<String, u64>,
+    /// How many times a banned key was ignored. Not a decision line.
+    ban_ignored: u64,
 }
 
 /// One locked-wire POST, after the transport edge.
@@ -47,6 +56,7 @@ pub struct LockedSignIn {
 #[derive(Clone)]
 pub struct LockedThorough {
     pub nonce: [u8; 32],
+    pub origin: String,
     pub object: Vec<u8>,
     pub submission: [u8; 32],
     pub public_key: [u8; 32],
@@ -78,11 +88,152 @@ impl Door {
         let mut log = DecisionLog::open(dir).map_err(show_log)?;
         log.set_policy_hint(policy::public_document(&policy))
             .map_err(show_log)?;
+        let banned = load_bans(log.dir());
         Ok(Self {
-            inner: Arc::new(Mutex::new(Inner { log, now: None })),
+            inner: Arc::new(Mutex::new(Inner {
+                log,
+                now: None,
+                banned,
+                pending_global: 0,
+                pending_by_source: std::collections::HashMap::new(),
+                ban_ignored: 0,
+            })),
             rows: Arc::new(SignInRows::new()),
             policy,
         })
+    }
+
+    /// A banned public key is ignored. No verify, no decision line.
+    /// The counter is the only record of the ignore.
+    pub fn banned(&self, public_key: &[u8; 32]) -> bool {
+        let mut inner = self.lock();
+        if inner.banned.contains_key(public_key) {
+            inner.ban_ignored = inner.ban_ignored.saturating_add(1);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn last_seq(&self) -> u64 {
+        self.lock().log.lines().last().and_then(|line| line.value.get("seq").and_then(|item| item.as_u64())).unwrap_or(0)
+    }
+
+    /// Thorough finished. A match is `accept`. A mismatch is `revoke` because
+    /// the fast phase already issued `provisional`, and the public key is banned.
+    pub fn settle_thorough(&self, job: &LockedThorough, out: crate::thorough::ThoroughOut) {
+        self.rows.note_deep(
+            &job.nonce,
+            crate::signin_row::Deep {
+                runs_done: out.runs_done,
+                legs_matched: out.legs_matched,
+                legs_total: out.legs_total,
+                salt: out.salt.clone(),
+                indices: out.indices.clone(),
+                commitment: out.commitment.clone(),
+            },
+        );
+        let now = self.now_unix_s();
+        let mut write = if out.matched {
+            DecisionWrite::bare(now, None, "thorough", "accept")
+        } else {
+            DecisionWrite::bare(now, None, "thorough", "revoke")
+        };
+        write.fast_seq = Some(self.last_seq());
+        write.submission_sha256 = job.submission;
+        write.public_key = job.public_key;
+        write.object_sha256 = job.object_sha;
+        write.object = job.object.clone();
+        write.reasons = vec![if out.matched {
+            wire::OUTCOME_ACCEPTED.to_owned()
+        } else {
+            "revoke".to_owned()
+        }];
+        write.summary = Some("{}".to_owned());
+        write.policy_id = Some(self.policy.policy_id.clone());
+        if !out.matched {
+            let note = if out.digest_mismatch {
+                "checkpoint mismatch"
+            } else {
+                "a recomputed leg result differs"
+            };
+            write.reason = Some(note.to_owned());
+            write.reason_code = Some(reasons::code_of_note(note).to_owned());
+            write.class = Some(reasons::class_of(reasons::code_of_note(note)).to_owned());
+        }
+        let seq = {
+            let mut inner = self.lock();
+            inner.log.append(&write).ok()
+        };
+        if out.matched {
+            self.rows.settle(&job.nonce, wire::OUTCOME_ACCEPTED, now);
+        } else {
+            // The website token stays `rejected`. `revoked` is not a §15.1 token.
+            self.rows.settle(&job.nonce, wire::OUTCOME_REJECTED, now);
+            if self.policy.ban_key_on_fake_leg {
+                self.ban_key(&job.public_key, seq.unwrap_or(0));
+            }
+        }
+    }
+
+    pub fn note_deep(&self, nonce: &[u8; 32], out: crate::thorough::ThoroughOut) {
+        self.rows.note_deep(
+            nonce,
+            crate::signin_row::Deep {
+                runs_done: out.runs_done,
+                legs_matched: out.legs_matched,
+                legs_total: out.legs_total,
+                salt: out.salt,
+                indices: out.indices,
+                commitment: out.commitment,
+            },
+        );
+    }
+
+    pub fn ban_ignored(&self) -> u64 {
+        self.lock().ban_ignored
+    }
+
+    /// Pending caps. Over a cap the nonce is not consumed and nothing is logged.
+    pub fn over_pending_cap(&self, source: &str) -> bool {
+        let inner = self.lock();
+        if inner.pending_global >= self.policy.pending_global {
+            return true;
+        }
+        inner
+            .pending_by_source
+            .get(source)
+            .copied()
+            .unwrap_or(0)
+            >= self.policy.pending_per_source
+    }
+
+    pub fn begin_pending(&self, source: &str) {
+        let mut inner = self.lock();
+        inner.pending_global = inner.pending_global.saturating_add(1);
+        *inner
+            .pending_by_source
+            .entry(source.to_owned())
+            .or_insert(0) += 1;
+    }
+
+    pub fn end_pending(&self, source: &str) {
+        let mut inner = self.lock();
+        inner.pending_global = inner.pending_global.saturating_sub(1);
+        if let Some(count) = inner.pending_by_source.get_mut(source) {
+            *count = count.saturating_sub(1);
+        }
+    }
+
+    /// Write a ban for the public key only. The seed is not stored.
+    pub fn ban_key(&self, public_key: &[u8; 32], seq: u64) {
+        let mut inner = self.lock();
+        inner.banned.insert(*public_key, seq);
+        let dir = inner.log.dir().to_path_buf();
+        drop(inner);
+        if let Err(err) = store_ban(&dir, public_key, seq) {
+            eprintln!("admission-service ban was not stored: {err}");
+        }
     }
 
     pub fn policy(&self) -> &AdmissionPolicy {
@@ -299,6 +450,16 @@ impl Door {
             );
         }
 
+        // Pending caps, before the nonce is consumed. Over a cap the website
+        // stays `pending` (the locked token; a `held` token is not in §15.1)
+        // and this function returns no thorough job.
+        if self.over_pending_cap(&body.origin) {
+            // No row. The nonce is not consumed. The result read of an
+            // unknown nonce is `pending`, which is the locked token.
+            return locked_client(ClientClass::DeliveryOk, None);
+        }
+        self.begin_pending(&body.origin);
+
         // 9. v2.0. Consume when this step starts. Policy settles later.
         let submission =
             wire::submission_sha256(&body.object_sha, &public_key, &message, &body.signature);
@@ -330,6 +491,7 @@ impl Door {
                     body: json!({ "delivery": "ok" }),
                     thorough: Some(LockedThorough {
                         nonce: body.nonce,
+                        origin: body.origin.clone(),
                         object: body.object,
                         submission,
                         public_key,
@@ -554,6 +716,106 @@ impl Door {
         }
     }
 
+    /// Fast phase for a consumed v2.0 object. A settled refuse writes the
+    /// thorough-less line and does not start a walk. `provisional` is the
+    /// grant. `held` writes no line.
+    pub fn settle_fast(&self, job: &LockedThorough) -> FastPhase {
+        if let Some(stored) = self.sticky(&job.public_key, &job.object_sha) {
+            self.rows.settle(&job.nonce, &stored, self.now_unix_s());
+            return FastPhase::Sticky;
+        }
+        let policy = self.policy.clone();
+        let index = self.index_url_from_job();
+        let decision = fast::decide(
+            &job.object,
+            &policy,
+            |_| Err(()),
+            |_| hike::ChainRead::NotRead,
+        );
+        let _ = index;
+        match decision {
+            FastDecision::Refuse { website, reasons, line, record } => {
+                self.write_fast_refuse(job, &reasons, &line, &record);
+                self.rows.settle(&job.nonce, website, self.now_unix_s());
+                FastPhase::Done
+            }
+            FastDecision::Held { .. } => {
+                // Website token stays pending. The locked table has no `held`.
+                FastPhase::Held
+            }
+            FastDecision::Provisional { record } => {
+                self.write_provisional(job, &record);
+                FastPhase::Provisional
+            }
+        }
+    }
+
+    fn index_url_from_job(&self) -> String {
+        String::new()
+    }
+
+    fn sticky(&self, public_key: &[u8; 32], object_sha: &[u8; 32]) -> Option<String> {
+        let inner = self.lock();
+        let key = hex32(public_key);
+        let object = hex32(object_sha);
+        let mut found = None;
+        for line in inner.log.lines() {
+            let same = line.value.get("public_key").and_then(|item| item.as_str()) == Some(key.as_str())
+                && line.value.get("object_sha256").and_then(|item| item.as_str()) == Some(object.as_str())
+                && line.value.get("policy_id").and_then(|item| item.as_str()) == Some(self.policy.policy_id.as_str());
+            if !same {
+                continue;
+            }
+            let decision = line.value.get("decision").and_then(|item| item.as_str());
+            if decision == Some("refuse") || decision == Some("revoke") {
+                found = line
+                    .value
+                    .get("reasons")
+                    .and_then(|item| item.as_array())
+                    .and_then(|items| items.first())
+                    .and_then(|item| item.as_str())
+                    .map(str::to_owned);
+            }
+        }
+        found
+    }
+
+    fn write_fast_refuse(&self, job: &LockedThorough, reasons: &[String], line: &str, record: &str) {
+        let now = self.now_unix_s();
+        let mut write = DecisionWrite::bare(now, None, "fast", "refuse");
+        write.submission_sha256 = job.submission;
+        write.public_key = job.public_key;
+        write.object_sha256 = job.object_sha;
+        write.object = job.object.clone();
+        write.reasons = reasons.to_vec();
+        write.reason = Some(line.to_owned());
+        write.summary = Some(record.to_owned());
+        write.policy_id = Some(self.policy.policy_id.clone());
+        let code = reasons.first().map(|note| reasons::code_of_note(note)).unwrap_or(reasons::CODE_SHAPE_MISMATCH);
+        write.reason_code = Some(code.to_owned());
+        write.class = Some(reasons::class_of(code).to_owned());
+        let mut inner = self.lock();
+        if let Err(error) = inner.log.append(&write) {
+            eprintln!("admission-service fast refuse was not written: {}", show_log(error));
+        }
+    }
+
+    fn write_provisional(&self, job: &LockedThorough, record: &str) {
+        let now = self.now_unix_s();
+        let mut write = DecisionWrite::bare(now, None, "fast", "provisional");
+        write.submission_sha256 = job.submission;
+        write.public_key = job.public_key;
+        write.object_sha256 = job.object_sha;
+        write.object = job.object.clone();
+        write.reasons = vec!["provisional".to_owned()];
+        write.summary = Some(if record.is_empty() { "{}".to_owned() } else { record.to_owned() });
+        write.policy_id = Some(self.policy.policy_id.clone());
+        let mut inner = self.lock();
+        if let Err(error) = inner.log.append(&write) {
+            eprintln!("admission-service provisional was not written: {}", show_log(error));
+        }
+    }
+
     pub fn latest_bytes(&self) -> Option<Vec<u8>> {
         self.lock().log.latest_bytes()
     }
@@ -727,6 +989,51 @@ fn locked_client(client: ClientClass, _outcome: Option<&str>) -> LockedSignIn {
         body,
         thorough: None,
     }
+}
+
+/// What the fast phase did with a consumed nonce.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FastPhase {
+    /// A grant was issued. Thorough runs.
+    Provisional,
+    /// `not read`. No line. The website stays `pending`.
+    Held,
+    /// A settled refuse, or a sticky stored outcome. Thorough does not run.
+    Done,
+    Sticky,
+}
+
+fn load_bans(dir: &Path) -> std::collections::HashMap<[u8; 32], u64> {
+    let mut out = std::collections::HashMap::new();
+    let path = dir.join("banned_keys.json");
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        return out;
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return out;
+    };
+    let Some(map) = value.as_object() else {
+        return out;
+    };
+    for (key, seq) in map {
+        if let (Some(bytes), Some(seq)) = (log::parse_hex32(key), seq.as_u64()) {
+            out.insert(bytes, seq);
+        }
+    }
+    out
+}
+
+fn store_ban(dir: &Path, public_key: &[u8; 32], seq: u64) -> Result<(), String> {
+    let path = dir.join("banned_keys.json");
+    let mut map = if path.exists() {
+        let raw = std::fs::read_to_string(&path).map_err(|err| err.to_string())?;
+        serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&raw).unwrap_or_default()
+    } else {
+        serde_json::Map::new()
+    };
+    map.insert(hex32(public_key), serde_json::json!(seq));
+    let bytes = serde_json::to_vec(&map).map_err(|err| err.to_string())?;
+    std::fs::write(&path, bytes).map_err(|err| err.to_string())
 }
 
 fn show_log(error: LogError) -> String {

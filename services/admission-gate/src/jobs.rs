@@ -205,6 +205,10 @@ impl JobStore {
         jobs.get(job_id).map(Job::to_json_string)
     }
 
+    pub fn log_dir(&self) -> std::path::PathBuf {
+        self.cfg.log_dir.clone()
+    }
+
     pub fn counts(&self) -> (usize, usize) {
         let jobs = self.jobs.lock().expect("job map");
         let live = jobs.values().filter(|job| !job.state.is_terminal()).count();

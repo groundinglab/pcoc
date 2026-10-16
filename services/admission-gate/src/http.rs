@@ -411,6 +411,10 @@ fn sign_in_locked(svc: &Service, headers: &HeaderMap, bytes: &[u8]) -> Response 
     }
     let result = svc.door.sign_in_locked(locked);
     if let Some(job) = result.thorough.clone() {
+        // A banned key is ignored after the signature: no fast phase, no line.
+        if svc.door.banned(&job.public_key) {
+            return locked_response(svc, headers, result.status, result.body);
+        }
         spawn_locked(svc.door.clone(), svc.jobs.clone(), job);
     }
     locked_response(svc, headers, result.status, result.body)
@@ -443,14 +447,37 @@ fn locked_response(
 
 fn spawn_locked(door: Door, jobs: JobStore, job: LockedThorough) {
     tokio::spawn(async move {
+        let source = job.origin.clone();
         // A prior thorough accept with policy_id skips measurement.
         if job.prior_accept.is_some() {
             door.settle_locked(job, Ok(crate::verifier::Report::Unreadable));
+            door.end_pending(&source);
             return;
         }
-        let object = job.object.clone();
-        let report = jobs.measure(object).await;
-        door.settle_locked(job, report);
+        match door.settle_fast(&job) {
+            crate::door::FastPhase::Provisional => {
+                let object = job.object.clone();
+                let object_sha = job.object_sha;
+                let public_key = job.public_key;
+                let log_dir = jobs.log_dir();
+                let policy = door.policy().clone();
+                let seq = door.last_seq();
+                let walked = tokio::task::spawn_blocking(move || {
+                    crate::thorough::run(&log_dir, seq, &object, &object_sha, &policy)
+                })
+                .await;
+                match walked {
+                    Ok(Ok(out)) => door.settle_thorough(&job, out),
+                    _ => {
+                        let report = jobs.measure(job.object.clone()).await;
+                        door.settle_locked(job, report);
+                    }
+                }
+                let _ = public_key;
+            }
+            crate::door::FastPhase::Held | crate::door::FastPhase::Done | crate::door::FastPhase::Sticky => {}
+        }
+        door.end_pending(&source);
     });
 }
 

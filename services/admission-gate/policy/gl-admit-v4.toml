@@ -2,9 +2,9 @@
 # Argued in ../POLICY.md. Anyone may choose their own values; a policy id must
 # change whenever any value changes.
 #
-# This file is descriptive. Gate v0.4.1 does not read it. The keys that build
-# reads today are policy_id, min_leg_rate and min_waypoints in gate.toml; the
-# rest are the target for the next gate build (see ../STATUS.md).
+# This file is the policy the gate reads. A gate.toml `policy` path points
+# here, or the same keys sit inline as [policy_table]. Unknown keys are an
+# error. v1 history: gate 0.4.1 read a float min_leg_rate. That key is gone.
 
 policy_id = "gl-admit-v4"
 

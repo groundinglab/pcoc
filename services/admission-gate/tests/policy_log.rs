@@ -334,6 +334,7 @@ fn thorough(
     nonce[1] = n as u8;
     pcoc_admission::door::LockedThorough {
         nonce,
+        origin: "https://groundinglab.io".to_owned(),
         object: b"body".to_vec(),
         submission: [2u8; 32],
         public_key: key,

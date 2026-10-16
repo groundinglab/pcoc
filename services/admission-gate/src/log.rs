@@ -169,6 +169,10 @@ impl DecisionLog {
         Ok(log)
     }
 
+    pub fn dir(&self) -> &Path {
+        &self.dir
+    }
+
     pub fn lines(&self) -> &[StoredLine] {
         &self.lines
     }
