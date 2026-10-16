@@ -37,7 +37,7 @@ pub const DEFAULT_MAX_JOBS: usize = 256;
 pub const DEFAULT_MAX_CONCURRENT: usize = 2;
 pub const DEFAULT_RATE_PER_MIN: u32 = 12;
 /// Shipped recommendation. The process reads this file when `policy` is omitted.
-pub const DEFAULT_POLICY_FILE: &str = "policy/gl-admit-v5.toml";
+pub const DEFAULT_POLICY_FILE: &str = "policy/gl-admit-v6.toml";
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -55,7 +55,7 @@ pub struct Config {
     /// Decision log directory. The process creates it. A v1.35 chain here is
     /// not loaded.
     pub log_dir: PathBuf,
-    /// The full policy table. The code default is `gl-admit-v5`.
+    /// The full policy table. The code default is `gl-admit-v6`.
     pub policy: AdmissionPolicy,
     /// Checkpoint binding threads. The process does not read `PCOC_BIND_THREADS`.
     pub bind_threads: usize,
@@ -82,9 +82,9 @@ struct FileConfig {
     index_timeout_secs: u64,
     /// Path of a policy file, relative to this config file. When omitted, and
     /// [`Self::policy_table`] is also omitted, the process reads
-    /// `policy/gl-admit-v5.toml` beside this file.
+    /// `policy/gl-admit-v6.toml` beside this file.
     policy: Option<String>,
-    /// Inline policy table. The keys are those of `gl-admit-v5.toml`.
+    /// Inline policy table. The keys are those of `gl-admit-v6.toml`.
     /// Unknown keys are an error. Mutually exclusive with [`Self::policy`].
     #[serde(default, rename = "policy_table")]
     policy_table: Option<PolicyFile>,
@@ -115,7 +115,7 @@ impl Default for FileConfig {
     }
 }
 
-/// The keys of `policy/gl-admit-v5.toml`. Unknown keys are an error.
+/// The keys of `policy/gl-admit-v6.toml`. Unknown keys are an error.
 ///
 /// `min_leg_rate` is not a key. Gate 0.4.1 read that float. A log line at
 /// startup records the move from that float to this integer floor.
@@ -125,8 +125,11 @@ struct PolicyFile {
     policy_id: String,
     leg_rate_floor: RateFloorFile,
     min_anchored_paths: u64,
-    require_first_anchored: u64,
-    require_last_anchored: u64,
+    /// Optional. gl-admit-v6 omits both: only the count matters.
+    #[serde(default)]
+    require_first_anchored: Option<u64>,
+    #[serde(default)]
+    require_last_anchored: Option<u64>,
     thorough_six_leg_runs: u64,
     thorough_early_stop: bool,
     provisional: String,
@@ -315,14 +318,20 @@ fn policy_from_file(file: PolicyFile, max_concurrent: usize) -> Result<Admission
             policy::ANCHORED_SPAN
         ));
     }
-    if file.require_first_anchored == 0 || file.require_first_anchored > policy::ANCHORED_SPAN {
-        return Err("require_first_anchored must be a waypoint index from 1 through 16".to_owned());
+    for (key, value) in [
+        ("require_first_anchored", file.require_first_anchored),
+        ("require_last_anchored", file.require_last_anchored),
+    ] {
+        if let Some(index) = value {
+            if index == 0 || index > policy::ANCHORED_SPAN {
+                return Err(format!("{key} must be a waypoint index from 1 through 16"));
+            }
+        }
     }
-    if file.require_last_anchored == 0 || file.require_last_anchored > policy::ANCHORED_SPAN {
-        return Err("require_last_anchored must be a waypoint index from 1 through 16".to_owned());
-    }
-    if file.require_first_anchored > file.require_last_anchored {
-        return Err("require_first_anchored must be at most require_last_anchored".to_owned());
+    if let (Some(first), Some(last)) = (file.require_first_anchored, file.require_last_anchored) {
+        if first > last {
+            return Err("require_first_anchored must be at most require_last_anchored".to_owned());
+        }
     }
     if file.thorough_six_leg_runs == 0 {
         return Err("thorough_six_leg_runs must be at least 1".to_owned());
@@ -412,12 +421,12 @@ mod tests {
         assert_eq!(cfg.max_object_bytes, DEFAULT_MAX_OBJECT_BYTES);
         assert_eq!(cfg.max_concurrent_verify, 2);
         assert_eq!(cfg.rate_per_min, 12);
-        assert_eq!(cfg.policy.policy_id, "gl-admit-v5");
+        assert_eq!(cfg.policy.policy_id, "gl-admit-v6");
         assert_eq!(cfg.policy.leg_rate_floor.p, 1);
         assert_eq!(cfg.policy.leg_rate_floor.q, 5);
         assert_eq!(cfg.policy.min_anchored_paths, 6);
-        assert_eq!(cfg.policy.require_first_anchored, 1);
-        assert_eq!(cfg.policy.require_last_anchored, 16);
+        assert_eq!(cfg.policy.require_first_anchored, None);
+        assert_eq!(cfg.policy.require_last_anchored, None);
         assert_eq!(cfg.policy.thorough_six_leg_runs, 3);
         assert!(cfg.policy.thorough_early_stop);
         assert!(cfg.policy.provisional_on());
@@ -526,7 +535,7 @@ mod tests {
             (7, 20)
         );
         assert_eq!(cfg.policy.min_anchored_paths, 8);
-        assert_eq!(cfg.policy.require_last_anchored, 14);
+        assert_eq!(cfg.policy.require_last_anchored, Some(14));
         assert_eq!(cfg.policy.thorough_six_leg_runs, 2);
         assert!(!cfg.policy.thorough_early_stop);
         assert!(!cfg.policy.provisional_on());

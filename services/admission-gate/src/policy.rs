@@ -1,7 +1,7 @@
 //! Gate policy. The verifier reports measurements. This module judges them.
 //!
 //! `policy_id` names one exact table for its whole life. The table is the
-//! keys in `policy/gl-admit-v5.toml`. A change of any value is a new id.
+//! keys in `policy/gl-admit-v6.toml`. A change of any value is a new id.
 //! The rate compares the bookend pair `(N, S)` from the section 14 record
 //! as integers: `q·N ≥ p·S`. The waypoint count compares `anchored_total`
 //! among `W_1` … `W_16`. Neither number is a measurement.
@@ -10,7 +10,7 @@
 //! `min_leg_rate` of 0.25 leg/s and `min_waypoints` 6 of 18. That float and
 //! the named floors (`strict` 7/20, `default` 1/4, `lenient` 1/8) are gone.
 //! Those three fractions stay informative examples in spec §15.5. They are
-//! not a policy key. The code default is now `gl-admit-v5`.
+//! not a policy key. The code default is now `gl-admit-v6`.
 //!
 //! When `N` is `not defined` from the object's own bytes, whatever `S` is,
 //! the refusal is immediate (`bookends_not_defined`). A pure `not read` pair,
@@ -46,6 +46,11 @@ pub const BOOKENDS_NOT_READ_LINE: &str =
 pub const REFUSE_TOO_FEW: &str = "too_few_waypoints_anchored";
 pub const TOO_FEW_LINE: &str = "Too few waypoints among W_1 through W_16 are anchored.";
 
+/// The too-few line with the count, e.g. `4 of 16 anchored, need 6`.
+pub fn too_few_line(anchored: u64, min: u64) -> String {
+    format!("Too few waypoints anchored: {anchored} of {ANCHORED_SPAN} anchored, need {min}.")
+}
+
 /// Budget exhausted while a measurement stayed `not read`.
 pub const REFUSE_HELD_BOUND: &str = "held_bound";
 
@@ -69,7 +74,7 @@ pub fn leg_rate_line(p: u64, q: u64) -> String {
 }
 
 /// `gl-admit-v` plus a positive integer. Bound to one table for its life.
-pub const DEFAULT_POLICY_ID: &str = "gl-admit-v5";
+pub const DEFAULT_POLICY_ID: &str = "gl-admit-v6";
 
 /// `W_1` … `W_16`. `W_17` is never fetched and is not in the anchored count.
 pub const ANCHORED_SPAN: u64 = 16;
@@ -116,15 +121,19 @@ pub struct RateFloor {
 
 /// One configured policy table. A different value is a different id.
 ///
-/// The fields are the keys of `policy/gl-admit-v5.toml`, plus the pending
+/// The fields are the keys of `policy/gl-admit-v6.toml`, plus the pending
 /// caps the plan names (F3) and the held-retry budgets §15.3 names.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct AdmissionPolicy {
     pub policy_id: String,
     pub leg_rate_floor: RateFloor,
     pub min_anchored_paths: u64,
-    pub require_first_anchored: u64,
-    pub require_last_anchored: u64,
+    /// Optional first/last anchored rule. `None` (gl-admit-v6) means no
+    /// specific waypoint is required; only the count matters.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub require_first_anchored: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub require_last_anchored: Option<u64>,
     pub thorough_six_leg_runs: u64,
     pub thorough_early_stop: bool,
     /// `on` or `off`. `on` means the fast phase issues `provisional`.
@@ -148,8 +157,8 @@ impl Default for AdmissionPolicy {
             policy_id: DEFAULT_POLICY_ID.to_owned(),
             leg_rate_floor: RateFloor { p: 1, q: 5 },
             min_anchored_paths: 6,
-            require_first_anchored: 1,
-            require_last_anchored: 16,
+            require_first_anchored: None,
+            require_last_anchored: None,
             thorough_six_leg_runs: 3,
             thorough_early_stop: true,
             provisional: "on".to_owned(),

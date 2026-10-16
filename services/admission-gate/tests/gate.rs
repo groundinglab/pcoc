@@ -384,7 +384,7 @@ async fn health_reports_version_commit_spec_and_config() {
     assert!(!body.to_string().contains("log_dir"), "{body}");
     assert!(!body.to_string().contains("config_path"), "{body}");
     assert!(body["config"].get("leg_rate_floor").is_none(), "{body}");
-    assert_eq!(body["config"]["policy_id"], "gl-admit-v5");
+    assert_eq!(body["config"]["policy_id"], "gl-admit-v6");
     assert_eq!(body["config"]["bind_threads"], 6);
     let origins = body["config"]["allowed_origins"].as_array().unwrap();
     assert!(origins.is_empty(), "the default names no site");
@@ -395,7 +395,7 @@ async fn health_reports_version_commit_spec_and_config() {
     )
     .await;
     assert_eq!(policy_status, StatusCode::OK);
-    assert_eq!(policy["policy_id"], "gl-admit-v5");
+    assert_eq!(policy["policy_id"], "gl-admit-v6");
     assert_eq!(policy["leg_rate_floor"]["p"], 1);
     assert_eq!(policy["leg_rate_floor"]["q"], 5);
     assert_eq!(policy["min_anchored_paths"], 6);
@@ -641,7 +641,7 @@ async fn latest_json_matches_the_chain_after_restart() {
     assert_eq!(status, StatusCode::OK, "{latest}");
     assert_eq!(latest["last_seq"], 1);
     assert_eq!(latest["feed"], "pcoc-gate-feed-v2");
-    assert_eq!(latest["policy"]["policy_id"], "gl-admit-v5");
+    assert_eq!(latest["policy"]["policy_id"], "gl-admit-v6");
     assert_eq!(latest["policy"]["leg_rate_floor"]["p"], 1);
     assert_eq!(latest["policy"]["leg_rate_floor"]["q"], 5);
     assert_eq!(

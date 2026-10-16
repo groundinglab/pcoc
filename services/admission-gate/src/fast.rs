@@ -200,19 +200,19 @@ fn settled_without_terrain(
             crate::wire::OUTCOME_REJECTED,
         ));
     }
-    let first = policy.require_first_anchored;
-    let last = policy.require_last_anchored;
-    let first_now = screen.anchored_indices.contains(&first);
-    let last_now = screen.anchored_indices.contains(&last);
-    let first_possible = screen.possible_indices.contains(&first);
-    let last_possible = screen.possible_indices.contains(&last);
+    let now = |i: Option<u64>| i.is_none_or(|i| screen.anchored_indices.contains(&i));
+    let possible = |i: Option<u64>| i.is_none_or(|i| screen.possible_indices.contains(&i));
+    let first_now = now(policy.require_first_anchored);
+    let last_now = now(policy.require_last_anchored);
+    let first_possible = possible(policy.require_first_anchored);
+    let last_possible = possible(policy.require_last_anchored);
     if screen.anchored >= policy.min_anchored_paths && first_now && last_now {
         return None;
     }
     if screen.anchored_possible < policy.min_anchored_paths || !first_possible || !last_possible {
         return Some(refuse_now(
             vec![policy::REFUSE_TOO_FEW.to_owned()],
-            policy::TOO_FEW_LINE.to_owned(),
+            policy::too_few_line(screen.anchored, policy.min_anchored_paths),
             "{}".to_owned(),
             crate::wire::OUTCOME_TOO_FEW,
         ));
@@ -296,10 +296,10 @@ fn judge_fast(
     }
 
     match anchored_judgment(measurements, policy, profile) {
-        Anchored::SettledShort => {
+        Anchored::SettledShort(anchored) => {
             return refuse_now(
                 vec![policy::REFUSE_TOO_FEW.to_owned()],
-                policy::TOO_FEW_LINE.to_owned(),
+                policy::too_few_line(anchored, policy.min_anchored_paths),
                 record,
                 crate::wire::OUTCOME_TOO_FEW,
             );
@@ -378,7 +378,7 @@ enum Anchored {
     Met,
     /// Even if every unread plant came back anchored, the count stays short
     /// or the required first or last waypoint cannot be anchored.
-    SettledShort,
+    SettledShort(u64),
     NotRead,
 }
 
@@ -410,17 +410,22 @@ fn anchored_judgment(
         }
         let _ = stage;
     }
-    let first = policy.require_first_anchored.saturating_sub(1) as usize;
-    let last = policy.require_last_anchored.saturating_sub(1) as usize;
-    let first_ok = anchors.get(first).and_then(|item| item.as_str()) == Some("anchored");
-    let last_ok = anchors.get(last).and_then(|item| item.as_str()) == Some("anchored");
-    let first_possible = anchor_could(anchors.get(first));
-    let last_possible = anchor_could(anchors.get(last));
+    let ok = |i: Option<u64>| {
+        i.is_none_or(|i| {
+            anchors.get(i.saturating_sub(1) as usize).and_then(|item| item.as_str())
+                == Some("anchored")
+        })
+    };
+    let could_be = |i: Option<u64>| i.is_none_or(|i| anchor_could(anchors.get(i.saturating_sub(1) as usize)));
+    let first_ok = ok(policy.require_first_anchored);
+    let last_ok = ok(policy.require_last_anchored);
+    let first_possible = could_be(policy.require_first_anchored);
+    let last_possible = could_be(policy.require_last_anchored);
     if anchored >= policy.min_anchored_paths && first_ok && last_ok {
         return Anchored::Met;
     }
     if could < policy.min_anchored_paths || !first_possible || !last_possible {
-        return Anchored::SettledShort;
+        return Anchored::SettledShort(anchored);
     }
     Anchored::NotRead
 }

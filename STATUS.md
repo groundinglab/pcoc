@@ -9,7 +9,7 @@ What is specified, what has been measured, and what is open. This page is not th
 | Satoshi Hike v2.0 construction | locked in the specification, 2026-10-08 | `spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md` |
 | `STEPS_PER_LEG` 2000000, eighteen stages, anchor offsets 2, 3, 4 | locked, Part A | specification §6 and §13.1 |
 | Leg-rate floor | a Part B parameter; the specification sets no value (amended 2026-10-16). Example figures 7/20, 1/4, 1/8 are informative | specification §15.4, §15.5 |
-| groundinglab's recommended default policy `gl-admit-v5` | a recommendation, not specification | [services/admission-gate/POLICY.md](services/admission-gate/POLICY.md) |
+| groundinglab's recommended default policy `gl-admit-v6` | a recommendation, not specification | [services/admission-gate/POLICY.md](services/admission-gate/POLICY.md) |
 | Part A conformance | the vectors under `spec/conformance/v2.0/` | §16 |
 
 ## Measured
