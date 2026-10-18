@@ -451,11 +451,17 @@ fn locked_response(
 
 fn spawn_locked(door: Door, jobs: JobStore, job: LockedThorough) {
     tokio::spawn(async move {
-        let source = job.pending_key();
+        // The slot taken in sign_in_locked is released when this guard drops:
+        // on every return, on a hold, and on a panic unwind.
+        let _slot = crate::door::PendingSlot::new(door.clone(), job.pending_key());
+        // Banned since the slot was taken (another task's ban): ignored, no
+        // fast phase, no line, no return. The website stays pending.
+        if door.is_banned(&job.public_key) {
+            return;
+        }
         // A prior thorough accept with policy_id skips measurement.
         if job.prior_accept.is_some() {
             door.settle_locked(job, Ok(crate::verifier::Report::Unreadable));
-            door.end_pending(&source);
             return;
         }
         match door.settle_fast_seq(&job) {
@@ -485,7 +491,6 @@ fn spawn_locked(door: Door, jobs: JobStore, job: LockedThorough) {
                 _,
             ) => {}
         }
-        door.end_pending(&source);
     });
 }
 

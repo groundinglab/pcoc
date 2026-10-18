@@ -156,6 +156,13 @@ impl Door {
         }
     }
 
+    /// Whether a public key is banned, without counting an ignore. The
+    /// settle paths use it so a key banned while its job was in flight is
+    /// never granted.
+    pub fn is_banned(&self, public_key: &[u8; 32]) -> bool {
+        self.lock().banned.contains_key(public_key)
+    }
+
     pub fn last_seq(&self) -> u64 {
         self.lock()
             .log
@@ -208,6 +215,15 @@ impl Door {
         if !self.provisional_is(out.seq, job) {
             eprintln!(
                 "admission-service thorough fast_seq={} does not name this job's provisional; held",
+                out.seq
+            );
+            return;
+        }
+        if out.matched && self.is_banned(&job.public_key) {
+            // Banned while this job was in flight: never an accept. No line;
+            // the provisional stays unsettled and the website stays pending.
+            eprintln!(
+                "admission-service thorough fast_seq={}: the key was banned in flight; held",
                 out.seq
             );
             return;
@@ -349,6 +365,13 @@ impl Door {
                 return;
             }
         };
+        if out.matched && self.is_banned(&job.public_key) {
+            eprintln!(
+                "admission-service resume fast_seq={}: the key is banned; held",
+                job.fast_seq
+            );
+            return;
+        }
         let now = self.now_unix_s();
         let write = self.thorough_write(
             now,
@@ -405,6 +428,40 @@ impl Door {
             return true;
         }
         inner.pending_by_source.get(source).copied().unwrap_or(0) >= self.policy.pending_per_source
+    }
+
+    /// The ban check, the pending caps and taking the slot, under one lock.
+    /// A ban written by another task is either seen here or lands after the
+    /// slot is taken; a job for the same key that holds a slot always bans
+    /// before it releases that slot, so a banned key cannot slip between
+    /// the check and the take.
+    pub fn try_begin_pending(&self, public_key: &[u8; 32], source: &str) -> PendingAdmit {
+        let mut inner = self.lock();
+        if inner.banned.contains_key(public_key) {
+            inner.ban_ignored = inner.ban_ignored.saturating_add(1);
+            return PendingAdmit::Banned;
+        }
+        if inner.pending_global >= self.policy.pending_global
+            || inner.pending_by_source.get(source).copied().unwrap_or(0)
+                >= self.policy.pending_per_source
+        {
+            return PendingAdmit::OverCap;
+        }
+        inner.pending_global = inner.pending_global.saturating_add(1);
+        *inner
+            .pending_by_source
+            .entry(source.to_owned())
+            .or_insert(0) += 1;
+        PendingAdmit::Begun
+    }
+
+    /// Number of pending slots held, globally and for `source`.
+    pub fn pending_counts(&self, source: &str) -> (u64, u64) {
+        let inner = self.lock();
+        (
+            inner.pending_global,
+            inner.pending_by_source.get(source).copied().unwrap_or(0),
+        )
     }
 
     pub fn begin_pending(&self, source: &str) {
@@ -656,30 +713,33 @@ impl Door {
         // (the website token stays `pending`), no fast phase, no line, and no
         // pending slot is taken. Checked before the caps so a banned
         // resubmit cannot hold a slot.
-        if self.banned(&public_key) {
-            return match self.rows.consume(
-                &body,
-                ClientClass::DeliveryOk,
-                wire::OUTCOME_PENDING,
-                now,
-            ) {
-                Ok(()) => locked_client(ClientClass::DeliveryOk, None),
-                Err(replay) => replay_response(replay),
-            };
-        }
-
+        //
         // Pending caps, before the nonce is consumed. Over a cap the website
         // stays `pending` (the locked token; a `held` token is not in §15.1)
         // and this function returns no thorough job. The per-source cap is
         // keyed on the submitter's public key, not on the signed site origin,
-        // so one submitter cannot hold every sign-in for a site.
+        // so one submitter cannot hold every sign-in for a site. The ban
+        // check and the slot are taken under one lock (try_begin_pending).
         let pending_key = pending_key(&public_key);
-        if self.over_pending_cap(&pending_key) {
-            // No row. The nonce is not consumed. The result read of an
-            // unknown nonce is `pending`, which is the locked token.
-            return locked_client(ClientClass::DeliveryOk, None);
+        match self.try_begin_pending(&public_key, &pending_key) {
+            PendingAdmit::Banned => {
+                return match self.rows.consume(
+                    &body,
+                    ClientClass::DeliveryOk,
+                    wire::OUTCOME_PENDING,
+                    now,
+                ) {
+                    Ok(()) => locked_client(ClientClass::DeliveryOk, None),
+                    Err(replay) => replay_response(replay),
+                };
+            }
+            PendingAdmit::OverCap => {
+                // No row. The nonce is not consumed. The result read of an
+                // unknown nonce is `pending`, which is the locked token.
+                return locked_client(ClientClass::DeliveryOk, None);
+            }
+            PendingAdmit::Begun => {}
         }
-        self.begin_pending(&pending_key);
 
         // 9. v2.0. Consume when this step starts. Policy settles later.
         let submission =
@@ -940,6 +1000,15 @@ impl Door {
     ) -> (FastPhase, Option<u64>) {
         let networks = index.observed_networks();
         let decision = match self.policy.expected_network() {
+            // Fail closed: a provisional that rests on no observed index
+            // document is not mainnet evidence. Held, never a grant.
+            Some(_)
+                if networks.is_empty() && matches!(decision, FastDecision::Provisional { .. }) =>
+            {
+                FastDecision::Held {
+                    record: "{}".to_owned(),
+                }
+            }
             Some(expected) if networks.iter().any(|network| network != expected) => {
                 FastDecision::Refuse {
                     reasons: vec![reasons::CODE_INDEX_NETWORK_NOT_EXPECTED.to_owned()],
@@ -1142,6 +1211,44 @@ impl Door {
 
 fn networks_json(networks: &[String]) -> Value {
     Value::Array(networks.iter().cloned().map(Value::String).collect())
+}
+
+/// Outcome of [`Door::try_begin_pending`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PendingAdmit {
+    /// The key is banned. No slot was taken.
+    Banned,
+    /// A pending cap is full. No slot was taken.
+    OverCap,
+    /// A slot was taken. The caller releases it with `end_pending`
+    /// (or a [`PendingSlot`]).
+    Begun,
+}
+
+/// A taken pending slot, released exactly once when dropped. The thorough
+/// task holds one, so a task that returns early, holds, errors or panics
+/// still releases its slot.
+pub struct PendingSlot {
+    door: Door,
+    source: String,
+}
+
+impl PendingSlot {
+    pub fn new(door: Door, source: String) -> Self {
+        Self { door, source }
+    }
+}
+
+impl Drop for PendingSlot {
+    fn drop(&mut self) {
+        // A poisoned lock must not turn a panic unwind into an abort.
+        if let Ok(mut inner) = self.door.inner.lock() {
+            inner.pending_global = inner.pending_global.saturating_sub(1);
+            if let Some(count) = inner.pending_by_source.get_mut(&self.source) {
+                *count = count.saturating_sub(1);
+            }
+        }
+    }
 }
 
 /// Key of the per-source pending cap: the submitter's public key, in hex.
@@ -1802,6 +1909,112 @@ mod tests {
         assert_eq!(door.unsettled().len(), 1, "the provisional stays held");
         assert_eq!(door.sign_in_result(&job.nonce)["outcome"], "pending");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Review fix: a key banned while its job was in flight is never
+    /// granted. A matching thorough result writes no accept and the website
+    /// stays pending.
+    #[test]
+    fn a_key_banned_in_flight_is_never_accepted() {
+        let built = small_honest();
+        let (url, _) = serve(&built.docs, Mirror::Honest);
+        let (door, dir) = open_at(&url);
+        let job = job_of(&built.bytes, 1);
+        door.consume_for_test(&job.nonce, job.object_sha, door.now_unix_s());
+        let (phase, seq) = door.settle_fast_small_seq(&job);
+        assert_eq!(phase, FastPhase::Provisional, "{}", chain_text(&dir));
+        let seq = seq.unwrap();
+        let out =
+            thorough::run_for_test(&dir, seq, &built.hike, &job.object_sha, door.policy()).unwrap();
+        assert!(out.matched);
+        // Another task bans the key before this job settles.
+        door.ban_key(&job.public_key, 0);
+        door.finish_thorough(&job, Ok(out.clone()));
+        assert!(
+            chain(&dir).iter().all(|line| line["decision"] != "accept"),
+            "{}",
+            chain_text(&dir)
+        );
+        assert_eq!(door.sign_in_result(&job.nonce)["outcome"], "pending");
+        // The restart resume path refuses to accept a banned key as well.
+        let jobs = door.unsettled();
+        assert_eq!(jobs.len(), 1);
+        door.settle_resumed(jobs.into_iter().next().unwrap(), Ok(out));
+        assert!(chain(&dir).iter().all(|line| line["decision"] != "accept"));
+    }
+
+    /// Review fix: the ban check and the pending slot are one step, and a
+    /// taken slot is released by its guard even when the task panics.
+    #[test]
+    fn a_banned_key_takes_no_slot_and_a_panicking_job_releases_its_slot() {
+        let (door, _dir) = open_with("http://127.0.0.1:9", AdmissionPolicy::default());
+        let key = [0x42u8; 32];
+        let source = super::pending_key(&key);
+        assert_eq!(
+            door.try_begin_pending(&key, &source),
+            super::PendingAdmit::Begun
+        );
+        assert_eq!(door.pending_counts(&source), (1, 1));
+        // Per-source cap (1) is full for this key.
+        assert_eq!(
+            door.try_begin_pending(&key, &source),
+            super::PendingAdmit::OverCap
+        );
+        let slot = super::PendingSlot::new(door.clone(), source.clone());
+        let panicked = std::thread::spawn(move || {
+            let _slot = slot;
+            panic!("thorough task died");
+        })
+        .join();
+        assert!(panicked.is_err());
+        assert_eq!(
+            door.pending_counts(&source),
+            (0, 0),
+            "the guard released the slot"
+        );
+        door.ban_key(&key, 0);
+        let before = door.ban_ignored();
+        assert_eq!(
+            door.try_begin_pending(&key, &source),
+            super::PendingAdmit::Banned
+        );
+        assert_eq!(
+            door.pending_counts(&source),
+            (0, 0),
+            "a banned key takes no slot"
+        );
+        assert_eq!(door.ban_ignored(), before + 1);
+    }
+
+    /// Review fix: under an expected network, a provisional that rests on no
+    /// observed index document fails closed (held, no line).
+    #[test]
+    fn v7_holds_a_provisional_with_no_observed_network() {
+        struct Silent;
+        impl crate::verifier::IndexRead for Silent {
+            fn beacon(&self, _: u64) -> Result<hike::IndexBeacon, ()> {
+                Err(())
+            }
+            fn beacon_fresh(&self, _: u64) -> Result<hike::IndexBeacon, ()> {
+                Err(())
+            }
+            fn plant(&self, _: &hike::PathLocators) -> hike::ChainRead {
+                hike::ChainRead::NotRead
+            }
+            fn plant_fresh(&self, _: &hike::PathLocators) -> hike::ChainRead {
+                hike::ChainRead::NotRead
+            }
+        }
+        let (door, dir) = open_with("http://127.0.0.1:9", shipped_policy("gl-admit-v7.toml"));
+        let built = small_honest();
+        let job = job_of(&built.bytes, 1);
+        let decision = crate::fast::FastDecision::Provisional {
+            record: "{}".to_owned(),
+        };
+        let (phase, seq) = door.finish_fast_read(&job, decision, &Silent);
+        assert_eq!(phase, FastPhase::Held);
+        assert_eq!(seq, None);
+        assert!(chain(&dir).is_empty(), "{}", chain_text(&dir));
     }
 
     fn provisional_seq(dir: &Path, job: &LockedThorough) -> u64 {
