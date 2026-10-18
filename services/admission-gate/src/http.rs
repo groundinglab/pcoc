@@ -471,14 +471,11 @@ fn spawn_locked(door: Door, jobs: JobStore, job: LockedThorough) {
                 let walked = tokio::task::spawn_blocking(move || {
                     crate::thorough::run(&log_dir, seq, &object, &object_sha, &policy)
                 })
-                .await;
-                match walked {
-                    Ok(Ok(out)) => door.settle_thorough(&job, out),
-                    _ => {
-                        let report = jobs.measure(job.object.clone()).await;
-                        door.settle_locked(job, report);
-                    }
-                }
+                .await
+                .unwrap_or_else(|error| Err(format!("thorough worker failed: {error}")));
+                // No fallback: an error is held, never a second check that
+                // could write `accept`.
+                door.finish_thorough(&job, walked);
                 let _ = public_key;
             }
             (

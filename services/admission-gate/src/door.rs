@@ -229,6 +229,25 @@ impl Door {
         }
     }
 
+    /// The thorough phase finished or failed. A result is settled by
+    /// [`Door::settle_thorough`]. An error (a draw file that does not match,
+    /// a leg that cannot be recomputed, a worker that died) is not a second
+    /// admission path: no line is written, the provisional stays unsettled
+    /// and the website token stays `pending` (held). There is no fallback to
+    /// the six-leg verifier.
+    pub fn finish_thorough(
+        &self,
+        job: &LockedThorough,
+        walked: Result<crate::thorough::ThoroughOut, String>,
+    ) {
+        match walked {
+            Ok(out) => self.settle_thorough(job, out),
+            Err(error) => {
+                eprintln!("admission-service thorough did not finish; held: {error}");
+            }
+        }
+    }
+
     pub fn note_deep(&self, nonce: &[u8; 32], out: crate::thorough::ThoroughOut) {
         self.rows.note_deep(
             nonce,
@@ -1426,6 +1445,67 @@ mod tests {
             assert_eq!(line["decision"], "accept", "{line}");
             assert_eq!(line["deep"]["indices"], draw_runs(&dir, seq), "{line}");
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Defect 2 (gate review r2, finding 2). A thorough error is held. It
+    /// never falls through to another check that can write `accept`.
+    #[test]
+    fn a_thorough_error_is_held_and_never_accepts() {
+        let built = small_honest();
+        let (url, _) = serve(&built.docs, Mirror::Honest);
+        let (door, dir) = open_at(&url);
+        let job = job_of(&built.bytes, 1);
+        door.consume_for_test(&job.nonce, job.object_sha, door.now_unix_s());
+        let (phase, seq) = door.settle_fast_small_seq(&job);
+        assert_eq!(phase, FastPhase::Provisional);
+        let seq = seq.unwrap();
+        let pending = dir.join("pending");
+        std::fs::create_dir_all(&pending).unwrap();
+        let draw_path = pending.join(format!("{seq}.draw"));
+
+        // Fault 1: a stored draw for another object.
+        let other = [0x5au8; 32];
+        let salt = [7u8; 32];
+        let runs = vec![vec![0u64, 1, 2, 3, 4, 5]];
+        let foreign = serde_json::json!({
+            "seq": seq,
+            "object_sha256": canon::hex32(&other),
+            "salt": hex::encode(salt),
+            "runs": runs,
+            "commitment": canon::hex32(&thorough::commitment(seq, &other, &salt, &runs)),
+        });
+        std::fs::write(&draw_path, foreign.to_string()).unwrap();
+        let walked = thorough::run_for_test(&dir, seq, &built.hike, &job.object_sha, door.policy());
+        assert!(walked.is_err());
+        door.finish_thorough(&job, walked);
+
+        // Fault 2: a committed draw naming a leg the object does not have,
+        // so the leg recompute errors.
+        let runs = vec![vec![0u64, 1, 2, 3, 4, 10_000]];
+        let broken = serde_json::json!({
+            "seq": seq,
+            "object_sha256": canon::hex32(&job.object_sha),
+            "salt": hex::encode(salt),
+            "runs": runs,
+            "commitment": canon::hex32(&thorough::commitment(seq, &job.object_sha, &salt, &runs)),
+        });
+        std::fs::write(&draw_path, broken.to_string()).unwrap();
+        let walked = thorough::run_for_test(&dir, seq, &built.hike, &job.object_sha, door.policy());
+        assert!(walked.is_err());
+        door.finish_thorough(&job, walked);
+
+        let lines = chain(&dir);
+        assert!(
+            lines.iter().all(|line| line["decision"] != "accept"),
+            "{lines:?}"
+        );
+        assert!(
+            lines.iter().all(|line| line["phase"] != "thorough"),
+            "{lines:?}"
+        );
+        assert_eq!(door.unsettled().len(), 1, "the provisional stays held");
+        assert_eq!(door.sign_in_result(&job.nonce)["outcome"], "pending");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
