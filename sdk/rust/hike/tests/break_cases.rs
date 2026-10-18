@@ -387,6 +387,25 @@ fn a_top_level_that_is_not_a_map_is_malformed_cbor() {
     assert!(!hike::top_level_map(&[]));
 }
 
+/// F6: more than 18 stages still lists every other violated condition over
+/// the stages that are present. A duplicated stage-3 header is header height
+/// order and header hash differ, with stages length.
+#[test]
+fn nineteen_stages_keep_the_other_shape_conditions() {
+    let mut v = object();
+    let extra = v.stage(17).clone();
+    v.get("stages").arr().push(extra);
+    let beacon = v.stage(2).get("beacon").clone();
+    let height = v.stage(2).get("beacon_height").clone();
+    v.stage(3).set("beacon", beacon);
+    v.stage(3).set("beacon_height", height);
+    let rec = record(&enc(&v));
+    assert_eq!(
+        items(&rec),
+        ["stages length", "header height order", "header hash differ"]
+    );
+}
+
 /// F5 / Q-a: last_interrupt_height above 2^53−1 is height_range and, because
 /// that height is not a usable ordered height, header height order. The
 /// integer itself compares exactly: 2^53 is greater than stage 17's height,

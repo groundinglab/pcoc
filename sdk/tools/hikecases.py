@@ -132,6 +132,13 @@ def cases(pack):
     add("short-pubkey", lambda v: v.set("public_key", v.get("public_key")[:31]))
     add("stages-17", lambda v: v.get("stages").pop())
     add("stages-19", lambda v: v.get("stages").append(copy.deepcopy(st(v, 17))))
+    # F6: 19 stages, and stage 3's header duplicates stage 2's. stages length
+    # does not drop the other conditions over the stages that are present.
+    def stages19_dup(v):
+        v.get("stages").append(copy.deepcopy(st(v, 17)))
+        st(v, 3).set("beacon", st(v, 2).get("beacon"))
+        st(v, 3).set("beacon_height", st(v, 2).get("beacon_height"))
+    add("stages19-dup-header", stages19_dup)
     add("stage5-uint", lambda v: v.get("stages").__setitem__(5, 7))
     add("extra-top-key", lambda v: v.append(["zzz", 1]))
     add("extra-s5-key", lambda v: st(v, 5).append(["zzz", 1]))

@@ -646,6 +646,35 @@ public final class V2Pack {
                 throw new AssertionError("six-leg previous " + Arrays.toString(c) + " " + index + " " + result);
             }
         }
+        // F6: 19 stages, stage 3's header copied from stage 2. stages length
+        // does not drop header height order or header hash differ.
+        Cbor.Val top = Cbor.decode(obj);
+        List<Cbor.Val> stageList = new ArrayList<>(top.map.get("stages").array);
+        Cbor.Val from = stageList.get(2);
+        List<java.util.Map.Entry<String, byte[]>> stage3 = new ArrayList<>();
+        for (java.util.Map.Entry<String, Cbor.Val> entry : stageList.get(3).map.entrySet()) {
+            Cbor.Val value = entry.getValue();
+            if ("beacon".equals(entry.getKey()) || "beacon_height".equals(entry.getKey())) {
+                value = from.map.get(entry.getKey());
+            }
+            stage3.add(java.util.Map.entry(entry.getKey(), encodeVal(value)));
+        }
+        List<byte[]> encodedStages = new ArrayList<>();
+        for (int g = 0; g < stageList.size(); g++) {
+            encodedStages.add(g == 3 ? Cbor.encodeMap(stage3) : encodeVal(stageList.get(g)));
+        }
+        encodedStages.add(encodeVal(stageList.get(17)));
+        List<java.util.Map.Entry<String, byte[]>> fields = new ArrayList<>();
+        for (java.util.Map.Entry<String, Cbor.Val> entry : top.map.entrySet()) {
+            byte[] value = "stages".equals(entry.getKey()) ? Cbor.encodeArray(encodedStages) : encodeVal(entry.getValue());
+            fields.add(java.util.Map.entry(entry.getKey(), value));
+        }
+        String longShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(Cbor.encodeMap(fields), Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!"[\"stages length\",\"header height order\",\"header hash differ\"]".equals(longShape)) {
+            throw new AssertionError("stages 19 " + longShape);
+        }
         // F5 / Q-a: last_interrupt_height of 2^53 and of 2^64−1 lists header
         // height order with height_range. The integer compares exactly.
         byte[] heightKey = cat(new byte[] {0x75}, "last_interrupt_height".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {0x19});

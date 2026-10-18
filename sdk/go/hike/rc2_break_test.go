@@ -163,6 +163,70 @@ func TestRC2NonMapTopLevelIsUndecoded(t *testing.T) {
 	}
 }
 
+// F6: 19 stages with stage 3's header copied from stage 2 lists stages
+// length, header height order and header hash differ. stages length does
+// not drop the other conditions over the stages that are present.
+func TestF6NineteenStagesKeepOtherShapeConditions(t *testing.T) {
+	obj, index := loadKat(t)
+	item, err := decodeItem(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stages, _ := item.field("stages")
+	dup := stages.arr[2]
+	beacon, _ := dup.field("beacon")
+	height, _ := dup.field("beacon_height")
+	target := &stages.arr[3]
+	for i, key := range target.keys {
+		if key == "beacon" {
+			target.vals[i] = beacon
+		}
+		if key == "beacon_height" {
+			target.vals[i] = height
+		}
+	}
+	stages.arr = append(stages.arr, stages.arr[17])
+	for i, key := range item.keys {
+		if key == "stages" {
+			item.vals[i] = stages
+		}
+	}
+	rec, decoded := katRecord(t, encodeCBOR(item), index)
+	if !decoded {
+		t.Fatal("decoded")
+	}
+	got := fmt.Sprint(at(rec, "shape_item"))
+	want := fmt.Sprint([]any{"stages length", "header height order", "header hash differ"})
+	if got != want {
+		t.Fatalf("shape %s", got)
+	}
+}
+
+func encodeCBOR(v cborVal) []byte {
+	switch v.kind {
+	case 0:
+		return encodeUint(v.u)
+	case 2:
+		return encodeBytes(v.b)
+	case 3:
+		return encodeText(v.s)
+	case 4:
+		items := make([][]byte, len(v.arr))
+		for i, item := range v.arr {
+			items[i] = encodeCBOR(item)
+		}
+		return encodeArray(items)
+	case 5:
+		pairs := make([][2][]byte, len(v.keys))
+		for i, key := range v.keys {
+			pairs[i] = textPair(key, encodeCBOR(v.vals[i]))
+		}
+		return encodeMap(pairs)
+	default:
+		return nil
+	}
+}
+
 // F5 / Q-a: last_interrupt_height of 2^53 and of 2^64−1 lists header height
 // order with height_range. The integer compares exactly, so last_interrupt
 // is not listed: 2^53 is greater than stage 17's height.
