@@ -16,6 +16,12 @@ Inputs, all from spec/conformance/v2.0 (the source of truth):
     and mismatches;
   * targeted section 14.1 edits: one field absent, mistyped or out of order;
   * one-byte CBOR items that are not a map (uint, empty array, empty text);
+  * the structural break cases in hikecases.py: a wrong checkpoint or leg
+    result width in several stages, each stage field absent or mistyped,
+    absent or mistyped top-level fields, 0/1/17/19 stages, a stage that is
+    not a map, absent beacons combined with bad headers, mixed edits,
+    out-of-range integers, six-leg previous values of the wrong width, and
+    top levels that are not a map or carry trailing bytes;
   * several audit seeds per object, so the drawn legs differ between runs.
 
 Usage (from the repository root):
@@ -25,6 +31,9 @@ Exit 0 and a final "crosscheck PASS" line on agreement; exit 1 otherwise.
 """
 import argparse, binascii, hashlib, http.server, json, os, subprocess, sys, tempfile, threading
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import hikecases  # noqa: E402
+
 PACK = "spec/conformance/v2.0"
 
 # Open disagreements between the three verify programs (sdk/KNOWN-DIVERGENCES.md).
@@ -32,18 +41,18 @@ PACK = "spec/conformance/v2.0"
 # Java stdout ("-" pins an empty stdout). A listed case that starts to agree, a
 # listed case whose bytes change, or any unlisted disagreement fails the run.
 KNOWN_DIVERGENCES = {
-    # one well-formed CBOR item that is not a map: Rust writes a field set
-    # record (exit 0); Go/Java treat it as undecodable (exit 1, no record).
-    # Open spec question (section 14.1 rows 1 and 2), not a known bug.
-    "cbor-uint": ("c83953b6c66dfe1f", "-", "-"),
-    "cbor-array": ("c83953b6c66dfe1f", "-", "-"),
-    "cbor-text": ("c83953b6c66dfe1f", "-", "-"),
-    # a checkpoint of the wrong width (31 bytes) in stage 2: all three differ.
-    # Rust records W_3 `mismatch` and the stage-2 leg `mismatch` and leaves the
-    # checkpoint counts `not defined`; Go and Java record W_3 `not defined`, the
-    # leg `match`, and count the element; Go leaves legs_outside `not defined`,
-    # Java counts 17. Found in this pass; not yet fixed.
-    "field-s2-cpwidth": ("9ab891c42b95fafd", "bac1fe407e6aa300", "dd8b5bbfcf612d01"),
+    # Open spec question Q-b (sdk/KNOWN-DIVERGENCES.md): a stages element that
+    # is not a map. Rust and Java read it as a stage map with every field
+    # absent (checkpoint_count 0, path `skip`, w17_path `not fetched by
+    # design`); Go reads it as an absent stage (`not defined`). Shape agrees.
+    "stage0-uint": ("87d54be634f67630", "5119a87ef7d4d3cd", "87d54be634f67630"),
+    "stage1-uint": ("27aa73761f68f982", "c256b2ba88b2ed8e", "27aa73761f68f982"),
+    "stage5-uint": ("f08fa31c1a00a629", "6b3d6543fd428657", "f08fa31c1a00a629"),
+    "stage17-uint": ("8e155559c4815735", "ff90075e765126ea", "8e155559c4815735"),
+    # Open spec question Q-a: last_interrupt_height above 2^53 - 1 (and above
+    # stage 17's height). Go also lists `header height order`; Rust and Java
+    # list `height_range` only.
+    "li-height-2^64-1": ("e9b8228be57f3db2", "84bececb692cac10", "e9b8228be57f3db2"),
 }
 
 
@@ -51,12 +60,12 @@ KNOWN_DIVERGENCES = {
 # Verify + Record.Marshal, Java Measure.record), pinned the same way;
 # "none" is a Java null. Filled from a run; see sdk/KNOWN-DIVERGENCES.md.
 LIB_DIVERGENCES = {
-    # Rust: a `field set` record; Go: a `malformed cbor` record; Java: null.
-    "cbor-uint": ("e243d445c914e094", "9eb729dc587187e9", "none"),
-    "cbor-array": ("e243d445c914e094", "9eb729dc587187e9", "none"),
-    "cbor-text": ("e243d445c914e094", "9eb729dc587187e9", "none"),
-    # the program-level three-way split above, at the library level.
-    "field-s2-cpwidth": ("d65a1f5efcd40b30", "57441d8ac5b43ce6", "2dd10956cbbe5334"),
+    # The two program-level spec questions above, at the library level.
+    "stage0-uint": ("ca096d74bf2e1b47", "c85ec5ba690252fd", "ca096d74bf2e1b47"),
+    "stage1-uint": ("c2aa7be545c13037", "67106f05b133a917", "c2aa7be545c13037"),
+    "stage5-uint": ("03633a4c23bfd22d", "c542bfedd8f21174", "03633a4c23bfd22d"),
+    "stage17-uint": ("badd1c19c04ef720", "dc3c169377aec4ae", "badd1c19c04ef720"),
+    "li-height-2^64-1": ("2109106b1b3e6c43", "971ad8cf01aff7f6", "2109106b1b3e6c43"),
 }
 
 
@@ -65,34 +74,38 @@ def load_cases():
     kat = json.load(open(f"{PACK}/kat-small.json"))
     kat_docs = {str(d["height"]): d["body"] for d in kat["documents"]}
     kat_obj = binascii.unhexlify(kat["object_hex"])
-    cases.append(("kat-small", kat_obj, kat_docs))
+    cases.append(("kat-small", kat_obj, kat_docs, None))
     t3 = json.load(open(f"{PACK}/test-3leg.json"))
     t3_docs = {str(r["height"]): r["body"] for r in t3["header_reads"] + t3["plant_reads"]}
-    cases.append(("test-3leg", binascii.unhexlify(t3["object_hex"]), t3_docs))
-    cases.append(("earlier-kind", open(f"{PACK}/earlier-kind.cbor", "rb").read(), kat_docs))
+    cases.append(("test-3leg", binascii.unhexlify(t3["object_hex"]), t3_docs, None))
+    cases.append(("earlier-kind", open(f"{PACK}/earlier-kind.cbor", "rb").read(), kat_docs, None))
     # Deterministic mutants of the kat object.
     n = len(kat_obj)
     for k, at in enumerate(sorted({1, 2, 9, 17, 40, 64, n // 7, n // 3, n // 2, (2 * n) // 3, n - 40, n - 2})):
         m = bytearray(kat_obj)
         m[at] ^= 0x01
-        cases.append((f"kat-flip@{at}", bytes(m), kat_docs))
+        cases.append((f"kat-flip@{at}", bytes(m), kat_docs, None))
         m = bytearray(kat_obj)
         head = [0x1B, 0x5B, 0xBB, 0xFF, 0x00, 0x18][k % 6]
         # A head equal to the byte already there would duplicate kat-small.
         m[at] = head if head != kat_obj[at] else head ^ 0x80
-        cases.append((f"kat-head@{at}", bytes(m), kat_docs))
+        cases.append((f"kat-head@{at}", bytes(m), kat_docs, None))
     for cut in (0, 1, 8, n // 4, n // 2, n - 1):
-        cases.append((f"kat-cut@{cut}", kat_obj[:cut], kat_docs))
-    cases.append(("kat-trailing", kat_obj + b"\x00", kat_docs))
+        cases.append((f"kat-cut@{cut}", kat_obj[:cut], kat_docs, None))
+    cases.append(("kat-trailing", kat_obj + b"\x00", kat_docs, None))
     # Targeted section 14.1 cases: one field absent, mistyped or out of order,
     # everything else intact. Each must list every violated condition and
     # still record the later measurements.
     for name, obj in field_cases(kat_obj):
-        cases.append((name, obj, kat_docs))
+        cases.append((name, obj, kat_docs, None))
     # One well-formed CBOR item that is not a map (section 14.1 rows 1 and 2).
-    cases.append(("cbor-uint", b"\x01", kat_docs))
-    cases.append(("cbor-array", b"\x80", kat_docs))
-    cases.append(("cbor-text", b"\x60", kat_docs))
+    cases.append(("cbor-uint", b"\x01", kat_docs, None))
+    cases.append(("cbor-array", b"\x80", kat_docs, None))
+    cases.append(("cbor-text", b"\x60", kat_docs, None))
+    # Structural break cases (hikecases.py).
+    cases.extend(hikecases.cases(PACK))
+    names = [c[0] for c in cases]
+    assert len(names) == len(set(names)), "duplicate case names"
     return cases
 
 
@@ -213,14 +226,15 @@ def main():
     fails, runs, decoded, known_seen = [], 0, 0, set()
     lib_runs, lib_known_seen = 0, set()
     with tempfile.TemporaryDirectory() as tmp:
-        for name, obj, docs in load_cases():
+        for name, obj, docs, pinned_seed in load_cases():
             Index.docs = docs
             path = os.path.join(tmp, "object.bin")
             open(path, "wb").write(obj)
             docs_path = os.path.join(tmp, "docs.json")
             # a null body is a 404: leave that height out
             json.dump({h: b for h, b in docs.items() if b is not None}, open(docs_path, "w"))
-            for seed in seeds if name in ("kat-small", "test-3leg", "earlier-kind") else seeds[:1]:
+            run_seeds = seeds if name in ("kat-small", "test-3leg", "earlier-kind") else seeds[:1]
+            for seed in [pinned_seed] if pinned_seed else run_seeds:
                 args = ["--input", path, "--index-url", url, "--profile", "conformance-small", "--audit-seed", seed]
                 out = {lang: run(cmd + args, a.timeout) for lang, cmd in langs.items()}
                 runs += 1
@@ -244,7 +258,7 @@ def main():
                     elif known:
                         why = f" (known divergence changed bytes: pinned {KNOWN_DIVERGENCES[name]}, got {pinned})"
                     fails.append(name + why)
-                print(f"{status:<5} {name:<16} seed={seed[:8]} exit={codes['rust']} record={digests['rust']}"
+                print(f"{status:<5} {name:<24} seed={seed[:8]} exit={codes['rust']} record={digests['rust']}"
                       + ("" if same else f"  codes={codes} digests={digests}"))
                 if libs is None:
                     continue
