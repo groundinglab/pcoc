@@ -10,7 +10,9 @@ Inputs, all from spec/conformance/v2.0 (the source of truth):
     replies by a local HTTP index (GET /index/<height>; a null body is a 404);
   * earlier-kind.cbor;
   * deterministic mutants of the kat-small object (byte flips, CBOR head bytes,
-    truncations), so the three must also agree on refusals and mismatches;
+    truncations, a trailing byte), so the three must also agree on refusals
+    and mismatches;
+  * one-byte CBOR items that are not a map (uint, empty array, empty text);
   * several audit seeds per object, so the drawn legs differ between runs.
 
 Usage (from the repository root):
@@ -21,17 +23,26 @@ import argparse, binascii, hashlib, http.server, json, os, subprocess, sys, temp
 
 PACK = "spec/conformance/v2.0"
 
-# Open Rust vs Go/Java disagreements found by this harness on 18 Oct 2026 and
-# present on main before the SDK move (reference Rust at 565add5 gives the
-# same bytes). Go and Java agree with each other in every case. Not fixed in
-# the move: see sdk/KNOWN-DIVERGENCES.md. A listed case that starts to agree,
-# or any unlisted disagreement, fails the run, so this list can only shrink.
+# Open Rust vs Go/Java disagreements, present before the SDK move (the
+# reference Rust build at 565add5 writes the same bytes). Go and Java agree
+# with each other in every case. See sdk/KNOWN-DIVERGENCES.md. Each entry pins
+# the first 16 hex digits of the SHA-256 of the Rust stdout and of the Go/Java
+# stdout ("-" pins an empty stdout). A listed case that starts to agree, a
+# listed case whose bytes change, or any unlisted disagreement fails the run.
 KNOWN_DIVERGENCES = {
-    "kat-flip@2",     # field set: Rust stops measuring; Go/Java also report constant + measure on
-    "kat-head@2",     # same object as kat-flip@2 (head byte gives the same flip)
-    "kat-flip@562",   # field set in a stage map: Rust stops; Go/Java add header height order + measure on
-    "kat-head@562",   # same as kat-flip@562
-    "kat-flip@3938",  # Rust omits shape_item header height order; Go/Java include it
+    # field set at the top level: Rust stops measuring; Go/Java add constant and measure on
+    "kat-flip@2": ("c83953b6c66dfe1f", "5a1fceb2ac0d8d2d"),
+    "kat-head@2": ("c83953b6c66dfe1f", "5a1fceb2ac0d8d2d"),
+    # field set in a stage map: Rust stops; Go/Java add header height order and measure on
+    "kat-flip@562": ("c83953b6c66dfe1f", "ce6cd51c179d204b"),
+    "kat-head@562": ("c83953b6c66dfe1f", "ce6cd51c179d204b"),
+    # Rust omits header height order; Go/Java include it
+    "kat-flip@3938": ("3252419fd201645e", "d55f786828031912"),
+    # one well-formed CBOR item that is not a map: Rust writes a field set
+    # record (exit 0); Go/Java treat it as undecodable (exit 1, no record)
+    "cbor-uint": ("c83953b6c66dfe1f", "-"),
+    "cbor-array": ("c83953b6c66dfe1f", "-"),
+    "cbor-text": ("c83953b6c66dfe1f", "-"),
 }
 
 
@@ -57,6 +68,10 @@ def load_cases():
     for cut in (0, 1, 8, n // 4, n // 2, n - 1):
         cases.append((f"kat-cut@{cut}", kat_obj[:cut], kat_docs))
     cases.append(("kat-trailing", kat_obj + b"\x00", kat_docs))
+    # One well-formed CBOR item that is not a map (section 14.1 rows 1 and 2).
+    cases.append(("cbor-uint", b"\x01", kat_docs))
+    cases.append(("cbor-array", b"\x80", kat_docs))
+    cases.append(("cbor-text", b"\x60", kat_docs))
     return cases
 
 
@@ -113,12 +128,12 @@ def main():
             Index.docs = docs
             path = os.path.join(tmp, "object.bin")
             open(path, "wb").write(obj)
-            for seed in seeds if not name.startswith("kat-") or name == "kat-small" else seeds[:1]:
+            for seed in seeds if name in ("kat-small", "test-3leg", "earlier-kind") else seeds[:1]:
                 args = ["--input", path, "--index-url", url, "--profile", "conformance-small", "--audit-seed", seed]
                 out = {lang: run(cmd + args, a.timeout) for lang, cmd in langs.items()}
                 runs += 1
                 codes = {lang: o[0] for lang, o in out.items()}
-                digests = {lang: hashlib.sha256(o[1]).hexdigest()[:16] for lang, o in out.items()}
+                digests = {lang: hashlib.sha256(o[1]).hexdigest()[:16] if o[1] else "-" for lang, o in out.items()}
                 same = len(set(codes.values())) == 1 and len({o[1] for o in out.values()}) == 1
                 if out["rust"][1]:
                     decoded += 1
@@ -126,22 +141,27 @@ def main():
                 known = name in KNOWN_DIVERGENCES
                 if same and not known:
                     status = "ok  "
-                elif not same and known and gojava:
+                elif not same and known and gojava and KNOWN_DIVERGENCES[name] == (digests["rust"], digests["go"]):
                     status = "KNOWN"
                     known_seen.add(name)
                 else:
                     status = "FAIL"
-                    fails.append(name + (" (listed as known but now agrees: remove it)" if same else ""))
+                    why = ""
+                    if same:
+                        why = " (listed as known but now agrees: remove it)"
+                    elif known:
+                        why = f" (known divergence changed bytes: pinned {KNOWN_DIVERGENCES[name]}, got {(digests['rust'], digests['go'])})"
+                    fails.append(name + why)
                 print(f"{status:<5} {name:<16} seed={seed[:8]} exit={codes['rust']} record={digests['rust']}"
                       + ("" if same else f"  codes={codes} digests={digests}"))
     server.shutdown()
     base_ok = decoded >= 3
     if not base_ok:
         fails.append(f"only {decoded} runs wrote a record; expected the base objects to decode")
-    missing = KNOWN_DIVERGENCES - known_seen
+    missing = set(KNOWN_DIVERGENCES) - known_seen
     if missing:
         fails.append(f"known divergence cases not run: {sorted(missing)}")
-    print(f"{runs} cases x 3 languages, {decoded} wrote a record, {len(known_seen)} known Rust-vs-Go/Java divergences (sdk/KNOWN-DIVERGENCES.md)")
+    print(f"{len(load_cases())} inputs, {runs} runs x 3 languages, {decoded} wrote a record, {len(known_seen)} known Rust-vs-Go/Java divergences (sdk/KNOWN-DIVERGENCES.md)")
     if fails:
         print("crosscheck FAIL: " + ", ".join(fails))
         return 1

@@ -1,15 +1,21 @@
 # Known divergences between the SDKs
 
-`sdk/test.sh` runs the Rust, Go and Java verify programs on the same inputs (`sdk/tools/crosscheck.py`). On every conformance-pack object, all three write byte-identical section 14 records. On some **malformed** objects, Rust disagrees with Go and Java. Go and Java agree with each other in every case.
+`sdk/test.sh` runs the Rust, Go and Java verify programs on the same inputs (`sdk/tools/crosscheck.py`). On every conformance-pack object, all three write byte-identical section 14 records. On some **malformed** inputs, Rust disagrees with Go and Java. Go and Java agree with each other in every case.
 
-These divergences already existed before the SDK move: the reference Rust build at `565add5` (main, gate 0.5.4) writes the same bytes. The move does not fix them, because tonight's push allows no behaviour changes. The harness lists them by case name. If a listed case starts to agree, or a new case disagrees, the harness fails. The list can only shrink.
+This release changes no behaviour. The Rust build from before the SDK move writes the same bytes for every case below. The harness pins each case by name and by the first 16 hex digits of the Rust and the Go/Java output digests. The run fails in three situations: a listed case starts to agree, its bytes change, or an unlisted case disagrees.
 
-| Case (kat-small object, mutated) | What differs |
-|---|---|
-| `kat-flip@2`, `kat-head@2` (top-level `fill` key renamed) | Rust: `shape_item` `["field set"]`, and every later measurement is `not defined` or `not read`. Go/Java: `["field set", "constant"]`, and they go on to measure headers, checkpoints, waypoints, paths and the six-leg draw. |
-| `kat-flip@562`, `kat-head@562` (a key in a stage map renamed) | Rust: `["field set"]` and stops measuring. Go/Java: `["field set", "header height order"]` and go on measuring. |
-| `kat-flip@3938` (one bit in a stored header height) | Rust: `["last_interrupt"]`. Go/Java: `["last_interrupt", "header height order"]`. |
+| Case | Rust | Go and Java | Impact | Tracked by |
+|---|---|---|---|---|
+| `kat-flip@2`, `kat-head@2`: top-level `fill` key renamed | `shape_item` `["field set"]`. Every later measurement is `not defined` or `not read` | `["field set", "constant"]`, and they go on to measure headers, checkpoints, waypoints, paths and the six-leg draw | Malformed objects only. `shape` is `mismatch` in all three, so section 15 refuses in all three. A Rust verifier writes different record bytes from a Go or Java verifier | not yet filed: spec-owner question below |
+| `kat-flip@562`, `kat-head@562`: a key in a stage map renamed | `["field set"]`, then stops measuring | `["field set", "header height order"]`, and go on measuring | same | same |
+| `kat-flip@3938`: one bit in a stored header height | `["last_interrupt"]` | `["last_interrupt", "header height order"]` | same | same |
+| `cbor-uint` (`01`), `cbor-array` (`80`), `cbor-text` (`60`): one well-formed CBOR item that is not a map | Library: `verify` writes a record with `shape_item` `["field set"]`, the same bytes as the `kat-flip@2` record. Program: exit 0, record on stdout | Library: Go `Verify` returns `decoded == false` with a `["malformed cbor"]` record, and Java `Measure.record` returns `null`. Programs: exit 1, `undecodable` on stderr, no record | Input that is not a hike object. Every SDK refuses it, but Rust writes a record and the others do not | same |
 
-To reproduce: `bash sdk/test.sh`, or run `python3 sdk/tools/crosscheck.py` with the three binaries. Each case prints both record digests.
+To reproduce, run `bash sdk/test.sh`, or run `python3 sdk/tools/crosscheck.py` with the three binaries. Each divergent case prints its exit codes and all three record digests.
 
-**Open question for the spec owner.** Section 14.1 (the `shape_item` table, and the rule that a present map with the wrong keys adds `field set`) has to decide which reading is right: does a `field set` mismatch still let the other Rule A3 conditions and measurements run? The statement in section 14.1 that a missing `last_interrupt` gives exactly `["field set", "last_interrupt", "header height order", …]` suggests that items keep accumulating, which points towards Go/Java. The SDKs do not decide this. The spec does, followed by a fix with a new vector in a `spec` PR.
+## Questions for the spec owner
+
+These are spec decisions. The SDKs do not decide them. The fix lands as a new vector in a `spec` PR, and then every SDK follows.
+
+1. **Does `field set` stop the other Rule A3 conditions?** Section 14.1 (normative) says: *"On `mismatch`, the array contains every string whose condition is violated, each string once, in the order 1…14. … A condition that is violated is not dropped because another condition is also violated."* Section 14.1 also says *"Later measurements are still recorded."* On that text, the Rust records for `kat-flip@2`, `kat-flip@562` and `kat-flip@3938` look **non-conforming**: Rust drops conditions and measurements after `field set`, or omits `header height order`. Go and Java follow the text. This needs the spec owner's confirmation before any SDK changes.
+2. **Which `shape_item` does a well-formed CBOR item that is not a map get?** Row 1, `malformed cbor`, applies when *"the input is not one definite-length CBOR data item under section 7.3"*. `01`, `80` and `60` each are one such item, which points away from `malformed cbor`. Row 2, `field set`, covers *"a map that is present"*, but here no top-level map is present. Rust records `field set`. Go records `malformed cbor` and Java writes no record. Section 14.1 does not settle which is right, and no vector covers it.
