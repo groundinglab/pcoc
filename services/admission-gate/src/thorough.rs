@@ -74,6 +74,56 @@ pub fn run(
     )
 }
 
+/// Restart resume of an unsettled provisional. Reuses `pending/<seq>.draw`
+/// and never draws again: a missing draw file is an error, so the caller
+/// holds the provisional instead of judging it with a fresh draw.
+pub fn resume(
+    log_dir: &Path,
+    seq: u64,
+    object: &[u8],
+    object_sha: &[u8; 32],
+    policy: &AdmissionPolicy,
+) -> Result<ThoroughOut, String> {
+    let hike = hike_of(object)?;
+    walk_with(
+        log_dir,
+        seq,
+        &hike,
+        object_sha,
+        policy,
+        hike::Sizes::production(),
+        Draw::StoredOnly,
+    )
+}
+
+/// [`resume`] at `conformance-small` sizes, on a hike the test already built.
+#[cfg(test)]
+pub(crate) fn resume_for_test(
+    log_dir: &Path,
+    seq: u64,
+    hike: &hike::Hike,
+    object_sha: &[u8; 32],
+    policy: &AdmissionPolicy,
+) -> Result<ThoroughOut, String> {
+    walk_with(
+        log_dir,
+        seq,
+        hike,
+        object_sha,
+        policy,
+        hike::Sizes::conformance_small(),
+        Draw::StoredOnly,
+    )
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Draw {
+    /// Reuse a stored draw, or draw once and store it before any leg runs.
+    StoredOrFresh,
+    /// Reuse a stored draw. No stored draw is an error.
+    StoredOnly,
+}
+
 /// [`run`] at `conformance-small` sizes, on a hike the test already built.
 ///
 /// Production [`run`] decodes with section 6 and walks that terrain. This
@@ -105,10 +155,32 @@ fn walk(
     policy: &AdmissionPolicy,
     sizes: hike::Sizes,
 ) -> Result<ThoroughOut, String> {
+    walk_with(
+        log_dir,
+        seq,
+        hike,
+        object_sha,
+        policy,
+        sizes,
+        Draw::StoredOrFresh,
+    )
+}
+
+fn walk_with(
+    log_dir: &Path,
+    seq: u64,
+    hike: &hike::Hike,
+    object_sha: &[u8; 32],
+    policy: &AdmissionPolicy,
+    sizes: hike::Sizes,
+    mode: Draw,
+) -> Result<ThoroughOut, String> {
     let legs = leg_total(hike).ok_or_else(|| "leg total".to_owned())?;
     let path = draw_path(log_dir, seq);
     let draw = if path.is_file() {
         load_draw(&path, seq, object_sha)?
+    } else if mode == Draw::StoredOnly {
+        return Err(format!("no stored draw for seq {seq}; not drawn again"));
     } else {
         let draw = fresh_draw(seq, object_sha, legs, policy)?;
         store_draw(log_dir, &draw)?;

@@ -348,21 +348,6 @@ async fn poll_job_for(router: &Router, job_id: &str, budget: Duration) -> serde_
     panic!("verify job {job_id} did not finish within {budget:?}");
 }
 
-async fn wait_any_thorough(dir: &std::path::Path, budget: Duration) -> serde_json::Value {
-    let deadline = std::time::Instant::now() + budget;
-    while std::time::Instant::now() < deadline {
-        if let Ok(raw) = std::fs::read(dir.join("chain.jsonl")) {
-            for value in json_values(&raw) {
-                if value["phase"] == "thorough" {
-                    return value;
-                }
-            }
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    panic!("no thorough line within {budget:?}");
-}
-
 #[tokio::test]
 async fn health_reports_version_commit_spec_and_config() {
     let (router, dir) = service("https://index.example");
@@ -595,16 +580,15 @@ async fn a_restart_does_not_wait_on_a_hung_index() {
         cfg.max_concurrent_verify = 1;
         cfg.index_timeout = Duration::from_millis(400);
     });
-    let started = std::time::Instant::now();
-    let thorough = wait_any_thorough(&dir, Duration::from_secs(4)).await;
-    assert!(started.elapsed() < Duration::from_secs(4));
-    assert_eq!(thorough["decision"], "refuse", "{thorough}");
-    assert_eq!(thorough["fast_seq"], 0);
-    assert!(thorough["reasons"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|reason| reason == "the index did not answer for a stored beacon"));
+    // Gate 0.5.4: the resume reuses the stored draw and reads no index. This
+    // provisional has no stored draw, so it is held: no thorough line, and
+    // never a fresh six-leg draw against the (hung) index.
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    let raw = std::fs::read(dir.join("chain.jsonl")).unwrap();
+    assert!(
+        json_values(&raw).iter().all(|value| value["phase"] != "thorough"),
+        "a provisional with no stored draw is held"
+    );
     let (status, posted) = post_cbor(&router, vec![0x80]).await;
     assert_eq!(status, StatusCode::ACCEPTED, "{posted}");
     let job = poll_job_for(

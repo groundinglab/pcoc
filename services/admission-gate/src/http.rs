@@ -510,11 +510,21 @@ async fn get_sign_in_result(
     with_cors(&svc, &headers, (StatusCode::OK, Json(body)).into_response())
 }
 
+/// Restart resume. The stored `pending/<seq>.draw` is reused through the
+/// thorough check; nothing is drawn again. No stored draw is held.
 fn spawn_thorough(door: Door, jobs: JobStore, job: ThoroughJob) {
     tokio::spawn(async move {
+        let log_dir = jobs.log_dir();
+        let policy = door.policy().clone();
         let object = job.object.clone();
-        let report = jobs.measure(object).await;
-        door.settle(job, report).await;
+        let object_sha = job.object_sha;
+        let seq = job.fast_seq;
+        let walked = tokio::task::spawn_blocking(move || {
+            crate::thorough::resume(&log_dir, seq, &object, &object_sha, &policy)
+        })
+        .await
+        .unwrap_or_else(|error| Err(format!("resume worker failed: {error}")));
+        door.settle_resumed(job, walked);
     });
 }
 

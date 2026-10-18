@@ -5,7 +5,8 @@
 //! response. This process does not mint a session and does not call a website.
 //!
 //! A provisional line already in the log, with no thorough line, is settled
-//! on restart. A new sign-in does not write that provisional line. There is
+//! on restart through the thorough check with its stored draw. With no
+//! stored draw it is held: nothing is drawn again and nothing is accepted. A new sign-in does not write that provisional line. There is
 //! no friendly list. A pure bookend `not read` writes no thorough line.
 
 use crate::canon::{self, hex32};
@@ -21,8 +22,6 @@ use serde_json::{json, Value};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
-
-const VERIFIER_ERROR: &str = "verifier_error";
 
 #[derive(Clone)]
 pub struct Door {
@@ -174,41 +173,14 @@ impl Door {
             },
         );
         let now = self.now_unix_s();
-        let mut write = if out.matched {
-            DecisionWrite::bare(now, None, "thorough", "accept")
-        } else {
-            DecisionWrite::bare(now, None, "thorough", "revoke")
-        };
-        write.fast_seq = Some(out.seq);
-        write.submission_sha256 = job.submission;
-        write.public_key = job.public_key;
-        write.object_sha256 = job.object_sha;
-        write.object = job.object.clone();
-        write.reasons = vec![if out.matched {
-            wire::OUTCOME_ACCEPTED.to_owned()
-        } else {
-            "revoke".to_owned()
-        }];
-        write.summary = Some("{}".to_owned());
-        write.policy_id = Some(self.policy.policy_id.clone());
-        write.deep = Some(serde_json::json!({
-            "runs_done": out.runs_done,
-            "legs_matched": out.legs_matched,
-            "legs_total": out.legs_total,
-            "salt": out.salt,
-            "indices": out.indices,
-            "commitment": out.commitment,
-        }));
-        if !out.matched {
-            let note = if out.digest_mismatch {
-                "checkpoint mismatch"
-            } else {
-                "a recomputed leg result differs"
-            };
-            write.reason = Some(note.to_owned());
-            write.reason_code = Some(reasons::code_of_note(note).to_owned());
-            write.class = Some(reasons::class_of(reasons::code_of_note(note)).to_owned());
-        }
+        let write = self.thorough_write(
+            now,
+            job.submission,
+            job.public_key,
+            job.object_sha,
+            job.object.clone(),
+            &out,
+        );
         let seq = {
             let mut inner = self.lock();
             inner.log.append(&write).ok()
@@ -245,6 +217,112 @@ impl Door {
             Err(error) => {
                 eprintln!("admission-service thorough did not finish; held: {error}");
             }
+        }
+    }
+
+    /// The thorough accept or revoke line for `out`. `fast_seq` is `out.seq`.
+    fn thorough_write(
+        &self,
+        now: u64,
+        submission: [u8; 32],
+        public_key: [u8; 32],
+        object_sha: [u8; 32],
+        object: Vec<u8>,
+        out: &crate::thorough::ThoroughOut,
+    ) -> DecisionWrite {
+        let mut write = if out.matched {
+            DecisionWrite::bare(now, None, "thorough", "accept")
+        } else {
+            DecisionWrite::bare(now, None, "thorough", "revoke")
+        };
+        write.fast_seq = Some(out.seq);
+        write.submission_sha256 = submission;
+        write.public_key = public_key;
+        write.object_sha256 = object_sha;
+        write.object = object;
+        write.reasons = vec![if out.matched {
+            wire::OUTCOME_ACCEPTED.to_owned()
+        } else {
+            "revoke".to_owned()
+        }];
+        write.summary = Some("{}".to_owned());
+        write.policy_id = Some(self.policy.policy_id.clone());
+        write.deep = Some(serde_json::json!({
+            "runs_done": out.runs_done,
+            "legs_matched": out.legs_matched,
+            "legs_total": out.legs_total,
+            "salt": out.salt,
+            "indices": out.indices,
+            "commitment": out.commitment,
+        }));
+        if !out.matched {
+            let note = if out.digest_mismatch {
+                "checkpoint mismatch"
+            } else {
+                "a recomputed leg result differs"
+            };
+            write.reason = Some(note.to_owned());
+            write.reason_code = Some(reasons::code_of_note(note).to_owned());
+            write.class = Some(reasons::class_of(reasons::code_of_note(note)).to_owned());
+        }
+        write
+    }
+
+    /// Restart resume of an unsettled provisional, after
+    /// [`crate::thorough::resume`]. The stored draw was reused, so this is
+    /// the same thorough check the live path runs, including the ban on a
+    /// fake leg. An error (no stored draw, a draw that does not match) is
+    /// held: no line, and never an accept.
+    pub fn settle_resumed(
+        &self,
+        job: ThoroughJob,
+        walked: Result<crate::thorough::ThoroughOut, String>,
+    ) {
+        let out = match walked {
+            Ok(out) if out.seq == job.fast_seq => out,
+            Ok(out) => {
+                eprintln!(
+                    "admission-service resume fast_seq={} got a result for seq {}; held",
+                    job.fast_seq, out.seq
+                );
+                return;
+            }
+            Err(error) => {
+                eprintln!(
+                    "admission-service resume fast_seq={} held: {error}",
+                    job.fast_seq
+                );
+                return;
+            }
+        };
+        let now = self.now_unix_s();
+        let write = self.thorough_write(
+            now,
+            job.submission,
+            job.public_key,
+            job.object_sha,
+            job.object,
+            &out,
+        );
+        let seq = {
+            let mut inner = self.lock();
+            if already_settled(&inner.log, job.fast_seq) {
+                return;
+            }
+            match inner.log.append(&write) {
+                Ok(seq) => seq,
+                Err(error) => {
+                    eprintln!(
+                        "admission-service resumed thorough fast_seq={} was not written: {}",
+                        job.fast_seq,
+                        show_log(error)
+                    );
+                    return;
+                }
+            }
+        };
+        if !out.matched && self.policy.ban_key_on_fake_leg {
+            self.ban_key(&job.public_key, seq);
         }
     }
 
@@ -726,61 +804,6 @@ impl Door {
                 );
                 self.rows.settle(&job.nonce, outcome, now);
             }
-        }
-    }
-
-    pub async fn settle(&self, job: ThoroughJob, report: Result<Report, String>) {
-        let judgment = match report {
-            Ok(report) => Ok(policy::judge(
-                &report,
-                self.policy.leg_rate_floor.p,
-                self.policy.leg_rate_floor.q,
-            )),
-            Err(error) => Err(error),
-        };
-        let (decision, reasons, line, summary) = match judgment {
-            Ok(Judgment::Admit { record }) => ("accept", Vec::new(), None, record),
-            Ok(Judgment::Refuse {
-                reasons,
-                line,
-                record,
-            }) => ("refuse", reasons, Some(line), record),
-            // `held` is an HTTP outcome. It is not a decision-log event.
-            Ok(Judgment::Held { .. }) => return,
-            Err(_) => (
-                "refuse",
-                vec![VERIFIER_ERROR.to_owned()],
-                Some("The verifier did not finish.".to_owned()),
-                "{}".to_owned(),
-            ),
-        };
-        let mut inner = self.lock();
-        if already_settled(&inner.log, job.fast_seq) {
-            return;
-        }
-        let mut write = DecisionWrite::bare(log::unix_now(), job.tip_height, "thorough", decision);
-        write.fast_seq = Some(job.fast_seq);
-        write.submission_sha256 = job.submission;
-        write.public_key = job.public_key;
-        write.object_sha256 = job.object_sha;
-        write.object = job.object;
-        write.reason = line;
-        write.summary = Some(summary);
-        if decision == "refuse" {
-            let code = reasons
-                .first()
-                .map(|note| reasons::code_of_note(note))
-                .unwrap_or(reasons::CODE_VERIFIER_ERROR);
-            write.reason_code = Some(code.to_owned());
-            write.class = Some(reasons::class_of(code).to_owned());
-        }
-        write.reasons = reasons;
-        if let Err(error) = inner.log.append(&write) {
-            eprintln!(
-                "admission-service thorough fast_seq={} was not written: {}",
-                job.fast_seq,
-                show_log(error)
-            );
         }
     }
 
@@ -1446,6 +1469,85 @@ mod tests {
             assert_eq!(line["deep"]["indices"], draw_runs(&dir, seq), "{line}");
         }
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Defect 1 (gate review r2, finding 1). A restart resumes an unsettled
+    /// provisional with its stored draw: the indices on the thorough line are
+    /// the stored draw, and a fake leg still revokes and bans. A provisional
+    /// with no stored draw is held and never accepted.
+    #[test]
+    fn a_restart_resumes_with_the_stored_draw_and_never_draws_again() {
+        let built = small_honest();
+        let (url, _) = serve(&built.docs, Mirror::Honest);
+        let (door, dir) = open_at(&url);
+        // Honest job: the draw is stored, then the process stops before the
+        // thorough line is written.
+        let honest = job_of(&built.bytes, 1);
+        assert_eq!(door.settle_fast_small(&honest), FastPhase::Provisional);
+        let honest_seq = provisional_seq(&dir, &honest);
+        thorough::run_for_test(&dir, honest_seq, &built.hike, &honest.object_sha, door.policy())
+            .unwrap();
+        let stored = draw_runs(&dir, honest_seq);
+        // A job whose process stopped before any draw was stored.
+        let undrawn = job_of(&built.bytes, 2);
+        assert_eq!(door.settle_fast_small(&undrawn), FastPhase::Provisional);
+        let undrawn_seq = provisional_seq(&dir, &undrawn);
+        // A fake leg whose draw was stored.
+        let mut fake_hike = built.hike.clone();
+        fake_hike.stages[0].leg_results[0][0] ^= 0xff;
+        let fake_bytes = hike::encode_hike_sized(&fake_hike, hike::Sizes::conformance_small());
+        let mut fake = job_of(&fake_bytes, 3);
+        fake.public_key = [0x43; 32];
+        assert_eq!(door.settle_fast_small(&fake), FastPhase::Provisional);
+        let fake_seq = provisional_seq(&dir, &fake);
+        thorough::run_for_test(&dir, fake_seq, &fake_hike, &fake.object_sha, door.policy()).unwrap();
+        let fake_stored = draw_runs(&dir, fake_seq);
+        drop(door);
+
+        // Restart.
+        let door = reopen(&dir, &url);
+        let jobs = door.unsettled();
+        assert_eq!(jobs.len(), 3);
+        for job in jobs {
+            let hike = if job.fast_seq == fake_seq { &fake_hike } else { &built.hike };
+            let walked = thorough::resume_for_test(
+                &dir,
+                job.fast_seq,
+                hike,
+                &job.object_sha,
+                door.policy(),
+            );
+            door.settle_resumed(job, walked);
+        }
+        assert!(!dir.join("pending").join(format!("{undrawn_seq}.draw")).exists());
+        let lines = chain(&dir);
+        let thorough_for = |seq: u64| {
+            lines
+                .iter()
+                .find(|line| line["phase"] == "thorough" && line["fast_seq"] == serde_json::json!(seq))
+                .cloned()
+        };
+        let honest_line = thorough_for(honest_seq).expect("honest resume line");
+        assert_eq!(honest_line["decision"], "accept");
+        assert_eq!(honest_line["deep"]["indices"], stored);
+        let fake_line = thorough_for(fake_seq).expect("fake resume line");
+        assert_eq!(fake_line["decision"], "revoke");
+        assert_eq!(fake_line["deep"]["indices"], fake_stored);
+        assert!(door.banned(&fake.public_key), "the fake leg bans on resume");
+        assert!(thorough_for(undrawn_seq).is_none(), "no draw: held, no line");
+        assert!(
+            lines
+                .iter()
+                .filter(|line| line["decision"] == "accept")
+                .all(|line| line["fast_seq"] == serde_json::json!(honest_seq)),
+            "{lines:?}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn reopen(dir: &Path, index_url: &str) -> Door {
+        let cfg = Config::for_tests(dir.to_path_buf(), index_url);
+        Door::open(&cfg.log_dir, cfg.policy(), &cfg.index_url, cfg.index_timeout).unwrap()
     }
 
     /// Defect 2 (gate review r2, finding 2). A thorough error is held. It
