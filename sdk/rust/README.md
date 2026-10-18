@@ -388,7 +388,7 @@ cd sdk/rust && cargo build --release --locked
 
 `satoshi-hike-verify` takes the same flags as the Go and Java programs (see [the verify programs](../README.md#the-verify-programs)):
 - The default `--profile` is `test`. It does not dial `https://index.groundinglab.io`; it reads `PCOC_TEST_INDEX_URL` when `--index-url` is omitted.
-- `--profile conformance-small` requires `--sample-bytes N --slot-bytes N --terrain-bytes N --steps-per-leg N`. The record states those integers. Any of the four with another profile is a usage error.
+- `--profile conformance-small` requires `--sample-bytes N --slot-bytes N --terrain-bytes N --steps-per-leg N`. The record states those integers. Any of the four with another profile is a usage error, exit 2.
 - Without `--chain-rpc`, the plant check reads the index document (`proxy_matches`). With `--chain-rpc` (live profile only), it reads the node (`hike-net`).
 
 `satoshi-hike-produce` has flags of its own: `--demo-mnemonic`, `--report`, `--clock-source`, `--gossip-network`, and the profiles `test|live|slow-lan`. See its `--help`.

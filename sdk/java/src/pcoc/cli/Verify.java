@@ -351,7 +351,7 @@ public final class Verify {
     private static void usage() {
         System.err.println("usage: satoshi-hike-verify --input PATH --index-url URL [--audit-seed HEX] [--report PATH] [--profile production|conformance-small|test|live] [--sample-bytes N --slot-bytes N --terrain-bytes N --steps-per-leg N] [--chain-rpc URL] [--log quiet|verbose]");
         System.err.println("       default profile is test. Omitted --index-url is PCOC_TEST_INDEX_URL. Unset is a usage error. This tree does not fill that host. It does not fill https://index.groundinglab.io.");
-        System.err.println("       --profile conformance-small requires all four integers. Any of them with another profile is a usage error.");
+        System.err.println("       --profile conformance-small requires all four integers. Any of them with another profile is a usage error, exit 2.");
         System.err.println("       --profile live fills that index. --chain-rpc is live-only.");
         System.err.println("       --log defaults to quiet. verbose writes the measurement record to stderr. stdout is the measurement record when the object decodes.");
     }
