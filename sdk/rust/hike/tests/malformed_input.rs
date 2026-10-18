@@ -190,7 +190,14 @@ fn path_bodies_never_panic_and_bad_lengths_are_typed_errors() {
 
 #[test]
 fn index_replies_never_panic() {
-    let good = r#"{"height":840000,"block_hash":"0000000000000000000320283a032748cef8227873ff4872689bf23f1cda83a5"}"#;
+    let kat: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(pack().join("kat-small.json")).unwrap())
+            .unwrap();
+    let good = kat["documents"][0]["body"].as_str().unwrap().to_owned();
+    assert!(
+        hike::parse_index_beacon(&good).is_ok(),
+        "seed document must parse"
+    );
     let mut rng = Rng(0x5eed_0003);
     for (i, m) in mutants(good.as_bytes(), &mut rng, 4000)
         .into_iter()
