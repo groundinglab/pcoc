@@ -365,7 +365,7 @@ PCOC_REGEN_V2=1 cargo test --manifest-path sdk/rust/hike/Cargo.toml --test confo
 git diff --exit-code spec/conformance/v2.0
 ```
 
-The pack's own README still names the pre-move path `reference/rust/hike/Cargo.toml` in its regenerate commands. That file is covered by the `SPEC_PIN` hash, so the fix waits for the next spec release; the command above is the current one. [../SPEC_PIN](../SPEC_PIN) holds the spec tag and the vector hash.
+The pack's own README still names the pre-move path `reference/rust/hike/Cargo.toml` in its regenerate commands, and its `stage0-start.json` paragraph repeats the `sign-in-origins.json` sentence. That file is covered by the `SPEC_PIN` hash, so both fixes wait for the next spec release; the command above is the current one. [../SPEC_PIN](../SPEC_PIN) holds the spec tag and the vector hash.
 
 ## Test
 
