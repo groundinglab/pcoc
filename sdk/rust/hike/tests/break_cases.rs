@@ -387,6 +387,25 @@ fn a_top_level_that_is_not_a_map_is_malformed_cbor() {
     assert!(!hike::top_level_map(&[]));
 }
 
+/// F2: a declared byte, text, array or map length past the bytes left is
+/// the undecoded ["malformed cbor"] record. The same heads the Go and Java
+/// decoders reject without allocating from the declared length.
+#[test]
+fn an_oversized_length_is_malformed_cbor() {
+    let none = undecoded();
+    let inputs: &[&[u8]] = &[
+        &[0x5b, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff],
+        &[0x7b, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff],
+        &[0x9b, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff],
+        &[0xba, 0xff, 0xff, 0xff, 0xff],
+        &[0x9a, 0x3b, 0x9a, 0xca, 0x00],
+    ];
+    for bytes in inputs {
+        assert!(!hike::top_level_map(bytes), "{bytes:?}");
+        assert_eq!(record(bytes), none, "{bytes:?}");
+    }
+}
+
 /// rc.2 (approved change 3): decoded_hike refuses trailing bytes.
 #[test]
 fn decoded_hike_refuses_trailing_bytes() {

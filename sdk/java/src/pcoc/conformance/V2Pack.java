@@ -646,6 +646,35 @@ public final class V2Pack {
                 throw new AssertionError("six-leg previous " + Arrays.toString(c) + " " + index + " " + result);
             }
         }
+        // F2/F3: a declared length or count past the bytes left is malformed
+        // CBOR. The record is the undecoded one; the decoder does not allocate
+        // from that length. Depth is a separate change (F1).
+        for (byte[] in : new byte[][] {
+            {0x5b, 0x7f, -1, -1, -1, -1, -1, -1, -1},
+            {0x7b, 0x7f, -1, -1, -1, -1, -1, -1, -1},
+            {(byte) 0x9b, -1, -1, -1, -1, -1, -1, -1, -1},
+            {(byte) 0xba, -1, -1, -1, -1},
+            {(byte) 0x9a, 0x3b, (byte) 0x9a, (byte) 0xca, 0x00},
+            // Integer.MAX_VALUE element or pair counts. 9a and ba are 5 bytes;
+            // 9b 000000007fffffff is 9 bytes. The collection is not sized from
+            // that count.
+            {(byte) 0x9a, 0x7f, -1, -1, -1},
+            {(byte) 0xba, 0x7f, -1, -1, -1},
+            {(byte) 0x9b, 0x00, 0x00, 0x00, 0x00, 0x7f, -1, -1, -1},
+        }) {
+            String got = Measure.record(in, Profile.CONFORMANCE_SMALL_V2, height -> null, null, false);
+            if (got == null || !got.equals(none) || Cbor.issue(in).isEmpty()) {
+                throw new AssertionError("oversized length " + Arrays.toString(in) + " " + got);
+            }
+            try {
+                Cbor.decode(in);
+                throw new AssertionError("oversized length decoded " + Arrays.toString(in));
+            } catch (Cbor.Problem problem) {
+                if (!"truncated".equals(problem.issue)) {
+                    throw new AssertionError("oversized length issue " + problem.issue);
+                }
+            }
+        }
     }
 
     private static byte[] filled(byte b) {

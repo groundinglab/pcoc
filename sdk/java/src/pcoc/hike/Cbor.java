@@ -309,7 +309,10 @@ public final class Cbor {
                     return Val.text(text);
                 case 4: {
                     enter();
-                    if (Long.compareUnsigned(argument, Integer.MAX_VALUE) > 0) {
+                    // One item is at least one byte. A count past the bytes
+                    // left, or past what an int can hold, is truncated. The
+                    // list is not sized from that count.
+                    if (countExceeds(argument, 1)) {
                         throw new Problem("truncated");
                     }
                     List<Val> items = new ArrayList<>((int) argument);
@@ -321,7 +324,8 @@ public final class Cbor {
                 }
                 case 5: {
                     enter();
-                    if (Long.compareUnsigned(argument, Integer.MAX_VALUE) > 0) {
+                    // A map entry is a key and a value, at least two bytes.
+                    if (countExceeds(argument, 2)) {
                         throw new Problem("truncated");
                     }
                     LinkedHashMap<String, Val> map = new LinkedHashMap<>();
@@ -387,7 +391,11 @@ public final class Cbor {
         }
 
         byte[] take(long length) throws Problem {
-            if (Long.compareUnsigned(length, Integer.MAX_VALUE) > 0 || i + length > data.length) {
+            // i + length overflows a signed int when length is near 2^63.
+            // Compare the declared length as an unsigned long against the
+            // bytes still in the buffer, and refuse a length an array cannot hold.
+            if (Long.compareUnsigned(length, Integer.MAX_VALUE) > 0
+                    || Long.compareUnsigned(length, data.length - i) > 0) {
                 throw new Problem("truncated");
             }
             int n = (int) length;
@@ -395,6 +403,15 @@ public final class Cbor {
             System.arraycopy(data, i, out, 0, n);
             i += n;
             return out;
+        }
+
+        /** A count of n items, each at least per bytes, past the bytes left. */
+        boolean countExceeds(long count, int per) {
+            long left = data.length - i;
+            if (Long.compareUnsigned(count, Integer.MAX_VALUE) > 0) {
+                return true;
+            }
+            return Long.compareUnsigned(count, left / per) > 0;
         }
     }
 }
