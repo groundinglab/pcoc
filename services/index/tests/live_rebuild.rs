@@ -204,7 +204,7 @@ fn verify_bin() -> std::path::PathBuf {
     if let Ok(path) = std::env::var("SATOSHI_HIKE_VERIFY") {
         return Path::new(&path).to_path_buf();
     }
-    let go_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../reference/go");
+    let go_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sdk/go");
     let dest = std::env::temp_dir().join("satoshi-hike-verify-issue32");
     let go = std::env::var("GO_BIN").unwrap_or_else(|_| {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/home/christian".to_owned());

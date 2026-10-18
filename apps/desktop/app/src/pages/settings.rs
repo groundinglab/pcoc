@@ -135,7 +135,7 @@ fn work(app: &Rc<App>, on: bool) -> gtk::Widget {
     c.body.append(&setting(
         "Checkpoint threads",
         &format!(
-            "Reference default is {}. The verify record does not change.",
+            "Default is {}. The verify record does not change.",
             pcoc_hike_core::config::Config::default().threads
         ),
         &spin,
@@ -253,34 +253,32 @@ fn about_card(on: bool) -> gtk::Widget {
             about::APP_ID
         )
     };
-    let rows: Vec<(&str, gtk::Widget)> = vec![
+    let mut rows: Vec<(&str, gtk::Widget)> = vec![
         ("SPEC", line(about::SPEC, &[]).upcast()),
         ("Hard cut", line(about::SPEC_HARD_CUT, &["mono"]).upcast()),
         ("Sign-in", line(about::SPEC_SIGN_IN_LOCK, &[]).upcast()),
-        ("Reference crate", line(&about::crate_line(), &[]).upcast()),
-        ("Reference pin", text(&about::pin_line(), &[]).upcast()),
-        ("Resolved commit", mono(about::PIN_COMMIT).upcast()),
+        ("PCOC SDK", line(about::sdk_line(), &[]).upcast()),
+        ("SDK source", text(&about::source_line(), &[]).upcast()),
+    ];
+    if about::shows_resolved_commit() {
+        rows.push(("Resolved commit", mono(about::PIN_COMMIT).upcast()));
+    }
+    rows.extend([
         ("Object kind", line(about::OBJECT_KIND, &["mono"]).upcast()),
         (
             "App",
             line(&format!("PCOC Hike {}", about::APP_VERSION), &[]).upcast(),
         ),
         ("Install", text(&install, &[]).upcast()),
-    ];
+        ("By", line("groundinglab", &[]).upcast()),
+    ]);
     c.body.append(&kv(&rows, 140));
-    let note = match about::PIN_KIND {
-        "tag" => format!(
-            "This build links the reference at tag {}. Upgrading that pin is a separate change. Go and Java references are not linked. The build refuses a dependency on branch main.",
-            about::PIN
-        ),
-        "path" => "This build links the in-tree reference, the same crate satoshi-hike-produce uses. Go and Java references are not linked. The build refuses a dependency on branch main.".to_owned(),
-        _ => "This build pins a commit of the reference workspace rather than a tag. Upgrading the pin is a separate change. Go and Java references are not linked. The build refuses a dependency on branch main.".to_owned(),
-    };
+    let note = about::pin_note();
     c.body.append(&text(&note, &["muted", "small"]));
     learn(
         &c.body,
         &c.root,
-        "Produce progress is read from the reference's produce closures and its .events log at this pin. A dedicated progress callback is a change inside the reference, reviewed with the next tag.",
+        "Produce progress is read from the SDK's produce closures and its .events log. A dedicated progress callback would be a change inside the SDK, reviewed with the next SDK release.",
         on,
     );
     c.root.upcast()

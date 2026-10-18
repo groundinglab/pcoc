@@ -362,6 +362,16 @@ async fn health_reports_version_commit_spec_and_config() {
     assert_eq!(body["version"], env!("CARGO_PKG_VERSION"));
     assert_eq!(body["version"], "0.5.4");
     assert!(body["commit"].as_str().unwrap().len() >= 7);
+    // The gate builds the in-tree Rust SDK; health names its version.
+    // A clean tree stamps "(path)"; uncommitted SDK changes stamp "(path, dirty)".
+    let version = include_str!("../../../sdk/VERSION").trim();
+    let sdk = pcoc_admission::http::SDK_VERSION;
+    assert!(
+        sdk == format!("{version} (path)") || sdk == format!("{version} (path, dirty)"),
+        "{sdk}"
+    );
+    assert_eq!(body["sdk"], sdk, "{body}");
+    assert!(pcoc_admission::http::version_line().ends_with(&format!("sdk={sdk}")));
     assert_eq!(body["spec"], "Satoshi Hike v2.0");
     assert_eq!(body["spec_kind"], "v2.0");
     assert_eq!(body["config"]["index_url"], "https://index.example");

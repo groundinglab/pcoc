@@ -33,11 +33,12 @@ toml = "0.8"
 ureq = { version = "=2.12.1", default-features = false, features = ["tls"] }
 # url 2.5.4+ makes ureq's url resolve to idna 1 (GHSA-h97m-ww89-6jmq fix). The lock pins idna_adapter 1.1 (unicode-rs backend) so the build stays on rustc 1.83; idna_adapter 1.2 pulls icu 2.x, which needs a newer rustc.
 url = "2.5.4"
-# v2.0 reference at the published tag ref-rust-v2.0.6. `verify` stays the CLI record.
-# `verify_fast` is the gate's fast phase. nip06 stays on its published tag.
-hike = { git = "https://github.com/groundinglab/pcoc", tag = "ref-rust-v2.0.6" }
+# The Rust SDK (Satoshi Hike v2.0), in-tree at sdk/rust; version in sdk/VERSION.
+# `verify` stays the CLI record. `verify_fast` is the gate's fast phase.
+# /v1/health and --version report the resolved SDK version (build.rs reads Cargo.lock).
+hike = { path = "../../sdk/rust/hike" }
 
 [dev-dependencies]
-nip06 = { git = "https://github.com/groundinglab/pcoc", tag = "ref-rust-v2.0.5" }
+nip06 = { path = "../../sdk/rust/nip06" }
 http-body-util = "0.1"
 tower = { version = "0.5", features = ["util"] }

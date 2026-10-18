@@ -6,6 +6,6 @@ Read section 7.3 for the byte encodings, then section 13 for the producer proced
 
 Only hash-bound values are evidence. A text disagreement with a vector is a defect to report. Do not pick a side.
 
-A worked example is any of the three references. Start at [reference/README.md](../../reference/README.md). Rust is the program that can regenerate the vectors. Go and Java check the bytes already published.
+A worked example is any of the three SDKs. Start at [sdk/README.md](../../sdk/README.md). Rust is the program that can regenerate the vectors. Go and Java check the bytes already published.
 
 Do not call groundinglab to learn the construction. Do not read the services to learn the construction. The services add no Part A rule.

@@ -4,13 +4,20 @@ One binary, one config file, a log directory the process creates. Satoshi Hike v
 
 ## Build
 
-From `services/admission-gate/`, with a git checkout so `commit` is the SHA (`COMMIT` overrides it):
+The gate builds the Rust SDK from this repository by path (`sdk/rust/hike`), so the checkout must contain `sdk/rust` and `sdk/VERSION` as well as `services/admission-gate`. A sparse checkout needs at least:
+
+```bash
+git sparse-checkout set services/admission-gate sdk/rust   # cone mode also brings sdk/VERSION
+```
+
+Build from a clean checkout of a tag (`gate-v…` or `sdk-v…`), from `services/admission-gate/`, with git present so `commit` is the SHA (`COMMIT` overrides it):
 
 ```bash
 cargo build --locked --release
+target/release/admission-service --version   # admission-service <version> commit=<sha> sdk=<sdk version> (path)
 ```
 
-The binary is `target/release/admission-service`.
+The binary is `target/release/admission-service`. Do not deploy a binary whose `--version` says `(path, dirty)`: the SDK files it was built from had uncommitted changes. Release binaries contain the absolute path of the checkout, so builds from different directories differ in bytes. To keep the host path out of the binary, build with `RUSTFLAGS="--remap-path-prefix=$(git rev-parse --show-toplevel)=/pcoc"` (not yet part of the release process).
 
 ## Layout
 

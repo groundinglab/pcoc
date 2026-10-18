@@ -2,8 +2,8 @@
 #
 # GNOME 47 and 48 are past Flathub support. This build uses GNOME 50, which
 # still supplies GTK 4.14 and libadwaita 1.5. The sandbox build is offline.
-# apps/desktop/flatpak/build-bundle.sh vendors Cargo.lock first, including
-# the pinned hike git revision, and writes cargo-config.toml. The build
+# apps/desktop/flatpak/build-bundle.sh vendors Cargo.lock first (hike is the
+# in-tree Rust SDK at sdk/rust, part of this source dir), and writes cargo-config.toml. The build
 # copies that file to .cargo/config.toml at the repository root, which is
 # the directory cargo runs in.
 id: app.pcoc.Hike
@@ -57,6 +57,6 @@ modules:
           - apps/desktop/flatpak/build-dir
           - apps/desktop/flatpak/repo
           - apps/desktop/flatpak/out
-          - reference/rust/target
+          - sdk/rust/target
           - services/target
           - qa/stage-loop/target

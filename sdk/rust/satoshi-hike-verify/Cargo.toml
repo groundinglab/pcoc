@@ -1,0 +1,11 @@
+[package]
+name = "satoshi-hike-verify"
+version = "2.0.0-rc.2"
+license = "Apache-2.0"
+edition = "2021"
+rust-version = "1.83"
+publish = false
+
+[dependencies]
+hike = { path = "../hike" }
+hike-net = { path = "../hike-net" }

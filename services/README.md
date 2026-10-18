@@ -32,11 +32,11 @@ cargo test --locked
 
 Every service binds to loopback by default. To serve one publicly, put a reverse proxy of your choice in front of it. Nothing here names a host.
 
-| Folder | Process | Default bind | Depends on (git tag) | Release tag |
+| Folder | Process | Default bind | Depends on | Release tag |
 |---|---|---|---|---|
 | [`bari/`](bari/) | `bari` (crate `pcoc-bari`) | `127.0.0.1:38080` | `hike`, `hike-net` @ `ref-rust-v2.0.5` | `bari-v0.6.8` |
 | [`index/`](index/) | `pcoc-index` | `127.0.0.1:38081` | `pcoc-bari` @ `bari-v0.6.7` (`hike` @ `ref-rust-v2.0.4`) | `index-v0.1.4` |
-| [`admission-gate/`](admission-gate/) | `admission-service` (crate `pcoc-admission`) | `127.0.0.1:8787` | `hike` @ `ref-rust-v2.0.5` | `gate-v0.4.1` |
+| [`admission-gate/`](admission-gate/) | `admission-service` (crate `pcoc-admission`) | `127.0.0.1:8787` | `hike` from the in-tree Rust SDK, by path (`sdk/rust/hike`; version in `sdk/VERSION`) | `gate-v0.5.4` |
 | [`admission-claims/`](admission-claims/) | `admission-claims` (crate 0.1.0) | `127.0.0.1:8793` | none in this repository (reads the gate at `127.0.0.1:8787` by default) | none yet |
 
 Release tags are `<service>-v<x.y.z>` and point at the commit that ships that release. The table's Release tag column is the release that matches the working tree.
@@ -56,7 +56,7 @@ Release tags are `<service>-v<x.y.z>` and point at the commit that ships that re
 - `POST /v1/sign-in` is the sign-in door. The body is the §15.1 six-field object. The website reads `GET /v1/sign-in/result/{nonce}`. A v1.35 object is refused as `earlier_version`.
 - `POST /v1/verify` measures an object. It does not check a signature and does not admit.
 - `GET /latest.json` and `GET /log/{YYYY-MM-DD}.jsonl` are the public decision log.
-- `GET /v1/health` reports version, commit, spec kind and the config.
+- `GET /v1/health` reports version, commit, the Rust SDK version it was built with (`sdk`), spec kind and the config.
 
 The code default for `allowed_origins` is empty (loopback only). A live groundinglab deploy needs `https://groundinglab.io` and `https://www.groundinglab.io` there; the shipped `deploy/gate.toml` sets them. Install is [deploy/DEPLOY.md](admission-gate/deploy/DEPLOY.md). Request and response bodies are in [WIRE.md](admission-gate/WIRE.md).
 

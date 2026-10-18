@@ -1,7 +1,7 @@
 # Build products
 target/
 **/target/
-reference/java/build/
+sdk/java/build/
 __pycache__/
 *.pyc
 .venv/

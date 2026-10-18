@@ -6,7 +6,7 @@ One subject per branch. Future work stays one subject. The publication branch al
 
 ## Spec changes
 
-A Part A change updates the vectors in the same pull request, recomputes `reference/SPEC_PIN`, and runs the full suites. A path move of the vectors is a spec change for this reason.
+A Part A change updates the vectors in the same pull request, recomputes `sdk/SPEC_PIN`, and runs the full suites. A path move of the vectors is a spec change for this reason.
 
 ## Wording
 

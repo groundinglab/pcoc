@@ -1,6 +1,6 @@
 # PCOC
 
-**Early prototype.** Specification: Satoshi Hike v2.0 (`spec-v2.0.3`). Website: https://groundinglab.io
+**Early prototype.** Specification: Satoshi Hike v2.0 (`spec-v2.0.5`). Website: https://groundinglab.io
 
 A PCOC (production-constrained observable commitment) is a self-issued identifier backed by a resource commitment, not a payment. You make it on your own device by holding memory through a hike paced by Bitcoin blocks. Anyone can check the file cheaply, without trusting you or us. The design aims to give bulk making no discount: copying the file is cheap, but a new public key means a new hike.
 
@@ -44,15 +44,15 @@ The specification and the conformance vectors are the core deliverable. The poin
 |---|---|---|
 | Specification | [spec/](spec/) | The complete, normative definition of how a PCOC is made and checked |
 | Conformance | [spec/conformance/](spec/conformance/v2.0/) | Shared vectors: what a Part A implementation must reproduce |
-| References | [reference/](reference/) | First tested examples in Rust, Go, and Java. A guide, not a requirement. The specification wins if they disagree |
-| Services | [services/](services/) | Bari (the plant), the index (its own reader), and the Admission Gate, built on the Rust reference |
+| SDKs | [sdk/](sdk/) | Rust, Go, and Java SDKs, tested against the shared vectors and cross-checked against each other. The specification wins if they disagree |
+| Services | [services/](services/) | Bari (the plant), the index (its own reader), and the Admission Gate, built on the Rust SDK |
 | Apps | [apps/](apps/) | Desktop demonstrator, and an Android demonstrator described in [apps/android](apps/android/) |
 | Docs | [docs/](docs/README.md) | Plain-language briefs and rationale. Explanatory, not normative |
 | Your own deployment | [docs/run-under-your-own-name.md](docs/run-under-your-own-name.md) | Every place a builder changes to run the pieces under their own name |
 
 ## Run it yourself
 
-Hosted services are opt-in. `https://index.groundinglab.io` and `https://bari.groundinglab.io` are a convenience, not a dependency. A verifier takes `--index-url`. Omit it on the live profile and the reference uses the hosted index. Pass your own and it does not.
+Hosted services are opt-in. `https://index.groundinglab.io` and `https://bari.groundinglab.io` are a convenience, not a dependency. A verifier takes `--index-url`. Omit it on the live profile and the SDK verify program uses the hosted index. Pass your own and it does not.
 
 The index is its own component ([services/index](services/index/)). Three ways to have one, each opt-in:
 
@@ -64,7 +64,7 @@ The index is its own component ([services/index](services/index/)). Three ways t
 
 - **Check one:** https://groundinglab.io/verify
 - **Make one:** [desktop app](apps/desktop/)
-- **Build one:** [spec](spec/) → [conformance](spec/conformance/v2.0/) → [reference](reference/)
+- **Build one:** [spec](spec/) → [conformance](spec/conformance/v2.0/) → [SDKs](sdk/)
 - **Read why:** [briefs](docs/briefs/README.md) and [rationale](docs/README.md)
 - **What is measured:** [STATUS](STATUS.md)
 - **Contribute / report a vulnerability:** [CONTRIBUTING](CONTRIBUTING.md) · [SECURITY](SECURITY.md)

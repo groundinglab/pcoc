@@ -12,7 +12,7 @@ GET  /log/{YYYY-MM-DD}.jsonl        lines whose time_unix_s falls on that UTC da
 GET  /log/{YYYY-MM-DD}/{seq}        one decision-log line
 POST /v1/verify                     202 { "job_id" }
 GET  /v1/verify/{job_id}            status; the section 14 record when the object is v2.0
-GET  /v1/health                     version, commit, spec kind, config summary
+GET  /v1/health                     version, commit, sdk, spec kind, config summary
 GET  /v1/policy                     the policy in force (policy_id and its parameters)
 ```
 
@@ -153,7 +153,7 @@ Sign-in posts JSON. The transport limit is large enough for the base64 of an obj
 
 ## Health
 
-`GET /v1/health` returns `version` (crate), `commit` (git SHA baked in at build), `spec` (`Satoshi Hike v2.0`), `spec_kind` (`v2.0`), and `config` (the file: bind, index, log directory, limits, rate, leg-rate floor). No secrets.
+`GET /v1/health` returns `version` (crate), `commit` (git SHA baked in at build), `sdk` (the Rust SDK version from Cargo.lock, for example `2.0.0-rc.2 (path)`, or `2.0.0-rc.2 (path, dirty)` when the SDK files had uncommitted changes at build time), `spec` (`Satoshi Hike v2.0`), `spec_kind` (`v2.0`), and `config` (the file: bind, index, log directory, limits, rate, leg-rate floor). No secrets.
 
 ## Verify job
 

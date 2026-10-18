@@ -12,6 +12,6 @@ Everything in this repo that is deployed or published. Each one is released by a
 | Desktop app | `apps/desktop` | `desktop-v` | `pcoc.flatpak` (`apps/desktop/flatpak/build-bundle.sh`) | download |
 | Android app | built from groundinglab/primal-pcoc (`apps/android` holds docs and verification only) | `android-v` (in primal-pcoc) | APK | download |
 
-Reference implementations (`reference/`, tags `ref-rust-v`, `ref-java-v`, `reference/go/v`) and the spec (`spec-v`) are versioned libraries and documents, not deployables.
+The SDKs (`sdk/`, tag `sdk-v`, plus `sdk/go/v` for the Go module; earlier reference tags `ref-rust-v`, `ref-java-v` and the old Go module tags stay as history) and the spec (`spec-v`) are versioned libraries and documents, not deployables.
 
 The website is deployed from groundinglab ops (`www/`), not from this repo.

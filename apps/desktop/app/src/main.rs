@@ -1,5 +1,5 @@
-//! PCOC Hike for Linux. GTK4 and libadwaita, linking the pinned Rust
-//! reference in-process (DESIGN-v2 section 10).
+//! PCOC Hike for Linux. GTK4 and libadwaita, with the PCOC Rust SDK
+//! in-process (DESIGN-v2 section 10).
 #![forbid(unsafe_code)]
 
 mod pages;

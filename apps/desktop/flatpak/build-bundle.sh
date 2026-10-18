@@ -5,7 +5,7 @@
 # Default output: ~/pcoc-build/artifacts/pcoc.flatpak
 # Also writes <output>.sha256 beside it.
 #
-# The host vendors crates (the pinned hike git revision needs credentials).
+# The host vendors crates. hike is the in-tree Rust SDK (sdk/rust, a path dependency).
 # flatpak-builder then compiles offline against the GNOME 50 SDK.
 set -euo pipefail
 

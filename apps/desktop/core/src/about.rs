@@ -16,18 +16,52 @@ pub const OBJECT_KIND: &str = hike::KIND;
 
 pub const BITCOIN: &str = "mainnet";
 
-/// `crate hike 0.1.0`.
+/// `hike 2.0.0-rc.2`: the Rust SDK crate and the version Cargo.lock resolved.
 pub fn crate_line() -> String {
     format!("hike {HIKE_VERSION}")
 }
 
-/// `git tag ref-v2.0.0 …`, a commit pin, or the in-tree reference.
+/// The SDK version this build uses, as shown on About.
+pub const SDK_VERSION: &str = HIKE_VERSION;
+
+/// The About row "PCOC SDK": the SDK version this build uses.
+pub fn sdk_line() -> &'static str {
+    SDK_VERSION
+}
+
+/// The About row "SDK source", in words a reader can use.
+pub fn source_line() -> String {
+    match PIN_KIND {
+        "path" => "built in, from this repository".to_owned(),
+        "tag" => format!("git tag {PIN} of the PCOC Rust SDK"),
+        _ => format!("git commit {} of the PCOC Rust SDK", short_rev(PIN)),
+    }
+}
+
+/// "Resolved commit" means something only for a git pin. A path build has none.
+pub fn shows_resolved_commit() -> bool {
+    PIN_KIND != "path"
+}
+
+/// The note under the About rows. It states facts `build.rs` reports; the
+/// build does not refuse any pin.
+pub fn pin_note() -> String {
+    match PIN_KIND {
+        "path" => "This build includes the PCOC Rust SDK from this repository. The Go and Java SDKs are not included.".to_owned(),
+        "tag" => format!(
+            "This build includes the PCOC Rust SDK at tag {PIN}. Upgrading that pin is a separate change. The Go and Java SDKs are not included."
+        ),
+        _ => "This build includes the PCOC Rust SDK at a pinned commit rather than a tag. Upgrading the pin is a separate change. The Go and Java SDKs are not included.".to_owned(),
+    }
+}
+
+/// `git tag sdk-v2.0.0 …`, a commit pin, or the in-tree SDK (developer wording).
 pub fn pin_line() -> String {
     match PIN_KIND {
-        "tag" => format!("git tag {PIN} of the reference workspace, not branch main"),
-        "path" => "in-tree reference workspace, not branch main".to_owned(),
+        "tag" => format!("git tag {PIN} of the Rust SDK, not branch main"),
+        "path" => format!("in-tree Rust SDK at {PIN}"),
         _ => format!(
-            "git rev {} of the reference workspace, not branch main",
+            "git rev {} of the Rust SDK, not branch main",
             short_rev(PIN)
         ),
     }
@@ -55,12 +89,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pin_is_never_a_branch_and_names_a_commit() {
-        assert_eq!(PIN_KIND, "tag");
-        assert_eq!(PIN, "ref-rust-v2.0.5");
-        assert_ne!(PIN_COMMIT, "unresolved");
-        assert!(pin_line().contains("not branch main"));
+    fn pin_is_the_in_tree_sdk() {
+        assert_eq!(PIN_KIND, "path");
+        assert_eq!(PIN, "../../sdk/rust/hike");
+        assert_eq!(PIN_COMMIT, "local");
+        assert_eq!(pin_line(), "in-tree Rust SDK at ../../sdk/rust/hike");
         assert_eq!(OBJECT_KIND, "satoshi-hike-v2.0-object");
         assert_eq!(hike::MAINNET_DNS_SEEDS.len(), 7);
+    }
+
+    #[test]
+    fn about_rows_for_a_path_pin_are_plain() {
+        assert_eq!(source_line(), "built in, from this repository");
+        assert!(!shows_resolved_commit());
+        let note = pin_note();
+        assert!(
+            note.contains("PCOC Rust SDK from this repository"),
+            "{note}"
+        );
+        assert!(
+            !note.contains("reference") && !note.contains("branch main"),
+            "{note}"
+        );
+    }
+
+    #[test]
+    fn reports_the_sdk_version_from_sdk_version_file() {
+        let want = include_str!("../../../../sdk/VERSION").trim();
+        assert_eq!(SDK_VERSION, want);
+        assert_eq!(crate_line(), format!("hike {want}"));
+        assert_eq!(sdk_line(), want);
     }
 }

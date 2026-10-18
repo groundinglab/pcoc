@@ -8,7 +8,7 @@
 set -euo pipefail
 base="${1:-}"; head="${2:-HEAD}"
 keys=(spec rust go java gate claims bari index desktop docs)
-declare -A on dir=([spec]=spec [rust]=reference/rust [go]=reference/go [java]=reference/java
+declare -A on dir=([spec]=spec [rust]=sdk/rust [go]=sdk/go [java]=sdk/java
   [gate]=services/admission-gate [claims]=services/admission-claims [bari]=services/bari [index]=services/index
   [desktop]=apps/desktop [docs]=.)
 for k in "${keys[@]}"; do on[$k]=false; done
@@ -20,10 +20,10 @@ else
   for f in "${files[@]}"; do
     case "$f" in
       spec/*|.github/*) all=true ;;
-      reference/rust/*) on[rust]=true ;;
-      reference/go/*) on[go]=true ;;
-      reference/java/*) on[java]=true ;;
-      reference/*) on[rust]=true; on[go]=true; on[java]=true ;;
+      sdk/rust/*) on[rust]=true; on[gate]=true; on[desktop]=true ;;  # gate and desktop build sdk/rust by path
+      sdk/go/*) on[go]=true ;;
+      sdk/java/*) on[java]=true ;;
+      sdk/*) on[rust]=true; on[go]=true; on[java]=true; on[gate]=true; on[desktop]=true ;;
       services/admission-gate/*) on[gate]=true ;;
       services/admission-claims/*) on[claims]=true ;;
       services/bari/*) on[bari]=true ;;
