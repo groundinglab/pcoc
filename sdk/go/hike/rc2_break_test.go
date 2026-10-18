@@ -160,3 +160,35 @@ func TestRC2NonMapTopLevelIsUndecoded(t *testing.T) {
 		t.Fatal("a map with a trailing byte is a decoded top-level map")
 	}
 }
+
+// F2: a declared byte, text, array or map length past the bytes still in the
+// buffer is malformed CBOR. Verify must return the undecoded record and must
+// not panic. The length is compared as uint64 before any allocation.
+func TestF2OversizedLengthIsMalformed(t *testing.T) {
+	none, decoded := Verify(nil, ConformanceSmallV2, Index{}, nil, false)
+	if decoded {
+		t.Fatal("empty input decoded")
+	}
+	want := none.Marshal()
+	// 5b 7fffffffffffffff — a byte string of length 2^63−1.
+	// 7b 7fffffffffffffff — the same length as text.
+	// 9b ffffffffffffffff — an array of 2^64−1 elements.
+	// ba ffffffff — a map of 2^32 pairs.
+	// 9a 3b9aca00 — an array of 1_000_000_000 elements and no elements.
+	inputs := [][]byte{
+		{0x5b, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		{0x7b, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		{0x9b, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		{0xba, 0xff, 0xff, 0xff, 0xff},
+		{0x9a, 0x3b, 0x9a, 0xca, 0x00},
+	}
+	for _, in := range inputs {
+		rec, decoded := Verify(in, ConformanceSmallV2, Index{}, nil, false)
+		if decoded || !bytes.Equal(rec.Marshal(), want) {
+			t.Fatalf("%x decoded=%v record=%s", in, decoded, rec.Marshal())
+		}
+		if issue := CBORIssue(in); issue == "" {
+			t.Fatalf("%x decoded as one item", in)
+		}
+	}
+}

@@ -194,6 +194,20 @@ def cases(pack):
     trail("trail-s0-path-key", lambda v: st(v, 0).append(["path", b""]))
     trail("trail-absent-top-last_interrupt", lambda v: v.drop("last_interrupt"))
     trail("trail-earlier-kind-only", lambda v: v.__setitem__(slice(None), M([["kind", "satoshi-hike-v1.35-object"]])))
+    # F2: a declared length or count past the bytes still in the buffer.
+    # Each is one CBOR head and nothing after it.
+    for nm, b in [
+        ("os-top-bstr-2pow63", bytes.fromhex("5b7fffffffffffffff")),
+        ("os-top-text-2pow63", bytes.fromhex("7b7fffffffffffffff")),
+        ("os-top-arr-2pow64-1", bytes.fromhex("9bffffffffffffffff")),
+        ("os-top-map-2pow32", bytes.fromhex("baffffffff")),
+        ("os-top-arr-1e9", bytes.fromhex("9a3b9aca00")),
+    ]:
+        out.append((nm, b, docs, None))
+    # The same array head in place of kat-small's stages value.
+    def stages_huge(v):
+        v.set("stages", Raw(bytes.fromhex("9a3b9aca00")))
+    add("os-stages-arr-1e9", stages_huge)
     full = enc(base)
     out.append(("indef-map", b"\xbf" + full[1 + (1 if full[0] & 31 >= 24 else 0):] + b"\xff", docs, None))
     out.append(("tagged-map", b"\xd8\x18" + full, docs, None))
