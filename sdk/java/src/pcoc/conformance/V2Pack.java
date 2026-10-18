@@ -646,6 +646,34 @@ public final class V2Pack {
                 throw new AssertionError("six-leg previous " + Arrays.toString(c) + " " + index + " " + result);
             }
         }
+        // F7: text last_interrupt and text last_interrupt_height are field set.
+        byte[] liKey = cat(new byte[] {0x6e}, "last_interrupt".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {0x58, 0x20});
+        int liAt = nth(obj, liKey, 0) + liKey.length;
+        byte[] textHash = cat(Arrays.copyOfRange(obj, 0, liAt - 2), new byte[] {0x61, 'x'}, Arrays.copyOfRange(obj, liAt + 32, obj.length));
+        String hashShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(textHash, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!hashShape.contains("\"field set\"") || !hashShape.contains("\"last_interrupt\"")) {
+            throw new AssertionError("text last_interrupt " + hashShape);
+        }
+        byte[] lihKey = cat(new byte[] {0x75}, "last_interrupt_height".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {0x19});
+        int lihAt = nth(obj, lihKey, 0) + lihKey.length;
+        byte[] textHeight = cat(Arrays.copyOfRange(obj, 0, lihAt - 1), new byte[] {0x61, 'x'}, Arrays.copyOfRange(obj, lihAt + 2, obj.length));
+        String heightShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(textHeight, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!heightShape.contains("\"field set\"") || !heightShape.contains("\"last_interrupt\"")) {
+            throw new AssertionError("text last_interrupt_height " + heightShape);
+        }
+        // short-li: a 31-byte last_interrupt is the wrong width, not a wrong
+        // type. shape_item has no field set.
+        byte[] shortLi = cat(Arrays.copyOfRange(obj, 0, liAt - 1), new byte[] {0x1f}, Arrays.copyOfRange(obj, liAt, liAt + 31), Arrays.copyOfRange(obj, liAt + 32, obj.length));
+        String shortShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(shortLi, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!"[\"last_interrupt\",\"header hash differ\"]".equals(shortShape)) {
+            throw new AssertionError("short-li " + shortShape);
+        }
         // F6: 19 stages, stage 3's header copied from stage 2. stages length
         // does not drop header height order or header hash differ.
         Cbor.Val top = Cbor.decode(obj);

@@ -387,6 +387,38 @@ fn a_top_level_that_is_not_a_map_is_malformed_cbor() {
     assert!(!hike::top_level_map(&[]));
 }
 
+/// F7: text last_interrupt and text last_interrupt_height are wrong value
+/// types, so field set is listed with the conditions those fields already fail.
+#[test]
+fn a_text_last_interrupt_is_field_set() {
+    let mut hash = object();
+    hash.set("last_interrupt", V::T("x".to_owned()));
+    let rec = record(&enc(&hash));
+    let got = items(&rec);
+    assert!(got.contains(&"field set"), "{got:?}");
+    assert!(got.contains(&"last_interrupt"), "{got:?}");
+    assert!(got.contains(&"header hash differ"), "{got:?}");
+
+    let mut height = object();
+    height.set("last_interrupt_height", V::T("not-a-height".to_owned()));
+    let rec = record(&enc(&height));
+    let got = items(&rec);
+    assert!(got.contains(&"field set"), "{got:?}");
+    assert!(got.contains(&"last_interrupt"), "{got:?}");
+    assert!(got.contains(&"header height order"), "{got:?}");
+}
+
+/// short-li: a 31-byte last_interrupt is a byte string of the wrong width.
+/// That is last_interrupt (section 14.1 row 11), not field set.
+#[test]
+fn a_short_last_interrupt_is_not_field_set() {
+    let mut v = object();
+    let short = v.get("last_interrupt").bytes();
+    v.set("last_interrupt", V::B(short[..31].to_vec()));
+    let rec = record(&enc(&v));
+    assert_eq!(items(&rec), ["last_interrupt", "header hash differ"]);
+}
+
 /// F6: more than 18 stages still lists every other violated condition over
 /// the stages that are present. A duplicated stage-3 header is header height
 /// order and header hash differ, with stages length.

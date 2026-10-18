@@ -1191,6 +1191,16 @@ func shapeItems(item cborVal, profile Profile) []string {
 	if !hasStages || stages.kind != 4 {
 		fieldSet = true
 	}
+	// last_interrupt present and not a byte string, or last_interrupt_height
+	// present and not an unsigned integer, is a wrong value type (section
+	// 14.1 row 2). A byte string of the wrong width is last_interrupt only
+	// (row 11), the same as a wrong-width checkpoint.
+	if f, ok := item.field("last_interrupt"); ok && f.kind != 2 {
+		fieldSet = true
+	}
+	if f, ok := item.field("last_interrupt_height"); ok && f.kind != 0 {
+		fieldSet = true
+	}
 	stage0Path := false
 	w17Bad := true
 	if stages.kind == 4 {

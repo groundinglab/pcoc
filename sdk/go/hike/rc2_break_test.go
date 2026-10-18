@@ -163,6 +163,48 @@ func TestRC2NonMapTopLevelIsUndecoded(t *testing.T) {
 	}
 }
 
+// F7: a text last_interrupt or last_interrupt_height is field set.
+func TestF7TextLastInterruptIsFieldSet(t *testing.T) {
+	obj, index := loadKat(t)
+	check := func(needle string, textHead byte, width int) {
+		t.Helper()
+		pos := nthIndex(t, obj, []byte(needle), 0) + len(needle)
+		edited := append(append(append([]byte{}, obj[:pos]...), textHead, 'x'), obj[pos+width:]...)
+		rec, decoded := katRecord(t, edited, index)
+		if !decoded {
+			t.Fatal(needle)
+		}
+		items := at(rec, "shape_item").([]any)
+		has := func(name string) bool {
+			for _, item := range items {
+				if item == name {
+					return true
+				}
+			}
+			return false
+		}
+		if !has("field set") || !has("last_interrupt") {
+			t.Fatalf("%s pos=%d %v", needle, pos, items)
+		}
+	}
+	check("\x6elast_interrupt", 0x61, 34)
+	check("\x75last_interrupt_height", 0x61, 3)
+}
+
+// short-li: a 31-byte last_interrupt is the wrong width, not a wrong type.
+// shape_item is last_interrupt and header hash differ, with no field set.
+func TestF7ShortLastInterruptIsNotFieldSet(t *testing.T) {
+	obj, index := loadKat(t)
+	rec, decoded := katRecord(t, shorten(t, obj, []byte("\x6elast_interrupt\x58\x20"), 0), index)
+	if !decoded {
+		t.Fatal("short-li did not decode")
+	}
+	items := at(rec, "shape_item").([]any)
+	if len(items) != 2 || items[0] != "last_interrupt" || items[1] != "header hash differ" {
+		t.Fatalf("short-li %v", items)
+	}
+}
+
 // F6: 19 stages with stage 3's header copied from stage 2 lists stages
 // length, header height order and header hash differ. stages length does
 // not drop the other conditions over the stages that are present.

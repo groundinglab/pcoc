@@ -124,10 +124,16 @@ def cases(pack):
     add("s5-waypoint-33", lambda v: st(v, 5).set("waypoint", st(v, 5).get("waypoint") + b"\0"), DRAW_S5_J0)
     add("s5-waypoint-8", lambda v: st(v, 5).set("waypoint", st(v, 5).get("waypoint")[:8]), DRAW_S5_J0)
     add("short-s8-beacon", lambda v: st(v, 8).set("beacon", st(v, 8).get("beacon")[:31]))
+    # 31 bytes is the wrong width (section 14.1 row 11), not a wrong type.
+    # shape_item lists last_interrupt and does not list field set.
     add("short-li", lambda v: v.set("last_interrupt", v.get("last_interrupt")[:31]))
     for key in ("public_key", "seed_beacon", "stages", "last_interrupt", "last_interrupt_height", "kind", "n_slots"):
         add(f"absent-top-{key}", lambda v, key=key: v.drop(key))
     add("text-top-li-height", lambda v: v.set("last_interrupt_height", "x"))
+    # F7: a text last_interrupt or last_interrupt_height is a wrong value type
+    # (section 14.1 row 2), so field set is listed with last_interrupt.
+    add("text-last_interrupt", lambda v: v.set("last_interrupt", "x"))
+    add("text-last_interrupt_height", lambda v: v.set("last_interrupt_height", "not-a-height"))
     add("text-top-stages", lambda v: v.set("stages", "x"))
     add("short-pubkey", lambda v: v.set("public_key", v.get("public_key")[:31]))
     add("stages-17", lambda v: v.get("stages").pop())

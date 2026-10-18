@@ -345,6 +345,18 @@ public final class Measure {
         if (stages == null) {
             return true;
         }
+        // last_interrupt present and not a byte string, or last_interrupt_height
+        // present and not an unsigned integer, is field set (section 14.1 row 2).
+        // A byte string of the wrong width is last_interrupt only (row 11).
+        if (top.map.containsKey("last_interrupt")) {
+            Cbor.Val value = top.map.get("last_interrupt");
+            if (value == null || value.kind != Cbor.Val.Kind.BYTES) {
+                return true;
+            }
+        }
+        if (top.map.containsKey("last_interrupt_height") && uint(top, "last_interrupt_height") == null) {
+            return true;
+        }
         for (int g = 0; g < stages.size(); g++) {
             Cbor.Val stage = stages.get(g);
             if (stage == null || stage.kind != Cbor.Val.Kind.MAP) {

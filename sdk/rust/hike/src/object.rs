@@ -844,7 +844,15 @@ fn read_measured_map(value: &Cbor, trailing: bool, sizes: Sizes) -> Result<Measu
     }
     let last_interrupt = match map.iter().find(|(key, _)| key == "last_interrupt") {
         Some((_, Cbor::Bytes(bytes))) if bytes.len() == 32 => Some(arr32(bytes)),
+        // A byte string of the wrong width fails last_interrupt (section 14.1
+        // row 11). It is still a byte string, so it is not field set.
+        Some((_, Cbor::Bytes(_))) => {
+            note(Fail("last_interrupt"));
+            None
+        }
         Some(_) => {
+            // Present and not a byte string: wrong value type (section 14.1 row 2).
+            note(Fail("map field set"));
             note(Fail("last_interrupt"));
             None
         }
@@ -853,6 +861,8 @@ fn read_measured_map(value: &Cbor, trailing: bool, sizes: Sizes) -> Result<Measu
     let last_interrupt_height = match map.iter().find(|(key, _)| key == "last_interrupt_height") {
         Some((_, Cbor::Uint(height))) => Some(*height),
         Some(_) => {
+            // Present and not an unsigned integer: wrong value type.
+            note(Fail("map field set"));
             note(Fail("last_interrupt"));
             None
         }
