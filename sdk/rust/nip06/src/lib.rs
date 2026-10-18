@@ -39,12 +39,16 @@ const PATH_INDEXES: [u32; 5] = [44 | HARDENED, 1237 | HARDENED, 0 | HARDENED, 0,
 
 type HmacSha512 = Hmac<Sha512>;
 
-/// A demo identity. The mnemonic and secret are zeroed on drop.
+/// A demo identity. The mnemonic, secret and nsec are zeroed on drop.
+///
+/// The secret parts (`mnemonic`, `secret`, `nsec`) are private fields. Read them
+/// only through [`DemoKey::mnemonic`], [`DemoKey::secret_key`] and [`DemoKey::nsec`].
+/// `Debug` prints the public key and npub only. There is no `Display`.
 pub struct DemoKey {
     mnemonic: String,
     secret: [u8; 32],
     pub public_key: [u8; 32],
-    pub nsec: String,
+    nsec: String,
     pub npub: String,
 }
 
@@ -84,6 +88,11 @@ impl DemoKey {
 
     pub fn secret_key(&self) -> &[u8; 32] {
         &self.secret
+    }
+
+    /// NIP-19 `nsec` spelling of the secret key. This is secret material: do not log it.
+    pub fn nsec(&self) -> &str {
+        &self.nsec
     }
 
     pub fn public_key_hex(&self) -> String {
@@ -289,7 +298,7 @@ mod tests {
         let key = from_mnemonic(VECTOR_MNEMONIC).unwrap();
         assert_eq!(key.public_key_hex(), VECTOR_PUBLIC_HEX);
         assert_eq!(encode_hex(key.secret_key()), VECTOR_SECRET_HEX);
-        assert_eq!(key.nsec, VECTOR_NSEC);
+        assert_eq!(key.nsec(), VECTOR_NSEC);
         assert_eq!(key.npub, VECTOR_NPUB);
         assert_eq!(key.mnemonic(), VECTOR_MNEMONIC);
     }
@@ -330,5 +339,54 @@ mod tests {
         assert!(!report.contains(VECTOR_SECRET_HEX));
         assert!(!report.contains(VECTOR_NSEC));
         assert!(report.ends_with('\n'));
+    }
+
+    /// `DemoKey` must not implement `Display` (inherent-const probe: the inherent
+    /// const only exists when `T: Display`, otherwise the trait default is used).
+    #[test]
+    fn demo_key_has_no_display() {
+        use std::marker::PhantomData;
+        trait NoDisplay {
+            const IMPLS_DISPLAY: bool = false;
+        }
+        struct Probe<T: ?Sized>(PhantomData<T>);
+        impl<T: ?Sized> NoDisplay for Probe<T> {}
+        #[allow(dead_code)]
+        impl<T: ?Sized + std::fmt::Display> Probe<T> {
+            const IMPLS_DISPLAY: bool = true;
+        }
+        // Evaluated at compile time: a Display impl on DemoKey fails the test build.
+        const { assert!(<Probe<String>>::IMPLS_DISPLAY, "probe self-check") };
+        const {
+            assert!(
+                !<Probe<DemoKey>>::IMPLS_DISPLAY,
+                "DemoKey must not implement Display"
+            )
+        };
+    }
+
+    #[test]
+    fn debug_output_contains_no_secret() {
+        let key = from_mnemonic(VECTOR_MNEMONIC).unwrap();
+        for shown in [
+            format!("{key:?}"),
+            format!("{key:#?}"),
+            format!("{:?}", key.clone()),
+        ] {
+            assert!(shown.contains(VECTOR_NPUB), "{shown}");
+            assert!(!shown.contains(VECTOR_NSEC), "nsec leaked: {shown}");
+            assert!(
+                !shown.contains(VECTOR_SECRET_HEX),
+                "secret hex leaked: {shown}"
+            );
+            assert!(!shown.contains(VECTOR_MNEMONIC), "mnemonic leaked: {shown}");
+            for word in VECTOR_MNEMONIC.split_whitespace() {
+                assert!(
+                    !shown.contains(word),
+                    "mnemonic word {word} leaked: {shown}"
+                );
+            }
+            assert!(!shown.contains("nsec1"), "nsec prefix leaked: {shown}");
+        }
     }
 }
