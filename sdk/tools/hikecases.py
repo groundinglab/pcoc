@@ -172,6 +172,10 @@ def cases(pack):
     # with height_range. 2^53 is greater than stage 17's height as an integer.
     add("li-height-2^53", lambda v: v.set("last_interrupt_height", 2**53))
     add("li-height-2^64-1", lambda v: v.set("last_interrupt_height", 2**64 - 1))
+    # Q-j: a non-height integer above 2^53−1. Java lists height_range.
+    # Rust and Go do not. Pinned, not decided.
+    add("legcount-2^53-s5", lambda v: st(v, 5).set("leg_count", 2**53))
+    add("nslots-2^64-1", lambda v: v.set("n_slots", 2**64 - 1))
     add("neg-s5-height", lambda v: st(v, 5).set("beacon_height", -1))
     add("leg_count-0-s5", lambda v: st(v, 5).set("leg_count", 0))
     add("all-empty-s5", lambda v: (st(v, 5).set("checkpoints", []), st(v, 5).set("leg_results", []), st(v, 5).set("leg_count", 0)))

@@ -58,6 +58,10 @@ KNOWN_DIVERGENCES = {
     "stage1-uint": ("27aa73761f68f982", "c256b2ba88b2ed8e", "27aa73761f68f982"),
     "stage5-uint": ("f08fa31c1a00a629", "6b3d6543fd428657", "f08fa31c1a00a629"),
     "stage17-uint": ("8e155559c4815735", "ff90075e765126ea", "8e155559c4815735"),
+    # Q-j: a non-height integer above 2^53−1. Java lists height_range.
+    # Rust and Go do not. See KNOWN-DIVERGENCES.md.
+    "legcount-2^53-s5": ("c04c3025e63ace6a", "c04c3025e63ace6a", "a826670096212131"),
+    "nslots-2^64-1": ("461c05e674179dd2", "461c05e674179dd2", "80d814f2238f2d47"),
 }
 
 
@@ -70,6 +74,8 @@ LIB_DIVERGENCES = {
     "stage1-uint": ("c2aa7be545c13037", "67106f05b133a917", "c2aa7be545c13037"),
     "stage5-uint": ("03633a4c23bfd22d", "c542bfedd8f21174", "03633a4c23bfd22d"),
     "stage17-uint": ("badd1c19c04ef720", "dc3c169377aec4ae", "badd1c19c04ef720"),
+    "legcount-2^53-s5": ("6e49809d67b051bd", "6e49809d67b051bd", "7b3de0a4c907f8a9"),
+    "nslots-2^64-1": ("75fef3eba78a722c", "75fef3eba78a722c", "a2e0a284fe1cf588"),
 }
 
 

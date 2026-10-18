@@ -461,6 +461,18 @@ fn nineteen_stages_keep_the_other_shape_conditions() {
     );
 }
 
+/// Q-j: an integer above 2^53−1 that is not a height does not list
+/// height_range here. `leg_count` stays `leg_count`. `n_slots` stays `constant`.
+#[test]
+fn a_non_height_integer_above_the_json_bound_is_not_height_range() {
+    let mut legs = object();
+    legs.stage(5).set("leg_count", V::U(1 << 53));
+    assert_eq!(items(&record(&enc(&legs))), ["leg_count"]);
+    let mut slots = object();
+    slots.set("n_slots", V::U(u64::MAX));
+    assert_eq!(items(&record(&enc(&slots))), ["constant"]);
+}
+
 /// F5 / Q-a: last_interrupt_height above 2^53−1 is height_range and, because
 /// that height is not a usable ordered height, header height order. The
 /// integer itself compares exactly: 2^53 is greater than stage 17's height,

@@ -92,7 +92,7 @@ sdk/test.sh summary
 sdk/test.sh: PASS
 ```
 
-On a few malformed inputs the SDKs still disagree, on one open spec question: a `stages` element that is not a map. [KNOWN-DIVERGENCES.md](KNOWN-DIVERGENCES.md) lists it with the other open spec questions, the rows fixed for rc.2, and the rows fixed for rc.3; [CHANGES.md](CHANGES.md) describes rc.1 → rc.2 and rc.2 → rc.3. The harness pins each open case by name and by its output digests.
+On a few malformed inputs the SDKs still disagree, on two open spec questions: a `stages` element that is not a map, and an integer above 2^53−1 that is not a height. [KNOWN-DIVERGENCES.md](KNOWN-DIVERGENCES.md) lists it with the other open spec questions, the rows fixed for rc.2, and the rows fixed for rc.3; [CHANGES.md](CHANGES.md) describes rc.1 → rc.2 and rc.2 → rc.3. The harness pins each open case by name and by its output digests.
 
 ## The verify programs
 

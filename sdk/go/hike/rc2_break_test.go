@@ -299,6 +299,35 @@ func encodeCBOR(v cborVal) []byte {
 	}
 }
 
+// Q-j: a non-height integer above 2^53−1 is not height_range.
+// leg_count stays leg_count. n_slots stays constant.
+func TestQJNonHeightIntegerIsNotHeightRange(t *testing.T) {
+	obj, index := loadKat(t)
+	replaceUint := func(needle []byte, n uint64) []byte {
+		t.Helper()
+		pos := nthIndex(t, obj, needle, 0) + len(needle)
+		var be [8]byte
+		binary.BigEndian.PutUint64(be[:], n)
+		edited := append(append([]byte{}, obj[:pos-1]...), 0x1b)
+		edited = append(edited, be[:]...)
+		return append(edited, obj[pos:]...)
+	}
+	rec, decoded := katRecord(t, replaceUint([]byte("\x69leg_count\x01"), 1<<53), index)
+	if !decoded {
+		t.Fatal("leg_count")
+	}
+	if fmt.Sprint(at(rec, "shape_item")) != fmt.Sprint([]any{"leg_count"}) {
+		t.Fatalf("leg_count shape %v", at(rec, "shape_item"))
+	}
+	rec, decoded = katRecord(t, replaceUint([]byte("\x67n_slots\x04"), ^uint64(0)), index)
+	if !decoded {
+		t.Fatal("n_slots")
+	}
+	if fmt.Sprint(at(rec, "shape_item")) != fmt.Sprint([]any{"constant"}) {
+		t.Fatalf("n_slots shape %v", at(rec, "shape_item"))
+	}
+}
+
 // F5 / Q-a: last_interrupt_height of 2^53 and of 2^64−1 lists header height
 // order with height_range. The integer compares exactly, so last_interrupt
 // is not listed: 2^53 is greater than stage 17's height.

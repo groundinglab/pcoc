@@ -783,6 +783,27 @@ public final class V2Pack {
                 throw new AssertionError("interrupt height " + Long.toUnsignedString(n) + " " + shape);
             }
         }
+        // Q-j: a non-height integer above 2^53−1 lists height_range as well as
+        // the condition that integer already fails. leg_count stays leg_count.
+        // n_slots stays constant.
+        byte[] lcKey = cat(new byte[] {0x69}, "leg_count".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {0x01});
+        int lcAt = nth(obj, lcKey, 5) + lcKey.length;
+        byte[] hugeLeg = cat(Arrays.copyOfRange(obj, 0, lcAt - 1), new byte[] {0x1b, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, Arrays.copyOfRange(obj, lcAt, obj.length));
+        String legShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(hugeLeg, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!"[\"leg_count\",\"height_range\"]".equals(legShape)) {
+            throw new AssertionError("leg_count 2^53 " + legShape);
+        }
+        byte[] nsKey = cat(new byte[] {0x67}, "n_slots".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {0x04});
+        int nsAt = nth(obj, nsKey, 0) + nsKey.length;
+        byte[] hugeSlots = cat(Arrays.copyOfRange(obj, 0, nsAt - 1), new byte[] {0x1b, -1, -1, -1, -1, -1, -1, -1, -1}, Arrays.copyOfRange(obj, nsAt, obj.length));
+        String slotShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(hugeSlots, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!"[\"constant\",\"height_range\"]".equals(slotShape)) {
+            throw new AssertionError("n_slots 2^64-1 " + slotShape);
+        }
         // F2/F3: a declared length or count past the bytes left is malformed
         // CBOR. The record is the undecoded one; the decoder does not allocate
         // from that length. Depth is a separate change (F1).
