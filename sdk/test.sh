@@ -2,7 +2,8 @@
 # One harness for every SDK. Run from anywhere:  bash sdk/test.sh
 #
 # Steps (all run; the script exits non-zero if any step fails):
-#   1. spec pin      sdk/SPEC_PIN matches spec/conformance/ (vector hash)
+#   1. pins          sdk/SPEC_PIN matches spec/conformance/ (vector hash), and
+#                    every Rust crate version equals sdk/VERSION
 #   2. rust          cargo test --locked --release in sdk/rust (unit tests,
 #                    conformance pack, malformed-input tests, nip06)
 #   3. go            go vet ./... and go test ./... in sdk/go (unit tests and
@@ -40,7 +41,7 @@ need() {
   done
 }
 
-spec_pin() { need python3 && python3 sdk/tools/check_spec_pin.py; }
+spec_pin() { need python3 && python3 sdk/tools/check_spec_pin.py && python3 sdk/tools/check_versions.py; }
 
 rust() {
   need cargo && (cd sdk/rust && cargo test --locked --release)
@@ -67,7 +68,7 @@ crosscheck() {
     --java-classes "$work/java"
 }
 
-step "spec pin" spec_pin
+step "pins: spec vectors + sdk version" spec_pin
 step "rust: unit + conformance" rust
 step "go: vet + unit + conformance" go_sdk
 step "java: conformance" java_sdk
