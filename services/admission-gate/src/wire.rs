@@ -11,17 +11,15 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::sync::OnceLock;
 
-/// The one origin this build serves (SPEC section 15.1 **Origin**). It is the
-/// example deployment's origin. A builder who runs a gate for another site
-/// edits this constant; there is no config key for it.
-pub const ORIGIN: &str = "https://groundinglab.io";
-
 /// SPEC section 15.1 **Origin**: exact byte equality with a served origin.
 /// No case folding, trimming, decoding, or default-port completion.
-pub fn origin_served(served: &[&str], origin: &str) -> bool {
+///
+/// The served origins come from the required config key `served_origins`.
+/// There is no origin in code and no default.
+pub fn origin_served<S: AsRef<str>>(served: &[S], origin: &str) -> bool {
     served
         .iter()
-        .any(|candidate| candidate.as_bytes() == origin.as_bytes())
+        .any(|candidate| candidate.as_ref().as_bytes() == origin.as_bytes())
 }
 pub const DOMAIN: &[u8] = b"pcoc-gate-signin-v1";
 pub const LIFETIME_S: u64 = 120;
@@ -303,7 +301,7 @@ mod tests {
         let nonce = [0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef].repeat(4);
         let nonce: [u8; 32] = nonce.try_into().unwrap();
         let object = [0xaa; 32];
-        let bytes = challenge_bytes(ORIGIN, &nonce, 1_893_456_000, &object);
+        let bytes = challenge_bytes("https://groundinglab.io", &nonce, 1_893_456_000, &object);
         assert_eq!(bytes.len(), 116);
         assert!(window_accepts(1_000_000, 1_000_120));
         assert!(!window_accepts(1_000_000, 1_000_126));

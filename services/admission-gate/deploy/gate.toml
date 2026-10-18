@@ -1,6 +1,7 @@
 # Admission gate config. The process reads this file. The path is `--config`
 # or GATE_CONFIG. It does not read PCOC_BIND_THREADS or any GL_VERIFY_* variable.
 # Omitted keys use the defaults below. Unknown keys are an error.
+# served_origins is required and has no default.
 
 # TCP address. Default 127.0.0.1:8787 (loopback only). Put a reverse proxy in
 # front to serve it publicly. This file does not publish a hostname.
@@ -47,6 +48,13 @@ rate_per_min = 12
 # the proxy overwrites the header; a client can send it otherwise.
 # client_ip_header = "x-forwarded-for"
 
+# REQUIRED, no default. The site origins this gate serves for sign-in (SPEC
+# section 15.1 Origin): the signed body's `origin` must equal one of these,
+# byte for byte. A file without this key does not start. This is not CORS;
+# allowed_origins below is the browser's CORS list. groundinglab's instance
+# serves its own site; another deployment names its own site instead.
+served_origins = ["https://groundinglab.io"]
+
 # Exact CORS origins, no trailing slash. The code default is empty: no site
 # is allowed, only loopback origins (localhost, 127.0.0.1, [::1]). A live
 # groundinglab deploy needs the two public sites below; another deployment
@@ -69,3 +77,6 @@ extra_origins = []
 # table. A later start with the same id and a different table exits before
 # it listens. A value change needs a new id.
 policy = "../policy/gl-admit-v6.toml"
+# gl-admit-v7 (../policy/gl-admit-v7.toml) is v6 plus [index]
+# expected_network = "main": mainnet index evidence only. It binds as a new
+# id beside v6 in policy-bind.json. Switching is a deploy decision.

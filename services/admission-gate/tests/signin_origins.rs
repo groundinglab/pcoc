@@ -6,7 +6,7 @@
 //! signed with the reference `nip06` signer over that case's origin. The check
 //! runs the Gate's own origin rule with the served list set to the vector's
 //! `served`, so it tests the rule a gate built for `https://example.com`
-//! applies. This build itself serves `wire::ORIGIN`.
+//! applies. A gate serves the origins in its config key `served_origins`.
 //!
 //! Regenerate both copies with `PCOC_REGEN_SIGNIN_ORIGINS=1 cargo test --test signin_origins`.
 
@@ -169,14 +169,12 @@ fn signin_origin_vectors() {
 }
 
 #[test]
-fn this_build_serves_only_its_constant() {
-    assert!(wire::origin_served(
-        &[wire::ORIGIN],
-        "https://groundinglab.io"
-    ));
-    assert!(!wire::origin_served(&[wire::ORIGIN], "https://example.com"));
-    assert!(!wire::origin_served(
-        &[wire::ORIGIN],
-        "https://groundinglab.io/"
-    ));
+fn the_groundinglab_deploy_serves_only_its_configured_origin() {
+    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("deploy/gate.toml");
+    let cfg = pcoc_admission::Config::load(&path).unwrap();
+    let served = &cfg.served_origins;
+    assert_eq!(served, &vec!["https://groundinglab.io".to_owned()]);
+    assert!(wire::origin_served(served, "https://groundinglab.io"));
+    assert!(!wire::origin_served(served, "https://example.com"));
+    assert!(!wire::origin_served(served, "https://groundinglab.io/"));
 }

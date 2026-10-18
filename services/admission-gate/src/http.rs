@@ -59,6 +59,7 @@ impl Service {
             cfg.policy(),
             &cfg.index_url,
             cfg.index_timeout,
+            cfg.served_origins.clone(),
         )?;
         let jobs = JobStore::new(cfg.clone());
         for job in door.unsettled() {
@@ -414,12 +415,10 @@ fn sign_in_locked(svc: &Service, headers: &HeaderMap, bytes: &[u8]) -> Response 
         svc.door.note_transport_rejected(bytes);
         return bare_delivery(svc, headers, StatusCode::PAYLOAD_TOO_LARGE);
     }
+    // A banned key is ignored inside the door, before any pending slot is
+    // taken, so a thorough job here is never for a banned key.
     let result = svc.door.sign_in_locked(locked);
     if let Some(job) = result.thorough.clone() {
-        // A banned key is ignored after the signature: no fast phase, no line.
-        if svc.door.banned(&job.public_key) {
-            return locked_response(svc, headers, result.status, result.body);
-        }
         spawn_locked(svc.door.clone(), svc.jobs.clone(), job);
     }
     locked_response(svc, headers, result.status, result.body)
@@ -452,39 +451,46 @@ fn locked_response(
 
 fn spawn_locked(door: Door, jobs: JobStore, job: LockedThorough) {
     tokio::spawn(async move {
-        let source = job.origin.clone();
+        // The slot taken in sign_in_locked is released when this guard drops:
+        // on every return, on a hold, and on a panic unwind.
+        let _slot = crate::door::PendingSlot::new(door.clone(), job.pending_key());
+        // Banned since the slot was taken (another task's ban): ignored, no
+        // fast phase, no line, no return. The website stays pending.
+        if door.is_banned(&job.public_key) {
+            return;
+        }
         // A prior thorough accept with policy_id skips measurement.
         if job.prior_accept.is_some() {
             door.settle_locked(job, Ok(crate::verifier::Report::Unreadable));
-            door.end_pending(&source);
             return;
         }
-        match door.settle_fast(&job) {
-            crate::door::FastPhase::Provisional => {
+        match door.settle_fast_seq(&job) {
+            (crate::door::FastPhase::Provisional, Some(seq)) => {
+                // `seq` is this job's own provisional line, from the fast
+                // phase. It is the draw key and the thorough `fast_seq`.
                 let object = job.object.clone();
                 let object_sha = job.object_sha;
                 let public_key = job.public_key;
                 let log_dir = jobs.log_dir();
                 let policy = door.policy().clone();
-                let seq = door.last_seq();
-                let walked = tokio::task::spawn_blocking(move || {
+                let outcome = tokio::task::spawn_blocking(move || {
                     crate::thorough::run(&log_dir, seq, &object, &object_sha, &policy)
                 })
-                .await;
-                match walked {
-                    Ok(Ok(out)) => door.settle_thorough(&job, out),
-                    _ => {
-                        let report = jobs.measure(job.object.clone()).await;
-                        door.settle_locked(job, report);
-                    }
-                }
+                .await
+                .unwrap_or_else(|error| Err(format!("thorough worker failed: {error}")));
+                // No fallback: an error is held, never a second check that
+                // could write `accept`.
+                door.finish_thorough(&job, outcome);
                 let _ = public_key;
             }
-            crate::door::FastPhase::Held
-            | crate::door::FastPhase::Done
-            | crate::door::FastPhase::Sticky => {}
+            (
+                crate::door::FastPhase::Provisional
+                | crate::door::FastPhase::Held
+                | crate::door::FastPhase::Done
+                | crate::door::FastPhase::Sticky,
+                _,
+            ) => {}
         }
-        door.end_pending(&source);
     });
 }
 
@@ -508,11 +514,21 @@ async fn get_sign_in_result(
     with_cors(&svc, &headers, (StatusCode::OK, Json(body)).into_response())
 }
 
+/// Restart resume. The stored `pending/<seq>.draw` is reused through the
+/// thorough check; nothing is drawn again. No stored draw is held.
 fn spawn_thorough(door: Door, jobs: JobStore, job: ThoroughJob) {
     tokio::spawn(async move {
+        let log_dir = jobs.log_dir();
+        let policy = door.policy().clone();
         let object = job.object.clone();
-        let report = jobs.measure(object).await;
-        door.settle(job, report).await;
+        let object_sha = job.object_sha;
+        let seq = job.fast_seq;
+        let outcome = tokio::task::spawn_blocking(move || {
+            crate::thorough::resume(&log_dir, seq, &object, &object_sha, &policy)
+        })
+        .await
+        .unwrap_or_else(|error| Err(format!("resume worker failed: {error}")));
+        door.settle_resumed(job, outcome);
     });
 }
 
@@ -729,7 +745,7 @@ mod tests {
     use super::*;
 
     fn cfg() -> Config {
-        Config::default()
+        Config::for_tests(std::path::PathBuf::from("unused-log"), "http://127.0.0.1:9")
     }
 
     #[test]

@@ -39,7 +39,7 @@ One JSON body is this route. It is the locked SPEC §15.1 body. `{object_b64, si
 }
 ```
 
-`exp` is a JSON integer in the `u64` range, not a string. The signature origin is the body field `origin`. It is the requesting site's own web origin: any site may run a gate, and each gate binds the origin of the site it serves. `https://groundinglab.io` is the origin of groundinglab's instance. This build fixes the accepted origin to `https://groundinglab.io` (`src/wire.rs` `ORIGIN`); there is no config or env setting for it yet. It is not the caller's `Origin` header.
+`exp` is a JSON integer in the `u64` range, not a string. The signature origin is the body field `origin`. It is the requesting site's own web origin: any site may run a gate, and each gate binds the origin of the site it serves. `https://groundinglab.io` is the origin of groundinglab's instance. The accepted origins are the required config key `served_origins` (no default; groundinglab's `deploy/gate.toml` sets `["https://groundinglab.io"]`). It is separate from the CORS `allowed_origins`. It is not the caller's `Origin` header.
 
 The website link is `https://groundinglab.io/sign-in/?v=1&nonce=<64 lowercase hex>&exp=<decimal>`, in that order and with no other parameter. `v` stays `1` because the domain tag below is unchanged. The link does not carry `object`. This door does not parse the link. A link that contains `object=` is not a link, and this process never sees one.
 
@@ -82,7 +82,7 @@ A consumed row that is still `pending` adds `submitted`:
 The check order returns on the first step that decides:
 
 1. The body is not one JSON object, or `nonce` is not 64 lowercase hex. Client `malformed`. No row. The nonce is not consumed.
-2. `origin` is not this gate's origin (in this build, `https://groundinglab.io`), a field breaks the Submit grammar, or the window misses. Client `malformed`. The nonce is not consumed. When the object bytes hash to `object` and the nonce has no consumed row, the website outcome is `malformed`. Otherwise the outcome stays.
+2. `origin` is not one of this gate's `served_origins` (groundinglab's instance: `https://groundinglab.io`), a field breaks the Submit grammar, or the window misses. Client `malformed`. The nonce is not consumed. When the object bytes hash to `object` and the nonce has no consumed row, the website outcome is `malformed`. Otherwise the outcome stays.
 3. SHA-256 of the object bytes is not `object`. Client `bad_signature`. The nonce is not consumed. The website outcome stays.
 4. A consumed row exists. The same `object` and the same signature return the original client class and the original website outcome. Policy does not run again. Any other object or signature is client `malformed`, and the stored outcome stays.
 5. The object is shorter than 32 bytes. Website `too_short`. Client delivery OK. The nonce is consumed. No signature check runs.

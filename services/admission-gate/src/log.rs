@@ -93,6 +93,12 @@ pub struct DecisionWrite {
     /// Thorough result: runs, legs matched, revealed draw and commitment.
     /// Monitor feed only; not on the sign-in result body.
     pub deep: Option<Value>,
+    /// Gate 0.5.4: the `network` of each index document this decision rests
+    /// on (distinct, sorted), `null` when it rests on none. Lines written
+    /// before 0.5.4 have no such key; readers treat that as unknown.
+    pub index_network: Option<Value>,
+    /// The policy's `[index] expected_network` (gl-admit-v7 on).
+    pub expected_network: Option<String>,
 }
 
 impl DecisionWrite {
@@ -125,6 +131,8 @@ impl DecisionWrite {
             access_ref_day: None,
             access_ref_seq: None,
             deep: None,
+            index_network: None,
+            expected_network: None,
         }
     }
 }
@@ -465,14 +473,20 @@ fn encode_decision(seq: u64, prev: &str, write: &DecisionWrite) -> Result<Vec<u8
     if let Some(deep) = &write.deep {
         map.insert("deep".to_owned(), deep.clone());
     }
+    if let Some(expected) = &write.expected_network {
+        map.insert("expected_network".to_owned(), json!(expected));
+    }
+    if let Some(networks) = &write.index_network {
+        map.insert("index_network".to_owned(), networks.clone());
+    }
     let mut text = serde_json::to_string(&Value::Object(map))
         .map_err(|err| LogError::Unusable(err.to_string()))?;
     // New keys are already in the object, immediately before the summary splice.
     // The splice stays last so a section 14 newline still sits inside the object.
     text.pop();
     if let Some(measures) = &write.measures {
-        let encoded = serde_json::to_string(measures)
-            .map_err(|err| LogError::Unusable(err.to_string()))?;
+        let encoded =
+            serde_json::to_string(measures).map_err(|err| LogError::Unusable(err.to_string()))?;
         text.push_str(",\"measures\":");
         text.push_str(&encoded);
     }
@@ -675,7 +689,36 @@ mod tests {
             access_ref_day: None,
             access_ref_seq: None,
             deep: None,
+            index_network: None,
+            expected_network: None,
         }
+    }
+
+    /// A line without the 0.5.4 network fields encodes exactly as before,
+    /// and a log mixing both shapes opens and replays.
+    #[test]
+    fn network_fields_are_additive_and_old_shapes_still_parse() {
+        let dir = temp_dir("network-fields");
+        let mut log = DecisionLog::open(&dir).unwrap();
+        let old = sample("provisional", 1);
+        let raw = encode_decision(0, GENESIS_HEX, &old).unwrap();
+        let text = String::from_utf8(raw).unwrap();
+        assert!(!text.contains("index_network") && !text.contains("expected_network"));
+        log.append(&old).unwrap();
+        let mut new = sample("refuse", 2);
+        new.expected_network = Some("main".to_owned());
+        new.index_network = Some(serde_json::json!(["synthetic"]));
+        log.append(&new).unwrap();
+        drop(log);
+        let log = DecisionLog::open(&dir).unwrap();
+        assert_eq!(log.lines().len(), 2);
+        assert!(log.lines()[0].value.get("index_network").is_none());
+        assert_eq!(
+            log.lines()[1].value["index_network"],
+            serde_json::json!(["synthetic"])
+        );
+        assert_eq!(log.lines()[1].value["expected_network"], "main");
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

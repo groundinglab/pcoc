@@ -158,6 +158,63 @@ pub struct RateFloor {
     pub q: u64,
 }
 
+/// `[index]` table of a policy (gl-admit-v7 on). Hashed with the table.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct IndexPolicy {
+    /// `main` or `synthetic`. Every index document a decision rests on,
+    /// header and plant reads alike, must carry this `network`.
+    pub expected_network: String,
+}
+
+/// The networks an `[index] expected_network` may name.
+pub const NETWORKS: &[&str] = &["main", "synthetic"];
+
+/// Plain wording of `index_network_not_expected` for a mainnet policy.
+pub const NETWORK_NOT_MAIN_LINE: &str =
+    "The index evidence is not from the Bitcoin mainnet, so it cannot support admission here.";
+
+/// The refusal sentence for an `expected_network` miss.
+pub fn network_line(expected: &str) -> String {
+    if expected == "main" {
+        NETWORK_NOT_MAIN_LINE.to_owned()
+    } else {
+        format!(
+            "The index evidence is not from the {expected} network this gate expects, so it cannot support admission here."
+        )
+    }
+}
+
+/// How this binary was built. A testing build must not claim mainnet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GateBuild {
+    Production,
+    /// Built with the cargo feature `testing` (conformance-small helpers,
+    /// synthetic fixtures).
+    Testing,
+}
+
+/// The build of this binary: `Testing` when the cargo feature `testing` is
+/// on. A release build (`cargo build --release`) is `Production`.
+pub const fn gate_build() -> GateBuild {
+    if cfg!(feature = "testing") {
+        GateBuild::Testing
+    } else {
+        GateBuild::Production
+    }
+}
+
+/// Startup check. A policy that expects mainnet evidence does not start in
+/// a testing build.
+pub fn check_build(policy: &AdmissionPolicy, build: GateBuild) -> Result<(), String> {
+    if policy.expected_network() == Some("main") && build == GateBuild::Testing {
+        return Err(format!(
+            "policy {} expects index network \"main\", and this is a testing build; a testing build serves only a synthetic policy",
+            policy.policy_id
+        ));
+    }
+    Ok(())
+}
+
 /// One configured policy table. A different value is a different id.
 ///
 /// The fields are the keys of `policy/gl-admit-v6.toml`, plus the pending
@@ -184,10 +241,17 @@ pub struct AdmissionPolicy {
     pub draw_commitment: String,
     pub reverify_max_attempts: u64,
     pub max_held_blocks: u64,
+    /// Open sign-ins per source. Since gate 0.5.4 the source is the
+    /// submitter's public key, not the signed site origin. The value and
+    /// its key name are unchanged, so the policy hash is unchanged.
     pub pending_per_source: u64,
     /// `None` means `max_concurrent × 2`, filled when the config is built.
     pub pending_global: u64,
     pub verify_cap_per_door_session: u64,
+    /// `[index]` (gl-admit-v7 on). Absent in gl-admit-v6 and earlier, and
+    /// then not serialized, so their bind hash and policy document stay the same.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub index: Option<IndexPolicy>,
 }
 
 impl Default for AdmissionPolicy {
@@ -209,6 +273,7 @@ impl Default for AdmissionPolicy {
             pending_per_source: DEFAULT_PENDING_PER_SOURCE,
             pending_global: 4,
             verify_cap_per_door_session: 3,
+            index: None,
         }
     }
 }
@@ -261,6 +326,13 @@ impl AdmissionPolicy {
 
     pub fn provisional_on(&self) -> bool {
         self.provisional == "on"
+    }
+
+    /// `[index] expected_network`, when this policy sets one.
+    pub fn expected_network(&self) -> Option<&str> {
+        self.index
+            .as_ref()
+            .map(|index| index.expected_network.as_str())
     }
 }
 
@@ -555,7 +627,10 @@ mod tests {
         );
         assert_eq!(too_few_line(4, 6), "Waypoints anchored: 4 of 16, needs 6.");
         for line in [leg_rate_line(1499, 9557, 1, 5), too_few_line(4, 6)] {
-            assert!(!line.contains("1/5") && !line.contains("leg per second"), "{line}");
+            assert!(
+                !line.contains("1/5") && !line.contains("leg per second"),
+                "{line}"
+            );
         }
     }
 

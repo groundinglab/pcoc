@@ -27,6 +27,16 @@ The admission gate is a service. groundinglab's gate is one configured instance 
 
 A six-leg or checkpoint-digest `mismatch` is an invariant `revoke` in the specification (Rule B9), scoped to `(public_key, object_sha256)`. This policy adds one rule at this gate: **the public key is banned at this gate, and a later submission from a banned key is ignored without verification.** The specification has no ban concept. This rule is groundinglab's policy, not specification. Another gate may choose otherwise.
 
+## gl-admit-v7 (prepared, not deployed)
+
+[policy/gl-admit-v7.toml](policy/gl-admit-v7.toml) is `gl-admit-v6` plus one key, `[index] expected_network = "main"`. Every other value is the same.
+
+| Parameter | Value | Argument |
+|---|---|---|
+| `index.expected_network` | `main` | An accepted sign-in should rest on Bitcoin mainnet headers and mainnet waypoints. The index serves a `network` field on every document. Under this policy every document the decision rests on (header reads, plant reads, and the fresh reads that confirm a mismatch) must say `"network":"main"`. Another network, or no `network` field, is refused as `index_network_not_expected` (class `invalid`): "The index evidence is not from the Bitcoin mainnet, so it cannot support admission here." |
+
+The specification gives the verifier no network input (P14.5), so this is gate policy, not specification. The key is part of the hashed table and is written on every decision line as `expected_network`. Since gate 0.5.4 every new line also carries `index_network`, the networks of the index documents it rests on, whatever the policy. A gate built with the cargo feature `testing` does not start under this policy. Past accepts stand: a policy change does not re-judge or rewrite an earlier line.
+
 ## Choosing your own
 
 Copy `policy/gl-admit-v6.toml`, change the values, and give it a new id that encodes them. The specification's §15.5 lists other informative examples (for instance leg-rate floors `7/20`, `1/4`, `1/8`).

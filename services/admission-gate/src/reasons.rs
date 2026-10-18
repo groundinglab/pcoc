@@ -38,6 +38,9 @@ pub const CODE_PATHS_INCLUDED: &str = "paths_included_below_minimum";
 pub const CODE_INDEX_UNREAD: &str = "index_unread";
 pub const CODE_VERIFIER_ERROR: &str = "verifier_error";
 pub const CODE_CHALLENGE_EXPIRED: &str = "challenge_expired";
+/// An index document a decision rests on is not from the policy's
+/// `[index] expected_network` (or carries no `network`). gl-admit-v7 on.
+pub const CODE_INDEX_NETWORK_NOT_EXPECTED: &str = "index_network_not_expected";
 
 /// Every code this gate writes, in table order. A test covers this list.
 pub const INVENTORY: &[(&str, &str)] = &[
@@ -60,6 +63,7 @@ pub const INVENTORY: &[(&str, &str)] = &[
     (CODE_INDEX_UNREAD, CLASS_OPERATIONAL),
     (CODE_VERIFIER_ERROR, CLASS_OPERATIONAL),
     (CODE_CHALLENGE_EXPIRED, CLASS_OPERATIONAL),
+    (CODE_INDEX_NETWORK_NOT_EXPECTED, CLASS_INVALID),
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -94,6 +98,7 @@ pub fn code_of_note(note: &str) -> &'static str {
         note if note == OUTCOME_TOO_FEW => CODE_BELOW_WAYPOINTS,
         "verifier_error" => CODE_VERIFIER_ERROR,
         CODE_CHALLENGE_EXPIRED => CODE_CHALLENGE_EXPIRED,
+        CODE_INDEX_NETWORK_NOT_EXPECTED => CODE_INDEX_NETWORK_NOT_EXPECTED,
         _ => CODE_SHAPE_MISMATCH,
     }
 }
@@ -227,6 +232,7 @@ fn sentence(code: &str, measures: &Measures) -> String {
         CODE_PATH_PLANT_MISMATCH => "Invalid: a present path does not match the plant.".to_owned(),
         CODE_SUCCESSOR_MISMATCH => "Invalid: a successor waypoint differs.".to_owned(),
         CODE_PATHS_INCLUDED => "Invalid: paths included is below the spec minimum.".to_owned(),
+        CODE_INDEX_NETWORK_NOT_EXPECTED => policy::NETWORK_NOT_MAIN_LINE.to_owned(),
         CODE_BELOW_LEG_RATE => "Valid, measured below the configured leg rate.".to_owned(),
         CODE_BELOW_WAYPOINTS => "Valid, fewer waypoints than the configured minimum.".to_owned(),
         _ => "Invalid: the proof does not hold.".to_owned(),

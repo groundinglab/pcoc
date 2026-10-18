@@ -3,7 +3,7 @@
 //! Three runs of six distinct indices, drawn from `OsRng` by the section 14.6
 //! rejection rule, uniform over every leg. The commitment
 //! `H("pcoc-deep-v1" ‖ seq ‖ object_sha ‖ salt ‖ indices)` is fsynced before
-//! any leg is walked. Runs stop at the first mismatch. Rule A4.3 digests for
+//! any leg is checked. Runs stop at the first mismatch. Rule A4.3 digests for
 //! every leg run after the walks. A mismatch revokes when a grant was issued
 //! and, under this policy, bans the public key. The salt and the indices are
 //! revealed on the result. They are not readable over HTTP before that.
@@ -14,6 +14,7 @@ use hike::{draw_distinct, Entropy, OsEntropy};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::Write;
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 pub const COMMIT_DOMAIN: &[u8] = b"pcoc-deep-v1";
@@ -39,6 +40,9 @@ pub struct LegHit {
 
 #[derive(Clone, Debug)]
 pub struct ThoroughOut {
+    /// The job's own provisional seq. The draw file and the commitment are
+    /// keyed on it, and the thorough line's `fast_seq` is this value.
+    pub seq: u64,
     pub matched: bool,
     pub runs_done: u64,
     pub legs_matched: u64,
@@ -69,6 +73,56 @@ pub fn run(
         policy,
         hike::Sizes::production(),
     )
+}
+
+/// Restart resume of an unsettled provisional. Reuses `pending/<seq>.draw`
+/// and never draws again: a missing draw file is an error, so the caller
+/// holds the provisional instead of judging it with a fresh draw.
+pub fn resume(
+    log_dir: &Path,
+    seq: u64,
+    object: &[u8],
+    object_sha: &[u8; 32],
+    policy: &AdmissionPolicy,
+) -> Result<ThoroughOut, String> {
+    let hike = hike_of(object)?;
+    run_draws(
+        log_dir,
+        seq,
+        &hike,
+        object_sha,
+        policy,
+        hike::Sizes::production(),
+        Draw::StoredOnly,
+    )
+}
+
+/// [`resume`] at `conformance-small` sizes, on a hike the test already built.
+#[cfg(test)]
+pub(crate) fn resume_for_test(
+    log_dir: &Path,
+    seq: u64,
+    hike: &hike::Hike,
+    object_sha: &[u8; 32],
+    policy: &AdmissionPolicy,
+) -> Result<ThoroughOut, String> {
+    run_draws(
+        log_dir,
+        seq,
+        hike,
+        object_sha,
+        policy,
+        hike::Sizes::conformance_small(),
+        Draw::StoredOnly,
+    )
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Draw {
+    /// Reuse a stored draw, or draw once and store it before any leg runs.
+    StoredOrFresh,
+    /// Reuse a stored draw. No stored draw is an error.
+    StoredOnly,
 }
 
 /// [`run`] at `conformance-small` sizes, on a hike the test already built.
@@ -102,10 +156,32 @@ fn walk(
     policy: &AdmissionPolicy,
     sizes: hike::Sizes,
 ) -> Result<ThoroughOut, String> {
+    run_draws(
+        log_dir,
+        seq,
+        hike,
+        object_sha,
+        policy,
+        sizes,
+        Draw::StoredOrFresh,
+    )
+}
+
+fn run_draws(
+    log_dir: &Path,
+    seq: u64,
+    hike: &hike::Hike,
+    object_sha: &[u8; 32],
+    policy: &AdmissionPolicy,
+    sizes: hike::Sizes,
+    mode: Draw,
+) -> Result<ThoroughOut, String> {
     let legs = leg_total(hike).ok_or_else(|| "leg total".to_owned())?;
     let path = draw_path(log_dir, seq);
     let draw = if path.is_file() {
         load_draw(&path, seq, object_sha)?
+    } else if mode == Draw::StoredOnly {
+        return Err(format!("no stored draw for seq {seq}; not drawn again"));
     } else {
         let draw = fresh_draw(seq, object_sha, legs, policy)?;
         store_draw(log_dir, &draw)?;
@@ -141,6 +217,7 @@ fn walk(
     }
     let digest_mismatch = failed.is_none() && digest_miss(hike, &terrain, &seed, sizes);
     Ok(ThoroughOut {
+        seq,
         matched: failed.is_none() && !digest_mismatch,
         runs_done,
         legs_matched,
@@ -204,15 +281,23 @@ fn fresh_draw(
     })
 }
 
+/// Private draw file: `pending/` is 0700 and `<seq>.draw` is 0600, set in
+/// code whatever the process umask is.
 fn store_draw(log_dir: &Path, draw: &DrawFile) -> Result<(), String> {
     let path = draw_path(log_dir, draw.seq);
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(PRIVATE_DIR_MODE)
+            .create(parent)
+            .map_err(|err| err.to_string())?;
+        fs::set_permissions(parent, fs::Permissions::from_mode(PRIVATE_DIR_MODE))
+            .map_err(|err| err.to_string())?;
     }
     let bytes = serde_json::to_vec(draw).map_err(|err| err.to_string())?;
     let tmp = path.with_extension("tmp");
     {
-        let mut file = File::create(&tmp).map_err(|err| err.to_string())?;
+        let mut file = private_file(&tmp)?;
         file.write_all(&bytes).map_err(|err| err.to_string())?;
         file.sync_all().map_err(|err| err.to_string())?;
     }
@@ -222,6 +307,26 @@ fn store_draw(log_dir: &Path, draw: &DrawFile) -> Result<(), String> {
         dir.sync_all().map_err(|err| err.to_string())?;
     }
     Ok(())
+}
+
+/// Mode of a private gate file (`pending/<seq>.draw`, `banned_keys.json`).
+pub const PRIVATE_FILE_MODE: u32 = 0o600;
+/// Mode of the private `pending/` directory.
+pub const PRIVATE_DIR_MODE: u32 = 0o700;
+
+/// Create or truncate `path` at mode 0600, independent of the umask. An
+/// existing file is set to 0600 too.
+pub fn private_file(path: &Path) -> Result<File, String> {
+    let file = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(PRIVATE_FILE_MODE)
+        .open(path)
+        .map_err(|err| err.to_string())?;
+    file.set_permissions(fs::Permissions::from_mode(PRIVATE_FILE_MODE))
+        .map_err(|err| err.to_string())?;
+    Ok(file)
 }
 
 fn load_draw(path: &Path, seq: u64, object_sha: &[u8; 32]) -> Result<DrawFile, String> {
