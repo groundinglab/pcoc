@@ -120,7 +120,6 @@ fn actions(app: &Rc<App>, path: &std::path::Path) -> gtk::Widget {
         let path = path.to_owned();
         sign.connect_clicked(move |_| app.sign_in_with(path.clone()));
     }
-    row.append(&sign);
     let (note, busy) = {
         let s = app.state.borrow();
         (s.phone_note.clone(), s.phone_busy)
@@ -143,6 +142,7 @@ fn actions(app: &Rc<App>, path: &std::path::Path) -> gtk::Widget {
         phone.connect_clicked(move |_| app.send_to_phone(path.clone()));
     }
     row.append(&phone);
+    row.append(&sign);
     let Some(note) = note else {
         return row.upcast();
     };

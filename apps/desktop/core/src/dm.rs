@@ -120,7 +120,7 @@ impl Sent {
     /// The sentence the app shows.
     pub fn sentence(&self) -> String {
         format!(
-            "Sent to {}. {} Open the phone app signed in with this npub and approve the PCOC .cbor message.",
+            "Sent to {}. {} On the phone app signed in with this npub, press Approve on \"PCOC .cbor DM received.\"",
             self.recipient_npub,
             relay_summary(&self.results)
         )
