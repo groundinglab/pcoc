@@ -15,18 +15,18 @@ The record it writes is byte-identical to the Rust and Go SDKs. The JDK alone is
 You need JDK 21 or newer: `javac -version` must print 21 or higher, and 17 does not work. There is no Maven or Gradle build, and nothing is published to a repository. Pin the repository tag and compile the sources into a jar of your own, outside the checkout:
 
 ```sh
-git clone --depth 1 --branch sdk-v2.0.0-rc.1 https://github.com/groundinglab/pcoc /path/to/pcoc
+git clone --depth 1 --branch sdk-v2.0.0-rc.2 https://github.com/groundinglab/pcoc /path/to/pcoc
 SDK=/path/to/pcoc/sdk/java
 OUT=$PWD/build                      # in your project, not in the checkout
 mkdir -p "$OUT/sdk-classes" lib
 find "$SDK/src" -name '*.java' -not -path '*/conformance/*' | sort > "$OUT/pcoc-sources.txt"
 javac --release 21 -d "$OUT/sdk-classes" @"$OUT/pcoc-sources.txt"
-jar --create --file lib/pcoc-sdk-2.0.0-rc.1.jar -C "$OUT/sdk-classes" .
+jar --create --file lib/pcoc-sdk-2.0.0-rc.2.jar -C "$OUT/sdk-classes" .
 ```
 
-Then compile and run against the jar: `javac --release 21 -cp lib/pcoc-sdk-2.0.0-rc.1.jar …` and `java -cp lib/pcoc-sdk-2.0.0-rc.1.jar:… YourMain`. `pcoc.conformance` is the test harness, and is not needed at run time.
+Then compile and run against the jar: `javac --release 21 -cp lib/pcoc-sdk-2.0.0-rc.2.jar …` and `java -cp lib/pcoc-sdk-2.0.0-rc.2.jar:… YourMain`. `pcoc.conformance` is the test harness, and is not needed at run time.
 
-> `sdk-v2.0.0-rc.1` is prepared but not yet published. Until it is, use a checkout of this repository at the commit the tag names: `git rev-parse sdk-v2.0.0-rc.1^{commit}` in a clone that has the tag.
+> `sdk-v2.0.0-rc.2` is prepared but not yet published. Until it is, use a checkout of this repository at the commit the tag names: `git rev-parse sdk-v2.0.0-rc.2^{commit}` in a clone that has the tag.
 
 ## Quickstart (run by `sdk/test.sh`)
 
@@ -77,7 +77,7 @@ public class Quickstart {
         }
         System.out.println("draw = draw_bytes_hex: " + Arrays.equals(pinned, stream));
 
-        // Profile.PRODUCTION for real objects. null means CBOR that is not a map.
+        // Profile.PRODUCTION for real objects.
         String record = Measure.record(object, Profile.CONFORMANCE_SMALL_V2, index, stream, false);
         Json.Obj parsed = (Json.Obj) Json.parse(record);
         System.out.println("shape: " + ((Json.Str) parsed.fields().get("shape")).value);
@@ -133,7 +133,7 @@ Measure.Reader index = height -> {
 byte[] stream = new byte[4096];
 new SecureRandom().nextBytes(stream);
 String record = Measure.record(object, Profile.PRODUCTION, index, stream, false);
-System.out.print(record == null ? "" : record); // null: CBOR that is not a map
+System.out.print(record); // never null: undecodable or non-map input gets the ["malformed cbor"] record
 ```
 
 **The public index.** `https://index.groundinglab.io` serves `GET /index/<height>` only for the mainnet heights it retains, and answers 404 for any other height. The `conformance-small` vectors use small, non-mainnet heights, so on a vector object every read is `not read`. Use a real production object.
@@ -215,7 +215,7 @@ public static String issue(byte[] data)                          // "" for one w
 **Building blocks.**
 - `Terrain.fill`, `Terrain.fillPin` and `Measure.drawSix`.
 - `Bytes`: `sha256`, `hex`, `unhex`, `le64`, `u64le` and `displayHex`.
-- The constants in `Hike`, including the informative §15.5 `LEG_RATE_FLOOR_*` examples.
+- The constants in `Hike`. (The §15.5 leg-rate floor examples are no longer SDK constants as of rc.2: a policy sets the value.)
 
 **Programs.** `pcoc.cli.Verify` and `pcoc.cli.Produce`.
 
@@ -223,7 +223,7 @@ The Rust SDK has two things these packages do not: direct node reads for the pla
 
 ## Errors
 
-`Cbor.Problem` is a checked exception. Its reason is the public field **`issue`** (a `String`); `getMessage()` returns `null`. Catch it like this:
+`Cbor.Problem` is a checked exception. Its reason is the public field **`issue`** (a `String`); `getMessage()` returns the same text (rc.2; it returned `null` before). Catch it like this:
 
 ```java
 try {
@@ -250,7 +250,6 @@ try {
 | `IllegalArgumentException` (`getMessage()`: `"trailing json"`, `"truncated json"`, `"duplicate json key"`, `"escape"`, `"control"`, `"number"`, `"expected …"`, `"object"`, `"array"`, `"string"`) | `Json.parse`, `parseStrict`, `asObj`, … | Text that is not one strict JSON value of the expected type |
 | `IllegalArgumentException` from `Json.parse` | `RecordHash.verifyRecordSha256` | The record is not JSON |
 | `IllegalStateException` | `Bytes.digest`, `Terrain` | The JRE has no SHA-256 (cannot happen on a conforming JDK) |
-| `null` | `Measure.record` | The object is CBOR but not a map. Bytes that are not CBOR get the "undecodable" record instead |
 | `null` | `PathBody.locatorsFor`, `inclusionHeight` | A path body that does not decode, or does not match the waypoint |
 | `null` | `Index.readDocument` | A document that section 9 rejects |
 | `null` | `Bytes.unhex` | Odd-length or non-hex text |
@@ -262,7 +261,7 @@ The diagnostic texts are not part of the record, and they differ between SDKs. O
 
 `Measure.record` throws nothing for malformed objects. It records `mismatch`, `not defined` or `not read`.
 
-The programs exit 0 when the record is written, 1 when the object cannot be read or does not decode, and 2 on a usage error. A well-formed CBOR item that is not a map exits 1 here, but 0 in Rust; see [KNOWN-DIVERGENCES.md](../KNOWN-DIVERGENCES.md).
+The programs exit 1 only when no top-level CBOR map decodes: the file cannot be read, the first item does not decode under section 7.3, or it is well-formed but not a map. In every other case, trailing bytes after a map included, they write the record and exit 0. Usage errors exit 2. `Measure.record` never returns `null` for these inputs (rc.2): bytes that do not decode and a top level that is not a map both get the `["malformed cbor"]` record. Rust and Go behave the same.
 
 ## Conformance vectors
 
@@ -278,8 +277,8 @@ bash sdk/java/v2.sh    # this SDK only: javac --release 21 -Xlint:all -Werror, t
 ## Programs
 
 ```sh
-java -cp lib/pcoc-sdk-2.0.0-rc.1.jar pcoc.cli.Verify --input OBJECT --profile live --index-url https://index.groundinglab.io
-java -cp lib/pcoc-sdk-2.0.0-rc.1.jar pcoc.cli.Produce --help
+java -cp lib/pcoc-sdk-2.0.0-rc.2.jar pcoc.cli.Verify --input OBJECT --profile live --index-url https://index.groundinglab.io
+java -cp lib/pcoc-sdk-2.0.0-rc.2.jar pcoc.cli.Produce --help
 ```
 
 **Verify** takes the same flags as the Rust and Go programs; see [the verify programs](../README.md#the-verify-programs).

@@ -16,7 +16,7 @@ pub const OBJECT_KIND: &str = hike::KIND;
 
 pub const BITCOIN: &str = "mainnet";
 
-/// `hike 2.0.0-rc.1`: the Rust SDK crate and the version Cargo.lock resolved.
+/// `hike 2.0.0-rc.2`: the Rust SDK crate and the version Cargo.lock resolved.
 pub fn crate_line() -> String {
     format!("hike {HIKE_VERSION}")
 }

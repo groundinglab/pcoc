@@ -5,7 +5,7 @@ The Rust SDK for Satoshi Hike v2.0, the PCOC specification. It is one Cargo work
 | Crate | What it is |
 |---|---|
 | `hike` | The library: decode, measure and verify a hike object (the section 14 record); produce one (section 13); the section 15 refusals; the index and plant clients; the constants. |
-| `hike-net` | Network code kept out of `hike`: `ChainRpc::new(url, user, password)` reads a Bitcoin Core node for the plant check, and `judge_test_policy` / `GateJudgment` are the test-plane policy (not for production gates). |
+| `hike-net` | Network code kept out of `hike`: `ChainRpc::new(url, user, password)` reads a Bitcoin Core node for the plant check. (The test-plane `judge_test_policy` moved out of the SDK in rc.2: it is policy, not measurement.) |
 | `nip06` | DEMO keys only: BIP-39 English 12-word, empty passphrase, NIP-06 path, BIP-340 x-only. Not a hike `production_seed`. |
 | `satoshi-hike-verify`, `satoshi-hike-produce` | Command-line programs built on `hike`. |
 
@@ -19,12 +19,12 @@ The admission gate and the desktop app use this SDK as their engine, and the And
 ```toml
 [dependencies]
 # a tag (Rust and Java share the repository tag)
-hike = { git = "https://github.com/groundinglab/pcoc", tag = "sdk-v2.0.0-rc.1" }
+hike = { git = "https://github.com/groundinglab/pcoc", tag = "sdk-v2.0.0-rc.2" }
 # or a checkout: the path is relative to your Cargo.toml, pointing at <clone>/sdk/rust/hike
 hike = { path = "../pcoc/sdk/rust/hike" }
 ```
 
-> `sdk-v2.0.0-rc.1` is prepared but not yet published. Use the path form until it is on the remote.
+> `sdk-v2.0.0-rc.2` is prepared but not yet published. Use the path form until it is on the remote.
 
 Cargo finds `hike` inside the repository by its package name, so you don't need a `subdir` key. Add `nip06` or `hike-net` the same way if you need them.
 
@@ -38,7 +38,7 @@ Cargo finds `hike` inside the repository by its package name, so you don't need 
 ```toml
 [dependencies]
 # In your own project, pin the tag instead:
-# hike = { git = "https://github.com/groundinglab/pcoc", tag = "sdk-v2.0.0-rc.1" }
+# hike = { git = "https://github.com/groundinglab/pcoc", tag = "sdk-v2.0.0-rc.2" }
 hike = { path = "../../rust/hike" }
 serde_json = "=1.0.151"
 sha2 = "0.10"
@@ -257,6 +257,7 @@ pub enum ChainRead { Match, Mismatch, NotRead }
 
 ```rust
 pub fn decoded_hike(bytes: &[u8]) -> Result<Hike, ()>
+pub fn top_level_map(bytes: &[u8]) -> bool   // the first CBOR item decodes and is a map (trailing bytes allowed)
 pub fn canonical_object(bytes: &[u8]) -> Result<bool, ()>
 pub fn object_public_key(bytes: &[u8]) -> Result<[u8; 32], ()>
 pub fn yielded_public_key(bytes: &[u8]) -> YieldedKey     // Undecodable | NoPublicKey | PublicKey([u8; 32])
@@ -298,7 +299,7 @@ Related produce APIs:
 - Functions: `fill_terrain[_sized]`, `production_seed`, `leg_result[_sized]`, `checkpoint_sized`, `successor_waypoint[_sized]`, `terrain_sample_sized`, `draw_distinct` and `effective_bits`.
 - The section 6 constants: `KIND`, `STAGES`, `STEPS_PER_LEG`, `SAMPLE_BYTES`, …, `ANCHOR_WINDOW_OFFSETS`.
 
-**Admission (section 15).** `admit(&Measurements) -> bool` returns true when there is no refusal and no held read. `failure_facts(&Measurements) -> Vec<&'static str>` names the refusals, and is empty when the record is clear or held. The informative §15.5 example floors are `LEG_RATE_FLOOR_*`.
+**Admission (section 15).** `admit(&Measurements) -> bool` returns true when there is no refusal and no held read. `failure_facts(&Measurements) -> Vec<&'static str>` names the refusals, and is empty when the record is clear or held. The informative §15.5 example floors are policy values, not SDK constants (rc.2): they live in `spec/conformance/v2.0/constants.json`.
 
 **Events and reports.**
 - `verify_events` turns one observation into `VerifyEvent`s: the object, then the six checks in section 14 order.
@@ -327,7 +328,7 @@ Related produce APIs:
 | opaque `ClockError` (not nameable as `hike::ClockError`; match it as `Err(_)`) | `parse_index_beacon`, `parse_index_document` | The body is not one JSON value with unique members; `header` is not an object; `header.hash` is not 64 hex digits; or `header.height` is not an unsigned integer |
 | `ProduceFailure { message, http_status }` | `produce*`, `read_clock`, plant calls | A tip or plant call failed. `http_status` is set when there was an HTTP answer |
 | `UsageError` | `parse_verify`, `parse_produce` | Bad command-line arguments (the programs exit 2) |
-| `Err(())` | `decoded_hike` | The first CBOR item does not decode, is not a map, or lacks a value the `Hike` struct cannot do without (`public_key`, `seed_beacon`, `stages`, or a stage's `waypoint`, `path`, `checkpoints` or `leg_results`). An absent or mistyped constant, or a stage's absent `beacon`, `beacon_height` or `leg_count`, is not an error here: that slot holds zero, and `verify` records the condition. **Trailing bytes after a decodable map are not an error here:** `decoded_hike` returns the hike even when the shape is `mismatch`. It is not a validity check. Use `verify` (which records `malformed cbor` for trailing bytes, as section 7.3 requires) or `canonical_object` |
+| `Err(())` | `decoded_hike` | The first CBOR item does not decode, is not a map, or has bytes after it (rc.2: trailing bytes are an error here too). A field that is absent or of the wrong type is not an error: that slot holds zero (an empty array for `checkpoints` or `leg_results`, an empty `path`), and `verify` records the condition. It is not a validity check: a hike with a `mismatch` shape is still returned. Use `verify` for the record |
 | `Err(())` | `canonical_object`, `object_public_key` | The bytes are not exactly one well-formed CBOR item (trailing bytes included), or are not a hike map |
 | `Err(())` | `proxy_matches`, `direct_matches` | The plant document or the node facts do not match the path |
 | `None`, `YieldedKey::Undecodable`, `YieldedKey::NoPublicKey` | `earlier_object_kind`, `yielded_public_key` | Not a CBOR map or not an earlier kind; no 32-byte `public_key` field |
@@ -339,7 +340,7 @@ Related produce APIs:
 
 The error types are Rust's own. The Go and Java SDKs report the same conditions with different texts or values, and the diagnostic texts differ between SDKs; only the record bytes are conformance-tested. [The comparison table](#error-names-across-the-sdks) is below.
 
-The programs exit 0 when the record is written, 1 when the object cannot be read or the bytes are not CBOR, and 2 on a usage error. One exception: a well-formed CBOR item that is not a map (for example the single byte `01`) gets a `field set` record and exit 0 from Rust, but exit 1 from Go and Java. It is listed in [KNOWN-DIVERGENCES.md](../KNOWN-DIVERGENCES.md).
+The programs exit 1 only when no top-level CBOR map decodes (`hike::top_level_map(bytes)` is false): the file cannot be read, the first item does not decode under section 7.3, or it is well-formed but not a map (for example the single byte `01`). In every other case, trailing bytes after a map included, they write the record and exit 0. Usage errors exit 2. `verify` itself gives the `["malformed cbor"]` record for every input the program refuses. Go and Java behave the same (rc.2).
 
 ### Error names across the SDKs
 
@@ -353,7 +354,7 @@ The programs exit 0 when the record is written, 1 when the object cannot be read
 | Bytes after the first CBOR item | record `malformed cbor` | `trailing` | `Cbor.Problem`, `.issue` `"trailing"` |
 | Reserved CBOR length code (28–30) | record `malformed cbor` | `float-or-simple` | `.issue` `"truncated"` |
 | Text that is not UTF-8 | record `malformed cbor` | `malformed cbor` | `.issue` `"truncated"` |
-| Top item not a map | record `field set` | `malformed cbor` | `.issue` `"not a map"` |
+| Top item not a map | record `malformed cbor` | `malformed cbor` | `.issue` `"not a map"` |
 
 ## Conformance vectors
 

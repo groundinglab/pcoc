@@ -27,6 +27,6 @@ public class Live {
         byte[] stream = new byte[4096];
         new SecureRandom().nextBytes(stream);
         String record = Measure.record(object, Profile.PRODUCTION, index, stream, false);
-        System.out.print(record == null ? "" : record); // null: CBOR that is not a map
+        System.out.print(record); // never null: undecodable or non-map input gets the ["malformed cbor"] record
     }
 }

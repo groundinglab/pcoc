@@ -7,15 +7,15 @@ It uses only the Go standard library, and needs Go 1.22 or newer.
 ## Install / pin
 
 ```sh
-go get github.com/groundinglab/pcoc/sdk/go/v2@v2.0.0-rc.1
+go get github.com/groundinglab/pcoc/sdk/go/v2@v2.0.0-rc.2
 ```
 
-The module lives under `sdk/go/`, so its tag is `sdk/go/v2.0.0-rc.1`. That is the same commit as the repository tag `sdk-v2.0.0-rc.1`.
+The module lives under `sdk/go/`, so its tag is `sdk/go/v2.0.0-rc.2`. That is the same commit as the repository tag `sdk-v2.0.0-rc.2`.
 
 > The tag is prepared but not yet published. Until it is, use a checkout of this repository. The `replace` path is relative to your `go.mod` and points at `<clone>/sdk/go`:
 >
 > ```
-> require github.com/groundinglab/pcoc/sdk/go/v2 v2.0.0-rc.1
+> require github.com/groundinglab/pcoc/sdk/go/v2 v2.0.0-rc.2
 > replace github.com/groundinglab/pcoc/sdk/go/v2 => ../pcoc/sdk/go
 > ```
 
@@ -223,7 +223,6 @@ func NewProfile(name, kind string, sample, slot, terrain, steps int) (Profile, e
 **Building blocks.**
 - Functions: `FillTerrain`, `SeedValue`, `SampleAt`, `SlotAt`, `CheckpointDigest`, `WaypointDigest`, `FoldCheckpoints`, `DrawSix` and `FillPin`.
 - The section 6 constants: `Stages`, `Kind`, `SealDomain`, `Mix*`, ….
-- The informative §15.5 examples `LegRateFloor*`.
 
 **Programs.** `cmd/satoshi-hike-verify` and `cmd/satoshi-hike-produce`.
 
@@ -262,7 +261,7 @@ The diagnostic texts are not part of the record, and they differ between SDKs. O
 
 `Verify` does not return an error. Malformed input gives `decoded == false`, or a record whose tokens say `mismatch`, `not defined` or `not read`. A failed index read is `ok == false` from `Fetch`, and shows in the record.
 
-The programs exit 0 when the record is written, 1 when the object cannot be read or does not decode, and 2 on a usage error. A well-formed CBOR item that is not a map exits 1 here, but 0 in Rust; see [KNOWN-DIVERGENCES.md](../KNOWN-DIVERGENCES.md).
+The programs exit 1 only when no top-level CBOR map decodes: the file cannot be read, the first item does not decode under section 7.3, or it is well-formed but not a map. In every other case, trailing bytes after a map included, they write the record and exit 0. Usage errors exit 2. `Verify` returns the `["malformed cbor"]` record (with `decoded` false) for every input the program refuses. Rust and Java behave the same (rc.2).
 
 ## Conformance vectors
 

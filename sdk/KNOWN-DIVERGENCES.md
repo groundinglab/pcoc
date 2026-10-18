@@ -5,49 +5,68 @@
 - **Programs:** the Rust, Go and Java `satoshi-hike-verify` programs must write byte-identical stdout and exit with the same code.
 - **Libraries:** each SDK's verify call must return a byte-identical record. The calls are Rust `verify_sized` with `verify_record_json`, Go `Verify` with `Record.Marshal`, and Java `Measure.record`. The `librecord` programs in `examples/` print that record even when the verify program would withhold it.
 
-On every conformance-pack object, all three SDKs write byte-identical section 14 records. The inputs are the pack objects, mutants of `kat-small`, targeted section 14.1 edits (one field absent, mistyped or out of order) and one-byte CBOR items that are not a map. The harness pins each case below by name and by the first 16 hex digits of the Rust, Go and Java output digests. The run fails in three situations: a listed case starts to agree, its bytes change, or an unlisted case disagrees.
+On every conformance-pack object, all three SDKs write byte-identical section 14 records. The inputs are the pack objects, mutants of `kat-small`, targeted section 14.1 edits, one-byte CBOR items that are not a map, and (from rc.2) the structural break cases in `sdk/tools/hikecases.py`: a wrong checkpoint or leg-result width in several stages, each stage field absent or mistyped, absent or mistyped top-level fields, 0/1/17/19 stages, a stage that is not a map, absent beacons combined with bad headers, mixed edits, out-of-range integers, six-leg previous values of the wrong width, top levels that are not a map, and trailing bytes after maps with and without other faults. The harness pins each open case below by name and by the first 16 hex digits of the Rust, Go and Java output digests. The run fails in three situations: a listed case starts to agree, its bytes change, or an unlisted case disagrees.
 
 ## Open
 
-| Case | Rust | Go | Java | Kind | Tracked by |
-|---|---|---|---|---|---|
-| `cbor-uint` (`01`), `cbor-array` (`80`), `cbor-text` (`60`): one well-formed CBOR item that is not a map | Library: a record with `shape_item` `["field set"]`. Program: exit 0, that record on stdout | Library: `Verify` returns `decoded == false` and a record with `["malformed cbor"]`. Program: exit 1, `undecodable` on stderr, no record | Library: `Measure.record` returns `null`. Program: exit 1, no record | **Spec question 1** below | this file; not filed |
-| `field-s2-cpwidth`: stage 2's checkpoint is 31 bytes, not 32 | `W_3` `mismatch`, the stage-2 leg in the six-leg draw `mismatch`, and `checkpoint_count`/`whole_hike_legs` `not defined` | `W_3` `not defined`, that leg `match`, counts are numbers, `legs_outside` `not defined` | Same as Go, except `legs_outside` is `17` | **Bugs, not yet fixed.** Section 14 says a recompute with unusable stage bytes is `not defined` (Rust wrong). A `j = 0` leg reads only the waypoint and `leg_results[0]` (Rust wrong). `whole_hike_legs` is a JSON number (Rust wrong). `legs_outside` is `not defined` only when the bookend fields are, and here they are defined (Go wrong) | this file; not filed |
+Both rows are open spec questions (below), not known bugs: the SPEC text does not settle which record is right, so no SDK was changed for them.
 
-All three SDKs agree on every other case, at both levels. That includes the 11 truncated or broken-head inputs, where no program writes a record; see spec question 2.
+| Case | Rust | Go | Java | Kind |
+|---|---|---|---|---|
+| `stage0-uint`, `stage1-uint`, `stage5-uint`, `stage17-uint`: one element of `stages` is the unsigned integer 7, not a map | Read as a stage map with every field absent: `checkpoint_count` `0`, `whole_hike_legs` and `legs_outside` counted, `path_state` `skip` / `plant` `n/a`, `w17_path` `not fetched by design` | Read as an absent stage: `checkpoint_count`, `whole_hike_legs`, `legs_outside`, `path_state`, `plant` and `w17_path` `not defined` | Same as Rust | **Spec question Q-b**. `shape_item` agrees in all three |
+| `li-height-2^64-1`: `last_interrupt_height` is 2^64 − 1 (above 2^53 − 1, and above stage 17's height) | `shape_item` lists `height_range` | Also lists `header height order` | Same as Rust | **Spec question Q-a** |
 
-## Fixed after rc.1
+All three SDKs agree on every other case, at both levels.
 
-The tag `sdk-v2.0.0-rc.1` (c9b160ea) still has the bug below. It is fixed on `sdk/phase-a` after the tag.
+## Fixed for rc.2
 
-**Rust did not record every section 14.1 condition, and stopped measuring.** Section 14.1 (normative) says: *"On `mismatch`, the array contains every string whose condition is violated … A condition that is violated is not dropped because another condition is also violated. A condition that tests a field’s value is violated when that field is absent."* It also says *"Later measurements are still recorded."* Rust departed from this in two ways:
+The rc.1 tags (c9b160ea) have every bug below. They are fixed on `sdk/phase-a` and in the rc.2 tags. Each row names the SPEC text that decides it; each is a cross-check case, and the SDK tests pin the facts (Rust `hike/tests/break_cases.rs`, Go `hike/rc2_break_test.go`, Java `V2Pack.rc2Break`).
 
-- `hike/src/object.rs`, `read_measured_map` and `parse_stage`, used `?` on a required field. When `kind`, `fill`, a size constant, a stage key set, a stage `beacon`, `beacon_height` or `leg_count` was absent or of the wrong type, the whole object was refused. The record was then the no-object record, byte-identical to the one for the single byte `01`.
-- The header-order loop stopped at the first failed pair (`break`). The closing-header check recorded `last_interrupt` but not `header height order` or `header hash differ` for the same pair.
+| Case(s) | Wrong in | Was | Now (all three) | SPEC basis |
+|---|---|---|---|---|
+| `field-s2-cpwidth`, `cpw-s0` … `cpw-s17`, `cpw-s4-33`, `cpw-s4-0`: a checkpoint of the wrong width | Rust | `W_{g+1}` `mismatch` | `not defined` | §14.2 (line 1232): a recompute with unusable stage bytes is `not defined`, and `checkpoints[g].legs` is `not defined` "in that same case" |
+| same | Rust | the stage's `j = 0` leg in the six-leg draw `mismatch` (the leg results were dropped with the checkpoints) | `match` | §14.6: leg 0 reads the waypoint and `leg_results[0]` only |
+| same | Rust | `checkpoint_count`, `whole_hike_legs`, `legs_outside` `not defined` | the array length, the bad element counted | §14.4 (line 1254) `checkpoint_count` is the number of checkpoints; §14.6 `L_g = len(stages[g].checkpoints)` |
+| same | Go | `N`, `fixed_start.N`, `legs_outside` `not defined` (counted only stages whose legs were defined) | numbers | Rule A4.7 (lines 295, 1479): `N` is "an integer when bookends exist"; line 1254: `legs_outside` is `not defined` only when the bookend fields are |
+| `cpw-s3-lc2`, `lrw-cpw-s4`: a bad width and a wrong `leg_count` | Rust | `leg_count` dropped when a width was bad | listed | §14.1: "a condition that is violated is not dropped because another condition is also violated" |
+| `absent-s5-*`, `text-s5-*`, `absent-s0-*`, `absent-top-public_key`, `absent-top-seed_beacon`, `absent-top-stages`, `text-top-stages`, `short-pubkey`, `short-s5-waypoint`, `mixed-2`, `stages-0`: an absent or mistyped `checkpoints`, `leg_results`, `waypoint`, `path`, `public_key`, `seed_beacon` or `stages` | Rust | the no-object record (`["field set"]`, nothing measured) | every violated condition listed, and the later measurements recorded | §14.1: "Later measurements are still recorded"; "a condition that tests a field's value is violated when that field is absent" (the rc.1 section 14.1 fix covered the other fields) |
+| `absent-s17-path`, `text-s17-path`: stage 17's `path` absent or not bytes | Rust | no `W_17 path` | `["field set", "W_17 path"]` | Rule A4.1 (line 1262ff): an absent stage-17 path is `W_17 path` |
+| `stages-19`: 19 stages | Rust | the six-leg draw indexed stage 18 too | stages 0 … 17 only | §14.6: `leg_total = start_STAGES` |
+| `stages-0`, `absent-top-stages`: no stage 0 | Rust | `seed_value` `not defined` | `mismatch` | Rule A4.1: `stages[0].waypoint` is compared to SHA-256(seed): match, else mismatch |
+| `short-s8-beacon`, `short-li`: a 31-byte stored hash | Go | `stored_hash` written as 62 hex digits | `not defined` | §14.1 line 1262: a value with no usable value from the object is `not defined` |
+| `text-s5-checkpoints`, `text-s5-leg_results`: the value is not an array | Go, Java | no `field set` | `field set` | §14.1 row 2: wrong value types |
+| `cpw-prev7-s3`, `cp-prev-text-s3`: the six-leg previous checkpoint is under 8 bytes, or text | Java | crashed (exit 1, stack trace, no record) | `mismatch` | §14.6 / line 1252: each result is `match` or `mismatch`; nothing recomputes from a short previous |
+| `cp-prev-nowp-s3`: leg `j ≥ 1` drawn on a stage with no waypoint | Java | `mismatch` | `match` | §14.6: for `j ≥ 1` the previous is the stored `checkpoints[j − 1]`; the waypoint is not read |
 
-A related bug: the six-leg draw indexed legs by `leg_count`, but section 14.6 says *"The draw does not read `leg_count`"*.
+`cpw-prev-s3` (a 31-byte previous checkpoint, leg `j = 1` drawn by seed `01…01`) agrees in all three: `match`, from the first 8 bytes (§11.2 `S_0 = u64_le(previous[0:8])`).
 
-Go and Java followed the text. Rust now does too, and its records are byte-identical to theirs for every case below.
+### Behaviour changes approved for rc.2 (closing spec questions 1 and 2 of rc.1)
 
-| Case | Rust before | All three now |
-|---|---|---|
-| `kat-flip@2`, `kat-head@2`: top-level `fill` key renamed | `["field set"]`, then nothing measured | `["field set", "constant"]`, and everything measured |
-| `kat-flip@562`, `kat-head@562`: stage 1 `beacon_height` key renamed | `["field set"]`, then nothing measured | `["field set", "header height order"]`. `headers[1]` is `not defined` / `not read` |
-| `kat-flip@3938`: `last_interrupt_height` below stage 17's height | `["last_interrupt"]` | `["last_interrupt", "header height order"]` |
-| `field-slot-text`: `slot_bytes` is text | no-object record | `["field set", "constant"]` |
-| `field-s0-beacon`, `field-s5-beacon`: a stage `beacon` key renamed | no-object record | `["field set", "seed beacon", "header hash differ"]` (stage 0), `["field set", "header hash differ"]` (stage 5, and `W_5` is `not defined`) |
-| `field-s1-height`: stage 1 `beacon_height` renamed | no-object record | as `kat-flip@562` |
-| `field-s3-legcount`, `field-s3-legcount-2`: stage 3 `leg_count` absent, or 2 with 1 checkpoint | no-object record; a draw over 19 legs | `["field set", "leg_count"]` / `["leg_count"]`; the draw is over 18 checkpoints |
-| `field-li-equal`: `last_interrupt` equals stage 17's beacon | `["last_interrupt"]` | `["last_interrupt", "header hash differ"]` |
-| `field-order-hash`: a height-order failure at stage 4 and a repeated hash at stage 10 | `["header height order"]` | `["header height order", "header hash differ"]` |
+| Change | Rust | Go | Java | Cases |
+|---|---|---|---|---|
+| 1. A top level that is not a map is recorded as `["malformed cbor"]`, the same record as bytes that do not decode | was `["field set"]`; now the undecoded record | the library wrote `["malformed cbor"]` on a partly measured skeleton; now the undecoded record | `Measure.record` returned `null`; now the undecoded record | `cbor-uint`, `cbor-array`, `cbor-text`, `nm-*` |
+| 2. The programs exit 1 only when no top-level map decodes; every other input writes a record and exits 0 | `01` exited 0 with a record; now exit 1 | unchanged | unchanged | `nm-*`, `kat-trailing`, `map-then-map`, `map-then-01`, `trail-*` |
+| 3. `decoded_hike` returns `Err` on trailing bytes | was `Ok` | n/a | n/a | Rust test `decoded_hike_refuses_trailing_bytes` |
+| 4. `Cbor.Problem.getMessage()` returns `.issue` | n/a | n/a | was `null` | Java `V2Pack.rc2Break` |
 
-Section 14.1 is the only basis for this fix. No vector covers these inputs yet. Adding them is a spec PR.
+Changes 1 and 2 also change SPEC wording (§14.1 row 1 and §18 item 9). That wording, with a vector, is drafted for the next spec tag (v2.0.6, after the SPEC_PIN tag); see [CHANGES.md](CHANGES.md). Until that tag exists the vectors are SDK cross-check cases.
+
+## Fixed after rc.1 (before rc.2)
+
+**Rust did not record every section 14.1 condition, and stopped measuring.** `hike/src/object.rs` used `?` on a required field, so an absent or mistyped `kind`, `fill`, size constant, stage key set, stage `beacon`, `beacon_height` or `leg_count` refused the whole object; the header-order loop stopped at the first failed pair; and the six-leg draw indexed legs by `leg_count`. Cases: `kat-flip@2`, `kat-head@2`, `kat-flip@562`, `kat-head@562`, `kat-flip@3938`, `field-slot-text`, `field-s0-beacon`, `field-s5-beacon`, `field-s1-height`, `field-s3-legcount`, `field-s3-legcount-2`, `field-li-equal`, `field-order-hash`. Go and Java followed the text; Rust now does too.
 
 ## Questions for the spec owner
 
-There are two. The SDKs do not decide them. Each fix lands as a new vector in a `spec` PR, and then every SDK follows.
+The SDKs do not decide these. Where all three already agree, the cross-check holds them to that agreement; each answer lands as a vector in a `spec` PR, and then every SDK follows.
 
-1. **Which `shape_item` does a well-formed CBOR item that is not a map get?** Row 1, `malformed cbor`, applies when *"the input is not one definite-length CBOR data item under section 7.3"*. `01`, `80` and `60` each are one such item, which points away from `malformed cbor`. Row 2, `field set`, covers *"a map that is present"*, but here no top-level map is present. Rust records `field set`, Go records `malformed cbor`, and Java returns no record. Section 14.1 does not settle which is right, and no vector covers it.
-2. **Does a verify program write the `["malformed cbor"]` record, or exit 1?** Sections 7.3 and 14.1 define a record for malformed CBOR: *"`shape_item` is exactly `["malformed cbor"]` … Later measurements are still recorded."* All three libraries return that record, byte-identical, for the 11 truncated or broken-head inputs (`kat-cut@*`, `kat-flip@1`, `kat-head@1`, `kat-head@9`, `kat-flip@17`, `kat-head@17`). The locked verify-CLI rule (section 18, item 9) says: *"Exit code `0` means the record was produced … Exit code `1` means the object file cannot be read or decoded."* All three programs exit 1 with no record on those inputs. But for `kat-trailing`, also malformed CBOR under section 7.3, they exit 0 and write the record. So each program draws the line at whether a map decodes. The spec does not say whether "cannot be decoded" means "is malformed CBOR" (then `kat-trailing` should exit 1) or "is not CBOR at all" (then the 11 inputs should exit 0 with the record). No behaviour changes until this is settled.
+- **Q-a. `last_interrupt_height` above 2^53 − 1.** `height_range` applies. Does the closing pair also get `header height order` when the value is greater than stage 17's height? Go says yes; Rust and Java say no (pinned: `li-height-2^64-1`).
+- **Q-b. A `stages` element that is not a map.** Is it a stage map with every field absent (Rust, Java: counts `0`, path `skip`), or an absent stage (Go: `not defined`)? §14.1 row 2 lists `field set` either way (pinned: `stage*-uint`).
+- **Q-c. An absent `checkpoints` array: `checkpoint_count` `0` or `not defined`?** All three write `0`. Line 909 asks for a "usable count" for `whole_hike_legs`; line 1197 says a shape mismatch that leaves no usable value is `not defined`.
+- **Q-d. A leg whose input is absent** (the stage's `waypoint`, or `public_key` / `seed_beacon` for the terrain): all three write `mismatch` (line 1252 allows only `match` or `mismatch`), where line 1197 could read as `not defined`.
+- **Q-e. `stages` empty or absent.** All three add `checkpoint width`, `leg result width` and `seed beacon` (an absent field violates a condition on its value). With one stage (`stages-1`) the missing stages add no width items, as for `test-3leg`. Is that asymmetry intended?
+- **Q-f. Six-leg previous of the wrong width.** All three read bytes 0 … 7 of a 31-byte previous checkpoint (`cpw-prev-s3`: `match`), literally §11.2 and §14.6. Should a previous of the wrong width make that leg `mismatch` instead?
+- **Q-g. An absent or mistyped stage `path` (stages 1 … 16):** all three write `path_state` `skip`. Should it be `not defined`? And `w17_path` for an absent or mistyped stage-17 path is `not fetched by design` in all three.
+- **Q-h. Trailing bytes after a map that is not strictly usable.** All three write the undecoded record (PORTS-219 item 17, `a0 00`) when a field is absent or mistyped, a stage key set is not exact, a width is wrong, or `leg_count` differs from the arrays; a strictly usable map with trailing bytes is measured (`kat-trailing`). P7.7 says "Later measurements are still recorded" for malformed CBOR. Should a map with trailing bytes always be measured?
+- **Q-i. A checkpoint element that is text, not bytes:** all three list `checkpoint width` only, not `field set`.
 
 To reproduce, run `bash sdk/test.sh`, or run `python3 sdk/tools/crosscheck.py` with the binaries. Each divergent case prints its exit codes and all three digests.

@@ -41,7 +41,7 @@ public class Quickstart {
         }
         System.out.println("draw = draw_bytes_hex: " + Arrays.equals(pinned, stream));
 
-        // Profile.PRODUCTION for real objects. null means CBOR that is not a map.
+        // Profile.PRODUCTION for real objects.
         String record = Measure.record(object, Profile.CONFORMANCE_SMALL_V2, index, stream, false);
         Json.Obj parsed = (Json.Obj) Json.parse(record);
         System.out.println("shape: " + ((Json.Str) parsed.fields().get("shape")).value);

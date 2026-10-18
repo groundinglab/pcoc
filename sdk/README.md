@@ -29,9 +29,9 @@ Only Rust has the section 15 helpers (`admit`, `failure_facts`) and direct node 
 
 | | Value |
 |---|---|
-| SDK version | `2.0.0-rc.1`, in [VERSION](VERSION) |
-| Repository tag | `sdk-v2.0.0-rc.1`. Rust and Java pin this one. |
-| Go module tag | `sdk/go/v2.0.0-rc.1`. The module path requires the `sdk/go/` prefix. |
+| SDK version | `2.0.0-rc.2`, in [VERSION](VERSION) |
+| Repository tag | `sdk-v2.0.0-rc.2`. Rust and Java pin this one. |
+| Go module tag | `sdk/go/v2.0.0-rc.2`. The module path requires the `sdk/go/` prefix. |
 | Specification | The tag and vector hash in [SPEC_PIN](SPEC_PIN). `sdk/test.sh` checks both. |
 
 Both tags point at the same commit. Pin a tag, never `main`.
@@ -40,7 +40,7 @@ Inside this repository, the gate and the desktop app pin the SDK by path (`sdk/r
 - the gate: in `/v1/health` (`sdk`) and in `admission-service --version`;
 - the desktop app: on its About page.
 
-> The `rc.1` tags are prepared but not yet published. Until they are on the remote, depend on a checkout by path, as `examples/` does. `git rev-parse sdk-v2.0.0-rc.1^{commit}` in a clone that has the tag shows the commit it names.
+> The `rc.2` tags are prepared but not yet published. Until they are on the remote, depend on a checkout by path, as `examples/` does. `git rev-parse sdk-v2.0.0-rc.2^{commit}` in a clone that has the tag shows the commit it names.
 
 Earlier tags of these trees are kept as history: `ref-rust-v2.0.1` … `ref-rust-v2.0.6`, `ref-java-v2.0.1` … `ref-java-v2.0.2`, and the Go module tags under the old module path. Nothing new is tagged under them.
 
@@ -76,7 +76,7 @@ It runs every step, then exits non-zero if any step failed:
 2. **Rust:** `cargo test --locked --release`, covering unit tests, the conformance pack and malformed-input tests;
 3. **Go:** `go vet ./...` and `go test ./...`, covering unit tests and the conformance pack;
 4. **Java:** `java/v2.sh`, covering the conformance pack and the section 6 pins;
-5. **cross-check:** the Rust, Go and Java verify programs run on the pack objects, deterministic mutants of `kat-small`, targeted section 14.1 edits and one-byte non-map CBOR items, and must write byte-identical records and exit codes. Each SDK's verify call is compared the same way at the library level, through the `librecord` examples ([tools/crosscheck.py](tools/crosscheck.py));
+5. **cross-check:** the Rust, Go and Java verify programs run on the pack objects, deterministic mutants of `kat-small`, targeted section 14.1 edits, one-byte non-map CBOR items and the structural break cases in `sdk/tools/hikecases.py`, and must write byte-identical records and exit codes. Each SDK's verify call is compared the same way at the library level, through the `librecord` examples ([tools/crosscheck.py](tools/crosscheck.py));
 6. **examples:** every example compiles. The quickstarts must reproduce the `kat-small` record byte for byte, and the produce examples must write the same object in all three languages;
 7. **docs:** every version, tag, spec tag, digest, output block and code snippet in these READMEs must match `VERSION`, `SPEC_PIN`, the example output and the example sources ([tools/check_docs.py](tools/check_docs.py)).
 
@@ -92,7 +92,7 @@ sdk/test.sh summary
 sdk/test.sh: PASS
 ```
 
-On a few malformed inputs the SDKs still disagree: one open spec question and one set of bugs not yet fixed. [KNOWN-DIVERGENCES.md](KNOWN-DIVERGENCES.md) lists them, with the two open spec questions and the Rust section 14.1 bug fixed after rc.1. The harness pins each open case by name and by its output digests.
+On a few malformed inputs the SDKs still disagree, on two open spec questions (a `stages` element that is not a map, and a `last_interrupt_height` above 2^53 − 1). [KNOWN-DIVERGENCES.md](KNOWN-DIVERGENCES.md) lists them with the other open spec questions, and the rows fixed for rc.2; [CHANGES.md](CHANGES.md) describes rc.1 → rc.2. The harness pins each open case by name and by its output digests.
 
 ## The verify programs
 
@@ -103,7 +103,7 @@ On a few malformed inputs the SDKs still disagree: one open spec question and on
 - `--log quiet|verbose`: with `verbose`, the record is also written to stderr;
 - `--chain-rpc URL`, live profile only.
 
-Verify writes the record to stdout. It exits 0 when it writes a record, 1 when the object cannot be read or does not decode, and 2 on a usage error. A well-formed CBOR item that is not a map differs by SDK; see [KNOWN-DIVERGENCES.md](KNOWN-DIVERGENCES.md).
+Verify writes the record to stdout. It exits 1 only when no top-level CBOR map decodes: the file cannot be read, the first CBOR item does not decode (section 7.3), or it is well-formed but not a map. In every other case, trailing bytes after a map included, it writes the record and exits 0. Usage errors exit 2. The library call still returns the `["malformed cbor"]` record for bytes the program refuses. The three SDKs agree (rc.2).
 
 The produce flags differ by SDK. See each program's `--help`.
 
@@ -120,7 +120,7 @@ The offline produce examples use a scripted tip sequence at `conformance-small` 
 Verify writes the section 14 measurement record. It does not judge. Judgment is policy (section 15): a gate applies a policy to the record.
 - **The SDKs' policy code.** The only policy code in the SDKs is Rust's `hike::admit` and `hike::failure_facts`. They apply the section 15 invariant refusals: shape, checkpoint mismatch, seed value, plant mismatch, successor, and the six legs. They apply **no threshold**.
 - **Thresholds.** Values such as the leg-rate floor or the anchored-path minimum belong to the relying party's policy. groundinglab's argued default is [services/admission-gate/POLICY.md](../services/admission-gate/POLICY.md). It is a recommendation, not part of the specification.
-- **The test-plane policy.** `hike-net`'s `judge_test_policy` is for the test plane only.
+- **No policy values in the SDKs (rc.2).** The section 15.5 leg-rate floor examples and the test-plane judgment (`judge_test_policy`) are no longer SDK code: the spec defines measurements, a policy sets the values. The examples stay in `spec/conformance/v2.0/constants.json` and the SDK test fixtures; the test-plane judgment is a fixture in `services/admission-gate/tests/test_plane_policy.rs`.
 
 ## Layout
 

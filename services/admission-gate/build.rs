@@ -1,10 +1,10 @@
 //! Stamp `ADMISSION_COMMIT` and `PCOC_SDK_VERSION` into the binary.
 //!
 //! `PCOC_SDK_VERSION` is the version of the `hike` package (the Rust SDK) that
-//! `Cargo.lock` resolved, plus where it came from: `2.0.0-rc.1 (path)` for the
+//! `Cargo.lock` resolved, plus where it came from: `2.0.0-rc.2 (path)` for the
 //! in-tree `sdk/rust`, or `<version> (git <commit>)` for a git pin. A path
 //! build from a git checkout whose SDK files have uncommitted changes is
-//! `2.0.0-rc.1 (path, dirty)`. The SDK files are `sdk/VERSION` and, under
+//! `2.0.0-rc.2 (path, dirty)`. The SDK files are `sdk/VERSION` and, under
 //! `sdk/rust/`, the workspace manifest, lock and toolchain files and the `hike`
 //! and `nip06` crates. A missing `hike` entry in `Cargo.lock` fails the build.
 //!
