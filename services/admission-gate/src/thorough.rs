@@ -14,6 +14,7 @@ use hike::{draw_distinct, Entropy, OsEntropy};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::Write;
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 pub const COMMIT_DOMAIN: &[u8] = b"pcoc-deep-v1";
@@ -280,15 +281,23 @@ fn fresh_draw(
     })
 }
 
+/// Private draw file: `pending/` is 0700 and `<seq>.draw` is 0600, set in
+/// code whatever the process umask is.
 fn store_draw(log_dir: &Path, draw: &DrawFile) -> Result<(), String> {
     let path = draw_path(log_dir, draw.seq);
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(PRIVATE_DIR_MODE)
+            .create(parent)
+            .map_err(|err| err.to_string())?;
+        fs::set_permissions(parent, fs::Permissions::from_mode(PRIVATE_DIR_MODE))
+            .map_err(|err| err.to_string())?;
     }
     let bytes = serde_json::to_vec(draw).map_err(|err| err.to_string())?;
     let tmp = path.with_extension("tmp");
     {
-        let mut file = File::create(&tmp).map_err(|err| err.to_string())?;
+        let mut file = private_file(&tmp)?;
         file.write_all(&bytes).map_err(|err| err.to_string())?;
         file.sync_all().map_err(|err| err.to_string())?;
     }
@@ -298,6 +307,26 @@ fn store_draw(log_dir: &Path, draw: &DrawFile) -> Result<(), String> {
         dir.sync_all().map_err(|err| err.to_string())?;
     }
     Ok(())
+}
+
+/// Mode of a private gate file (`pending/<seq>.draw`, `banned_keys.json`).
+pub const PRIVATE_FILE_MODE: u32 = 0o600;
+/// Mode of the private `pending/` directory.
+pub const PRIVATE_DIR_MODE: u32 = 0o700;
+
+/// Create or truncate `path` at mode 0600, independent of the umask. An
+/// existing file is set to 0600 too.
+pub fn private_file(path: &Path) -> Result<File, String> {
+    let file = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(PRIVATE_FILE_MODE)
+        .open(path)
+        .map_err(|err| err.to_string())?;
+    file.set_permissions(fs::Permissions::from_mode(PRIVATE_FILE_MODE))
+        .map_err(|err| err.to_string())?;
+    Ok(file)
 }
 
 fn load_draw(path: &Path, seq: u64, object_sha: &[u8; 32]) -> Result<DrawFile, String> {

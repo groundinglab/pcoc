@@ -1253,7 +1253,18 @@ fn store_ban(dir: &Path, public_key: &[u8; 32], seq: u64) -> Result<(), String> 
     };
     map.insert(hex32(public_key), serde_json::json!(seq));
     let bytes = serde_json::to_vec(&map).map_err(|err| err.to_string())?;
-    std::fs::write(&path, bytes).map_err(|err| err.to_string())
+    // Atomic and private: a 0600 tmp file, fsync, rename, fsync the directory.
+    let tmp = dir.join("banned_keys.json.tmp");
+    {
+        use std::io::Write as _;
+        let mut file = crate::thorough::private_file(&tmp)?;
+        file.write_all(&bytes).map_err(|err| err.to_string())?;
+        file.sync_all().map_err(|err| err.to_string())?;
+    }
+    std::fs::rename(&tmp, &path).map_err(|err| err.to_string())?;
+    std::fs::File::open(dir)
+        .and_then(|handle| handle.sync_all())
+        .map_err(|err| err.to_string())
 }
 
 fn show_log(error: LogError) -> String {
@@ -1586,6 +1597,31 @@ mod tests {
                 .all(|line| line["fast_seq"] == serde_json::json!(honest_seq)),
             "{lines:?}"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The draw file and the ban file are 0600 and `pending/` is 0700,
+    /// whatever the umask (the test process runs with the usual 022).
+    #[test]
+    fn the_draw_and_ban_files_are_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let built = small_honest();
+        let (url, _) = serve(&built.docs, Mirror::Honest);
+        let (door, dir) = open_at(&url);
+        let job = job_of(&built.bytes, 1);
+        assert_eq!(door.settle_fast_small(&job), FastPhase::Provisional);
+        let seq = provisional_seq(&dir, &job);
+        thorough::run_for_test(&dir, seq, &built.hike, &job.object_sha, door.policy()).unwrap();
+        door.ban_key(&[0x44; 32], 0);
+        door.ban_key(&[0x45; 32], 1);
+        let mode = |path: PathBuf| std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(dir.join("pending").join(format!("{seq}.draw"))), 0o600);
+        assert_eq!(mode(dir.join("pending")), 0o700);
+        assert_eq!(mode(dir.join("banned_keys.json")), 0o600);
+        assert!(!dir.join("banned_keys.json.tmp").exists());
+        let bans: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(dir.join("banned_keys.json")).unwrap()).unwrap();
+        assert_eq!(bans.as_object().unwrap().len(), 2);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
