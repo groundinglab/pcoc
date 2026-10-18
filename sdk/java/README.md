@@ -15,18 +15,18 @@ The record it writes is byte-identical to the Rust and Go SDKs. The JDK alone is
 You need JDK 21 or newer: `javac -version` must print 21 or higher, and 17 does not work. There is no Maven or Gradle build, and nothing is published to a repository. Pin the repository tag and compile the sources into a jar of your own, outside the checkout:
 
 ```sh
-git clone --depth 1 --branch sdk-v2.0.0-rc.2 https://github.com/groundinglab/pcoc /path/to/pcoc
+git clone --depth 1 --branch sdk-v2.0.0-rc.3 https://github.com/groundinglab/pcoc /path/to/pcoc
 SDK=/path/to/pcoc/sdk/java
 OUT=$PWD/build                      # in your project, not in the checkout
 mkdir -p "$OUT/sdk-classes" lib
 find "$SDK/src" -name '*.java' -not -path '*/conformance/*' | sort > "$OUT/pcoc-sources.txt"
 javac --release 21 -d "$OUT/sdk-classes" @"$OUT/pcoc-sources.txt"
-jar --create --file lib/pcoc-sdk-2.0.0-rc.2.jar -C "$OUT/sdk-classes" .
+jar --create --file lib/pcoc-sdk-2.0.0-rc.3.jar -C "$OUT/sdk-classes" .
 ```
 
-Then compile and run against the jar: `javac --release 21 -cp lib/pcoc-sdk-2.0.0-rc.2.jar …` and `java -cp lib/pcoc-sdk-2.0.0-rc.2.jar:… YourMain`. `pcoc.conformance` is the test harness, and is not needed at run time.
+Then compile and run against the jar: `javac --release 21 -cp lib/pcoc-sdk-2.0.0-rc.3.jar …` and `java -cp lib/pcoc-sdk-2.0.0-rc.3.jar:… YourMain`. `pcoc.conformance` is the test harness, and is not needed at run time.
 
-> `sdk-v2.0.0-rc.2` is published as a repository tag. `git rev-parse sdk-v2.0.0-rc.2^{commit}` shows the commit it names.
+> `sdk-v2.0.0-rc.3` is the repository tag for this version. Build from a checkout until that tag exists.
 
 ## Quickstart (run by `sdk/test.sh`)
 
@@ -280,8 +280,8 @@ bash sdk/java/v2.sh    # this SDK only: javac --release 21 -Xlint:all -Werror, t
 ## Programs
 
 ```sh
-java -cp lib/pcoc-sdk-2.0.0-rc.2.jar pcoc.cli.Verify --input OBJECT --profile live --index-url https://index.groundinglab.io
-java -cp lib/pcoc-sdk-2.0.0-rc.2.jar pcoc.cli.Produce --help
+java -cp lib/pcoc-sdk-2.0.0-rc.3.jar pcoc.cli.Verify --input OBJECT --profile live --index-url https://index.groundinglab.io
+java -cp lib/pcoc-sdk-2.0.0-rc.3.jar pcoc.cli.Produce --help
 ```
 
 **Verify** takes the same flags as the Rust and Go programs; see [the verify programs](../README.md#the-verify-programs).

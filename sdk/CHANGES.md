@@ -1,6 +1,6 @@
-# SDK changes: rc.2 → rc.3 (in progress)
+# SDK changes: rc.2 → rc.3
 
-Not tagged. `sdk/VERSION` stays `2.0.0-rc.2` until the rc.3 bump.
+rc.3 is version `2.0.0-rc.3` in [VERSION](VERSION). The repository tag for this version is `sdk-v2.0.0-rc.3`; the Go module tag is `sdk/go/v2.0.0-rc.3`. This commit does not tag, and it does not change the gate crate version.
 
 ## Decoder nesting limit (review findings F1, F3)
 
@@ -8,9 +8,25 @@ Not tagged. `sdk/VERSION` stays `2.0.0-rc.2` until the rc.3 bump.
 - **Why:** the decoders recursed without a bound. Rust aborted the process on stack overflow, reachable from the gate's sign-in door before the signature check with one ~8 KB object (8 000 nested arrays on a 2 MiB thread). Java threw `StackOverflowError` at about 2 700 levels. Go grew its stack, but the limit is required to be the same in all three so that the gate bounds its work before authenticating.
 - Records for every object that nests 64 deep or less are unchanged.
 
+## Fix-forward (review findings F2–F9)
+
+- **F2.** The Go CBOR decoder rejects a declared byte, text, array or map length that does not fit in the bytes still in the buffer, before it allocates. The comparison is overflow-safe. A hostile length is `["malformed cbor"]` and exit 1. `hike.Verify` does not panic.
+- **F3.** The Java decoder makes the same length check, including an array or map count of `Integer.MAX_VALUE` (`9a 7fffffff`, `ba 7fffffff`, `9b 000000007fffffff`). The count is bounded by the bytes left, so those inputs are malformed and do not allocate the declared count.
+- **F4.** A six-leg leg 0 whose stage waypoint is not 32 bytes is `mismatch` in Go, as it already was in Rust and Java.
+- **F5 (Q-a resolved).** Header height order compares the decoded unsigned integer. A `last_interrupt_height` above 2^53 − 1 lists `header height order` with `height_range`. The integer itself is not clamped: 2^53 is still greater than stage 17's height, so `last_interrupt` is not listed for that value.
+- **F6.** With more than 18 stages, Rust lists every other violated shape condition over the stages that are present, not only `stages length`. The six-leg draw still indexes stages 0 … 17.
+- **F7.** `last_interrupt` present and not a byte string, or `last_interrupt_height` present and not an unsigned integer, lists `field set`. A byte string of the wrong width stays `last_interrupt` only (`short-li` has no `field set`).
+- **F8 (user-visible).** Each `satoshi-hike-verify` takes `--sample-bytes N --slot-bytes N --terrain-bytes N --steps-per-leg N`. With `--profile conformance-small` all four are required: a missing flag, a value that is not a decimal integer, or a value the profile constructor rejects is a usage error, exit 2, with nothing on stdout. The record states the integers that run measured with. Giving any of the four with another profile is also exit 2.
+- **F9 (Q-i resolved).** A checkpoint element or a leg-result element that is not a byte string lists `field set` as well as `checkpoint width` or `leg result width`. A byte string of the wrong width stays the width condition only.
+
+## Rust API
+
+- `MeasureProfile::ConformanceSmall` now carries `Sizes`, the four integers the verify run was given. `MeasureProfile::sizes()` returns them. Produce does not select this profile.
+- `Measurements` gains `measured_sizes: Option<Sizes>`. A verify run sets it to the sizes it measured with. A hand-built fixture leaves it `None`, and the conformance-small record then states the section 16.1 integers.
+
 # SDK changes: rc.1 → rc.2
 
-rc.1 is the rc.1 tag pair at c9b160ea. rc.2 is `sdk-v2.0.0-rc.2` and `sdk/go/v2.0.0-rc.2`, version `2.0.0-rc.2` in [VERSION](VERSION). Neither is published.
+rc.1 is the rc.1 tag pair at c9b160ea. rc.2 is the repository tag and the Go module tag for that release, the version then recorded in [VERSION](VERSION). Neither is published.
 
 > **For the spec owner: a spec change is drafted, not merged.** Approved changes 1 and 2 below alter SPEC wording (§14.1 row 1 and §18 item 9, which is marked *Locked 2026-10-07*). That wording and a new vector (`spec/conformance/v2.0/top-level.json`) are in **one separate commit on the local branch `spec/v2.0.6-draft`** (also `patches/spec-2.0.6-draft.patch` in the bundle), **not on `sdk/phase-a` and not in rc.2**. Reason: `sdk/SPEC_PIN` pins the hash of `spec/conformance` *and* checks it against the tree of its spec tag (the current tag, v2.0.5). A new vector changes the hash, so the pin cannot be updated honestly until a new spec tag exists. The draft commit sets SPEC_PIN to the next tag, **v2.0.6** (repository tag `spec-` + `v2.0.6`), with the new hash; `check_spec_pin.py` fails on that branch until that tag is created on the draft commit. Until then, rc.2 carries the same inputs as SDK cross-check cases (`cbor-*`, `nm-*`, `kat-trailing`, `map-then-*`, `trail-*`), and all three SDKs already behave as the draft says. No file under `spec/` changed on `sdk/phase-a`.
 
@@ -45,7 +61,7 @@ These removals are API changes. A caller that used the constants should read its
 
 ## Cross-check
 
-`sdk/tools/crosscheck.py` now also runs the structural break cases in `sdk/tools/hikecases.py` (CBOR-value edits of `kat-small`): 157 inputs, 163 runs × 3 languages (135 write a record), and the same 163 runs × 3 at library level (`librecord`). All agree except 5 pinned rows, the open questions Q-a and Q-b in KNOWN-DIVERGENCES.md. The new code was mutation-checked: 28 mutants over the Rust, Go and Java changes, 27 killed by the unit tests or the cross-check; the survivor (Java's byte-string check on a six-leg previous) is equivalent, because a Java text value carries no bytes.
+`sdk/tools/crosscheck.py` now also runs the structural break cases in `sdk/tools/hikecases.py` (CBOR-value edits of `kat-small`): 157 inputs, 163 runs × 3 languages (135 write a record), and the same 163 runs × 3 at library level (`librecord`). At rc.2 all agreed except 5 pinned rows, the open questions Q-a and Q-b in KNOWN-DIVERGENCES.md. After rc.2, Q-a is resolved and the pin is the four `stage*-uint` rows (Q-b). The new code was mutation-checked: 28 mutants over the Rust, Go and Java changes, 27 killed by the unit tests or the cross-check; the survivor (Java's byte-string check on a six-leg previous) is equivalent, because a Java text value carries no bytes.
 
 ## Upgrading from rc.1
 

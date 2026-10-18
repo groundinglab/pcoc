@@ -7,15 +7,15 @@ It uses only the Go standard library, and needs Go 1.22 or newer.
 ## Install / pin
 
 ```sh
-go get github.com/groundinglab/pcoc/sdk/go/v2@v2.0.0-rc.2
+go get github.com/groundinglab/pcoc/sdk/go/v2@v2.0.0-rc.3
 ```
 
-The module lives under `sdk/go/`, so its tag is `sdk/go/v2.0.0-rc.2`. That is the same commit as the repository tag `sdk-v2.0.0-rc.2`.
+The module lives under `sdk/go/`, so its tag is `sdk/go/v2.0.0-rc.3`. That is the same commit as the repository tag `sdk-v2.0.0-rc.3`.
 
-> The tag is published, so `go get` resolves it. To work from a checkout instead, add a `replace`. Its path is relative to your `go.mod` and points at `<clone>/sdk/go`:
+> When that tag is published, `go get` resolves it. To work from a checkout instead, add a `replace`. Its path is relative to your `go.mod` and points at `<clone>/sdk/go`:
 >
 > ```
-> require github.com/groundinglab/pcoc/sdk/go/v2 v2.0.0-rc.2
+> require github.com/groundinglab/pcoc/sdk/go/v2 v2.0.0-rc.3
 > replace github.com/groundinglab/pcoc/sdk/go/v2 => ../pcoc/sdk/go
 > ```
 
