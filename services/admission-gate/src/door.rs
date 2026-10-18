@@ -133,9 +133,35 @@ impl Door {
             .unwrap_or(0)
     }
 
+    /// Whether line `seq` is the fast `provisional` this job wrote.
+    fn provisional_is(&self, seq: u64, job: &LockedThorough) -> bool {
+        let inner = self.lock();
+        let Some(line) = inner.log.lines().get(seq as usize) else {
+            return false;
+        };
+        let text = |key: &str| line.value.get(key).and_then(|item| item.as_str());
+        line.value.get("seq").and_then(|item| item.as_u64()) == Some(seq)
+            && text("decision") == Some("provisional")
+            && text("submission_sha256") == Some(hex32(&job.submission).as_str())
+            && text("public_key") == Some(hex32(&job.public_key).as_str())
+            && text("object_sha256") == Some(hex32(&job.object_sha).as_str())
+    }
+
     /// Thorough finished. A match is `accept`. A mismatch is `revoke` because
     /// the fast phase already issued `provisional`, and the public key is banned.
+    ///
+    /// `out.seq` is the job's own provisional seq, carried from the fast
+    /// phase. It is never read back from the log tail, so two interleaved
+    /// jobs cannot share a ticket. A seq that does not name this job's
+    /// provisional writes no line: the provisional stays unsettled (held).
     pub fn settle_thorough(&self, job: &LockedThorough, out: crate::thorough::ThoroughOut) {
+        if !self.provisional_is(out.seq, job) {
+            eprintln!(
+                "admission-service thorough fast_seq={} does not name this job's provisional; held",
+                out.seq
+            );
+            return;
+        }
         self.rows.note_deep(
             &job.nonce,
             crate::signin_row::Deep {
@@ -153,7 +179,7 @@ impl Door {
         } else {
             DecisionWrite::bare(now, None, "thorough", "revoke")
         };
-        write.fast_seq = Some(self.last_seq());
+        write.fast_seq = Some(out.seq);
         write.submission_sha256 = job.submission;
         write.public_key = job.public_key;
         write.object_sha256 = job.object_sha;
@@ -743,8 +769,15 @@ impl Door {
     /// thorough-less line and does not start a walk. `provisional` is the
     /// grant. `held` writes no line.
     pub fn settle_fast(&self, job: &LockedThorough) -> FastPhase {
+        self.settle_fast_seq(job).0
+    }
+
+    /// [`settle_fast`], plus the seq of the provisional line this job wrote.
+    /// The thorough phase keys its draw and its line on that seq. A
+    /// provisional that was not written returns `Held` and no seq.
+    pub fn settle_fast_seq(&self, job: &LockedThorough) -> (FastPhase, Option<u64>) {
         if let Some(phase) = self.sticky_phase(job) {
-            return phase;
+            return (phase, None);
         }
         self.finish_fast(
             job,
@@ -759,8 +792,13 @@ impl Door {
     /// same index client through this entry.
     #[cfg(test)]
     pub fn settle_fast_small(&self, job: &LockedThorough) -> FastPhase {
+        self.settle_fast_small_seq(job).0
+    }
+
+    #[cfg(test)]
+    pub fn settle_fast_small_seq(&self, job: &LockedThorough) -> (FastPhase, Option<u64>) {
         if let Some(phase) = self.sticky_phase(job) {
-            return phase;
+            return (phase, None);
         }
         self.finish_fast(
             job,
@@ -779,8 +817,8 @@ impl Door {
         verifier::IndexClient::open(&self.index_url, self.index_timeout)
     }
 
-    fn finish_fast(&self, job: &LockedThorough, decision: FastDecision) -> FastPhase {
-        match decision {
+    fn finish_fast(&self, job: &LockedThorough, decision: FastDecision) -> (FastPhase, Option<u64>) {
+        let phase = match decision {
             FastDecision::Refuse {
                 website,
                 reasons,
@@ -796,10 +834,14 @@ impl Door {
                 FastPhase::Held
             }
             FastDecision::Provisional { record } => {
-                self.write_provisional(job, &record);
-                FastPhase::Provisional
+                return match self.write_provisional(job, &record) {
+                    Some(seq) => (FastPhase::Provisional, Some(seq)),
+                    // No provisional line, so no thorough ticket. Held.
+                    None => (FastPhase::Held, None),
+                };
             }
-        }
+        };
+        (phase, None)
     }
 
     fn sticky(&self, public_key: &[u8; 32], object_sha: &[u8; 32]) -> Option<String> {
@@ -867,7 +909,7 @@ impl Door {
         }
     }
 
-    fn write_provisional(&self, job: &LockedThorough, record: &str) {
+    fn write_provisional(&self, job: &LockedThorough, record: &str) -> Option<u64> {
         let now = self.now_unix_s();
         let mut write = DecisionWrite::bare(now, None, "fast", "provisional");
         write.submission_sha256 = job.submission;
@@ -882,11 +924,15 @@ impl Door {
         });
         write.policy_id = Some(self.policy.policy_id.clone());
         let mut inner = self.lock();
-        if let Err(error) = inner.log.append(&write) {
-            eprintln!(
-                "admission-service provisional was not written: {}",
-                show_log(error)
-            );
+        match inner.log.append(&write) {
+            Ok(seq) => Some(seq),
+            Err(error) => {
+                eprintln!(
+                    "admission-service provisional was not written: {}",
+                    show_log(error)
+                );
+                None
+            }
         }
     }
 
@@ -1343,6 +1389,61 @@ mod tests {
         assert_eq!(door.last_seq(), seq);
         assert_eq!(door.ban_ignored(), 1);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Defect 3 (gate review r2, finding 3). Two interleaved sign-ins each
+    /// keep their own ticket: the draw and the thorough line are keyed on the
+    /// job's own provisional seq, never on the log tail.
+    #[test]
+    fn interleaved_jobs_each_settle_against_their_own_provisional() {
+        let built = small_honest();
+        let (url, _) = serve(&built.docs, Mirror::Honest);
+        let (door, dir) = open_at(&url);
+        let a = job_of(&built.bytes, 1);
+        let b = job_of(&built.bytes, 2);
+        assert_eq!(door.settle_fast_small(&a), FastPhase::Provisional);
+        assert_eq!(door.settle_fast_small(&b), FastPhase::Provisional);
+        let seq_a = provisional_seq(&dir, &a);
+        let seq_b = provisional_seq(&dir, &b);
+        assert_ne!(seq_a, seq_b);
+        // B finishes first, then A: the log tail is no longer A's line.
+        let out_b =
+            thorough::run_for_test(&dir, seq_b, &built.hike, &b.object_sha, door.policy()).unwrap();
+        door.settle_thorough(&b, out_b);
+        let out_a =
+            thorough::run_for_test(&dir, seq_a, &built.hike, &a.object_sha, door.policy()).unwrap();
+        door.settle_thorough(&a, out_a);
+        for (job, seq) in [(&a, seq_a), (&b, seq_b)] {
+            let lines = chain(&dir);
+            let line = lines
+                .iter()
+                .find(|line| {
+                    line["phase"] == "thorough"
+                        && line["submission_sha256"] == canon::hex32(&job.submission)
+                })
+                .unwrap_or_else(|| panic!("no thorough line for seq {seq}: {lines:?}"));
+            assert_eq!(line["fast_seq"], serde_json::json!(seq), "{line}");
+            assert_eq!(line["decision"], "accept", "{line}");
+            assert_eq!(line["deep"]["indices"], draw_runs(&dir, seq), "{line}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn provisional_seq(dir: &Path, job: &LockedThorough) -> u64 {
+        chain(dir)
+            .iter()
+            .find(|line| {
+                line["decision"] == "provisional"
+                    && line["submission_sha256"] == canon::hex32(&job.submission)
+            })
+            .and_then(|line| line["seq"].as_u64())
+            .expect("provisional line")
+    }
+
+    fn draw_runs(dir: &Path, seq: u64) -> serde_json::Value {
+        let raw = std::fs::read(dir.join("pending").join(format!("{seq}.draw"))).expect("draw");
+        let draw: serde_json::Value = serde_json::from_slice(&raw).unwrap();
+        draw["runs"].clone()
     }
 
     struct Hits {

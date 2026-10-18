@@ -39,6 +39,9 @@ pub struct LegHit {
 
 #[derive(Clone, Debug)]
 pub struct ThoroughOut {
+    /// The job's own provisional seq. The draw file and the commitment are
+    /// keyed on it, and the thorough line's `fast_seq` is this value.
+    pub seq: u64,
     pub matched: bool,
     pub runs_done: u64,
     pub legs_matched: u64,
@@ -141,6 +144,7 @@ fn walk(
     }
     let digest_mismatch = failed.is_none() && digest_miss(hike, &terrain, &seed, sizes);
     Ok(ThoroughOut {
+        seq,
         matched: failed.is_none() && !digest_mismatch,
         runs_done,
         legs_matched,

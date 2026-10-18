@@ -459,14 +459,15 @@ fn spawn_locked(door: Door, jobs: JobStore, job: LockedThorough) {
             door.end_pending(&source);
             return;
         }
-        match door.settle_fast(&job) {
-            crate::door::FastPhase::Provisional => {
+        match door.settle_fast_seq(&job) {
+            (crate::door::FastPhase::Provisional, Some(seq)) => {
+                // `seq` is this job's own provisional line, from the fast
+                // phase. It is the draw key and the thorough `fast_seq`.
                 let object = job.object.clone();
                 let object_sha = job.object_sha;
                 let public_key = job.public_key;
                 let log_dir = jobs.log_dir();
                 let policy = door.policy().clone();
-                let seq = door.last_seq();
                 let walked = tokio::task::spawn_blocking(move || {
                     crate::thorough::run(&log_dir, seq, &object, &object_sha, &policy)
                 })
@@ -480,9 +481,13 @@ fn spawn_locked(door: Door, jobs: JobStore, job: LockedThorough) {
                 }
                 let _ = public_key;
             }
-            crate::door::FastPhase::Held
-            | crate::door::FastPhase::Done
-            | crate::door::FastPhase::Sticky => {}
+            (
+                crate::door::FastPhase::Provisional
+                | crate::door::FastPhase::Held
+                | crate::door::FastPhase::Done
+                | crate::door::FastPhase::Sticky,
+                _,
+            ) => {}
         }
         door.end_pending(&source);
     });
