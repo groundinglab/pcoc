@@ -180,13 +180,6 @@ fn field<'a>(map: &'a [(String, Cbor)], key: &str) -> Result<&'a Cbor, Fail> {
         .ok_or(Fail("missing field"))
 }
 
-fn field_text<'a>(map: &'a [(String, Cbor)], key: &str) -> Result<&'a str, Fail> {
-    match field(map, key)? {
-        Cbor::Text(s) => Ok(s),
-        _ => Err(Fail("expected text")),
-    }
-}
-
 fn field_uint(map: &[(String, Cbor)], key: &str) -> Result<u64, Fail> {
     match field(map, key)? {
         Cbor::Uint(n) => Ok(*n),
@@ -223,11 +216,43 @@ fn arr32(bytes: &[u8]) -> [u8; 32] {
     out
 }
 
-fn parse_stage(value: &Cbor) -> Result<(Stage, bool, Vec<&'static str>), Fail> {
+/// Stage fields the wire omitted or carried with the wrong type or width.
+///
+/// Section 14.1: a condition that tests a field's value is violated when that
+/// field is absent, and later measurements are still recorded. An absent
+/// beacon is `header hash differ` (and `seed beacon` on stage 0), an absent
+/// `beacon_height` is `header height order`, and the record writes the stored
+/// value as `not defined` with no index read. The [`Stage`] keeps a zero in
+/// that slot; these flags say it is not a stored value.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct StageAbsent {
+    pub beacon: bool,
+    pub beacon_height: bool,
+    /// `len(checkpoints)` on the wire, counting an element of the wrong width.
+    /// Section 14.6 indexes legs by it. `None` for a hike built in code.
+    pub checkpoint_elems: Option<usize>,
+}
+
+type ParsedStage = (Stage, bool, Vec<&'static str>, StageAbsent);
+
+fn parse_stage(value: &Cbor) -> Result<ParsedStage, Fail> {
     let map = pairs(value)?;
     let path_key = map.iter().any(|(key, _)| key == "path");
-    exact_keys(map, if path_key { STAGE_KEYS } else { STAGE0_KEYS })?;
-    let beacon = arr32(&field_bytes(map, "beacon", 32)?);
+    let mut notes = Vec::new();
+    let mut absent = StageAbsent::default();
+    // A wrong key set is `field set`. The fields that did decode stay usable.
+    if exact_keys(map, if path_key { STAGE_KEYS } else { STAGE0_KEYS }).is_err() {
+        notes.push("map field set");
+    }
+    let beacon = match field_bytes(map, "beacon", 32) {
+        Ok(bytes) => arr32(&bytes),
+        Err(fail) => {
+            notes.push(fail.0);
+            notes.push("beacon");
+            absent.beacon = true;
+            [0u8; 32]
+        }
+    };
     let waypoint = arr32(&field_bytes(map, "waypoint", 32)?);
     // Shape does not decode `path`. Empty bytes are the section 13.3 produce fact.
     // Stage 0 has no path key (Rule A3.3).
@@ -236,9 +261,23 @@ fn parse_stage(value: &Cbor) -> Result<(Stage, bool, Vec<&'static str>), Fail> {
     } else {
         Vec::new()
     };
-    let leg_count = field_uint(map, "leg_count")?;
-    let beacon_height = field_uint(map, "beacon_height")?;
-    let mut notes = Vec::new();
+    let leg_count = match field_uint(map, "leg_count") {
+        Ok(count) => count,
+        Err(fail) => {
+            notes.push(fail.0);
+            notes.push("leg_count");
+            0
+        }
+    };
+    let beacon_height = match field_uint(map, "beacon_height") {
+        Ok(height) => height,
+        Err(fail) => {
+            notes.push(fail.0);
+            notes.push("beacon height");
+            absent.beacon_height = true;
+            0
+        }
+    };
     let mut checkpoints = Vec::new();
     let mut checkpoint_elems = 0usize;
     let mut bad_checkpoint = false;
@@ -264,6 +303,7 @@ fn parse_stage(value: &Cbor) -> Result<(Stage, bool, Vec<&'static str>), Fail> {
             }
         }
     }
+    absent.checkpoint_elems = Some(checkpoint_elems);
     // Array length is the element count, including a short-width element.
     // A short width is `checkpoint width` or `leg result width`, not `leg_count`,
     // when those counts still agree.
@@ -317,6 +357,7 @@ fn parse_stage(value: &Cbor) -> Result<(Stage, bool, Vec<&'static str>), Fail> {
         },
         path_key,
         notes,
+        absent,
     ))
 }
 
@@ -399,6 +440,26 @@ pub(crate) struct MeasuredObject {
     /// Every shape note, in the order recorded. A seed-value mismatch is
     /// `seed_value`, not one of these notes.
     pub shape_notes: Vec<&'static str>,
+    /// One entry per stage: which stored header fields the wire did not carry.
+    pub stage_absent: Vec<StageAbsent>,
+}
+
+/// A section 6 constant field. `wrong_type` is `field set`; `differs` is
+/// `constant`. An absent field differs (section 14.1); the missing key is
+/// already `field set` through the top-level key check.
+fn constant_field(map: &[(String, Cbor)], key: &str, want: ConstantValue) -> (bool, bool) {
+    match (field(map, key), want) {
+        (Ok(Cbor::Text(found)), ConstantValue::Text(want)) => (false, found != want),
+        (Ok(Cbor::Uint(found)), ConstantValue::Uint(want)) => (false, *found != want),
+        (Ok(_), _) => (true, true),
+        (Err(_), _) => (false, true),
+    }
+}
+
+#[derive(Clone, Copy)]
+enum ConstantValue<'a> {
+    Text(&'a str),
+    Uint(u64),
 }
 
 fn top_keys_exact(map: &[(String, Cbor)]) -> bool {
@@ -446,23 +507,40 @@ fn read_measured_map(value: &Cbor, trailing: bool, sizes: Sizes) -> Result<Measu
     if !top_keys_exact(map) {
         note(Fail("map field set"));
     }
-    if field_text(map, "kind")? != KIND {
-        note(Fail("kind"));
-    }
-    if field_text(map, "fill")? != FILL {
-        note(Fail("fill"));
-    }
-    if field_uint(map, "slot_bytes")? != sizes.slot_bytes as u64 {
-        note(Fail("slot_bytes"));
-    }
-    if field_uint(map, "n_slots")? != sizes.n_slots() as u64 {
-        note(Fail("n_slots"));
-    }
-    if field_uint(map, "sample_bytes")? != sizes.sample_bytes as u64 {
-        note(Fail("sample_bytes"));
-    }
-    if field_uint(map, "steps_per_leg")? != sizes.steps_per_leg {
-        note(Fail("steps_per_leg"));
+    // Section 14.1: an absent or mistyped constant is `constant` (and a
+    // mistyped one is also `field set`). It does not stop the measurement.
+    let constants: [(&'static str, ConstantValue, &'static str); 6] = [
+        ("kind", ConstantValue::Text(KIND), "expected text"),
+        ("fill", ConstantValue::Text(FILL), "expected text"),
+        (
+            "slot_bytes",
+            ConstantValue::Uint(sizes.slot_bytes as u64),
+            "expected unsigned",
+        ),
+        (
+            "n_slots",
+            ConstantValue::Uint(sizes.n_slots() as u64),
+            "expected unsigned",
+        ),
+        (
+            "sample_bytes",
+            ConstantValue::Uint(sizes.sample_bytes as u64),
+            "expected unsigned",
+        ),
+        (
+            "steps_per_leg",
+            ConstantValue::Uint(sizes.steps_per_leg),
+            "expected unsigned",
+        ),
+    ];
+    for (key, want, type_note) in constants {
+        let (wrong_type, differs) = constant_field(map, key, want);
+        if wrong_type {
+            note(Fail(type_note));
+        }
+        if differs {
+            note(Fail(key));
+        }
     }
     let public_key = arr32(&field_bytes(map, "public_key", 32)?);
     let seed_beacon = arr32(&field_bytes(map, "seed_beacon", 32)?);
@@ -472,13 +550,15 @@ fn read_measured_map(value: &Cbor, trailing: bool, sizes: Sizes) -> Result<Measu
     }
     let mut stages = Vec::with_capacity(stage_items.len());
     let mut path_keys = Vec::with_capacity(stage_items.len());
+    let mut stage_absent = Vec::with_capacity(stage_items.len());
     for item in stage_items {
-        let (stage, path_key, stage_notes) = parse_stage(item)?;
+        let (stage, path_key, stage_notes, absent) = parse_stage(item)?;
         for fail in stage_notes {
             note(Fail(fail));
         }
         path_keys.push(path_key);
         stages.push(stage);
+        stage_absent.push(absent);
     }
     for stage in &stages {
         if stage.leg_count < 1 {
@@ -518,7 +598,7 @@ fn read_measured_map(value: &Cbor, trailing: bool, sizes: Sizes) -> Result<Measu
         if path_keys.iter().skip(1).any(|present| !present) {
             note(Fail("path"));
         }
-        if stages[0].beacon != seed_beacon {
+        if stage_absent[0].beacon || stages[0].beacon != seed_beacon {
             note(Fail("seed beacon"));
         }
         // Equality with SHA-256(seed) is `seed_value`, not a shape_item.
@@ -527,20 +607,36 @@ fn read_measured_map(value: &Cbor, trailing: bool, sizes: Sizes) -> Result<Measu
         if !stages[17].path.is_empty() {
             note(Fail("W_17 path"));
         }
+        // Every pair is checked. One violated condition does not hide
+        // another (section 14.1); `shape_item` lists each string once.
         for g in 0..STAGES - 1 {
-            if stages[g + 1].beacon_height <= stages[g].beacon_height {
+            let (this, next) = (stage_absent[g], stage_absent[g + 1]);
+            if this.beacon_height
+                || next.beacon_height
+                || stages[g + 1].beacon_height <= stages[g].beacon_height
+            {
                 note(Fail("beacon height"));
-                break;
             }
-            if stages[g + 1].beacon == stages[g].beacon {
+            if this.beacon || next.beacon || stages[g + 1].beacon == stages[g].beacon {
                 note(Fail("beacon"));
-                break;
             }
         }
+        let closing = stage_absent[17];
         match (last_interrupt, last_interrupt_height) {
             (Some(hash), Some(height)) => {
-                if height <= stages[17].beacon_height || hash == stages[17].beacon {
+                // `last_interrupt_height` and `last_interrupt` are also the
+                // last stored header: an order or equality failure there is
+                // `header height order` / `header hash differ` as well.
+                let height_bad = closing.beacon_height || height <= stages[17].beacon_height;
+                let hash_bad = closing.beacon || hash == stages[17].beacon;
+                if height_bad || hash_bad {
                     note(Fail("last_interrupt"));
+                }
+                if height_bad {
+                    note(Fail("beacon height"));
+                }
+                if hash_bad {
+                    note(Fail("beacon"));
                 }
             }
             (None, None) => {
@@ -551,13 +647,13 @@ fn read_measured_map(value: &Cbor, trailing: bool, sizes: Sizes) -> Result<Measu
             }
             (None, Some(height)) => {
                 note(Fail("beacon"));
-                if height <= stages[17].beacon_height {
+                if closing.beacon_height || height <= stages[17].beacon_height {
                     note(Fail("beacon height"));
                 }
             }
             (Some(hash), None) => {
                 note(Fail("beacon height"));
-                if hash == stages[17].beacon {
+                if closing.beacon || hash == stages[17].beacon {
                     note(Fail("beacon"));
                 }
             }
@@ -586,6 +682,7 @@ fn read_measured_map(value: &Cbor, trailing: bool, sizes: Sizes) -> Result<Measu
         shape: shape_fail.is_none(),
         shape_fail,
         shape_notes,
+        stage_absent,
         hike: Hike {
             public_key,
             seed_beacon,

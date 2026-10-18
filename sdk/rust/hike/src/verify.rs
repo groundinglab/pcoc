@@ -8,7 +8,7 @@ use crate::audit::{draw_distinct, Entropy, OsEntropy, PinnedEntropy};
 use crate::bind::successor_waypoint_sized;
 use crate::clock::IndexBeacon;
 use crate::consts::{bind_threads_from, height_in_anchor_window, Sizes, STAGES};
-use crate::object::{earlier_object_kind, read_measured_object_sized, Hike, Stage};
+use crate::object::{earlier_object_kind, read_measured_object_sized, Hike, Stage, StageAbsent};
 use crate::pathbody::{path_locators, validate_path};
 use crate::terrain::{fill_pin, fill_terrain_sized, production_seed};
 use crate::walk::leg_result_sized;
@@ -221,10 +221,24 @@ pub struct Measurements {
     pub record_body: String,
 }
 
-fn total_legs(hike: &Hike) -> Option<u64> {
+/// `L_g` for each stage: the number of checkpoints, `len(stages[g].checkpoints)`.
+/// Section 14.6: the draw does not read `leg_count`.
+fn leg_lens(hike: &Hike, wire: &[StageAbsent]) -> Vec<u64> {
+    hike.stages
+        .iter()
+        .enumerate()
+        .map(|(g, stage)| {
+            absent_at(wire, g)
+                .checkpoint_elems
+                .unwrap_or(stage.checkpoints.len()) as u64
+        })
+        .collect()
+}
+
+fn total_legs(lens: &[u64]) -> Option<u64> {
     let mut n = 0u64;
-    for stage in &hike.stages {
-        n = n.checked_add(stage.leg_count)?;
+    for len in lens {
+        n = n.checked_add(*len)?;
     }
     Some(n)
 }
@@ -238,10 +252,9 @@ fn draw_count(n: u64) -> Option<usize> {
     }
 }
 
-fn locate(hike: &Hike, q: u64) -> (usize, usize) {
+fn locate(lens: &[u64], q: u64) -> (usize, usize) {
     let mut start = 0u64;
-    for (g, stage) in hike.stages.iter().enumerate() {
-        let len = stage.leg_count;
+    for (g, &len) in lens.iter().enumerate() {
         if q < start + len {
             return (g, (q - start) as usize);
         }
@@ -257,8 +270,14 @@ fn terrain_of(hike: &Hike, sizes: Sizes) -> Vec<u8> {
     )
 }
 
+/// Absence flags for stage `g`. A hike built in code (no wire) has none.
+fn absent_at(absent: &[StageAbsent], g: usize) -> StageAbsent {
+    absent.get(g).copied().unwrap_or_default()
+}
+
 fn beacon_records<F>(
     hike: &Hike,
+    absent: &[StageAbsent],
     beacon_at: &mut F,
 ) -> (
     Vec<bool>,
@@ -273,9 +292,14 @@ where
     let mut header_times_s = Vec::with_capacity(hike.stages.len());
     let mut observed_unix_ms = Vec::with_capacity(hike.stages.len());
     let mut headers = Vec::with_capacity(19);
-    for stage in &hike.stages {
-        let (fact, observed, stage_time) =
-            read_header(Some(stage.beacon), Some(stage.beacon_height), beacon_at);
+    for (g, stage) in hike.stages.iter().enumerate() {
+        // An absent stored hash or height is `not defined` and is not read.
+        let missing = absent_at(absent, g);
+        let (fact, observed, stage_time) = read_header(
+            (!missing.beacon).then_some(stage.beacon),
+            (!missing.beacon_height).then_some(stage.beacon_height),
+            beacon_at,
+        );
         matches.push(matches!(fact.cmp, crate::section14::IndexCmp::Match { .. }));
         header_times_s.push(stage_time);
         observed_unix_ms.push(observed);
@@ -480,12 +504,14 @@ fn successor_inputs_present(hike: &Hike) -> bool {
     hike.stages.len() >= STAGES
 }
 
-fn interrupt_header(hike: &Hike, hash: &[u8; 32], height: u64) -> bool {
-    let stored = hike
-        .stages
-        .iter()
-        .skip(1)
-        .any(|stage| stage.beacon == *hash && stage.beacon_height == height);
+fn interrupt_header(hike: &Hike, absent: &[StageAbsent], hash: &[u8; 32], height: u64) -> bool {
+    let stored = hike.stages.iter().enumerate().skip(1).any(|(g, stage)| {
+        let missing = absent_at(absent, g);
+        !missing.beacon
+            && !missing.beacon_height
+            && stage.beacon == *hash
+            && stage.beacon_height == height
+    });
     let closing = !hike.last_interrupt_absent
         && hike.last_interrupt == *hash
         && hike.last_interrupt_height == height;
@@ -500,7 +526,12 @@ struct BoundPath {
 
 /// Section 13.1. `W_1` … `W_16` ask `path_chain` only after the window and the
 /// stored interrupt header both match. `W_17` is not asked.
-fn bound_path<C, R>(hike: &Hike, g: usize, path_chain: &mut C) -> BoundPath
+fn bound_path<C, R>(
+    hike: &Hike,
+    stage_absent: &[StageAbsent],
+    g: usize,
+    path_chain: &mut C,
+) -> BoundPath
 where
     C: FnMut(&crate::pathbody::PathLocators) -> R,
     R: Into<ChainRead>,
@@ -579,8 +610,10 @@ where
             differs: false,
         };
     }
-    if !height_in_anchor_window(stage.beacon_height, height)
-        || !interrupt_header(hike, &locators.block_hash, height)
+    // With no stored `beacon_height` there is no window to place the path in.
+    if absent_at(stage_absent, g).beacon_height
+        || !height_in_anchor_window(stage.beacon_height, height)
+        || !interrupt_header(hike, stage_absent, &locators.block_hash, height)
     {
         return BoundPath {
             fact: PathFact {
@@ -614,16 +647,19 @@ where
     }
 }
 
-fn bound_paths<C, R>(hike: &Hike, path_chain: &mut C) -> Vec<BoundPath>
+fn bound_paths<C, R>(hike: &Hike, absent: &[StageAbsent], path_chain: &mut C) -> Vec<BoundPath>
 where
     C: FnMut(&crate::pathbody::PathLocators) -> R,
     R: Into<ChainRead>,
 {
-    (1..=17).map(|g| bound_path(hike, g, path_chain)).collect()
+    (1..=17)
+        .map(|g| bound_path(hike, absent, g, path_chain))
+        .collect()
 }
 
 fn waypoint_records(
     hike: &Hike,
+    absent: &[StageAbsent],
     terrain: &[u8],
     paths: &[BoundPath],
     sizes: Sizes,
@@ -637,7 +673,8 @@ fn waypoint_records(
     let mut successor_differs = Vec::with_capacity(STAGES - 1);
     for g in 0..STAGES - 1 {
         // A missing stage of the pair is `not defined`. The record still has 17 rows.
-        if hike.stages.len() <= g + 1 {
+        // So is an absent `I_g` (the next stage's beacon): the recompute has no input.
+        if hike.stages.len() <= g + 1 || absent_at(absent, g + 1).beacon {
             successor_differs.push(None);
             continue;
         }
@@ -690,22 +727,31 @@ fn rewalk_pool() -> rayon::ThreadPool {
         .expect("recomputed-leg pool of 6 threads")
 }
 
-fn rewalk(hike: &Hike, terrain: &[u8], indices: &[u64], sizes: Sizes) -> Vec<bool> {
+fn rewalk(
+    hike: &Hike,
+    wire: &[StageAbsent],
+    terrain: &[u8],
+    indices: &[u64],
+    sizes: Sizes,
+) -> Vec<bool> {
     let seed = computed_seed(hike);
+    let lens = leg_lens(hike, wire);
     let pool = rewalk_pool();
     pool.install(|| {
         indices
             .par_iter()
             .map(|&q| {
-                let (g, j) = locate(hike, q);
+                let (g, j) = locate(&lens, q);
                 let stage = &hike.stages[g];
-                // Section 14.6. Stage 0’s leg-0 start is the computed seed.
-                let previous = binding_previous(stage, j, g, &seed);
+                // A leg with no usable stored result is `mismatch`. Checked
+                // before `previous`, which reads `checkpoints[j − 1]`.
                 if stage.leg_result_missing.get(j).copied().unwrap_or(false)
                     || j >= stage.leg_results.len()
                 {
                     return false;
                 }
+                // Section 14.6. Stage 0’s leg-0 start is the computed seed.
+                let previous = binding_previous(stage, j, g, &seed);
                 let stored = u64::from_le_bytes(stage.leg_results[j]);
                 leg_result_sized(terrain, &previous, sizes) == stored
             })
@@ -713,8 +759,14 @@ fn rewalk(hike: &Hike, terrain: &[u8], indices: &[u64], sizes: Sizes) -> Vec<boo
     })
 }
 
-fn measure_six(hike: &Hike, terrain: &[u8], source: &mut dyn Entropy, sizes: Sizes) -> SixLegs {
-    let Some(n) = total_legs(hike) else {
+fn measure_six(
+    hike: &Hike,
+    wire: &[StageAbsent],
+    terrain: &[u8],
+    source: &mut dyn Entropy,
+    sizes: Sizes,
+) -> SixLegs {
+    let Some(n) = total_legs(&leg_lens(hike, wire)) else {
         return SixLegs::NotObtained;
     };
     let Some(k) = draw_count(n) else {
@@ -724,7 +776,7 @@ fn measure_six(hike: &Hike, terrain: &[u8], source: &mut dyn Entropy, sizes: Siz
         Ok(indices) => indices,
         Err(()) => return SixLegs::DrawNotObtained,
     };
-    let matches = rewalk(hike, terrain, &indices, sizes);
+    let matches = rewalk(hike, wire, terrain, &indices, sizes);
     SixLegs::Rewalked { indices, matches }
 }
 
@@ -835,7 +887,7 @@ where
     } else {
         !hike.stages.is_empty()
     };
-    let bound = bound_paths(hike, &mut path_chain);
+    let bound = bound_paths(hike, &measured.stage_absent, &mut path_chain);
     let mut anchored = 0u64;
     let mut anchored_possible = 0u64;
     let mut anchored_indices = Vec::new();
@@ -934,14 +986,15 @@ where
     };
     let shape = measured.shape;
     let hike = &measured.hike;
-    let (beacon_matches_index, times, observed, headers) = beacon_records(hike, &mut beacon_at);
+    let (beacon_matches_index, times, observed, headers) =
+        beacon_records(hike, &measured.stage_absent, &mut beacon_at);
     let header_mismatch = headers
         .iter()
         .any(|header| matches!(header.cmp, crate::section14::IndexCmp::Mismatch));
     let header_not_read = headers
         .iter()
         .any(|header| matches!(header.cmp, crate::section14::IndexCmp::NotRead));
-    let bound = bound_paths(hike, &mut path_chain);
+    let bound = bound_paths(hike, &measured.stage_absent, &mut path_chain);
     let measure_successors = if sizes.is_production() {
         successor_inputs_present(hike)
     } else {
@@ -956,6 +1009,7 @@ where
     let waypoints = if measure_successors {
         Recorded::Obtained(waypoint_records(
             hike,
+            &measured.stage_absent,
             terrain.as_deref().expect("waypoint rehash reads terrain"),
             &bound,
             sizes,
@@ -1138,7 +1192,8 @@ where
 
     let mut terrain: Option<Vec<u8>> = None;
     let (checkpoints, stage_times, observed_times, headers) = {
-        let (beacon_matches_index, times, observed, headers) = beacon_records(hike, &mut beacon_at);
+        let (beacon_matches_index, times, observed, headers) =
+            beacon_records(hike, &measured.stage_absent, &mut beacon_at);
         let digests = hike
             .stages
             .iter()
@@ -1169,7 +1224,7 @@ where
         )
     };
 
-    let bound = bound_paths(hike, &mut path_chain);
+    let bound = bound_paths(hike, &measured.stage_absent, &mut path_chain);
     let measure_successors = if sizes.is_production() {
         successor_inputs_present(hike)
     } else {
@@ -1182,7 +1237,13 @@ where
         let _terrain = terrain
             .as_deref()
             .expect("waypoint measurement recomputes terrain");
-        Recorded::Obtained(waypoint_records(hike, _terrain, &bound, sizes))
+        Recorded::Obtained(waypoint_records(
+            hike,
+            &measured.stage_absent,
+            _terrain,
+            &bound,
+            sizes,
+        ))
     } else {
         Recorded::NotObtained
     };
@@ -1197,7 +1258,7 @@ where
 
     let paths_included = Recorded::Obtained(count_paths_included(hike));
 
-    let six_legs = match total_legs(hike) {
+    let six_legs = match total_legs(&leg_lens(hike, &measured.stage_absent)) {
         None => SixLegs::NotObtained,
         Some(n) if draw_count(n).is_none() => SixLegs::CouldNotDraw,
         Some(_) => {
@@ -1207,6 +1268,7 @@ where
             let mut source = entropy(draw);
             measure_six(
                 hike,
+                &measured.stage_absent,
                 terrain.as_deref().expect("a recomputed leg reads terrain"),
                 source.as_mut(),
                 sizes,
@@ -1683,7 +1745,7 @@ mod tests {
                 differs: false,
             })
             .collect();
-        let found = waypoint_records(&hike, &terrain, &paths, sizes);
+        let found = waypoint_records(&hike, &[], &terrain, &paths, sizes);
         assert_eq!(found.successor_differs.len(), 17);
         assert!(found.successor_differs[0].is_some());
         assert!(found.successor_differs[1].is_some());
@@ -1803,7 +1865,7 @@ mod tests {
             stage.leg_results.clear();
         }
         assert_eq!(
-            measure_six(&hike, &[], &mut Boom, Sizes::production()),
+            measure_six(&hike, &[], &[], &mut Boom, Sizes::production()),
             SixLegs::CouldNotDraw
         );
         assert_eq!(draw_count(0), None);
@@ -1816,7 +1878,7 @@ mod tests {
     fn a_failed_byte_source_records_that_the_draw_was_not_obtained() {
         let hike = structural_object();
         assert_eq!(
-            measure_six(&hike, &[], &mut Empty, Sizes::production()),
+            measure_six(&hike, &[], &[], &mut Empty, Sizes::production()),
             SixLegs::DrawNotObtained
         );
     }
@@ -2366,7 +2428,7 @@ mod tests {
         hike.stages[0].waypoint = [0x22; 32];
         assert_ne!(seed[..8], hike.stages[0].waypoint[..8]);
         assert_eq!(
-            rewalk(&hike, &terrain, &[0], Sizes::production()),
+            rewalk(&hike, &[], &terrain, &[0], Sizes::production()),
             vec![true]
         );
         assert_ne!(

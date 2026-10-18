@@ -11,7 +11,9 @@
 #                    the conformance pack)
 #   4. java          sdk/java/v2.sh (conformance pack and section 6 pins)
 #   5. cross-check   the Rust, Go and Java verify programs on the same pack
-#                    objects and mutants must write byte-identical records
+#                    objects and mutants must write byte-identical records,
+#                    and so must each SDK's verify call (library level),
+#                    apart from the pinned sdk/KNOWN-DIVERGENCES.md cases
 #   6. examples      every example compiles; the quickstarts reproduce the
 #                    kat-small record byte for byte and the offline produce
 #                    examples write the same object, in all three languages
@@ -71,10 +73,17 @@ crosscheck() {
   mkdir -p "$work/java"
   (cd sdk/java && find src -name '*.java' | sort > "$work/java-sources.txt" \
     && javac --release 21 -d "$work/java" @"$work/java-sources.txt") || return 1
+  # Library level: each SDK's verify call on the same inputs (sdk/examples librecord).
+  (cd sdk/examples/rust && cargo build -q --locked --release --bin librecord) || return 1
+  (cd sdk/examples/go && go build -o "$work/go-librecord" ./librecord) || return 1
+  javac --release 21 -d "$work/java" sdk/examples/java/LibRecord.java -cp "$work/java" || return 1
   python3 sdk/tools/crosscheck.py \
-    --rust "$root/sdk/rust/target/release/satoshi-hike-verify" \
+    --rust "${CARGO_TARGET_DIR:-$root/sdk/rust/target}/release/satoshi-hike-verify" \
     --go "$work/go-verify" \
-    --java-classes "$work/java"
+    --java-classes "$work/java" \
+    --lib-rust "${CARGO_TARGET_DIR:-$root/sdk/examples/rust/target}/release/librecord" \
+    --lib-go "$work/go-librecord" \
+    --lib-java-classes "$work/java"
 }
 
 examples() {
