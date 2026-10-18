@@ -98,6 +98,11 @@ impl SecretKey {
         Ok(Self { bytes })
     }
 
+    /// The raw scalar, for the NIP-04 key agreement in `dm`. Never logged.
+    pub(crate) fn scalar(&self) -> &[u8; 32] {
+        &self.bytes
+    }
+
     /// The bech32 nsec spelling. Shown so the user can copy it. Not stored.
     pub fn to_nsec(&self) -> Zeroizing<String> {
         let mut data = self.bytes.as_ref().to_base32();

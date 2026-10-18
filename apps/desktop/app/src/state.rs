@@ -102,6 +102,9 @@ pub struct State {
     /// Test admission on Produce.
     pub test_note: Option<String>,
     pub test_busy: bool,
+    /// Send to my phone: the last result, and whether a send is in flight.
+    pub phone_note: Option<String>,
+    pub phone_busy: bool,
     pub page: Page,
     pub narrow: bool,
     /// The sample build pins the clock to the design's moment.

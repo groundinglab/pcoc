@@ -120,8 +120,45 @@ fn actions(app: &Rc<App>, path: &std::path::Path) -> gtk::Widget {
         let path = path.to_owned();
         sign.connect_clicked(move |_| app.sign_in_with(path.clone()));
     }
+    let (note, busy) = {
+        let s = app.state.borrow();
+        (s.phone_note.clone(), s.phone_busy)
+    };
+    let phone = button(
+        if busy {
+            "Sending…"
+        } else {
+            "Send to my phone"
+        },
+        "outline",
+    );
+    phone.set_sensitive(!busy);
+    phone.set_tooltip_text(Some(
+        "Send this PCOC to its own npub as an encrypted Nostr message, for the phone app signed in with that npub. Making a PCOC never sends it by itself.",
+    ));
+    {
+        let app = Rc::clone(app);
+        let path = path.to_owned();
+        phone.connect_clicked(move |_| app.send_to_phone(path.clone()));
+    }
+    row.append(&phone);
     row.append(&sign);
-    row.upcast()
+    let Some(note) = note else {
+        return row.upcast();
+    };
+    let block = vbox(6);
+    block.append(&row);
+    let tone = if note.starts_with("Sent") {
+        "teal"
+    } else if note.starts_with("Not sent") {
+        "amber"
+    } else {
+        "muted"
+    };
+    let label = text(&note, &[tone, "small"]);
+    label.set_selectable(true);
+    block.append(&label);
+    block.upcast()
 }
 
 fn compact_result(app: &Rc<App>, path: &std::path::Path) -> gtk::Widget {

@@ -4,6 +4,7 @@
 
 pub mod about;
 pub mod config;
+pub mod dm;
 pub mod endpoints;
 pub mod format;
 pub mod hex;

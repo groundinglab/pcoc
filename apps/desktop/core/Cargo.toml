@@ -22,6 +22,9 @@ serde_json.workspace = true
 sha2.workspace = true
 ureq.workspace = true
 zeroize.workspace = true
+aes.workspace = true
+cbc.workspace = true
+tungstenite.workspace = true
 
 [build-dependencies]
 toml = "0.8"
