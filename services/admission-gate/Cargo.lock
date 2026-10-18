@@ -280,8 +280,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hike"
-version = "0.1.0"
-source = "git+https://github.com/groundinglab/pcoc?tag=ref-rust-v2.0.6#d6eb3f3a6101197b76f8217b0db8246e7235edd5"
+version = "2.0.0-rc.1"
 dependencies = [
  "getrandom",
  "rayon",
@@ -473,8 +472,7 @@ dependencies = [
 
 [[package]]
 name = "nip06"
-version = "0.1.0"
-source = "git+https://github.com/groundinglab/pcoc?tag=ref-rust-v2.0.5#b875df9b9891e21e3d9a10d05f9d3b432d65e7f2"
+version = "2.0.0-rc.1"
 dependencies = [
  "bech32",
  "bip39",

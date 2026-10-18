@@ -20,10 +20,10 @@ else
   for f in "${files[@]}"; do
     case "$f" in
       spec/*|.github/*) all=true ;;
-      sdk/rust/*) on[rust]=true ;;
+      sdk/rust/*) on[rust]=true; on[gate]=true; on[desktop]=true ;;  # gate and desktop build sdk/rust by path
       sdk/go/*) on[go]=true ;;
       sdk/java/*) on[java]=true ;;
-      sdk/*) on[rust]=true; on[go]=true; on[java]=true ;;
+      sdk/*) on[rust]=true; on[go]=true; on[java]=true; on[gate]=true; on[desktop]=true ;;
       services/admission-gate/*) on[gate]=true ;;
       services/admission-claims/*) on[claims]=true ;;
       services/bari/*) on[bari]=true ;;

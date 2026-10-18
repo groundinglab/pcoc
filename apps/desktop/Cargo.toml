@@ -9,8 +9,9 @@ rust-version = "1.83"
 publish = false
 
 [workspace.dependencies]
-# The Rust reference (Satoshi Hike v2.0), pinned to a release tag.
-hike = { git = "https://github.com/groundinglab/pcoc", tag = "ref-rust-v2.0.5" }
+# The Rust SDK (Satoshi Hike v2.0), in-tree at sdk/rust; version in sdk/VERSION.
+# About shows the resolved version and pin (core/build.rs reads Cargo.lock).
+hike = { path = "../../sdk/rust/hike" }
 
 base64 = "0.22"
 bech32 = "=0.9.1"

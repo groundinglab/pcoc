@@ -257,8 +257,8 @@ fn about_card(on: bool) -> gtk::Widget {
         ("SPEC", line(about::SPEC, &[]).upcast()),
         ("Hard cut", line(about::SPEC_HARD_CUT, &["mono"]).upcast()),
         ("Sign-in", line(about::SPEC_SIGN_IN_LOCK, &[]).upcast()),
-        ("Reference crate", line(&about::crate_line(), &[]).upcast()),
-        ("Reference pin", text(&about::pin_line(), &[]).upcast()),
+        ("SDK crate", line(&about::crate_line(), &[]).upcast()),
+        ("SDK pin", text(&about::pin_line(), &[]).upcast()),
         ("Resolved commit", mono(about::PIN_COMMIT).upcast()),
         ("Object kind", line(about::OBJECT_KIND, &["mono"]).upcast()),
         (

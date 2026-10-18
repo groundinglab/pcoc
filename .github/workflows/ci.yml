@@ -131,7 +131,8 @@ jobs:
           persist-credentials: false
       - if: steps.on.outputs.run == 'true'
         name: sparse worktree (full clone, cone mode, no partial filter)
-        run: git sparse-checkout set ${{ matrix.dir }}
+        # gate and desktop build the Rust SDK by path (sdk/rust). Cone mode also brings the files directly under sdk/ (sdk/VERSION).
+        run: git sparse-checkout set ${{ matrix.dir }} sdk/rust
       - if: steps.on.outputs.run == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -159,7 +160,7 @@ jobs:
         with:
           persist-credentials: false
       - name: sparse worktree (full clone, cone mode, no partial filter)
-        run: git sparse-checkout set apps/desktop spec/conformance
+        run: git sparse-checkout set apps/desktop spec/conformance sdk/rust
       - name: GTK dev packages (preinstalled on the runner image; no sudo on self-hosted)
         run: pkg-config --modversion gtk4 libadwaita-1 || echo "::warning::gtk4/libadwaita dev packages missing on this runner image"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

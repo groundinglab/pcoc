@@ -40,6 +40,13 @@ pub const SERVICE: &str = "admission-service";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Git SHA recorded at build time. See `build.rs`.
 pub const COMMIT: &str = env!("ADMISSION_COMMIT");
+/// The Rust SDK (`hike`) version this binary was built against, from Cargo.lock.
+pub const SDK_VERSION: &str = env!("PCOC_SDK_VERSION");
+
+/// `admission-service 0.5.4 commit=<sha> sdk=<hike version> (<source>)`, for `--version`.
+pub fn version_line() -> String {
+    format!("{SERVICE} {VERSION} commit={COMMIT} sdk={SDK_VERSION}")
+}
 pub use crate::verifier::SPEC_NAME;
 
 #[derive(Clone)]
@@ -109,6 +116,7 @@ struct HealthBody {
     service: &'static str,
     version: &'static str,
     commit: &'static str,
+    sdk: &'static str,
     spec: &'static str,
     spec_kind: &'static str,
     config: ConfigSummary,
@@ -146,6 +154,7 @@ async fn health(State(svc): State<Service>, headers: HeaderMap) -> Response {
         service: SERVICE,
         version: VERSION,
         commit: COMMIT,
+        sdk: SDK_VERSION,
         spec: SPEC_NAME,
         spec_kind: SPEC_KIND_LABEL,
         config: ConfigSummary {

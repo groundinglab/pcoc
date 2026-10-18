@@ -1,6 +1,6 @@
 [package]
 name = "pcoc-hike"
-description = "PCOC Hike for Linux. GTK4 and libadwaita. Links the pinned Rust reference in-process."
+description = "PCOC Hike for Linux. GTK4 and libadwaita. Links the Rust SDK (sdk/rust) in-process."
 version.workspace = true
 license = "Apache-2.0"
 edition.workspace = true

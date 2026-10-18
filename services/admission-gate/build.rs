@@ -1,4 +1,8 @@
-//! Stamp `ADMISSION_COMMIT` into the binary.
+//! Stamp `ADMISSION_COMMIT` and `PCOC_SDK_VERSION` into the binary.
+//!
+//! `PCOC_SDK_VERSION` is the version of the `hike` package (the Rust SDK) that
+//! `Cargo.lock` resolved, plus where it came from: `2.0.0-rc.1 (path)` for the
+//! in-tree `sdk/rust`, or `<version> (git <commit>)` for a git pin.
 //!
 //! `COMMIT`, when set to a non-empty single line, is that stamp. Otherwise
 //! `git rev-parse HEAD` in this tree is the stamp. A build with neither
@@ -16,6 +20,47 @@ fn main() {
         .or_else(git_head)
         .unwrap_or_else(|| "unknown".to_owned());
     println!("cargo:rustc-env=ADMISSION_COMMIT={commit}");
+    println!("cargo:rerun-if-changed=Cargo.lock");
+    let sdk = std::fs::read_to_string("Cargo.lock")
+        .ok()
+        .and_then(|lock| sdk_in_lock(&lock))
+        .unwrap_or_else(|| "unknown".to_owned());
+    println!("cargo:rustc-env=PCOC_SDK_VERSION={sdk}");
+}
+
+/// `hike` in Cargo.lock: `<version> (path)` or `<version> (git <short commit>)`.
+fn sdk_in_lock(lock: &str) -> Option<String> {
+    let mut lines = lock.lines();
+    while let Some(line) = lines.next() {
+        if line != "[[package]]" {
+            continue;
+        }
+        let mut name = None;
+        let mut version = None;
+        let mut source = None;
+        for field in lines.by_ref() {
+            if field.is_empty() {
+                break;
+            }
+            if let Some(v) = field.strip_prefix("name = ") {
+                name = Some(v.trim_matches('"'));
+            } else if let Some(v) = field.strip_prefix("version = ") {
+                version = Some(v.trim_matches('"'));
+            } else if let Some(v) = field.strip_prefix("source = ") {
+                source = Some(v.trim_matches('"'));
+            }
+        }
+        if name != Some("hike") {
+            continue;
+        }
+        let version = version?;
+        return Some(match source.and_then(|s| s.rsplit_once('#')) {
+            Some((_, commit)) => format!("{version} (git {})", &commit[..commit.len().min(7)]),
+            None if source.is_none() => format!("{version} (path)"),
+            None => format!("{version} ({})", source.unwrap_or("unknown")),
+        });
+    }
+    None
 }
 
 /// Rebuild when HEAD or a ref moves. Paths are absolute so they resolve from

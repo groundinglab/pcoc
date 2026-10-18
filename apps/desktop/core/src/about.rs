@@ -16,20 +16,20 @@ pub const OBJECT_KIND: &str = hike::KIND;
 
 pub const BITCOIN: &str = "mainnet";
 
-/// `crate hike 0.1.0`.
+/// `hike 2.0.0-rc.1`: the Rust SDK crate and the version Cargo.lock resolved.
 pub fn crate_line() -> String {
     format!("hike {HIKE_VERSION}")
 }
 
-/// `git tag ref-v2.0.0 …`, a commit pin, or the in-tree reference.
+/// The SDK version this build uses, as shown on About.
+pub const SDK_VERSION: &str = HIKE_VERSION;
+
+/// `git tag sdk-v2.0.0 …`, a commit pin, or the in-tree SDK.
 pub fn pin_line() -> String {
     match PIN_KIND {
-        "tag" => format!("git tag {PIN} of the reference workspace, not branch main"),
-        "path" => "in-tree reference workspace, not branch main".to_owned(),
-        _ => format!(
-            "git rev {} of the reference workspace, not branch main",
-            short_rev(PIN)
-        ),
+        "tag" => format!("git tag {PIN} of the Rust SDK, not branch main"),
+        "path" => format!("in-tree Rust SDK at {PIN}"),
+        _ => format!("git rev {} of the Rust SDK, not branch main", short_rev(PIN)),
     }
 }
 
@@ -55,12 +55,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pin_is_never_a_branch_and_names_a_commit() {
-        assert_eq!(PIN_KIND, "tag");
-        assert_eq!(PIN, "ref-rust-v2.0.5");
-        assert_ne!(PIN_COMMIT, "unresolved");
-        assert!(pin_line().contains("not branch main"));
+    fn pin_is_the_in_tree_sdk() {
+        assert_eq!(PIN_KIND, "path");
+        assert_eq!(PIN, "../../sdk/rust/hike");
+        assert_eq!(PIN_COMMIT, "local");
+        assert_eq!(pin_line(), "in-tree Rust SDK at ../../sdk/rust/hike");
         assert_eq!(OBJECT_KIND, "satoshi-hike-v2.0-object");
         assert_eq!(hike::MAINNET_DNS_SEEDS.len(), 7);
+    }
+
+    #[test]
+    fn reports_the_sdk_version_from_sdk_version_file() {
+        let want = include_str!("../../../../sdk/VERSION").trim();
+        assert_eq!(SDK_VERSION, want);
+        assert_eq!(crate_line(), format!("hike {want}"));
     }
 }

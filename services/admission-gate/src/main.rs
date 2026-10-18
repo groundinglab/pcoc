@@ -1,6 +1,7 @@
 //! `admission-service` — Satoshi Hike v2.0 admission gate.
 //!
 //! The process reads one config file. The path is `--config` or `GATE_CONFIG`.
+//! `--version` prints the gate version, commit and Rust SDK version, then exits.
 //! It does not read `PCOC_BIND_THREADS` or any `GL_VERIFY_*` variable.
 #![forbid(unsafe_code)]
 
@@ -18,6 +19,10 @@ async fn main() {
 }
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    if env::args().skip(1).any(|arg| arg == "--version" || arg == "-V") {
+        println!("{}", http::version_line());
+        return Ok(());
+    }
     let path = config_path()?;
     let cfg = Config::load(&path)?;
     let bind = cfg.bind;
@@ -26,9 +31,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let listener = tokio::net::TcpListener::bind(bind).await?;
 
     eprintln!(
-        "admission-service v{} commit={} spec={} bind={} index={} log={} config={}",
+        "admission-service v{} commit={} sdk={} spec={} bind={} index={} log={} config={}",
         http::VERSION,
         http::COMMIT,
+        http::SDK_VERSION,
         http::SPEC_NAME,
         listener.local_addr()?,
         cfg.index_url,
@@ -60,7 +66,7 @@ fn config_path() -> Result<PathBuf, String> {
     while let Some(arg) = args.next() {
         if arg == "--help" || arg == "-h" {
             return Err(
-                "usage: admission-service --config <file>\nGATE_CONFIG may name that file instead"
+                "usage: admission-service --config <file> | --version\nGATE_CONFIG may name that file instead"
                     .to_owned(),
             );
         } else if arg == "--config" {
