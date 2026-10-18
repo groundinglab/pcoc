@@ -161,6 +161,53 @@ func TestRC2NonMapTopLevelIsUndecoded(t *testing.T) {
 	}
 }
 
+// F4: seed 11*32 draws stage 5 leg 0. A waypoint that is not 32 bytes makes
+// that leg mismatch. Section 14.6 reads the stored waypoint; section 11.2
+// does not take the first 8 bytes of a value of another width.
+func TestF4WrongWidthWaypointLeg0IsMismatch(t *testing.T) {
+	obj, index := loadKat(t)
+	stream := AuditStream(bytes.Repeat([]byte{0x11}, 32), 4096)
+	// Stage 5's waypoint is the 6th 0x68 waypoint 0x58 0x20 (stages 0..5).
+	needle := []byte("\x68waypoint\x58\x20")
+	at := nthIndex(t, obj, needle, 5) + len(needle)
+	check := func(edited []byte, width int) {
+		t.Helper()
+		rec, decoded := Verify(edited, ConformanceSmallV2, index, stream, false)
+		if !decoded {
+			t.Fatal("decoded")
+		}
+		var out map[string]any
+		if err := json.Unmarshal(rec.Marshal(), &out); err != nil {
+			t.Fatal(err)
+		}
+		six := atAny(out, "six_leg").(map[string]any)
+		indices := six["indices"].([]any)
+		results := six["results"].([]any)
+		found := false
+		for i, q := range indices {
+			if q.(float64) == 5 {
+				found = true
+				if results[i] != "mismatch" {
+					t.Fatalf("width %d leg result %v", width, results[i])
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("width %d draw %v did not include index 5", width, indices)
+		}
+		items := atAny(out, "shape_item").([]any)
+		if len(items) == 0 || items[0] != "field set" {
+			t.Fatalf("width %d shape %v", width, items)
+		}
+	}
+	// 31 bytes, 33 bytes, 8 bytes.
+	check(append(append(append([]byte{}, obj[:at-2]...), 0x58, 0x1f), append(append([]byte{}, obj[at:at+31]...), obj[at+32:]...)...), 31)
+	check(append(append(append([]byte{}, obj[:at-1]...), 0x21), append(append([]byte{}, obj[at:at+32]...), append([]byte{0}, obj[at+32:]...)...)...), 33)
+	check(append(append(append([]byte{}, obj[:at-2]...), 0x48), append([]byte{}, obj[at+24:]...)...), 8)
+}
+
+func atAny(v any, path ...any) any { return at(v, path...) }
+
 // F2: a declared byte, text, array or map length past the bytes still in the
 // buffer is malformed CBOR. Verify must return the undecoded record and must
 // not panic. The length is compared as uint64 before any allocation.

@@ -117,6 +117,12 @@ def cases(pack):
     add("absent-s17-height", lambda v: st(v, 17).drop("beacon_height"))
     add("absent-s17-path", lambda v: st(v, 17).drop("path"))
     add("short-s5-waypoint", lambda v: st(v, 5).set("waypoint", b"\0" * 31))
+    # F4: seed 11*32 draws stage 5 leg 0. A waypoint that is not 32 bytes
+    # makes that leg mismatch (section 14.6 reads the stored waypoint).
+    DRAW_S5_J0 = "11" * 32
+    add("s5-waypoint-31", lambda v: st(v, 5).set("waypoint", st(v, 5).get("waypoint")[:31]), DRAW_S5_J0)
+    add("s5-waypoint-33", lambda v: st(v, 5).set("waypoint", st(v, 5).get("waypoint") + b"\0"), DRAW_S5_J0)
+    add("s5-waypoint-8", lambda v: st(v, 5).set("waypoint", st(v, 5).get("waypoint")[:8]), DRAW_S5_J0)
     add("short-s8-beacon", lambda v: st(v, 8).set("beacon", st(v, 8).get("beacon")[:31]))
     add("short-li", lambda v: v.set("last_interrupt", v.get("last_interrupt")[:31]))
     for key in ("public_key", "seed_beacon", "stages", "last_interrupt", "last_interrupt_height", "kind", "n_slots"):

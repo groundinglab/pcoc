@@ -1052,9 +1052,12 @@ func sixLeg(terrain *Terrain, stages cborVal, counts []int, computed []byte, str
 		}
 		var previous []byte
 		if j == 0 {
+			// Section 14.6: the leg-0 start is the stored waypoint, which is
+			// 32 bytes (section 12.2). A shorter or longer value is not that
+			// start, so the leg is mismatch. Stage 0 uses the computed seed.
 			if g == 0 {
 				previous = computed
-			} else if wp, ok := bytesField(st, "waypoint"); ok {
+			} else if wp, ok := bytesField(st, "waypoint"); ok && len(wp) == 32 {
 				previous = wp
 			}
 		} else if checks != nil && j-1 < len(checks) {
