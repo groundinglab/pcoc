@@ -552,16 +552,27 @@ mod tests {
     }
 
     /// One anchored waypoint and a bookend rate of 0.05. Terrain stays 0.
+    ///
+    /// The terrain counter is process-wide and other tests build terrain in
+    /// parallel. A decide that built terrain would raise it on every try, so
+    /// one try with the counter unmoved proves this decide built none.
     #[test]
     fn a_settled_short_anchored_count_builds_no_terrain() {
         let object = quiet(1);
-        let before = hike::terrain_builds();
-        let decision = decide(&object, &policy(), &ClosedIndex);
-        assert!(
-            matches!(decision, FastDecision::Refuse { website, .. } if website == "too_few_waypoints_anchored"),
-            "{decision:?}"
-        );
-        assert_eq!(hike::terrain_builds(), before);
+        let mut unmoved = false;
+        for _ in 0..50 {
+            let before = hike::terrain_builds();
+            let decision = decide(&object, &policy(), &ClosedIndex);
+            assert!(
+                matches!(decision, FastDecision::Refuse { website, .. } if website == "too_few_waypoints_anchored"),
+                "{decision:?}"
+            );
+            if hike::terrain_builds() == before {
+                unmoved = true;
+                break;
+            }
+        }
+        assert!(unmoved, "the terrain counter moved on every try");
     }
 
     #[test]
