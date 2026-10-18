@@ -270,7 +270,7 @@ type ParsedStage = (Stage, bool, Vec<&'static str>, StageAbsent);
 /// type records its condition and leaves a zero placeholder flagged in
 /// [`StageAbsent`]; the measurement goes on. A stage element that is not a
 /// map is read as a map with no keys.
-fn parse_stage(value: &Cbor) -> ParsedStage {
+fn parse_stage(value: &Cbor, header: bool) -> ParsedStage {
     let mut notes = Vec::new();
     let map: &[(String, Cbor)] = match pairs(value) {
         Ok(map) => map,
@@ -289,7 +289,11 @@ fn parse_stage(value: &Cbor) -> ParsedStage {
         Ok(bytes) => arr32(&bytes),
         Err(fail) => {
             notes.push(fail.0);
-            notes.push("beacon");
+            // Stages past 17 are not stored headers. A broken beacon there
+            // is field set, not header hash differ.
+            if header {
+                notes.push("beacon");
+            }
             absent.beacon = true;
             [0u8; 32]
         }
@@ -332,7 +336,10 @@ fn parse_stage(value: &Cbor) -> ParsedStage {
         }
         Err(fail) => {
             notes.push(fail.0);
-            notes.push("beacon height");
+            // Same bound as the beacon: stages past 17 do not fail header height order.
+            if header {
+                notes.push("beacon height");
+            }
             absent.beacon_height = true;
             0
         }
@@ -837,8 +844,8 @@ fn read_measured_map(value: &Cbor, trailing: bool, sizes: Sizes) -> Result<Measu
     let mut stages = Vec::with_capacity(stage_items.len());
     let mut path_keys = Vec::with_capacity(stage_items.len());
     let mut stage_absent = Vec::with_capacity(stage_items.len());
-    for item in stage_items {
-        let (stage, path_key, stage_notes, absent) = parse_stage(item);
+    for (g, item) in stage_items.iter().enumerate() {
+        let (stage, path_key, stage_notes, absent) = parse_stage(item, g < STAGES);
         for fail in stage_notes {
             note(Fail(fail));
         }

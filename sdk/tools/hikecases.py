@@ -147,6 +147,20 @@ def cases(pack):
     add("short-pubkey", lambda v: v.set("public_key", v.get("public_key")[:31]))
     add("stages-17", lambda v: v.get("stages").pop())
     add("stages-19", lambda v: v.get("stages").append(copy.deepcopy(st(v, 17))))
+    # F11: a broken stage at index 18 or later adds no header condition.
+    def more_stages(n):
+        def f(v):
+            stages = v.get("stages")
+            while len(stages) < n:
+                stages.append(copy.deepcopy(stages[17]))
+        return f
+    add("f11-s19-s18-beacon-text", lambda v: (more_stages(19)(v), st(v, 18).set("beacon", "x")))
+    add("f11-s19-s18-beacon-absent", lambda v: (more_stages(19)(v), st(v, 18).drop("beacon")))
+    add("f11-s19-s18-bh-absent", lambda v: (more_stages(19)(v), st(v, 18).drop("beacon_height")))
+    add("f11-s19-s18-bh-text", lambda v: (more_stages(19)(v), st(v, 18).set("beacon_height", "x")))
+    add("f11-s19-s18-beacon-31", lambda v: (more_stages(19)(v), st(v, 18).set("beacon", b"\1" * 31)))
+    add("f11-s19-s18-empty", lambda v: (more_stages(19)(v), v.get("stages").__setitem__(18, M())))
+    add("f11-s20-s19-beacon-text", lambda v: (more_stages(20)(v), st(v, 19).set("beacon", "x")))
     # F6: 19 stages, and stage 3's header duplicates stage 2's. stages length
     # does not drop the other conditions over the stages that are present.
     def stages19_dup(v):

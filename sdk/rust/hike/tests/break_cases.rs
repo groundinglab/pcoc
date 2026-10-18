@@ -526,6 +526,21 @@ fn a_missing_index_document_records_plant_not_read() {
     assert!(paths.iter().all(|row| row.get("plant").and_then(|p| p.as_str()) != Some("match")));
 }
 
+/// F11: a broken stage at index 18 or later does not add a header condition.
+#[test]
+fn a_broken_stage_past_17_adds_no_header_condition() {
+    let mut v = object();
+    let extra = v.stage(17).clone();
+    v.get("stages").arr().push(extra);
+    v.stage(18).set("beacon", V::T("x".into()));
+    let rec = record(&enc(&v));
+    let got = items(&rec);
+    assert!(got.contains(&"field set"), "{got:?}");
+    assert!(got.contains(&"stages length"), "{got:?}");
+    assert!(!got.iter().any(|item| *item == "header hash differ"), "{got:?}");
+    assert!(!got.iter().any(|item| *item == "header height order"), "{got:?}");
+}
+
 /// F2: a declared byte, text, array or map length past the bytes left is
 /// the undecoded ["malformed cbor"] record. The same heads the Go and Java
 /// decoders reject without allocating from the declared length.
