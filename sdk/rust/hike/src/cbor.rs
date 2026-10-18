@@ -50,15 +50,21 @@ impl<'a> Cur<'a> {
             24 => Ok(u64::from(self.byte()?)),
             25 => {
                 let b = self.take(2)?;
-                Ok(u64::from(u16::from_be_bytes(b.try_into().unwrap())))
+                Ok(u64::from(u16::from_be_bytes(
+                    b.try_into().map_err(|_| Fail("truncated"))?,
+                )))
             }
             26 => {
                 let b = self.take(4)?;
-                Ok(u64::from(u32::from_be_bytes(b.try_into().unwrap())))
+                Ok(u64::from(u32::from_be_bytes(
+                    b.try_into().map_err(|_| Fail("truncated"))?,
+                )))
             }
             27 => {
                 let b = self.take(8)?;
-                Ok(u64::from_be_bytes(b.try_into().unwrap()))
+                Ok(u64::from_be_bytes(
+                    b.try_into().map_err(|_| Fail("truncated"))?,
+                ))
             }
             _ => Err(Fail("unsupported additional info")),
         }

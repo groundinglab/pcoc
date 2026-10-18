@@ -171,25 +171,23 @@ impl CanonicalPathBody {
             });
         }
 
-        let leaf = array32(&bytes[1..33]);
-        let leaf_index = be_u32(&bytes[33..37]);
-        let tree_size = be_u32(&bytes[37..41]);
+        let leaf = array32(bytes, 1)?;
+        let leaf_index = be_u32(bytes, 33)?;
+        let tree_size = be_u32(bytes, 37)?;
         let siblings_start = 42;
-        let siblings_end = siblings_start + sibling_count * 32;
-        let siblings = bytes[siblings_start..siblings_end]
-            .chunks_exact(32)
-            .map(array32)
-            .collect();
-        let mut offset = siblings_end;
-        let root = array32(&bytes[offset..offset + 32]);
+        let siblings = (0..sibling_count)
+            .map(|k| array32(bytes, siblings_start + k * 32))
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut offset = siblings_start + sibling_count * 32;
+        let root = array32(bytes, offset)?;
         offset += 32;
-        let txid = array32(&bytes[offset..offset + 32]);
+        let txid = array32(bytes, offset)?;
         offset += 32;
-        let vout = be_u32(&bytes[offset..offset + 4]);
+        let vout = be_u32(bytes, offset)?;
         offset += 4;
-        let block_hash = array32(&bytes[offset..offset + 32]);
+        let block_hash = array32(bytes, offset)?;
         offset += 32;
-        let block_height = be_u32(&bytes[offset..offset + 4]);
+        let block_height = be_u32(bytes, offset)?;
 
         let body = Self {
             path: MerklePath {
@@ -257,18 +255,21 @@ pub fn validate_path(bytes: &[u8], waypoint: &[u8; 32]) -> Result<(), PathError>
     Ok(())
 }
 
-fn array32(bytes: &[u8]) -> [u8; 32] {
-    let mut out = [0u8; 32];
-    out.copy_from_slice(bytes);
-    out
+/// The 32 bytes at `at`, or `Truncated` if the body ends first.
+fn array32(bytes: &[u8], at: usize) -> Result<[u8; 32], PathError> {
+    at.checked_add(32)
+        .and_then(|end| bytes.get(at..end))
+        .and_then(|slice| <[u8; 32]>::try_from(slice).ok())
+        .ok_or(PathError::Truncated)
 }
 
-fn be_u32(bytes: &[u8]) -> u32 {
-    u32::from_be_bytes(
-        bytes
-            .try_into()
-            .expect("caller supplied a fixed 4-byte slice"),
-    )
+/// The big-endian `u32` at `at`, or `Truncated` if the body ends first.
+fn be_u32(bytes: &[u8], at: usize) -> Result<u32, PathError> {
+    at.checked_add(4)
+        .and_then(|end| bytes.get(at..end))
+        .and_then(|slice| <[u8; 4]>::try_from(slice).ok())
+        .map(u32::from_be_bytes)
+        .ok_or(PathError::Truncated)
 }
 
 /// One-leaf body whose leaf is `waypoint` and whose block height is `block_height`.
@@ -309,6 +310,17 @@ pub fn encode_single_leaf(waypoint: &[u8; 32]) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn field_readers_return_truncated_instead_of_panicking() {
+        assert_eq!(array32(&[0u8; 31], 0), Err(PathError::Truncated));
+        assert_eq!(array32(&[0u8; 40], 9), Err(PathError::Truncated));
+        assert_eq!(array32(&[7u8; 40], 8), Ok([7u8; 32]));
+        assert_eq!(be_u32(&[0u8; 3], 0), Err(PathError::Truncated));
+        assert_eq!(be_u32(&[0u8; 8], usize::MAX - 1), Err(PathError::Truncated));
+        assert_eq!(be_u32(&[0, 0, 1, 2], 0), Ok(0x0102));
+    }
+
     use super::*;
 
     #[test]
