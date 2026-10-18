@@ -1241,6 +1241,32 @@ mod tests {
     }
 
     #[test]
+    fn yielded_public_key_bounds_nesting_on_a_two_mib_thread() {
+        // The gate door reads the key before any signature check. An ~8 KB
+        // object nesting 8 000 arrays used to overflow a 2 MiB stack.
+        for depth in [8_000usize, 100_000] {
+            let key = [0x33u8; 32];
+            let mut object = encode(&Cbor::Map(vec![(
+                "public_key".to_owned(),
+                Cbor::Bytes(key.to_vec()),
+            )]));
+            object[0] = 0xa2;
+            object.extend_from_slice(&[0x63, b'z', b'z', b'z']);
+            object.extend(std::iter::repeat(0x81).take(depth - 1));
+            object.push(0x80);
+            let got = std::thread::Builder::new()
+                .stack_size(2 * 1024 * 1024)
+                .spawn(move || {
+                    (yielded_public_key(&object), top_level_map(&object), earlier_object_kind(&object))
+                })
+                .unwrap()
+                .join()
+                .unwrap();
+            assert_eq!(got, (YieldedKey::Undecodable, false, None));
+        }
+    }
+
+    #[test]
     fn yielded_public_key_splits_an_undecodable_value_from_a_short_key() {
         assert_eq!(yielded_public_key(&[]), YieldedKey::Undecodable);
         assert_eq!(yielded_public_key(&[0xff]), YieldedKey::Undecodable);

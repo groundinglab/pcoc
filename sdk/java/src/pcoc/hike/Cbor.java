@@ -12,6 +12,15 @@ import java.util.Map;
 public final class Cbor {
     private Cbor() {}
 
+    /**
+     * Implementation resource limit: the most arrays and maps one item may sit
+     * inside, counting itself. A section 8 hike object nests at most 4 deep
+     * (top-level map, stages array, stage map, checkpoints/leg_results array;
+     * their elements are byte strings). 64 is 16 times that and is the same
+     * value in the Rust, Go and Java SDKs. A deeper item is malformed CBOR.
+     */
+    public static final int MAX_CBOR_NESTING = 64;
+
     public static final class Val {
         public enum Kind { UINT, BYTES, TEXT, ARRAY, MAP }
 
@@ -266,6 +275,8 @@ public final class Cbor {
     private static final class Cursor {
         final byte[] data;
         int i;
+        /** Arrays and maps open around the item being read. */
+        int depth;
 
         Cursor(byte[] data) {
             this.data = data;
@@ -297,6 +308,7 @@ public final class Cbor {
                     }
                     return Val.text(text);
                 case 4: {
+                    enter();
                     if (Long.compareUnsigned(argument, Integer.MAX_VALUE) > 0) {
                         throw new Problem("truncated");
                     }
@@ -304,9 +316,11 @@ public final class Cbor {
                     for (long n = 0; n < argument; n++) {
                         items.add(item());
                     }
+                    depth--;
                     return Val.array(items);
                 }
                 case 5: {
+                    enter();
                     if (Long.compareUnsigned(argument, Integer.MAX_VALUE) > 0) {
                         throw new Problem("truncated");
                     }
@@ -321,6 +335,7 @@ public final class Cbor {
                         }
                         map.put(key.text, item());
                     }
+                    depth--;
                     return Val.map(map);
                 }
                 case 6:
@@ -328,6 +343,13 @@ public final class Cbor {
                 default:
                     throw new Problem("float-or-simple");
             }
+        }
+
+        void enter() throws Problem {
+            if (depth >= MAX_CBOR_NESTING) {
+                throw new Problem("nesting depth");
+            }
+            depth++;
         }
 
         Head head() throws Problem {

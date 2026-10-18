@@ -1,3 +1,13 @@
+# SDK changes: rc.2 → rc.3 (in progress)
+
+Not tagged. `sdk/VERSION` stays `2.0.0-rc.2` until the rc.3 bump.
+
+## Decoder nesting limit (review findings F1, F3)
+
+- **Every SDK's CBOR decoder stops at 64 nested arrays and maps** (`hike::MAX_CBOR_NESTING`, Go `hike.MaxCBORNesting`, Java `Cbor.MAX_CBOR_NESTING`, the same value). A deeper item is malformed CBOR: the record is `["malformed cbor"]` and the programs exit 1. A valid hike object nests 4 deep, so no valid object changes. It is an implementation resource limit, documented in [KNOWN-DIVERGENCES.md](KNOWN-DIVERGENCES.md#implementation-resource-limits).
+- **Why:** the decoders recursed without a bound. Rust aborted the process on stack overflow, reachable from the gate's sign-in door before the signature check with one ~8 KB object (8 000 nested arrays on a 2 MiB thread). Java threw `StackOverflowError` at about 2 700 levels. Go grew its stack, but the limit is required to be the same in all three so that the gate bounds its work before authenticating.
+- Records for every object that nests 64 deep or less are unchanged.
+
 # SDK changes: rc.1 → rc.2
 
 rc.1 is the rc.1 tag pair at c9b160ea. rc.2 is `sdk-v2.0.0-rc.2` and `sdk/go/v2.0.0-rc.2`, version `2.0.0-rc.2` in [VERSION](VERSION). Neither is published.

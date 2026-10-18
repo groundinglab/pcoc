@@ -7,6 +7,14 @@
 
 use std::collections::HashSet;
 
+/// Implementation resource limit: the most arrays and maps one item may sit
+/// inside, counting itself. A section 8 hike object nests at most 4 deep
+/// (top-level map, `stages` array, stage map, `checkpoints`/`leg_results`
+/// array; their elements are byte strings). 64 is 16 times that and is the
+/// same value in the Rust, Go and Java SDKs. A deeper item is malformed CBOR,
+/// so decoding work and stack depth stay bounded before any signature check.
+pub const MAX_CBOR_NESTING: usize = 64;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Cbor {
     Uint(u64),
@@ -22,6 +30,8 @@ pub(crate) struct Fail(pub &'static str);
 struct Cur<'a> {
     data: &'a [u8],
     i: usize,
+    /// Arrays and maps open around the item being read.
+    depth: usize,
 }
 
 impl<'a> Cur<'a> {
@@ -111,16 +121,27 @@ impl<'a> Cur<'a> {
         Ok(Cbor::Text(text.to_owned()))
     }
 
+    fn enter(&mut self) -> Result<(), Fail> {
+        if self.depth >= MAX_CBOR_NESTING {
+            return Err(Fail("nesting depth"));
+        }
+        self.depth += 1;
+        Ok(())
+    }
+
     fn array_item(&mut self, ai: u8) -> Result<Cbor, Fail> {
+        self.enter()?;
         let n = self.count(ai)?;
         let mut items = Vec::with_capacity(n);
         for _ in 0..n {
             items.push(self.item()?);
         }
+        self.depth -= 1;
         Ok(Cbor::Array(items))
     }
 
     fn map_item(&mut self, ai: u8) -> Result<Cbor, Fail> {
+        self.enter()?;
         let n = self.count(ai)?;
         let mut pairs = Vec::with_capacity(n);
         let mut seen = HashSet::with_capacity(n);
@@ -134,6 +155,7 @@ impl<'a> Cur<'a> {
             }
             pairs.push((key, self.item()?));
         }
+        self.depth -= 1;
         Ok(Cbor::Map(pairs))
     }
 }
@@ -143,7 +165,7 @@ pub(crate) fn decode_head(data: &[u8]) -> Result<(Cbor, bool), Fail> {
     if data.is_empty() {
         return Err(Fail("empty"));
     }
-    let mut cur = Cur { data, i: 0 };
+    let mut cur = Cur { data, i: 0, depth: 0 };
     let value = cur.item()?;
     Ok((value, cur.i != data.len()))
 }
@@ -229,4 +251,80 @@ pub(crate) fn encode_wide_uints(value: &Cbor) -> Vec<u8> {
     let mut out = Vec::new();
     encode_into(&mut out, value, UintWidth::Eight);
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn nested_arrays(depth: usize) -> Vec<u8> {
+        let mut out = vec![0x81; depth.saturating_sub(1)];
+        out.push(0x80);
+        out
+    }
+
+    #[test]
+    fn nesting_up_to_the_limit_decodes() {
+        assert!(decode_one(&nested_arrays(MAX_CBOR_NESTING)).is_ok());
+        // Maps count the same as arrays.
+        let mut maps = Vec::new();
+        for _ in 0..MAX_CBOR_NESTING - 1 {
+            maps.extend_from_slice(&[0xa1, 0x61, b'k']);
+        }
+        maps.push(0xa0);
+        assert!(decode_one(&maps).is_ok());
+    }
+
+    #[test]
+    fn nesting_past_the_limit_is_malformed_not_a_crash() {
+        assert_eq!(decode_one(&nested_arrays(MAX_CBOR_NESTING + 1)), Err(Fail("nesting depth")));
+        // About 100 000 deep, run on a small thread: no stack overflow.
+        let deep = nested_arrays(100_000);
+        let got = std::thread::Builder::new()
+            .stack_size(256 * 1024)
+            .spawn(move || decode_head(&deep).map(|_| ()))
+            .unwrap()
+            .join()
+            .unwrap();
+        assert_eq!(got, Err(Fail("nesting depth")));
+        // Deep and truncated, deep inside a map: still a typed failure.
+        let mut inner = vec![0xa1, 0x63, b'z', b'z', b'z'];
+        inner.extend(vec![0x81; 100_000]);
+        assert!(decode_head(&inner).is_err());
+    }
+
+    /// Sibling containers do not add up: only the open ones count.
+    fn siblings(count: usize) -> (Vec<u8>, Vec<u8>) {
+        let mut arrays = vec![0x98, count as u8];
+        for _ in 0..count {
+            arrays.extend_from_slice(&[0x81, 0x80]);
+        }
+        let mut maps = vec![0xb8, count as u8];
+        for n in 0..count {
+            maps.extend_from_slice(&[0x62, b'a' + (n / 26) as u8, b'a' + (n % 26) as u8, 0xa1, 0x61, b'v', 0xa0]);
+        }
+        (arrays, maps)
+    }
+
+    #[test]
+    fn sibling_containers_do_not_count_toward_the_limit() {
+        let (arrays, maps) = siblings(200);
+        assert!(decode_one(&arrays).is_ok());
+        assert!(decode_one(&maps).is_ok());
+    }
+
+    #[test]
+    fn a_valid_hike_nests_four_deep() {
+        // top map > stages array > stage map > checkpoints array > bytes.
+        let object = Cbor::Map(vec![(
+            "stages".to_owned(),
+            Cbor::Array(vec![Cbor::Map(vec![(
+                "checkpoints".to_owned(),
+                Cbor::Array(vec![Cbor::Bytes(vec![0; 32])]),
+            )])]),
+        )]);
+        let mut cur = Cur { data: &encode(&object), i: 0, depth: 0 };
+        assert!(cur.item().is_ok());
+        assert!(4 * 4 <= MAX_CBOR_NESTING);
+    }
 }

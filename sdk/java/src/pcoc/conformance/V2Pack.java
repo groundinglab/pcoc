@@ -44,6 +44,7 @@ public final class V2Pack {
         blockHashDisplayOrder(root);
         stage0StartsOnTheLatestKnownHeader(root);
         rc2Break(pack);
+        nestingIsBounded(root);
         System.out.println("v2 pack ok");
     }
 
@@ -173,6 +174,83 @@ public final class V2Pack {
                 || !hardText.contains("\"six_leg_runs\":\"not read\"") || !trailingText.contains("\"seed_value\":\"match\"")
                 || !stageText.contains("\"shape_item\":[\"field set\",\"stage-0 path key\",\"leg_count\"]")) {
             throw new IllegalStateException("spec tokens");
+        }
+    }
+
+    private static byte[] nestedArrays(byte[] prefix, int depth) {
+        byte[] out = Arrays.copyOf(prefix, prefix.length + depth);
+        Arrays.fill(out, prefix.length, out.length - 1, (byte) 0x81);
+        out[out.length - 1] = (byte) 0x80;
+        return out;
+    }
+
+    /**
+     * Cbor.MAX_CBOR_NESTING (64, the same in Rust and Go) is an
+     * implementation resource limit. 64 nested arrays decode; 65 are malformed
+     * CBOR; about 100 000 deep is the undecoded record, never a
+     * StackOverflowError, even on a 256 KiB thread.
+     */
+    private static void nestingIsBounded(Path root) throws Exception {
+        if (Cbor.MAX_CBOR_NESTING != 64) {
+            throw new AssertionError("nesting limit");
+        }
+        if (!Cbor.issue(nestedArrays(new byte[0], 64)).isEmpty()
+                || !"nesting depth".equals(Cbor.issue(nestedArrays(new byte[0], 65)))) {
+            throw new AssertionError("nesting boundary");
+        }
+        byte[] maps = new byte[63 * 3 + 1];
+        for (int n = 0; n < 63; n++) {
+            maps[3 * n] = (byte) 0xa1;
+            maps[3 * n + 1] = 0x61;
+            maps[3 * n + 2] = 'k';
+        }
+        maps[maps.length - 1] = (byte) 0xa0;
+        if (!Cbor.issue(maps).isEmpty()) {
+            throw new AssertionError("64 nested maps");
+        }
+        // Sibling containers do not add up: only the open ones count.
+        byte[] arrays = new byte[2 + 2 * 200];
+        byte[] siblingMaps = new byte[2 + 7 * 200];
+        arrays[0] = (byte) 0x98;
+        arrays[1] = (byte) 200;
+        siblingMaps[0] = (byte) 0xb8;
+        siblingMaps[1] = (byte) 200;
+        for (int n = 0; n < 200; n++) {
+            arrays[2 + 2 * n] = (byte) 0x81;
+            arrays[3 + 2 * n] = (byte) 0x80;
+            byte[] entry = {0x62, (byte) ('a' + n / 26), (byte) ('a' + n % 26), (byte) 0xa1, 0x61, 'v', (byte) 0xa0};
+            System.arraycopy(entry, 0, siblingMaps, 2 + 7 * n, 7);
+        }
+        if (!Cbor.issue(arrays).isEmpty() || !Cbor.issue(siblingMaps).isEmpty()) {
+            throw new AssertionError("sibling containers counted toward the limit");
+        }
+        String hard = Files.readString(root.resolve("sdk/go/hike/testdata/ports219-hard.record"));
+        byte[] key = {(byte) 0xa1, 0x63, 'z', 'z', 'z'};
+        byte[][] inputs = {nestedArrays(new byte[0], 100_000), nestedArrays(key, 100_000), nestedArrays(key, 8_000),
+            Arrays.copyOf(nestedArrays(key, 100_000), 50_000)};
+        String[] got = new String[inputs.length];
+        Throwable[] thrown = new Throwable[1];
+        Thread worker = new Thread(null, () -> {
+            try {
+                for (int n = 0; n < inputs.length; n++) {
+                    if (!"nesting depth".equals(Cbor.issue(inputs[n]))) {
+                        throw new AssertionError("deep issue " + n);
+                    }
+                    got[n] = Summary.packRecord(inputs[n], Profile.PRODUCTION, height -> null, null, 1, null);
+                }
+            } catch (Throwable t) {
+                thrown[0] = t;
+            }
+        }, "deep", 256 * 1024);
+        worker.start();
+        worker.join();
+        if (thrown[0] != null) {
+            throw new AssertionError("deep nesting threw " + thrown[0]);
+        }
+        for (String record : got) {
+            if (!hard.equals(record)) {
+                throw new AssertionError("deep nesting is not the undecoded record");
+            }
         }
     }
 
