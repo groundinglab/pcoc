@@ -26,6 +26,11 @@
     <display_length compare="ge">720</display_length>
   </requires>
   <releases>
+    <release version="0.1.4" date="2026-10-18">
+      <description>
+        <p>Send to my phone: a finished PCOC goes to its own npub as one encrypted Nostr message (NIP-04), for the phone app signed in with that npub.</p>
+      </description>
+    </release>
     <release version="0.1.2" date="2026-10-15">
       <description>
         <p>Flatpak packaging is in this repository; the published bundle is built from this tag.</p>

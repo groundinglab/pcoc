@@ -57,6 +57,8 @@ fn blank_state(config: Config) -> State {
         sign_in_path: None,
         test_note: None,
         test_busy: false,
+        phone_note: None,
+        phone_busy: false,
         page: Page::Produce,
         narrow: false,
         fixed_now_ms: None,

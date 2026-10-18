@@ -6,6 +6,7 @@ use crate::state::{Page, SignInState, State, VerifyState};
 use crate::widgets::{self, hbox, line, status_dot, vbox};
 use adw::prelude::*;
 use gtk::{gio, glib};
+use pcoc_hike_core::dm;
 use pcoc_hike_core::format::{clock, tilde};
 use pcoc_hike_core::keys::{PublicKey, SecretKey};
 use pcoc_hike_core::produce::events::ProduceEvent;
@@ -773,7 +774,71 @@ impl App {
         self.go(Page::SignIn);
     }
 
+    /// Send to my phone. An explicit press only: Produce finishing never
+    /// sends. The event is built and signed here, on the GTK thread, so the
+    /// nsec never leaves `State`; only the signed event goes to the worker.
+    pub fn send_to_phone(self: &Rc<Self>, path: PathBuf) {
+        if self.state.borrow().phone_busy || self.state.borrow().sample {
+            return;
+        }
+        let note = |this: &Rc<Self>, words: String| {
+            this.state.borrow_mut().phone_note = Some(words);
+            this.refresh_all();
+        };
+        let bytes = match std::fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(err) => return note(self, dm::DmError::Read(err.to_string()).to_string()),
+        };
+        let prepared = {
+            let s = self.state.borrow();
+            match s.secret.as_ref() {
+                None => Err(dm::DmError::Locked),
+                Some(secret) => dm::prepare(&bytes, secret, s.now_s()),
+            }
+        };
+        let prepared = match prepared {
+            Ok(prepared) => prepared,
+            Err(err) => return note(self, err.to_string()),
+        };
+        {
+            let mut s = self.state.borrow_mut();
+            s.phone_busy = true;
+            s.phone_note = Some(format!(
+                "Sending this PCOC to {} over Nostr relays.",
+                prepared.recipient.npub()
+            ));
+        }
+        self.refresh_all();
+        let (tx, rx) = async_channel::bounded(1);
+        std::thread::Builder::new()
+            .name("pcoc-send-phone".into())
+            .spawn(move || {
+                let words = match dm::publish(&prepared, &dm::RELAYS) {
+                    Ok(sent) => sent.sentence(),
+                    Err(err) => err.to_string(),
+                };
+                let _ = tx.send_blocking(words);
+            })
+            .expect("spawn send thread");
+        let weak = Rc::downgrade(self);
+        glib::spawn_future_local(async move {
+            if let Ok(words) = rx.recv().await {
+                if let Some(app) = weak.upgrade() {
+                    {
+                        let mut s = app.state.borrow_mut();
+                        s.phone_busy = false;
+                        s.phone_note = Some(words);
+                    }
+                    app.refresh_all();
+                }
+            }
+        });
+    }
+
     fn open_hike(self: &Rc<Self>, path: PathBuf) {
+        if !self.state.borrow().phone_busy {
+            self.state.borrow_mut().phone_note = None;
+        }
         let status = {
             let state = self.state.borrow();
             hike_rows(&state)
