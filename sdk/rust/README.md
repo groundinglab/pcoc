@@ -342,6 +342,8 @@ The error types are Rust's own. The Go and Java SDKs report the same conditions 
 
 The programs exit 1 only when no top-level CBOR map decodes (`hike::top_level_map(bytes)` is false): the file cannot be read, the first item does not decode under section 7.3, or it is well-formed but not a map (for example the single byte `01`). In every other case, trailing bytes after a map included, they write the record and exit 0. Usage errors exit 2. `verify` itself gives the `["malformed cbor"]` record for every input the program refuses. Go and Java behave the same (rc.2).
 
+**Nesting limit (rc.3, implementation resource limit).** The decoder accepts at most `hike::MAX_CBOR_NESTING` = 64 nested arrays and maps (an item counts the containers around it, itself included). A deeper item is malformed CBOR: the record is `["malformed cbor"]` and the programs exit 1. A valid section 8 hike object nests 4 deep (top-level map, `stages` array, stage map, `checkpoints`/`leg_results` array), so no valid object is refused. The value is the same in the Rust, Go and Java SDKs; see [KNOWN-DIVERGENCES.md](../KNOWN-DIVERGENCES.md#implementation-resource-limits).
+
 ### Error names across the SDKs
 
 | Condition | Rust | Go | Java |
@@ -355,6 +357,7 @@ The programs exit 1 only when no top-level CBOR map decodes (`hike::top_level_ma
 | Reserved CBOR length code (28–30) | record `malformed cbor` | `float-or-simple` | `.issue` `"truncated"` |
 | Text that is not UTF-8 | record `malformed cbor` | `malformed cbor` | `.issue` `"truncated"` |
 | Top item not a map | record `malformed cbor` | `malformed cbor` | `.issue` `"not a map"` |
+| More than 64 nested arrays and maps (rc.3) | record `malformed cbor`; `yielded_public_key` is `Undecodable` | `nesting depth` | `.issue` `"nesting depth"` |
 
 ## Conformance vectors
 

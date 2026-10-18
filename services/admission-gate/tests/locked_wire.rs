@@ -937,3 +937,67 @@ async fn a_gate_serves_its_configured_origin_only() {
     assert_only_code(status, &body, &text, "malformed");
     assert!(!lab.door.consumed_nonce(&ours.nonce));
 }
+
+/// Kind, key and a third key `zzz` holding `depth` nested arrays.
+fn nested_object(secret: &[u8; 32], depth: usize) -> Vec<u8> {
+    let mut out = v2_object(secret);
+    out[0] = 0xa3;
+    out.extend(cbor_text("zzz"));
+    out.extend(std::iter::repeat(0x81).take(depth - 1));
+    out.push(0x80);
+    out
+}
+
+/// F1 regression: an ~8 KB object nesting 8 000 arrays reached the
+/// recursive CBOR decode at step 6 (`yielded_public_key`), before the
+/// signature check, and overflowed a 2 MiB stack (the tokio worker size),
+/// aborting the gate. With MAX_CBOR_NESTING it is one `bad_signature` and the
+/// gate keeps serving. In-process only; nothing here dials a deployed gate.
+#[test]
+fn an_8kb_nested_post_is_bad_signature_not_a_crash() {
+    let worker = std::thread::Builder::new()
+        .name("gate-2mib".to_owned())
+        .stack_size(2 * 1024 * 1024)
+        .spawn(|| {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("runtime")
+                .block_on(async {
+                    let lab = lab();
+                    let exp = NOW_2026_10_10 + 120;
+                    assert_eq!(hike::MAX_CBOR_NESTING, 64);
+                    for depth in [8_000usize, 100_000] {
+                        let mut deep = Signed::fresh(Vec::new(), exp);
+                        deep.object = nested_object(&deep.secret, depth);
+                        if depth == 8_000 {
+                            assert!((8_000..8_200).contains(&deep.object.len()), "{}", deep.object.len());
+                        }
+                        // Signed, and the hash matches: step 6 cannot read a key.
+                        let (status, body, text) = post_json(&lab, &deep.body()).await;
+                        assert_only_code(status, &body, &text, "bad_signature");
+                        assert!(!lab.door.consumed_nonce(&deep.nonce));
+                    }
+                    // At the limit the object decodes: the key is read, the
+                    // signature verifies, and the nonce is consumed.
+                    let mut edge = Signed::fresh(Vec::new(), exp);
+                    edge.object = nested_object(&edge.secret, hike::MAX_CBOR_NESTING - 1);
+                    let (status, body, _) = post_json(&lab, &edge.body()).await;
+                    assert_delivery(status, &body);
+                    assert!(lab.door.consumed_nonce(&edge.nonce));
+                    // One past the limit is undecodable before the signature.
+                    let mut over = Signed::fresh(Vec::new(), exp);
+                    over.object = nested_object(&over.secret, hike::MAX_CBOR_NESTING);
+                    let (status, body, text) = post_json(&lab, &over.body()).await;
+                    assert_only_code(status, &body, &text, "bad_signature");
+                    assert!(!lab.door.consumed_nonce(&over.nonce));
+                    // The gate still serves an ordinary sign-in afterwards.
+                    let mut ok = Signed::fresh(Vec::new(), exp);
+                    ok.object = v2_object(&ok.secret);
+                    let (status, body, _) = post_json(&lab, &ok.body()).await;
+                    assert_delivery(status, &body);
+                });
+        })
+        .expect("spawn");
+    worker.join().expect("the gate thread did not crash");
+}

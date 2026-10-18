@@ -22,6 +22,11 @@ Inputs, all from spec/conformance/v2.0 (the source of truth):
     not a map, absent beacons combined with bad headers, mixed edits,
     out-of-range integers, six-leg previous values of the wrong width, and
     top levels that are not a map or carry trailing bytes;
+  * nesting at and past the implementation limit MAX_CBOR_NESTING = 64
+    (sdk/KNOWN-DIVERGENCES.md): 64 deep decodes, 65 deep and about 100 000
+    deep are malformed CBOR, alone, under an extra key of the kat object
+    (the ~8 KB gate-door shape), inside a checkpoint element, as nested maps,
+    and truncated;
   * several audit seeds per object, so the drawn legs differ between runs.
 
 Usage (from the repository root):
@@ -104,6 +109,9 @@ def load_cases():
     cases.append(("cbor-text", b"\x60", kat_docs, None))
     # Structural break cases (hikecases.py).
     cases.extend(hikecases.cases(PACK))
+    # Nesting limit (F1): every SDK stops at MAX_CBOR_NESTING = 64.
+    for name, obj in nesting_cases(kat_obj):
+        cases.append((name, obj, kat_docs, None))
     names = [c[0] for c in cases]
     assert len(names) == len(set(names)), "duplicate case names"
     return cases
@@ -163,6 +171,47 @@ def field_cases(obj):
         ("field-li-equal", edit(li_equals_stage17)),
         ("field-order-hash", edit(order_and_hash)),
         ("field-s2-cpwidth", short_checkpoint(obj)),
+    ]
+
+
+MAX_CBOR_NESTING = 64
+
+
+def nesting_cases(obj):
+    """Arrays and maps nested to the limit and past it.
+
+    The kat object is a map of 11 keys (head 0xab). `extra_key(k)` adds a 12th
+    key `zzz` holding k nested arrays, so the deepest item sits inside k + 1
+    containers. `cp_elem(k)` replaces stage 4's first checkpoint with k nested
+    arrays around an empty byte string: 4 + k containers.
+    """
+    assert obj[0] == 0xAB
+
+    def arrays(k, leaf=b"\x01"):
+        return b"\x81" * k + leaf
+
+    def extra_key(k):
+        return b"\xac" + obj[1:] + b"\x63zzz" + arrays(k)
+
+    def cp_elem(k):
+        at = nth(obj, b"\x6bcheckpoints\x81\x58\x20", 4) + 13
+        return obj[:at] + arrays(k, b"\x40") + obj[at + 34:]
+
+    limit = MAX_CBOR_NESTING
+    return [
+        ("deep-arr-64", arrays(limit - 1, b"\x80")),
+        ("deep-arr-65", arrays(limit, b"\x80")),
+        ("deep-arr-100000", arrays(100_000)),
+        ("deep-key-64", extra_key(limit - 1)),
+        ("deep-key-65", extra_key(limit)),
+        ("deep-key-8000", extra_key(8_000)),
+        ("deep-key-100000", extra_key(100_000)),
+        ("deep-key-100000-cut", extra_key(100_000)[:60_000]),
+        ("deep-cp-elem-64", cp_elem(limit - 4)),
+        ("deep-cp-elem-65", cp_elem(limit - 3)),
+        ("deep-cp-elem-100000", cp_elem(100_000)),
+        ("deep-map-64", b"\xa1\x61a" * (limit - 1) + b"\xa0"),
+        ("deep-map-5000", b"\xa1\x61a" * 5000 + b"\x01"),
     ]
 
 

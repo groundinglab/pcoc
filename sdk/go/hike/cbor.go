@@ -13,7 +13,16 @@ import (
 // trailing byte. decodeHead reports that byte so a v2.0 record can still
 // measure the item.
 
+// MaxCBORNesting is an implementation resource limit: the most arrays and
+// maps one item may sit inside, counting itself. A section 8 hike object
+// nests at most 4 deep (top-level map, stages array, stage map,
+// checkpoints/leg_results array; their elements are byte strings). 64 is 16
+// times that and is the same value in the Rust, Go and Java SDKs. A deeper
+// item is malformed CBOR.
+const MaxCBORNesting = 64
+
 var (
+	errDepth      = errors.New("nesting depth")
 	errCbor       = errors.New("malformed cbor")
 	errIndefinite = errors.New("indefinite")
 	errFloat      = errors.New("float-or-simple")
@@ -159,6 +168,11 @@ func readHead(data []byte, i int) (major byte, arg *uint64, next int, err error)
 }
 
 func decodeOne(data []byte, i int) (cborVal, int, error) {
+	return decodeNested(data, i, 0)
+}
+
+// decodeNested reads one item. depth counts the arrays and maps around it.
+func decodeNested(data []byte, i int, depth int) (cborVal, int, error) {
 	major, arg, i, err := readHead(data, i)
 	if err != nil {
 		return cborVal{}, i, err
@@ -187,9 +201,12 @@ func decodeOne(data []byte, i int) (cborVal, int, error) {
 		}
 		return cborVal{kind: 3, s: string(raw)}, i + int(*arg), nil
 	case 4:
+		if depth >= MaxCBORNesting {
+			return cborVal{}, i, errDepth
+		}
 		arr := make([]cborVal, 0, *arg)
 		for n := uint64(0); n < *arg; n++ {
-			item, next, err := decodeOne(data, i)
+			item, next, err := decodeNested(data, i, depth+1)
 			if err != nil {
 				return cborVal{}, next, err
 			}
@@ -198,11 +215,14 @@ func decodeOne(data []byte, i int) (cborVal, int, error) {
 		}
 		return cborVal{kind: 4, arr: arr}, i, nil
 	case 5:
+		if depth >= MaxCBORNesting {
+			return cborVal{}, i, errDepth
+		}
 		keys := make([]string, 0, *arg)
 		vals := make([]cborVal, 0, *arg)
 		seen := map[string]struct{}{}
 		for n := uint64(0); n < *arg; n++ {
-			key, next, err := decodeOne(data, i)
+			key, next, err := decodeNested(data, i, depth+1)
 			if err != nil {
 				return cborVal{}, next, err
 			}
@@ -213,7 +233,7 @@ func decodeOne(data []byte, i int) (cborVal, int, error) {
 				return cborVal{}, next, errDuplicate
 			}
 			seen[key.s] = struct{}{}
-			val, next, err := decodeOne(data, next)
+			val, next, err := decodeNested(data, next, depth+1)
 			if err != nil {
 				return cborVal{}, next, err
 			}

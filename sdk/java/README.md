@@ -243,6 +243,7 @@ try {
 | `.issue` `"duplicate"` | same | A map key repeated |
 | `.issue` `"tag"` | same | A CBOR tag |
 | `.issue` `"float-or-simple"` | same | Major type 7 |
+| `.issue` `"nesting depth"` | same | More than `Cbor.MAX_CBOR_NESTING` (64) nested arrays and maps (rc.3) |
 | `.issue` `"not a map"` | `Cbor.mapKeys` | The top item is not a map |
 | `.issue` `"stage"` | `Cbor.stageKeys` | `stages` is missing, is not an array or has no such index, or that stage is not a map. Call `mapKeys` first: `stageKeys` assumes the top item is a map, and throws `NullPointerException` when it is not |
 | `Drive.Clock` | `Drive.run` | The public key is not 32 bytes; no tips were given; the tips ran out; or a tip's `natural` is not 32 bytes |
@@ -254,6 +255,8 @@ try {
 | `null` | `Index.readDocument` | A document that section 9 rejects |
 | `null` | `Bytes.unhex` | Odd-length or non-hex text |
 | `null` | `Profile.forVerify`, `forProduce` | An unknown profile name |
+
+**Nesting limit (rc.3, implementation resource limit).** The decoder accepts at most `Cbor.MAX_CBOR_NESTING` = 64 nested arrays and maps (an item counts the containers around it, itself included). A deeper item is malformed CBOR: the record is `["malformed cbor"]` and the programs exit 1. A valid section 8 hike object nests 4 deep (top-level map, `stages` array, stage map, `checkpoints`/`leg_results` array), so no valid object is refused. The value is the same in the Rust, Go and Java SDKs; see [KNOWN-DIVERGENCES.md](../KNOWN-DIVERGENCES.md#implementation-resource-limits).
 
 The `Profile` constructor checks (`SLOT_BYTES`, `TERRAIN_BYTES`, `profile`) guard the two built-in profiles, and cannot be reached from outside the package.
 

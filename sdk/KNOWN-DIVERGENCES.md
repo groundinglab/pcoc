@@ -18,6 +18,16 @@ Both rows are open spec questions (below), not known bugs: the SPEC text does no
 
 All three SDKs agree on every other case, at both levels.
 
+## Implementation resource limits
+
+These are not divergences between the SDKs: all three apply them identically, and the cross-check pins that they agree. They are listed here because the SPEC does not state them (a one-line SPEC proposal is pending; see `FIX-FORWARD-RC3.md` in the review bundle).
+
+| Limit | Value | Rust / Go / Java name | Effect | Derivation |
+|---|---|---|---|---|
+| CBOR nesting depth (rc.3, review findings F1/F3) | 64 | `hike::MAX_CBOR_NESTING` / `hike.MaxCBORNesting` / `Cbor.MAX_CBOR_NESTING` | An item inside more than 64 arrays and maps (counting itself) is malformed CBOR: `shape_item` `["malformed cbor"]`, the programs exit 1, `yielded_public_key` is `Undecodable`, Go `CBORIssue` and Java `.issue` are `nesting depth` | The deepest item a valid section 8 object can hold sits inside 4 containers: the top-level map, the `stages` array, a stage map, and a `checkpoints` or `leg_results` array (whose elements are byte strings; `path` is a byte string too, and no field is a nested map). The limit is max(4 × 4, 64) = 64, sixteen times the schema depth. |
+
+Before rc.3 the decoders recursed without a bound: Rust aborted on stack overflow (about 8 000 levels on a 2 MiB thread, the gate's sign-in door reaching it before the signature check), and Java threw `StackOverflowError` at about 2 700 levels. Cross-check cases: `deep-arr-64`, `deep-arr-65`, `deep-arr-100000`, `deep-key-64`, `deep-key-65`, `deep-key-8000`, `deep-key-100000`, `deep-key-100000-cut`, `deep-cp-elem-64`, `deep-cp-elem-65`, `deep-cp-elem-100000`, `deep-map-64`, `deep-map-5000`. Tests: Rust `cbor::tests`, `object::tests::yielded_public_key_bounds_nesting_on_a_two_mib_thread`; Go `hike/nesting_test.go`; Java `V2Pack.nestingIsBounded`; gate `tests/locked_wire.rs` `an_8kb_nested_post_is_bad_signature_not_a_crash`.
+
 ## Fixed for rc.2
 
 The rc.1 tags (c9b160ea) have every bug below. They are fixed on `sdk/phase-a` and in the rc.2 tags. Each row names the SPEC text that decides it; each is a cross-check case, and the SDK tests pin the facts (Rust `hike/tests/break_cases.rs`, Go `hike/rc2_break_test.go`, Java `V2Pack.rc2Break`).
