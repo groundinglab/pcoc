@@ -167,11 +167,19 @@ def cases(pack):
     add("mixed-1", lambda v: (st(v, 3).set("leg_count", "x"), st(v, 9).drop("beacon_height"), v.set("slot_bytes", "x"), st(v, 12).set("beacon", st(v, 11).get("beacon"))))
     add("mixed-2", lambda v: (v.drop("fill"), st(v, 2).drop("checkpoints"), cpw(7)(v), st(v, 10).drop("beacon")))
     add("height-2^53", lambda v: st(v, 17).set("beacon_height", 2**53))
-    # F5 / Q-a: the closing pair compares the decoded unsigned integer.
-    # 2^53 and 2^64−1 are above 2^53−1, so header height order is listed
-    # with height_range. 2^53 is greater than stage 17's height as an integer.
+    # F5 / Q-a: header height order compares the exact unsigned integer.
+    # A height above 2^53−1 is height_range and is written not defined, and
+    # it still takes part in the order. 2^53 and 2^64−1 are greater than
+    # stage 17's height, so those rows list height_range only.
     add("li-height-2^53", lambda v: v.set("last_interrupt_height", 2**53))
     add("li-height-2^64-1", lambda v: v.set("last_interrupt_height", 2**64 - 1))
+    # Stage 17 above 2^53−1 and still below last_interrupt_height: no order violation.
+    def s17_below_li(v):
+        st(v, 17).set("beacon_height", 2**53)
+        v.set("last_interrupt_height", 2**64 - 1)
+    add("s17-h-2^53-lt-li", s17_below_li)
+    # A stage height of 2^64−1 followed by the next stage's smaller height.
+    add("s16-h-2^64-1", lambda v: st(v, 16).set("beacon_height", 2**64 - 1))
     # Q-j: a non-height integer above 2^53−1. Java lists height_range.
     # Rust and Go do not. Pinned, not decided.
     add("legcount-2^53-s5", lambda v: st(v, 5).set("leg_count", 2**53))

@@ -766,22 +766,33 @@ public final class V2Pack {
         if (!"[\"stages length\",\"header height order\",\"header hash differ\"]".equals(longShape)) {
             throw new AssertionError("stages 19 " + longShape);
         }
-        // F5 / Q-a: last_interrupt_height of 2^53 and of 2^64−1 lists header
-        // height order with height_range. The integer compares exactly.
+        // F5 / Q-a: last_interrupt_height of 2^53 and of 2^64−1 is height_range
+        // only. The order comparison uses the exact integer.
         byte[] heightKey = cat(new byte[] {0x75}, "last_interrupt_height".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {0x19});
-        int heightAt = nth(obj, heightKey, 0) + heightKey.length;
         for (long n : new long[] {1L << 53, -1L}) {
-            byte[] head = new byte[] {0x1b};
-            byte[] be = new byte[8];
-            for (int i = 7; i >= 0; i--) {
-                be[i] = (byte) (n >>> ((7 - i) * 8));
-            }
-            byte[] edited = cat(Arrays.copyOfRange(obj, 0, heightAt - 1), head, be, Arrays.copyOfRange(obj, heightAt + 2, obj.length));
+            byte[] edited = putUint19(obj, heightKey, 0, n);
             Json.Obj rec = Json.asObj(Json.parse(Measure.record(edited, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)));
             String shape = Json.asArr(rec.fields().get("shape_item")).compact();
-            if (!"[\"header height order\",\"height_range\"]".equals(shape)) {
+            if (!"[\"height_range\"]".equals(shape)) {
                 throw new AssertionError("interrupt height " + Long.toUnsignedString(n) + " " + shape);
             }
+        }
+        // Stage 17 at 2^53 stays below last_interrupt_height 2^64−1.
+        byte[] bhKey = cat(new byte[] {0x6d}, "beacon_height".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {0x19});
+        byte[] below = putUint19(putUint19(obj, heightKey, 0, -1L), bhKey, 17, 1L << 53);
+        String belowShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(below, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!"[\"height_range\"]".equals(belowShape)) {
+            throw new AssertionError("stage 17 below last " + belowShape);
+        }
+        // Stage 16 at 2^64−1 is followed by a smaller height.
+        byte[] gap = putUint19(obj, bhKey, 16, -1L);
+        String gapShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(gap, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!"[\"header height order\",\"height_range\"]".equals(gapShape)) {
+            throw new AssertionError("stage 16 max " + gapShape);
         }
         // Q-j: a non-height integer above 2^53−1 lists height_range as well as
         // the condition that integer already fails. leg_count stays leg_count.
@@ -839,6 +850,16 @@ public final class V2Pack {
         byte[] out = new byte[32];
         Arrays.fill(out, b);
         return out;
+    }
+
+    /** Replace the k-th 2-byte unsigned whose head the needle ends on. */
+    private static byte[] putUint19(byte[] obj, byte[] needle, int k, long n) {
+        int at = nth(obj, needle, k) + needle.length;
+        byte[] be = new byte[8];
+        for (int i = 7; i >= 0; i--) {
+            be[i] = (byte) (n >>> ((7 - i) * 8));
+        }
+        return cat(Arrays.copyOfRange(obj, 0, at - 1), new byte[] {0x1b}, be, Arrays.copyOfRange(obj, at + 2, obj.length));
     }
 
     private static int nth(byte[] data, byte[] needle, int k) {

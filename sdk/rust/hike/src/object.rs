@@ -551,17 +551,17 @@ pub(crate) struct MeasuredObject {
     pub seed_absent: bool,
 }
 
-/// Header height order uses the decoded unsigned integer. A height above
-/// 2^53−1 is not a usable ordered height: the record writes it `not defined`
-/// (`height_range`) and the order is violated, the same as an absent height.
-/// A height inside the bound compares as `u64`. No float, no saturation,
-/// no clamp to 2^53−1.
+/// Header height order uses the decoded unsigned integer, including a value
+/// above 2^53−1. The record still writes that value as `not defined`
+/// (`height_range`). The comparison does not drop it, saturate it, or clamp
+/// it to 2^53−1. An absent height does not take part.
 fn height_in_order(height: Option<u64>) -> Option<u64> {
-    height.filter(|height| *height <= crate::consts::JSON_INT_MAX)
+    height
 }
 
 /// True when `height` is not strictly greater than `prev` for header height
-/// order. An absent height or one above 2^53−1 fails the order.
+/// order. An absent height fails the order. A height above 2^53−1 is compared
+/// by its exact value.
 fn height_order_bad(prev: Option<u64>, height: Option<u64>) -> bool {
     match (height_in_order(prev), height_in_order(height)) {
         (Some(prev), Some(height)) => height <= prev,
@@ -570,7 +570,7 @@ fn height_order_bad(prev: Option<u64>, height: Option<u64>) -> bool {
 }
 
 /// `last_interrupt`'s own condition compares the decoded integers exactly,
-/// including a value above 2^53−1. That value still fails header height order.
+/// including a value above 2^53−1. Header height order uses the same integers.
 fn interrupt_height_bad(stage_height: Option<u64>, height: u64) -> bool {
     stage_height.is_none_or(|stored| height <= stored)
 }
@@ -604,9 +604,8 @@ fn note_header_order(
             // `last_interrupt_height` and `last_interrupt` are also the
             // last stored header: an order or equality failure there is
             // `header height order` / `header hash differ` as well.
-            // `last_interrupt` compares the decoded integers exactly.
-            // Header height order also fails when either height is above
-            // 2^53−1, because that height is not a usable ordered height.
+            // `last_interrupt` and header height order both compare the
+            // decoded integers exactly, including a value above 2^53−1.
             let interrupt_bad = interrupt_height_bad(stage_height, height);
             let order_bad = height_order_bad(stage_height, Some(height));
             let hash_bad = closing.beacon || hash == stages[17].beacon;
@@ -912,8 +911,8 @@ fn read_measured_map(value: &Cbor, trailing: bool, sizes: Sizes) -> Result<Measu
         // Every pair is checked. One violated condition does not hide
         // another (section 14.1); `shape_item` lists each string once.
         // The compared height is the decoded unsigned integer, including a
-        // value above 2^53−1. That value is also `height_range`; it is not
-        // dropped from this order.
+        // value above 2^53−1. That value is also `height_range`. It takes
+        // part in this order by its exact value.
         note_header_order(&stages, &stage_absent, last_interrupt, last_interrupt_height, &mut note);
     } else {
         // A condition that tests a field's value is violated when that field is absent.

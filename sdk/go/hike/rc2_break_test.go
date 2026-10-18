@@ -328,32 +328,57 @@ func TestQJNonHeightIntegerIsNotHeightRange(t *testing.T) {
 	}
 }
 
-// F5 / Q-a: last_interrupt_height of 2^53 and of 2^64−1 lists header height
-// order with height_range. The integer compares exactly, so last_interrupt
-// is not listed: 2^53 is greater than stage 17's height.
-func TestF5OutOfRangeInterruptHeightFailsHeaderOrder(t *testing.T) {
+// putUint19 replaces the k-th 2-byte unsigned (head 0x19 plus two bytes) that
+// the needle ends on with an 8-byte unsigned of n.
+func putUint19(t *testing.T, obj, needle []byte, k int, n uint64) []byte {
+	t.Helper()
+	pos := nthIndex(t, obj, needle, k) + len(needle)
+	var be [8]byte
+	binary.BigEndian.PutUint64(be[:], n)
+	edited := append(append([]byte{}, obj[:pos-1]...), 0x1b)
+	edited = append(edited, be[:]...)
+	return append(edited, obj[pos+2:]...)
+}
+
+func shapeIs(t *testing.T, rec map[string]any, want []any) {
+	t.Helper()
+	got := at(rec, "shape_item")
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("shape %v", got)
+	}
+}
+
+// F5 / Q-a: last_interrupt_height of 2^53 and of 2^64−1 is height_range only.
+// Header height order compares the exact integer, and both values are greater
+// than stage 17's height, so header height order is not listed.
+func TestF5OutOfRangeInterruptHeightKeepsExactOrder(t *testing.T) {
 	obj, index := loadKat(t)
 	needle := []byte("\x75last_interrupt_height\x19")
-	pos := nthIndex(t, obj, needle, 0) + len(needle)
 	for _, n := range []uint64{1 << 53, ^uint64(0)} {
-		head := []byte{0x1b}
-		var be [8]byte
-		binary.BigEndian.PutUint64(be[:], n)
-		edited := append(append(append([]byte{}, obj[:pos-1]...), head...), be[:]...)
-		edited = append(edited, obj[pos+2:]...)
-		rec, decoded := katRecord(t, edited, index)
+		rec, decoded := katRecord(t, putUint19(t, obj, needle, 0, n), index)
 		if !decoded {
 			t.Fatal("decoded")
 		}
-		got := at(rec, "shape_item")
-		want := []any{"header height order", "height_range"}
-		if fmt.Sprint(got) != fmt.Sprint(want) {
-			t.Fatalf("height %d shape %v", n, got)
-		}
+		shapeIs(t, rec, []any{"height_range"})
 		if at(rec, "headers", 18, "stored_height") != "not defined" {
 			t.Fatalf("height %d stored %v", n, at(rec, "headers", 18, "stored_height"))
 		}
 	}
+	// Stage 17 at 2^53 is still below last_interrupt_height 2^64−1.
+	both := putUint19(t, obj, needle, 0, ^uint64(0))
+	both = putUint19(t, both, []byte("\x6dbeacon_height\x19"), 17, 1<<53)
+	rec, decoded := katRecord(t, both, index)
+	if !decoded {
+		t.Fatal("decoded")
+	}
+	shapeIs(t, rec, []any{"height_range"})
+	// Stage 16 at 2^64−1 is followed by stage 17's smaller height.
+	gap := putUint19(t, obj, []byte("\x6dbeacon_height\x19"), 16, ^uint64(0))
+	rec, decoded = katRecord(t, gap, index)
+	if !decoded {
+		t.Fatal("decoded")
+	}
+	shapeIs(t, rec, []any{"header height order", "height_range"})
 }
 
 // F4: seed 11*32 draws stage 5 leg 0. A waypoint that is not 32 bytes makes

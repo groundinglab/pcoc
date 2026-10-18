@@ -473,23 +473,39 @@ fn a_non_height_integer_above_the_json_bound_is_not_height_range() {
     assert_eq!(items(&record(&enc(&slots))), ["constant"]);
 }
 
-/// F5 / Q-a: last_interrupt_height above 2^53−1 is height_range and, because
-/// that height is not a usable ordered height, header height order. The
-/// integer itself compares exactly: 2^53 is greater than stage 17's height,
-/// so last_interrupt is not listed.
+/// F5 / Q-a: last_interrupt_height above 2^53−1 is `height_range` and is
+/// written `not defined`. Header height order compares the exact integer, so
+/// 2^53 and 2^64−1, both greater than stage 17's height, do not list
+/// `header height order`. `last_interrupt` is not listed either.
 #[test]
-fn an_out_of_range_interrupt_height_fails_header_order() {
+fn an_out_of_range_interrupt_height_keeps_exact_order() {
     for n in [1u64 << 53, u64::MAX] {
         let mut v = object();
         v.set("last_interrupt_height", V::U(n));
         let rec = record(&enc(&v));
-        assert_eq!(
-            items(&rec),
-            ["header height order", "height_range"],
-            "height {n}"
-        );
+        assert_eq!(items(&rec), ["height_range"], "height {n}");
         assert_eq!(rec["headers"][18]["stored_height"], "not defined");
     }
+}
+
+/// F5: every header pair uses the exact integer. Stage 17 at 2^53 is still
+/// below last_interrupt_height 2^64−1, so the order holds. Stage 16 at
+/// 2^64−1 is not below the next height, so the order fails.
+#[test]
+fn header_pairs_order_over_range_heights_by_exact_value() {
+    let mut below = object();
+    below.stage(17).set("beacon_height", V::U(1 << 53));
+    below.set("last_interrupt_height", V::U(u64::MAX));
+    let rec = record(&enc(&below));
+    assert_eq!(items(&rec), ["height_range"]);
+    assert_eq!(rec["headers"][17]["stored_height"], "not defined");
+    assert_eq!(rec["headers"][18]["stored_height"], "not defined");
+
+    let mut gap = object();
+    gap.stage(16).set("beacon_height", V::U(u64::MAX));
+    let rec = record(&enc(&gap));
+    assert_eq!(items(&rec), ["header height order", "height_range"]);
+    assert_eq!(rec["headers"][16]["stored_height"], "not defined");
 }
 
 /// F2: a declared byte, text, array or map length past the bytes left is

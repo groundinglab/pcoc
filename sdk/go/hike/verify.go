@@ -1341,7 +1341,7 @@ func shapeItems(item cborVal, profile Profile) []string {
 		if st, ok := stageAt(stages, 17); ok {
 			beacon, okB := bytesField(st, "beacon")
 			// Exact unsigned integers, including a value above 2^53−1.
-			// Header height order is separate and fails for that value.
+			// Header height order uses the same integers.
 			bh, okBH, _ := uintField(st, "beacon_height")
 			if okB && len(beacon) == 32 && okBH && !bytes.Equal(last, beacon) && lastH > bh {
 				lastBad = false
@@ -1357,16 +1357,16 @@ func shapeItems(item cborVal, profile Profile) []string {
 	for g := 0; g < Stages; g++ {
 		if st, ok := stageAt(stages, g); ok {
 			d, okD := bytesField(st, "beacon")
-			h, okH, over := uintField(st, "beacon_height")
-			// A height above 2^53−1 is not a usable ordered height. The
-			// comparison below uses the decoded integer with no clamp.
-			headers[g] = pair{d: d, h: h, okD: okD && len(d) == 32, okH: okH && !over}
+			h, okH, _ := uintField(st, "beacon_height")
+			// A height above 2^53−1 still takes part, by its exact value.
+			// The record writes it `not defined` (`height_range`).
+			headers[g] = pair{d: d, h: h, okD: okD && len(d) == 32, okH: okH}
 		}
 	}
 	{
 		d, okD := bytesOf(item, "last_interrupt")
-		h, okH, over := uintField(item, "last_interrupt_height")
-		headers[Stages] = pair{d: d, h: h, okD: okD && len(d) == 32, okH: okH && !over}
+		h, okH, _ := uintField(item, "last_interrupt_height")
+		headers[Stages] = pair{d: d, h: h, okD: okD && len(d) == 32, okH: okH}
 	}
 	heightBad := false
 	hashBad := false
