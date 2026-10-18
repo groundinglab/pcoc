@@ -1,41 +1,68 @@
 # PCOC SDKs
 
-Rust, Go and Java SDKs for Satoshi Hike v2.0, the PCOC specification. Each SDK can verify a PCOC (it writes the section 14 measurement record) and produce one. All three are tested against the same conformance vectors, and each is cross-checked against the other two. The admission gate and the desktop app in this repository build on the Rust SDK.
+A **PCOC** is a self-issued identifier. Its cost is a resource commitment, not a payment: the maker holds a large terrain in memory and computes legs of work over it, back to back, while Bitcoin supplies the clock. Each new Bitcoin header ends one stage, and the hike runs for 18 stages. Anyone can check the result (the hike object) against public Bitcoin data. Satoshi Hike v2.0 is the specification.
+
+This directory has three SDKs for it, in Rust, Go and Java. Each one can verify a hike object, which means writing the section 14 measurement record, and produce one. All three are tested against the same conformance vectors and cross-checked against each other. The admission gate and the desktop app in this repository build on the Rust SDK.
 
 The [specification](../spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md) and its [conformance vectors](../spec/conformance/v2.0/) are the source of truth. Where an SDK disagrees with them, the specification wins and the SDK has a bug.
+
+## Layers
+
+1. **Specification and conformance vectors** ([spec/](../spec/)): the law, and the bytes every implementation must reproduce.
+2. **SDKs** (this directory): libraries and command-line programs that implement the specification.
+3. **Services**: the [admission gate](../services/admission-gate/), which applies a policy to verify records, and the [index](../services/index/), which serves the public Bitcoin data a verifier reads.
+4. **Apps**: the [desktop app](../apps/desktop/), and the Android app (in its own repository, through the Rust core).
 
 ## Which one
 
 | You are writing | Use | Read |
 |---|---|---|
-| A Rust service or app, or an Android app through the Rust core (JNI) | Rust: crate `hike` (plus `nip06` for demo keys, `hike-net` for direct node reads) | [rust/README.md](rust/README.md) |
+| A Rust service or app, or an Android app through the Rust core (JNI) | Rust: crate `hike` (plus `nip06` for demo keys and `hike-net` for direct node reads) | [rust/README.md](rust/README.md) |
 | A Go service or tool | Go: module `github.com/groundinglab/pcoc/sdk/go/v2`, package `hike` | [go/README.md](go/README.md) |
-| A JVM service or tool | Java: packages `pcoc.hike` and `pcoc.json` (JDK 21, no build tool required) | [java/README.md](java/README.md) |
+| A JVM service or tool | Java: packages `pcoc.hike` and `pcoc.json` (JDK 21; no build tool needed) | [java/README.md](java/README.md) |
 
-The three SDKs give byte-identical records. [examples/](examples/) has the same quickstart in each language, and all three print the same record digest.
+All three write byte-identical records. [examples/](examples/) has the same programs in each language: a quickstart that reproduces a conformance vector, an offline produce run, and a live verify against the public index. `sdk/test.sh` runs or compiles every one of them.
+
+Only Rust has the section 15 helpers (`admit`, `failure_facts`) and direct node reads.
 
 ## Version and pinning
 
 | | Value |
 |---|---|
-| SDK version | `2.0.0-rc.1` ([VERSION](VERSION)) |
-| Repository tag | `sdk-v2.0.0-rc.1` (Rust and Java pin this) |
-| Go module tag | `sdk/go/v2.0.0-rc.1` (the module path requires the `sdk/go/` prefix) |
-| Specification | `spec-v2.0.5`, with the vector hash in [SPEC_PIN](SPEC_PIN) |
+| SDK version | `2.0.0-rc.1`, in [VERSION](VERSION) |
+| Repository tag | `sdk-v2.0.0-rc.1`. Rust and Java pin this one. |
+| Go module tag | `sdk/go/v2.0.0-rc.1`. The module path requires the `sdk/go/` prefix. |
+| Specification | The tag and vector hash in [SPEC_PIN](SPEC_PIN). `sdk/test.sh` checks both. |
 
-Pin a tag, never `main`. Inside this repository, the gate and the desktop app pin the SDK by path (`sdk/rust/hike`) and report the version they were built with: the gate in `/v1/health` (`sdk`) and in `admission-service --version`, the desktop app on its About page.
+Both tags point at the same commit. Pin a tag, never `main`.
 
-> The `rc.1` tags have been prepared but not yet published. Until they are on the remote, depend on a checkout by path, as `examples/` does.
+Inside this repository, the gate and the desktop app pin the SDK by path (`sdk/rust/hike`), and each reports the version it was built with:
+- the gate: in `/v1/health` (`sdk`) and in `admission-service --version`;
+- the desktop app: on its About page.
 
-Earlier tags of these trees (`ref-rust-v2.0.1` … `ref-rust-v2.0.6`, `ref-java-v2.0.1` … `ref-java-v2.0.2`, and the Go module tags under the old module path) are kept as history. Nothing new is tagged under them.
+> The `rc.1` tags are prepared but not yet published. Until they are on the remote, depend on a checkout by path, as `examples/` does. `git rev-parse sdk-v2.0.0-rc.1^{commit}` in a clone that has the tag shows the commit it names.
+
+Earlier tags of these trees are kept as history: `ref-rust-v2.0.1` … `ref-rust-v2.0.6`, `ref-java-v2.0.1` … `ref-java-v2.0.2`, and the Go module tags under the old module path. Nothing new is tagged under them.
 
 ## Conformance vectors: the source of truth
 
-`spec/conformance/v2.0/` holds the vectors: hike objects together with their recorded index replies and the exact section 14 record bytes they must produce (`test-3leg`, `kat-small`, `anchor-window`, `anchor-w16-i17`, `bind-threads`, `earlier-run-b`), known answers at the small `conformance-small` sizes (terrain, one leg, a checkpoint, bookends, the six-leg check), one checkpoint preimage, the P9.14 produce vector (`stage0-start.json`), the section 6 constants, and the section 15.1 sign-in wire vectors. The table in [its README](../spec/conformance/v2.0/README.md) describes each file. A Part A implementation conforms when it reproduces every vector byte for byte.
+`spec/conformance/v2.0/` holds the vectors. [Its README](../spec/conformance/v2.0/README.md) describes each file. They include:
+- hike objects, each with its recorded index replies and the exact section 14 record bytes it must produce: `test-3leg`, `kat-small`, `anchor-window`, `anchor-w16-i17`, `bind-threads`, `earlier-run-b`;
+- known answers at the small `conformance-small` sizes;
+- one checkpoint preimage;
+- the P9.14 produce tip script (`stage0-start.json`);
+- the section 6 constants;
+- the section 15.1 sign-in wire vectors.
 
-- [SPEC_PIN](SPEC_PIN) names the spec tag, plus a SHA-256 over every file under `spec/conformance/` except `tools/`. [tools/check_spec_pin.py](tools/check_spec_pin.py) recomputes it. A changed vector without a changed pin fails.
-- Rust is the only program that writes the vectors (`PCOC_REGEN_V2=1`, in a spec change only). Go and Java compare against the bytes Rust wrote. All three read the pack from `spec/conformance/v2.0/`. No SDK carries a hand copy.
-- The SDKs never edit the vectors. A vector change is a spec change: it comes with a new spec tag and a new `SPEC_PIN`.
+A Part A implementation conforms when it reproduces every vector byte for byte. Two fields in `kat-small.json` are easy to confuse:
+- `sha256` is the SHA-256 of the **object** bytes;
+- `record` is the record string itself.
+
+`draw_bytes_hex` is the six-leg draw stream that `record` was made with. It is the pinned stream SHA-256(seed ‖ le64(0)) ‖ SHA-256(seed ‖ le64(1)) ‖ …, with the seed being 32 bytes of `0x5a`.
+
+- **The pin.** [SPEC_PIN](SPEC_PIN) names the spec tag, plus a SHA-256 over every file under `spec/conformance/` except `tools/`. [tools/check_spec_pin.py](tools/check_spec_pin.py) recomputes that hash in the working tree and in the tag's tree. A changed vector without a new pin fails.
+- **Who writes the vectors.** The Rust hike pack generator in `sdk/rust/hike` writes the files listed in `manifest.json` (`PCOC_REGEN_V2=1`, only in a spec change). `sign-in-origins.json` is written by the admission gate's tests (`PCOC_REGEN_SIGNIN_ORIGINS=1`). `sign-in.json` and `stage0-start.json` are not generator output. Go and Java only read the vectors.
+- **No copies.** Each SDK reads the pack from `spec/conformance/v2.0/` in place; none keeps its own copy. A vector change is a spec change: it comes with a new spec tag and a new `SPEC_PIN`.
 
 ## One harness
 
@@ -43,34 +70,67 @@ Earlier tags of these trees (`ref-rust-v2.0.1` … `ref-rust-v2.0.6`, `ref-java-
 bash sdk/test.sh
 ```
 
-This runs, in order, and exits non-zero if any step fails:
+It runs every step, then exits non-zero if any step failed:
 
-1. the pins: `SPEC_PIN` against `spec/conformance/`, and every Rust crate version against `VERSION`;
-2. Rust: `cargo test --locked --release` (unit tests, the conformance pack, malformed-input tests);
-3. Go: `go vet ./...` and `go test ./...` (unit tests and the conformance pack);
-4. Java: `java/v2.sh` (the conformance pack and the section 6 pins);
-5. the cross-check: the Rust, Go and Java verify programs run on the pack objects and 25 mutants, and must write byte-identical records ([tools/crosscheck.py](tools/crosscheck.py));
-6. the README quickstarts in `examples/`, which must print the same digest in all three languages.
+1. **pins:** `SPEC_PIN` against `spec/conformance/` and against its tag's tree, and every Rust crate version against `VERSION`;
+2. **Rust:** `cargo test --locked --release`, covering unit tests, the conformance pack and malformed-input tests;
+3. **Go:** `go vet ./...` and `go test ./...`, covering unit tests and the conformance pack;
+4. **Java:** `java/v2.sh`, covering the conformance pack and the section 6 pins;
+5. **cross-check:** the Rust, Go and Java verify programs run on the pack objects, deterministic mutants of `kat-small` and one-byte non-map CBOR items, and must write byte-identical records and exit codes ([tools/crosscheck.py](tools/crosscheck.py));
+6. **examples:** every example compiles. The quickstarts must reproduce the `kat-small` record byte for byte, and the produce examples must write the same object in all three languages;
+7. **docs:** every version, tag, spec tag, digest, output block and code snippet in these READMEs must match `VERSION`, `SPEC_PIN`, the example output and the example sources ([tools/check_docs.py](tools/check_docs.py)).
 
-It needs `python3`, Rust (rustup picks up `rust/rust-toolchain.toml`), Go 1.22 or newer, and JDK 21 or newer. A missing tool is a failure, not a skip. CI runs it as the `sdk` job on the self-hosted runners.
+It needs `python3`, Rust (rustup picks up `rust/rust-toolchain.toml`), Go 1.22 or newer, JDK 21 or newer, and a git clone that has the spec tag. A missing tool is a failure, not a skip. Cargo writes build output to `sdk/rust/target/` and `sdk/examples/rust/target/` (both git-ignored), or to `$CARGO_TARGET_DIR` when that is set. CI runs the harness as the `sdk` job on the self-hosted runners.
 
-On malformed objects, five cases are known where Rust disagrees with Go and Java. They are listed in [KNOWN-DIVERGENCES.md](KNOWN-DIVERGENCES.md) and pinned by the harness, and they wait on a spec reading.
+The end of a passing run looks like this:
+
+```text
+sdk/test.sh summary
+  PASS  pins: spec vectors + sdk version (0s)
+  PASS  rust: unit + conformance (57s)
+  ...
+sdk/test.sh: PASS
+```
+
+On some malformed inputs, Rust disagrees with Go and Java. These cases are listed, with their impact and the open spec questions, in [KNOWN-DIVERGENCES.md](KNOWN-DIVERGENCES.md). The harness pins each one by name and by its output digests.
+
+## The verify programs
+
+`satoshi-hike-verify` takes the same flags in all three SDKs:
+- `--input PATH`, `--index-url URL` and `--profile production|conformance-small|test|live`;
+- `--audit-seed HEX`, which pins the six-leg draw;
+- `--report PATH`, which also writes a JSON report;
+- `--log quiet|verbose`: with `verbose`, the record is also written to stderr;
+- `--chain-rpc URL`, live profile only.
+
+Verify writes the record to stdout. It exits 0 when it writes a record, 1 when the object cannot be read or does not decode, and 2 on a usage error. A well-formed CBOR item that is not a map differs by SDK; see [KNOWN-DIVERGENCES.md](KNOWN-DIVERGENCES.md).
+
+The produce flags differ by SDK. See each program's `--help`.
+
+## What producing costs
+
+- **Wall time.** A production hike waits for **18 new Bitcoin headers** after its seed header: the interrupts `I_0` … `I_17`, one per stage. A stage ends at the first new header read after one of its checkpoints (section 13.2). Wall time is therefore about 18 × the mean interval between new headers, which is about 3 hours at Bitcoin's 10-minute target. Add the path asks due at the cut-off header, each after a wait of 15 to 45 seconds (section 13.1).
+- **Memory and compute.** For that whole time the producer holds `TERRAIN_BYTES`, which is 256 MiB at production sizes, and computes legs of 2,000,000 steps back to back.
+- **Hashcash.** Each waypoint post to the plant service carries a Hashcash proof. The plant service sets its difficulty.
+
+The offline produce examples use a scripted tip sequence at `conformance-small` sizes, so they finish in under a second.
+
+## What verify does and does not do
+
+Verify writes the section 14 measurement record. It does not judge. Judgment is policy (section 15): a gate applies a policy to the record.
+- **The SDKs' policy code.** The only policy code in the SDKs is Rust's `hike::admit` and `hike::failure_facts`. They apply the section 15 invariant refusals: shape, checkpoint mismatch, seed value, plant mismatch, successor, and the six legs. They apply **no threshold**.
+- **Thresholds.** Values such as the leg-rate floor or the anchored-path minimum belong to the relying party's policy. groundinglab's argued default is [services/admission-gate/POLICY.md](../services/admission-gate/POLICY.md). It is a recommendation, not part of the specification.
+- **The test-plane policy.** `hike-net`'s `judge_test_policy` is for the test plane only.
 
 ## Layout
 
 | Path | What |
 |---|---|
-| [rust/](rust/) | Cargo workspace: `hike` (verify, produce, admission helpers), `hike-net` (direct Bitcoin node reads, test-plane policy), `nip06` (DEMO keys), `satoshi-hike-produce` and `satoshi-hike-verify` (programs) |
+| [rust/](rust/) | Cargo workspace: `hike`, `hike-net`, `nip06`, and the programs `satoshi-hike-produce` and `satoshi-hike-verify` |
 | [go/](go/) | Go module: package `hike`, programs under `cmd/`, the conformance test under `conformance/` |
 | [java/](java/) | Java sources (`pcoc.hike`, `pcoc.json`, `pcoc.cli`, `pcoc.conformance`) and `v2.sh` |
-| [examples/](examples/) | The quickstart in each language (run by `test.sh`) |
-| [tools/](tools/) | `check_spec_pin.py`, `check_versions.py`, `crosscheck.py` |
-| [VERSION](VERSION), [SPEC_PIN](SPEC_PIN) | SDK version, and the spec tag plus vector hash |
+| [examples/](examples/) | Quickstart, produce and live examples in each language, all built by `test.sh` |
+| [tools/](tools/) | `check_spec_pin.py`, `check_versions.py`, `check_docs.py`, `crosscheck.py` |
+| [VERSION](VERSION), [SPEC_PIN](SPEC_PIN) | SDK version; spec tag and vector hash |
 
-## What verify does and does not do
-
-Verify writes the section 14 measurement record. It does not judge. Judgment is policy (specification section 15): an admission gate applies a policy to the record. The only policy code in the SDKs is `hike::admit` and the test-plane policy in `hike-net`. A leg is `2_000_000` steps and ends in a leg result. Produce records 18 stages, paced by Bitcoin block headers.
-
-## Steer
-
-↑ [root README](../README.md) · law ↑ [spec/](../spec/) · consumers → [services/admission-gate](../services/admission-gate/), [apps/desktop](../apps/desktop/)
+↑ [root README](../README.md)

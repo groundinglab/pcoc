@@ -2,8 +2,9 @@
 # One harness for every SDK. Run from anywhere:  bash sdk/test.sh
 #
 # Steps (all run; the script exits non-zero if any step fails):
-#   1. pins          sdk/SPEC_PIN matches spec/conformance/ (vector hash), and
-#                    every Rust crate version equals sdk/VERSION
+#   1. pins          sdk/SPEC_PIN matches spec/conformance/ and its tag's tree
+#                    (vector hash), and every Rust crate version equals
+#                    sdk/VERSION
 #   2. rust          cargo test --locked --release in sdk/rust (unit tests,
 #                    conformance pack, malformed-input tests, nip06)
 #   3. go            go vet ./... and go test ./... in sdk/go (unit tests and
@@ -14,10 +15,15 @@
 #   6. examples      every example compiles; the quickstarts reproduce the
 #                    kat-small record byte for byte and the offline produce
 #                    examples write the same object, in all three languages
+#   7. docs          README versions, tags, spec tag, digests and code
+#                    snippets match sdk/VERSION, sdk/SPEC_PIN, the example
+#                    output and the example sources (sdk/tools/check_docs.py)
 #
 # Needs: python3, Rust (rustup reads sdk/rust/rust-toolchain.toml), Go >= 1.22,
-# JDK >= 21. A missing tool is a failure, not a skip. No network is used
-# except by cargo to fetch locked crates on a cold cache.
+# JDK >= 21, and a git clone that has the spec tag. A missing tool is a
+# failure, not a skip. No network is used except by cargo to fetch locked
+# crates on a cold cache. Cargo writes sdk/rust/target/ and
+# sdk/examples/rust/target/ (git-ignored), or $CARGO_TARGET_DIR when set.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 root="$(pwd)"
@@ -103,12 +109,19 @@ examples() {
   return $ok
 }
 
+docs() {
+  need python3 || return 1
+  [ -s "$work/quickstart-rust.txt" ] && [ -s "$work/produce-rust.txt" ] || { echo "  needs the examples step output"; return 1; }
+  python3 sdk/tools/check_docs.py --quickstart "$work/quickstart-rust.txt" --produce "$work/produce-rust.txt"
+}
+
 step "pins: spec vectors + sdk version" spec_pin
 step "rust: unit + conformance" rust
 step "go: vet + unit + conformance" go_sdk
 step "java: conformance" java_sdk
 step "cross-check: rust/go/java verify" crosscheck
 step "examples: quickstart + produce agree, vector reproduced" examples
+step "docs: versions, spec tag, digests, snippets" docs
 
 echo
 echo "sdk/test.sh summary"

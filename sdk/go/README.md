@@ -1,8 +1,8 @@
 # Go SDK
 
-The Go SDK for Satoshi Hike v2.0, the PCOC specification. Module `github.com/groundinglab/pcoc/sdk/go/v2`, package `hike`. It verifies a hike object and writes the section 14 measurement record, byte-identical to the Rust and Java SDKs. It also has a deterministic producer for an already-read tip sequence (`Drive`), and the two programs `satoshi-hike-verify` and `satoshi-hike-produce`.
+The Go SDK for Satoshi Hike v2.0, the PCOC specification: module `github.com/groundinglab/pcoc/sdk/go/v2`, package `hike`. It verifies a hike object and writes the section 14 measurement record, byte-identical to the Rust and Java SDKs. It also has a deterministic producer for an already-read tip sequence (`Drive`), and the programs `satoshi-hike-verify` and `satoshi-hike-produce`.
 
-It uses only the Go standard library. Go 1.22 or newer.
+It uses only the Go standard library, and needs Go 1.22 or newer.
 
 ## Install / pin
 
@@ -10,9 +10,9 @@ It uses only the Go standard library. Go 1.22 or newer.
 go get github.com/groundinglab/pcoc/sdk/go/v2@v2.0.0-rc.1
 ```
 
-The module lives under `sdk/go/`, so its tag is `sdk/go/v2.0.0-rc.1`. This is the same commit as the repository tag `sdk-v2.0.0-rc.1`.
+The module lives under `sdk/go/`, so its tag is `sdk/go/v2.0.0-rc.1`. That is the same commit as the repository tag `sdk-v2.0.0-rc.1`.
 
-> The tag has been prepared but not yet published. Until it is, use a checkout of this repository:
+> The tag is prepared but not yet published. Until it is, use a checkout of this repository. The `replace` path is relative to your `go.mod` and points at `<clone>/sdk/go`:
 >
 > ```
 > require github.com/groundinglab/pcoc/sdk/go/v2 v2.0.0-rc.1
@@ -23,32 +23,104 @@ The module lives under `sdk/go/`, so its tag is `sdk/go/v2.0.0-rc.1`. This is th
 import "github.com/groundinglab/pcoc/sdk/go/v2/hike"
 ```
 
-## Quickstart (run)
+## Quickstart (run by `sdk/test.sh`)
 
-[`sdk/examples/go`](../examples/go/) verifies the `kat-small` conformance object against its recorded index replies. `sdk/test.sh` runs it on every change.
+[`sdk/examples/go`](../examples/go/) verifies the `kat-small` conformance object against the index replies recorded in the vector, and reproduces the vector's stored record byte for byte:
+
+<!-- from: sdk/examples/go/main.go -->
+```go
+// Verify the kat-small conformance object and reproduce the vector's stored
+// section 14 record byte for byte.
+package main
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/groundinglab/pcoc/sdk/go/v2/hike"
+)
+
+func main() {
+	pack := os.Args[1] // spec/conformance/v2.0
+	raw, err := os.ReadFile(filepath.Join(pack, "kat-small.json"))
+	if err != nil {
+		panic(err)
+	}
+	var kat struct {
+		ObjectHex    string `json:"object_hex"`
+		DrawBytesHex string `json:"draw_bytes_hex"`
+		Record       string `json:"record"`
+		Documents    []struct {
+			Height uint64 `json:"height"`
+			Body   string `json:"body"`
+		} `json:"documents"`
+	}
+	if err := json.Unmarshal(raw, &kat); err != nil {
+		panic(err)
+	}
+	object, _ := hex.DecodeString(kat.ObjectHex)
+
+	// The index: height -> section 9 document body. A real verifier sets
+	// Index.Fetch to GET <index>/index/<height>; here the vector carries the replies.
+	index := hike.Index{Documents: map[uint64]string{}}
+	for _, d := range kat.Documents {
+		index.Documents[d.Height] = d.Body
+	}
+
+	// The six-leg draw bytes. kat-small's draw_bytes_hex is AuditStream(seed, 256)
+	// for this seed. Production passes 4096 bytes from crypto/rand.
+	stream, _ := hex.DecodeString(kat.DrawBytesHex)
+	seed := bytes.Repeat([]byte{0x5A}, 32)
+	fmt.Println("draw = draw_bytes_hex:", bytes.Equal(hike.AuditStream(seed, len(stream)), stream))
+
+	record, decoded := hike.Verify(object, hike.ConformanceSmallV2, index, stream, false) // hike.Production for real objects
+	if !decoded {
+		fmt.Println("undecodable")
+		os.Exit(1)
+	}
+	body := record.Marshal() // compact JSON in section 14 key order plus one newline
+	fmt.Println("shape:", record.Shape)
+	fmt.Println("matches kat-small.json record:", string(body) == kat.Record)
+	fmt.Printf("record bytes sha256: %x\n", sha256.Sum256(body))
+	jcs, err := hike.VerifyRecordSHA256(string(body))
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("verify_record_sha256: %x\n", jcs)
+}
+```
 
 ```sh
 cd sdk/examples/go
 go run . ../../../spec/conformance/v2.0
 ```
 
+<!-- output: quickstart -->
 ```text
+draw = draw_bytes_hex: true
 shape: match
-record sha256: 79561726b24aad6a9fcdfb6ae09f0eb0b54934a57bb08dab4bd11e4113d64241
+matches kat-small.json record: true
+record bytes sha256: f539d89340a4e7885638412a0e1fbdf85212498c87ac5bb237a645ddc987ffac
+verify_record_sha256: 084e60600907af444632fc2bb09bf8846d78384f4f23eb2a06f6f50491161c29
 ```
 
-The digest is the SHA-256 of the record bytes. The Rust and Java quickstarts print the same digest. The core of it:
+What the output lines mean:
+- **The draw.** Passing the vector's `draw_bytes_hex` as `stream` is what reproduces the stored `record`. Those bytes are `AuditStream(seed, 256)` with `seed` = 32 bytes of `0x5a`. Any other stream draws other legs and writes another record.
+- **`record bytes sha256`** is the SHA-256 of the record bytes, including the trailing newline.
+- **`verify_record_sha256`** (`VerifyRecordSHA256`) is a different hash: SHA-256 over the RFC 8785 (JCS) form, excluding the newline. Use it as the record identifier. Neither is the vector's `sha256` field, which is the hash of the object bytes.
 
-```go
-index := hike.Index{Documents: map[uint64]string{ /* height: section 9 document body */ }}
-stream := hike.AuditStream(seed, 4096) // pinned draw; production uses crypto/rand
-record, decoded := hike.Verify(object, hike.ConformanceSmallV2, index, stream, false)
-if !decoded { /* not a hike object; record still says why */ }
-body := record.Marshal() // the exact bytes the conformance pack stores
-```
+The Rust and Java quickstarts print the same lines.
 
-For a real object, use `hike.Production`, fetch the index over HTTP, and draw the six legs from `crypto/rand`:
+## Verify a real object
 
+[`sdk/examples/go/live`](../examples/go/live/main.go) uses `hike.Production`, reads the public index over HTTP, and draws from `crypto/rand`. `sdk/test.sh` compiles it with `go vet` but doesn't run it, because it needs the network.
+
+<!-- from: sdk/examples/go/live/main.go -->
 ```go
 client := &http.Client{Timeout: 5 * time.Second}
 index := hike.Index{Fetch: func(height uint64) (string, bool) {
@@ -68,43 +140,101 @@ if _, err := rand.Read(stream); err != nil {
 	stream = nil // the record then says the draw was not read
 }
 record, decoded := hike.Verify(object, hike.Production, index, stream, false)
+if !decoded {
+	fmt.Fprintln(os.Stderr, "undecodable") // the record still says why
+}
 os.Stdout.Write(record.Marshal())
 ```
 
+**The public index.** `https://index.groundinglab.io` serves `GET /index/<height>` only for the mainnet heights it retains; any other height gets 404. The `conformance-small` vectors use small, non-mainnet heights, so on a vector object every read is `not read`. Use a real production object.
+
+**Gating.** This SDK has no section 15 helper; only Rust has one (`hike::admit` / `hike::failure_facts`). A Go gate reads the record's fields and applies the section 15 invariant refusals itself: `Shape`, the `checkpoints` comparison, `seed_value`, plant, successor, and six legs (spec section 15). Then it applies its own thresholds. groundinglab's argued default is [POLICY.md](../../services/admission-gate/POLICY.md), a recommendation and not part of the spec. Writing that is new code; the SDK does not provide it.
+
+## Produce
+
+[`sdk/examples/go/produce`](../examples/go/produce/main.go) produces an object offline. It uses the `stage0-start.json` tip script at `conformance-small` sizes, and then verifies the result:
+
+<!-- from: sdk/examples/go/produce/main.go -->
+```go
+var tips []hike.Tip
+for _, t := range v.Tips {
+	natural, _ := hex.DecodeString(t.NaturalHex)
+	tips = append(tips, hike.Tip{Natural: natural, Height: t.Height})
+}
+// ...
+object, _, err := hike.Drive(publicKey, hike.ConformanceSmallV2, tips) // hike.Production for a real PCOC
+if err != nil {
+	panic(err) // "public key", "seed observe" or "observe"
+}
+```
+
+```sh
+go run ./produce ../../../spec/conformance/v2.0
+```
+
+<!-- output: produce -->
+```text
+object bytes: 3670
+object sha256: da3acd20d063b7492e192b557fdf711fbe5761a49e446a6b2f664af17f72f765
+shape: match
+```
+
+`Drive` writes the same object bytes as the Rust and Java produce examples. It has no plant service, so every path is empty bytes. Network produce (Bitcoin header gossip, and the Bari plant service) is `cmd/satoshi-hike-produce`; it is not a library API in this SDK. For what a real hike costs (18 tip waits × the mean header interval, with 256 MiB held), see [What producing costs](../README.md#what-producing-costs).
+
 ## API overview
 
-**Verify (section 14).**
-- `Verify(data, profile, index, stream, omitSix) (Record, bool)` measures one object. It does not apply policy. `bool` is false when the object does not decode, and the record is then the "undecodable" or "malformed" record.
-- `Verify` counts a stored plant path as bound. To check each path against the chain yourself, call `PackRecord(data, profile, index, pathChain, threads, stream) string`. `pathChain(PathLocators) error` returns nil for a match. `threads` is the Rule A4.3 pool size and does not change the record.
-- `Record` is the section 14 record. `Record.Marshal()` writes its bytes, with keys in spec order and one trailing newline. `VerifyRecordSHA256(record)` is SHA-256 over the RFC 8785 form, excluding the newline.
+Generated docs: `go doc -all ./hike` in `sdk/go`.
+
+```go
+func Verify(data []byte, profile Profile, index Index, stream []byte, omitSix bool) (Record, bool)
+func PackRecord(data []byte, profile Profile, index Index, pathChain func(PathLocators) error, threads int, stream []byte) string
+func (r Record) Marshal() []byte                       // record bytes: section 14 key order, one trailing newline
+func VerifyRecordSHA256(record string) ([32]byte, error) // JCS hash, newline excluded
+func AuditStream(seed []byte, nbytes int) []byte         // SHA-256(seed ‖ le64(i)) blocks
+type Index struct {
+	Documents map[uint64]string
+	Fetch     func(height uint64) (body string, ok bool) // used for heights not in Documents
+}
+func Drive(publicKey []byte, profile Profile, tips []Tip) (object []byte, stderr string, err error)
+type Tip struct { Natural []byte; Height uint64 }
+func PathLocatorsFor(path, waypoint []byte) (PathLocators, error)
+func MapKeys(data []byte) ([]string, error)
+func StageKeys(data []byte, index int) ([]string, error)
+func CBORIssue(data []byte) string                      // "" when data is one well-formed item
+func NewProfile(name, kind string, sample, slot, terrain, steps int) (Profile, error)
+```
+
+**Verify.**
+- **`Verify`** measures one object. It does not apply policy. The `bool` is false when the object does not decode, and the record is then the "undecodable" or "malformed" record. `omitSix` leaves `six_leg` and `six_leg_runs` off the record.
+- **`Verify` and the plant check.** `Verify` counts a stored plant path as bound. To check each path against the chain yourself, call `PackRecord` with a `pathChain` that returns nil for a match. Its `threads` argument does not change the record.
+- **`Record` fields** (exported, JSON-tagged as the record keys):
+  - shape: `Profile`, `Shape` (`match` or `mismatch`), `ShapeItem []string`;
+  - stored data: `Headers`, `SeedValue`, `Checkpoints`, `Waypoints`, `Paths`, `Anchors`, `AnchoredTotal`, `SkipList`;
+  - bookends: `A`, `B`, `N`, `S`, `DeltaH`, `FixedStart`, `PB`, `HeightPB`, `IndexComparisonPB`, `TPB`, `HeightIAMinus1`, `TIAMinus1`;
+  - draw and analysis: `SixLeg`, `SixLegRuns`, `Analysis`;
+  - for `conformance-small`: `SampleBytes`, `SlotBytes`, `TerrainBytes`, `StepsPerLeg`.
 
 **Inputs.**
-- `Index{Documents, Fetch}` is the index, keyed by height. `ReadIndexDocument(body)` applies the section 9 document rules.
-- `Profile`: `Production` (the section 6 constants), `ConformanceSmallV2` (the section 16.1 sizes), `MeasureName(name)`, and `NewProfile(...)` for custom sizes.
-- `AuditStream(seed, n)` gives the pinned demo draw, SHA-256(seed ‖ le64(i)) blocks, the same as the programs' `--audit-seed`.
+- `Production` (section 6) and `ConformanceSmallV2` (section 16.1) are the built-in profiles. `MeasureName(name)` selects one by program name.
+- `ReadIndexDocument(body)` applies the section 9 document rules.
 
-**Objects and paths.**
-- `MapKeys` and `StageKeys` list CBOR keys. `CBORIssue(data)` says why the bytes are not one section 7.3 item, and returns empty when they are.
-- `PathLocatorsFor(path, waypoint)` decodes a canonical path body. `EncodePathInBlock` and `PathInclusionHeight` also work on path bodies.
-- `IsEarlierKind` checks for an earlier object kind.
-
-**Produce (section 13.2).** `Drive(publicKey, profile, tips)` runs produce against an already-read `[]Tip` sequence and returns the object bytes. Network produce (gossip, Bari) is `cmd/satoshi-hike-produce`.
+**Objects and paths.** `EncodePathInBlock`, `PathInclusionHeight` and `IsEarlierKind`.
 
 **Building blocks.**
-- `FillTerrain`, `SeedValue`, `SampleAt`, `SlotAt`, `CheckpointDigest`, `WaypointDigest`, `FoldCheckpoints`, `DrawSix`, `FillPin`.
-- The section 6 constants: `Stages`, `Kind`, `SealDomain`, the `Mix*` values, and others.
+- Functions: `FillTerrain`, `SeedValue`, `SampleAt`, `SlotAt`, `CheckpointDigest`, `WaypointDigest`, `FoldCheckpoints`, `DrawSix` and `FillPin`.
+- The section 6 constants: `Stages`, `Kind`, `SealDomain`, `Mix*`, ….
 - The informative §15.5 examples `LegRateFloor*`.
 
-**Programs.** `cmd/satoshi-hike-verify` and `cmd/satoshi-hike-produce`. Both have `--help`.
+**Programs.** `cmd/satoshi-hike-verify` and `cmd/satoshi-hike-produce`.
 
-The Rust SDK has two things this package does not: direct node reads for the plant check (`hike-net`), and the section 15 `admit` helper.
+The Rust SDK has two things this package does not: direct node reads for the plant check (`hike-net`), and the section 15 helpers.
 
 ## Errors
 
-| Error (text) | Returned by | Cause |
+| Error text | Returned by | Cause |
 |---|---|---|
-| `malformed cbor` | `MapKeys`, `StageKeys` (reported by `CBORIssue`) | A text string that is not UTF-8, the top item is not a map, or `stages` is missing, is not an array, has no such index, or that stage is not a map |
-| `indefinite` | same | Indefinite-length item (section 7.3 forbids it) |
+| `malformed cbor` | `MapKeys`, `StageKeys` (`CBORIssue` reports the same text) | A text string that is not UTF-8; the top item is not a map; or `stages` is missing, is not an array, has no such index, or that stage is not a map |
+| `indefinite` | same | An indefinite-length item, or a lone `0xff` break byte (section 7.3 forbids both) |
 | `float-or-simple` | same | Major type 7 (float, simple, true/false/null), or a reserved length code (28–30) |
 | `tag` | same | A CBOR tag |
 | `duplicate` | same | A map key repeated |
@@ -122,23 +252,27 @@ The Rust SDK has two things this package does not: direct node reads for the pla
 | `self sibling` | same | A lone last node is not paired with itself |
 | `leaf` | same | The leaf is not this waypoint |
 | `root` | same | The recomputed Merkle root differs from the stored root |
-| `profile integers do not divide` | `NewProfile` | The slot is not a multiple of 8 (at least 8), the terrain is not a multiple of the slot, sample < 1, terrain < sample, steps < 1, or the kind is empty |
+| `profile integers do not divide` | `NewProfile` | The slot is not a multiple of 8 (or is under 8); the terrain is not a multiple of the slot; sample < 1; terrain < sample; steps < 1; or the kind is empty |
 | `public key` | `Drive` | `publicKey` is not 32 bytes |
 | `seed observe` | `Drive` | No tips, or the first tip's `Natural` is not 32 bytes |
 | `observe` | `Drive` | The tip sequence ran out, or a tip's `Natural` is not 32 bytes |
 | JSON error | `VerifyRecordSHA256` | The record is not JSON |
 
-`Verify` does not return an error. Malformed input gives `decoded == false` or a record whose tokens say `mismatch`, `not defined` or `not read`. A failed index read is `ok == false` from `Fetch` and appears in the record. The programs exit 0 when the record is written, 1 when the object does not decode or cannot be read, and 2 on a usage error.
+The diagnostic texts are not part of the record, and they differ between SDKs. Only the record bytes are conformance-tested. The [Rust README](../rust/README.md#error-names-across-the-sdks) has a table that maps them across Rust, Go and Java.
+
+`Verify` does not return an error. Malformed input gives `decoded == false`, or a record whose tokens say `mismatch`, `not defined` or `not read`. A failed index read is `ok == false` from `Fetch`, and shows in the record.
+
+The programs exit 0 when the record is written, 1 when the object cannot be read or does not decode, and 2 on a usage error. A well-formed CBOR item that is not a map exits 1 here, but 0 in Rust; see [KNOWN-DIVERGENCES.md](../KNOWN-DIVERGENCES.md).
 
 ## Conformance vectors
 
-`spec/conformance/v2.0/` is the source of truth ([what each file is](../../spec/conformance/v2.0/README.md)). This SDK does not generate the vectors. `conformance/v2_test.go` and the package tests read them in place and compare the record byte for byte. [../SPEC_PIN](../SPEC_PIN) holds the spec tag and the vector hash.
+`spec/conformance/v2.0/` is the source of truth ([what each file is](../../spec/conformance/v2.0/README.md)). This SDK does not generate the vectors. `conformance/v2_test.go` and the package tests read them in place, and compare the record byte for byte. [../SPEC_PIN](../SPEC_PIN) holds the spec tag and the vector hash.
 
 ## Test
 
 ```sh
-bash sdk/test.sh                          # every SDK, plus the cross-check (from the repo root)
-cd sdk/go && go vet ./... && go test ./...   # this module only
+bash sdk/test.sh                              # every SDK, the cross-check, examples and docs (from the repo root)
+cd sdk/go && go vet ./... && go test ./...    # this module only; four "ok" package lines
 ```
 
 ## Programs
@@ -148,4 +282,8 @@ go run ./cmd/satoshi-hike-verify --input OBJECT --profile live --index-url https
 go run ./cmd/satoshi-hike-produce --pubkey-hex HEX --output PATH --gossip-peer HOST:PORT --bari-url URL
 ```
 
-The default `--profile` is `test`. It will not dial `https://index.groundinglab.io`, and it reads `PCOC_TEST_INDEX_URL` when `--index-url` is omitted. `--profile conformance-small` uses the section 16.1 sizes, and `--audit-seed HEX` pins the draw. Verify writes the section 14 record to stdout. It does not apply admission policy. `--chain-rpc URL` is accepted with `--profile live` for flag compatibility, but this program does not read the node: it calls verify without a chain callback, so a stored path in the anchor window counts as bound. This SDK does not derive a production seed from a mnemonic.
+**Verify** takes the same flags as the Rust and Java programs; see [the verify programs](../README.md#the-verify-programs).
+- The default `--profile` is `test`. It does not dial `https://index.groundinglab.io`; it reads `PCOC_TEST_INDEX_URL` when `--index-url` is omitted.
+- `--chain-rpc URL` is accepted with `--profile live` for flag compatibility, but this program does not read the node. It calls `Verify` without a chain callback, so a stored path in the anchor window counts as bound.
+
+**Produce** has its own flags: `--tips PATH` and the profiles `test|live|production`. See `--help`. This SDK does not derive a production seed from a mnemonic.

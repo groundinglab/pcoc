@@ -1,48 +1,123 @@
 # Java SDK
 
-The Java SDK for Satoshi Hike v2.0, the PCOC specification. Packages `pcoc.hike` (verify, the section 14 record, produce against a tip sequence, CBOR, path bodies, profiles), `pcoc.json` (strict JSON), and `pcoc.cli` (the programs `Verify` and `Produce`). The record it writes is byte-identical to the Rust and Go SDKs. The JDK alone is enough: no third-party dependencies.
+The Java SDK for Satoshi Hike v2.0, the PCOC specification. It has three packages:
+
+| Package | What it holds |
+|---|---|
+| `pcoc.hike` | Verify and the section 14 record; produce against a tip sequence; CBOR; path bodies; profiles |
+| `pcoc.json` | Strict JSON |
+| `pcoc.cli` | The programs `Verify` and `Produce` |
+
+The record it writes is byte-identical to the Rust and Go SDKs. The JDK alone is enough: it has no third-party dependencies.
 
 ## Install / pin
 
-JDK 21 or newer (`javac -version` must print 21 or higher; 17 does not work). There is no Maven or Gradle build and nothing is published to a repository. Pin the repository tag and compile the sources into your build:
+You need JDK 21 or newer: `javac -version` must print 21 or higher, and 17 does not work. There is no Maven or Gradle build, and nothing is published to a repository. Pin the repository tag and compile the sources into a jar of your own, outside the checkout:
 
 ```sh
-git clone --depth 1 --branch sdk-v2.0.0-rc.1 https://github.com/groundinglab/pcoc
-cd pcoc/sdk/java
-find src -name '*.java' -not -path '*/conformance/*' | sort > sources.txt
-javac --release 21 -d build/classes @sources.txt
-jar --create --file pcoc-sdk-2.0.0-rc.1.jar -C build/classes .
+git clone --depth 1 --branch sdk-v2.0.0-rc.1 https://github.com/groundinglab/pcoc /path/to/pcoc
+SDK=/path/to/pcoc/sdk/java
+OUT=$PWD/build                      # in your project, not in the checkout
+mkdir -p "$OUT/sdk-classes" lib
+find "$SDK/src" -name '*.java' -not -path '*/conformance/*' | sort > "$OUT/pcoc-sources.txt"
+javac --release 21 -d "$OUT/sdk-classes" @"$OUT/pcoc-sources.txt"
+jar --create --file lib/pcoc-sdk-2.0.0-rc.1.jar -C "$OUT/sdk-classes" .
 ```
 
-Put the jar (or `src/` as a source root) on your classpath. `pcoc.conformance` is the test harness and is not needed at run time.
+Then compile and run against the jar: `javac --release 21 -cp lib/pcoc-sdk-2.0.0-rc.1.jar …` and `java -cp lib/pcoc-sdk-2.0.0-rc.1.jar:… YourMain`. `pcoc.conformance` is the test harness, and is not needed at run time.
 
-> `sdk-v2.0.0-rc.1` has been prepared but not yet published. Until it is, use a checkout of this repository at that commit.
+> `sdk-v2.0.0-rc.1` is prepared but not yet published. Until it is, use a checkout of this repository at the commit the tag names: `git rev-parse sdk-v2.0.0-rc.1^{commit}` in a clone that has the tag.
 
-## Quickstart (run)
+## Quickstart (run by `sdk/test.sh`)
 
-[`sdk/examples/java/Quickstart.java`](../examples/java/Quickstart.java) verifies the `kat-small` conformance object against its recorded index replies. `sdk/test.sh` runs it on every change. From the repository root:
+[`sdk/examples/java/Quickstart.java`](../examples/java/Quickstart.java) verifies the `kat-small` conformance object against the index replies recorded in the vector, and reproduces the vector's stored record byte for byte:
 
-```sh
-mkdir -p /tmp/pcoc-java
-javac --release 21 -d /tmp/pcoc-java $(find sdk/java/src -name '*.java') sdk/examples/java/Quickstart.java
-java -cp /tmp/pcoc-java Quickstart spec/conformance/v2.0
-```
-
-```text
-record sha256: 79561726b24aad6a9fcdfb6ae09f0eb0b54934a57bb08dab4bd11e4113d64241
-```
-
-The digest is the SHA-256 of the record bytes. The Rust and Go quickstarts print the same digest. The core of it:
-
+<!-- from: sdk/examples/java/Quickstart.java -->
 ```java
-Measure.Reader index = docs::get;          // height -> section 9 document body, null = no body
-byte[] stream = /* 4096 draw bytes: SecureRandom in production, pinned here */;
-String record = Measure.record(object, Profile.CONFORMANCE_SMALL_V2, index, stream, false);
-// record == null: the object is CBOR but not a map. Otherwise these are the exact bytes the pack stores.
+// Verify the kat-small conformance object and reproduce the vector's stored
+// section 14 record byte for byte.
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import pcoc.hike.Bytes;
+import pcoc.hike.Measure;
+import pcoc.hike.Profile;
+import pcoc.hike.RecordHash;
+import pcoc.json.Json;
+
+public class Quickstart {
+    public static void main(String[] args) throws Exception {
+        Path pack = Path.of(args[0]); // spec/conformance/v2.0
+        Json.Obj kat = (Json.Obj) Json.parse(Files.readString(pack.resolve("kat-small.json")));
+        byte[] object = Bytes.unhex(((Json.Str) kat.fields().get("object_hex")).value);
+
+        // The index: height -> section 9 document body. A real verifier GETs
+        // <index>/index/<height>; here the vector carries the replies.
+        Map<Long, String> docs = new HashMap<>();
+        for (Json d : ((Json.Arr) kat.fields().get("documents")).items()) {
+            Json.Obj doc = (Json.Obj) d;
+            docs.put(Long.parseLong(((Json.Num) doc.fields().get("height")).digits),
+                    ((Json.Str) doc.fields().get("body")).value);
+        }
+        Measure.Reader index = docs::get; // null = no body for that height
+
+        // The six-leg draw bytes. kat-small's draw_bytes_hex is the pinned stream
+        // SHA-256(seed || le64(0)) || SHA-256(seed || le64(1)) || ... for this seed.
+        // Production passes 4096 bytes from SecureRandom.
+        byte[] stream = Bytes.unhex(((Json.Str) kat.fields().get("draw_bytes_hex")).value);
+        byte[] seed = new byte[32];
+        Arrays.fill(seed, (byte) 0x5A);
+        byte[] pinned = new byte[stream.length];
+        for (int i = 0; i * 32 < pinned.length; i++) {
+            byte[] block = Bytes.sha256(seed, Bytes.le64(i));
+            System.arraycopy(block, 0, pinned, i * 32, Math.min(32, pinned.length - i * 32));
+        }
+        System.out.println("draw = draw_bytes_hex: " + Arrays.equals(pinned, stream));
+
+        // Profile.PRODUCTION for real objects. null means CBOR that is not a map.
+        String record = Measure.record(object, Profile.CONFORMANCE_SMALL_V2, index, stream, false);
+        Json.Obj parsed = (Json.Obj) Json.parse(record);
+        System.out.println("shape: " + ((Json.Str) parsed.fields().get("shape")).value);
+        System.out.println("matches kat-small.json record: "
+                + record.equals(((Json.Str) kat.fields().get("record")).value));
+        System.out.println("record bytes sha256: " + Bytes.hex(Bytes.sha256(record.getBytes(StandardCharsets.UTF_8))));
+        System.out.println("verify_record_sha256: " + Bytes.hex(RecordHash.verifyRecordSha256(record)));
+    }
+}
 ```
 
-For a real object, use `Profile.PRODUCTION`, read the index over HTTP, and draw from `SecureRandom`:
+From the repository root, building into a temporary directory:
 
+```sh
+OUT=$(mktemp -d)
+javac --release 21 -d "$OUT" $(find sdk/java/src -name '*.java') sdk/examples/java/Quickstart.java
+java -cp "$OUT" Quickstart spec/conformance/v2.0
+```
+
+<!-- output: quickstart -->
+```text
+draw = draw_bytes_hex: true
+shape: match
+matches kat-small.json record: true
+record bytes sha256: f539d89340a4e7885638412a0e1fbdf85212498c87ac5bb237a645ddc987ffac
+verify_record_sha256: 084e60600907af444632fc2bb09bf8846d78384f4f23eb2a06f6f50491161c29
+```
+
+What the output lines mean:
+- **The draw.** Passing the vector's `draw_bytes_hex` as `stream` is what reproduces the stored `record`. Those bytes are the pinned stream SHA-256(seed ‖ le64(i)) for `seed` = 32 bytes of `0x5a`.
+- **`record bytes sha256`** is the SHA-256 of the record bytes, including the trailing newline.
+- **`verify_record_sha256`** (`RecordHash.verifyRecordSha256`) is a different hash: SHA-256 over the RFC 8785 (JCS) form, excluding the newline. Use it as the record identifier. Neither is the vector's `sha256` field, which is the hash of the object bytes.
+
+The Rust and Go quickstarts print the same lines.
+
+## Verify a real object
+
+[`sdk/examples/java/Live.java`](../examples/java/Live.java) uses `Profile.PRODUCTION`, reads the public index over HTTP, and draws from `SecureRandom`. `sdk/test.sh` compiles it but doesn't run it, because it needs the network.
+
+<!-- from: sdk/examples/java/Live.java -->
 ```java
 HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 Measure.Reader index = height -> {
@@ -52,69 +127,142 @@ Measure.Reader index = height -> {
                 HttpResponse.BodyHandlers.ofString());
         return r.statusCode() == 200 ? r.body() : null;
     } catch (Exception e) {
-        return null;                       // a failed read is recorded, not thrown
+        return null; // a failed read is recorded, not thrown
     }
 };
 byte[] stream = new byte[4096];
 new SecureRandom().nextBytes(stream);
 String record = Measure.record(object, Profile.PRODUCTION, index, stream, false);
+System.out.print(record == null ? "" : record); // null: CBOR that is not a map
 ```
+
+**The public index.** `https://index.groundinglab.io` serves `GET /index/<height>` only for the mainnet heights it retains, and answers 404 for any other height. The `conformance-small` vectors use small, non-mainnet heights, so on a vector object every read is `not read`. Use a real production object.
+
+**Gating.** This SDK has no section 15 helper; only Rust has one (`hike::admit` / `hike::failure_facts`). A Java gate reads the record's fields and applies the section 15 invariant refusals itself: shape, the checkpoint comparison, seed value, plant, successor, and six legs (spec section 15). Then it applies its own thresholds. groundinglab's argued default is [POLICY.md](../../services/admission-gate/POLICY.md), a recommendation and not part of the spec. Writing that is new code; the SDK does not provide it.
+
+## Produce
+
+[`sdk/examples/java/ProduceExample.java`](../examples/java/ProduceExample.java) produces an object offline. It uses the `stage0-start.json` tip script at `conformance-small` sizes, and then verifies the result:
+
+<!-- from: sdk/examples/java/ProduceExample.java -->
+```java
+List<Drive.Tip> tips = new ArrayList<>();
+for (Json t : ((Json.Arr) v.fields().get("tips")).items()) {
+    Json.Obj tip = (Json.Obj) t;
+    tips.add(new Drive.Tip(
+            Bytes.unhex(((Json.Str) tip.fields().get("natural_hex")).value),
+            Long.parseLong(((Json.Num) tip.fields().get("height")).digits)));
+}
+// ...
+Drive.Result result = Drive.run(publicKey, Profile.CONFORMANCE_SMALL_V2, tips); // Profile.PRODUCTION for a real PCOC
+```
+
+```sh
+java -cp "$OUT" ProduceExample spec/conformance/v2.0   # after compiling ProduceExample.java like Quickstart.java
+```
+
+<!-- output: produce -->
+```text
+object bytes: 3670
+object sha256: da3acd20d063b7492e192b557fdf711fbe5761a49e446a6b2f664af17f72f765
+shape: match
+```
+
+`Drive.run` writes the same object bytes as the Rust and Go produce examples. It has no plant service, so every path is empty bytes. Network produce (Bitcoin header gossip, and the Bari plant service) is `pcoc.cli.Produce`; it is not a library API in this SDK. For what a real hike costs (18 tip waits × the mean header interval, with 256 MiB held), see [What producing costs](../README.md#what-producing-costs).
 
 ## API overview
 
-**Verify (section 14).**
-- `Measure.record(object, profile, reader, stream, omitSix) → String` returns the record bytes: compact JSON with keys in spec order and one trailing newline. It does not apply policy, and it counts a stored plant path as bound.
-- The overload `Measure.record(object, profile, reader, chain, stream, omitSix)` takes a `Summary.Chain` (`boolean ok(PathBody.Locators)`) and checks each path in the anchor window against the chain.
-- `Summary.packRecord(...)` is the same record with a Rule A4.3 thread count, which does not change the bytes.
-- `Measure.Reader` is `String body(long height)`. Return `null` when there is no body.
-- `RecordHash.verifyRecordSha256(record)` is SHA-256 over the RFC 8785 form, excluding the newline.
+```java
+// pcoc.hike.Measure
+public interface Reader { String body(long height); }            // null: no body for that height
+public static String record(byte[] object, Profile profile, Reader reader, byte[] stream, boolean omitSix)
+public static String record(byte[] object, Profile profile, Reader reader, Summary.Chain chain, byte[] stream, boolean omitSix)
+// pcoc.hike.Summary
+public interface Chain { boolean ok(PathBody.Locators locators); }
+// pcoc.hike.RecordHash
+public static byte[] verifyRecordSha256(String record)           // JCS hash, newline excluded
+// pcoc.hike.Drive
+public static Drive.Result run(byte[] publicKey, Profile profile, List<Drive.Tip> tips) throws Drive.Clock
+public Tip(byte[] natural, long height)                          // Drive.Tip
+public final byte[] object; public final String stderr;          // Drive.Result
+// pcoc.hike.PathBody
+public static PathBody.Locators locatorsFor(byte[] path, byte[] waypoint)   // null when it does not match
+// pcoc.hike.Index
+public static Index readDocument(String body)                    // null when section 9 rejects it
+// pcoc.hike.Cbor
+public static Cbor.Val decode(byte[] data) throws Cbor.Problem
+public static List<String> mapKeys(byte[] data) throws Cbor.Problem
+public static List<String> stageKeys(byte[] data, int stage) throws Cbor.Problem
+public static String issue(byte[] data)                          // "" for one well-formed item
+```
+
+**Verify.**
+- **`Measure.record`** returns the record bytes: compact JSON in section 14 key order, with one trailing newline. It does not apply policy, and it counts a stored plant path as bound.
+- **The overload with a `Summary.Chain`** checks each path in the anchor window against the chain.
+- **`Summary.packRecord(...)`** writes the same record with a Rule A4.3 thread count, which does not change the bytes.
 
 **Inputs.**
-- `Profile.PRODUCTION` (the section 6 constants) and `Profile.CONFORMANCE_SMALL_V2` (the section 16.1 sizes).
-- `Profile.forVerify(name)` and `Profile.forProduce(name)` select a profile by program name, and return `null` for an unknown name.
-- `Index.readDocument(body)` applies the section 9 document rules, and returns `null` when it rejects the body.
+- `Profile.PRODUCTION` (section 6) and `Profile.CONFORMANCE_SMALL_V2` (section 16.1) are the built-in profiles.
+- `Profile.forVerify(name)` and `Profile.forProduce(name)` select one by program name, and return `null` for an unknown name.
 
-**Objects and paths.**
-- `Cbor.decode`, `Cbor.mapKeys` and `Cbor.stageKeys` throw `Cbor.Problem`. `Cbor.issue(bytes)` returns `""` for one acceptable item. The encoders are `encodeUint`, `encodeBytes`, `encodeText`, `encodeArray` and `encodeMap`.
-- `PathBody.locatorsFor(path, waypoint)` returns `null` when the body does not validate for that waypoint. `PathBody.encodePathInBlock`, `encodeForBlock` and `inclusionHeight` also work on path bodies.
-- `Hike.isEarlierKind` checks for an earlier object kind.
+**Objects and paths.** `PathBody.encodePathInBlock`, `encodeForBlock`, `inclusionHeight`, `Hike.isEarlierKind`, and the CBOR encoders `Cbor.encodeUint`, `encodeBytes`, `encodeText`, `encodeArray` and `encodeMap`.
 
-**Produce (section 13.2).** `Drive.run(publicKey, profile, tips) → Drive.Result` runs against an already-read `List<Drive.Tip>`. Network produce is `pcoc.cli.Produce`.
+**JSON (`pcoc.json.Json`).**
+- **Parsing.** `Json.parse(text)`, and `Json.parseStrict(text)`, which also rejects duplicate keys.
+- **Values.** `Json.Obj.fields()` is a `Map<String, Json>` in document order, and `Json.Arr.items()` is a `List<Json>`. `Json.Str.value` is a `String`, `Json.Num.digits` is the number as written (a `String`), `Json.Bool.value` is a `boolean`, and `Json.Null.INSTANCE` is null.
+- **Helpers.** `Json.asObj`, `asArr`, `asString`, `asNumber` and `deepEqual`. `compact()` writes compact JSON.
 
 **Building blocks.**
-- `Terrain.fill`, `Terrain.fillPin`, `Measure.drawSix`.
-- `Bytes`: `sha256`, `hex`, `unhex`, `le64`, `u64le`, `displayHex`.
+- `Terrain.fill`, `Terrain.fillPin` and `Measure.drawSix`.
+- `Bytes`: `sha256`, `hex`, `unhex`, `le64`, `u64le` and `displayHex`.
 - The constants in `Hike`, including the informative §15.5 `LEG_RATE_FLOOR_*` examples.
-
-**JSON.** `Json.parse` and `Json.parseStrict` (which rejects duplicate keys), `Json.Obj`, `Arr`, `Str`, `Num`, `Bool` and `Null`, and `Json.deepEqual`.
 
 **Programs.** `pcoc.cli.Verify` and `pcoc.cli.Produce`.
 
-The Rust SDK has two things these packages do not: direct node reads for the plant check, and the section 15 `admit` helper.
+The Rust SDK has two things these packages do not: direct node reads for the plant check, and the section 15 helpers.
 
 ## Errors
 
+`Cbor.Problem` is a checked exception. Its reason is the public field **`issue`** (a `String`); `getMessage()` returns `null`. Catch it like this:
+
+```java
+try {
+    List<String> keys = Cbor.mapKeys(bytes);
+} catch (Cbor.Problem p) {
+    System.err.println("not one well-formed CBOR map: " + p.issue);
+}
+```
+
 | Error | Thrown or returned by | Cause |
 |---|---|---|
-| `Cbor.Problem("trailing")` | `Cbor.decode`, `mapKeys`, `stageKeys`, `decodeHead`; `Cbor.issue` returns the same text | Bytes after the first item |
-| `Cbor.Problem("indefinite")` | same | Indefinite-length item |
-| `Cbor.Problem("negative")` | same | A negative integer |
-| `Cbor.Problem("truncated")` | same | The item runs past the end, a length is too large, a reserved length code (28–30), or a text string that is not UTF-8 |
-| `Cbor.Problem("non-text")` | same | A map key that is not a text string |
-| `Cbor.Problem("duplicate")` | same | A map key repeated |
-| `Cbor.Problem("tag")` | same | A CBOR tag |
-| `Cbor.Problem("float-or-simple")` | same | Major type 7 |
-| `Cbor.Problem("not a map")` | `Cbor.mapKeys` | The top item is not a map |
-| `Cbor.Problem("stage")` | `Cbor.stageKeys` | `stages` is missing, is not an array, or has no such index, or that stage is not a map. Call `mapKeys` first: `stageKeys` assumes the top item is a map |
-| `Drive.Clock` | `Drive.run` | The public key is not 32 bytes, no tips were given, the tips ran out, or a tip's `natural` is not 32 bytes |
+| `Cbor.Problem`, `.issue` `"trailing"` | `Cbor.decode`, `mapKeys`, `stageKeys`, `decodeHead`; `Cbor.issue` returns the same text | Bytes after the first item |
+| `.issue` `"indefinite"` | same | An indefinite-length item, or a lone `0xff` break byte |
+| `.issue` `"negative"` | same | A negative integer |
+| `.issue` `"truncated"` | same | The item runs past the end; a length is too large; a reserved length code (28–30); or a text string that is not UTF-8 |
+| `.issue` `"non-text"` | same | A map key that is not a text string |
+| `.issue` `"duplicate"` | same | A map key repeated |
+| `.issue` `"tag"` | same | A CBOR tag |
+| `.issue` `"float-or-simple"` | same | Major type 7 |
+| `.issue` `"not a map"` | `Cbor.mapKeys` | The top item is not a map |
+| `.issue` `"stage"` | `Cbor.stageKeys` | `stages` is missing, is not an array or has no such index, or that stage is not a map. Call `mapKeys` first: `stageKeys` assumes the top item is a map, and throws `NullPointerException` when it is not |
+| `Drive.Clock` | `Drive.run` | The public key is not 32 bytes; no tips were given; the tips ran out; or a tip's `natural` is not 32 bytes |
 | `IllegalArgumentException("production_seed")` | `Terrain.fillPin` | The seed is not 64 bytes |
-| `IllegalArgumentException` (`"trailing json"`, `"truncated json"`, `"duplicate json key"`, `"escape"`, `"control"`, `"number"`, `"expected …"`, `"object"`, `"array"`, `"string"`) | `Json.parse`, `parseStrict`, `asObj` … | Text that is not one strict JSON value of the expected type |
+| `IllegalArgumentException` (`getMessage()`: `"trailing json"`, `"truncated json"`, `"duplicate json key"`, `"escape"`, `"control"`, `"number"`, `"expected …"`, `"object"`, `"array"`, `"string"`) | `Json.parse`, `parseStrict`, `asObj`, … | Text that is not one strict JSON value of the expected type |
 | `IllegalArgumentException` from `Json.parse` | `RecordHash.verifyRecordSha256` | The record is not JSON |
 | `IllegalStateException` | `Bytes.digest`, `Terrain` | The JRE has no SHA-256 (cannot happen on a conforming JDK) |
-| `null` | `Measure.record` | The object is CBOR but not a map. Bytes that are not CBOR give the "undecodable" record instead |
-| `null` | `PathBody.locatorsFor`, `inclusionHeight`, `Index.readDocument`, `Bytes.unhex`, `Profile.forVerify` / `forProduce` | Invalid path body or wrong waypoint; rejected section 9 document; odd-length or non-hex text; unknown profile name |
+| `null` | `Measure.record` | The object is CBOR but not a map. Bytes that are not CBOR get the "undecodable" record instead |
+| `null` | `PathBody.locatorsFor`, `inclusionHeight` | A path body that does not decode, or does not match the waypoint |
+| `null` | `Index.readDocument` | A document that section 9 rejects |
+| `null` | `Bytes.unhex` | Odd-length or non-hex text |
+| `null` | `Profile.forVerify`, `forProduce` | An unknown profile name |
 
-The `Profile` constructor checks (`SLOT_BYTES`, `TERRAIN_BYTES`, `profile`) guard the two built-in profiles and cannot be reached from outside the package. `Measure.record` throws nothing for malformed objects. It records `mismatch`, `not defined` or `not read`. The programs exit 0 when the record is written, 1 when the object does not decode or cannot be read, and 2 on a usage error.
+The `Profile` constructor checks (`SLOT_BYTES`, `TERRAIN_BYTES`, `profile`) guard the two built-in profiles, and cannot be reached from outside the package.
+
+The diagnostic texts are not part of the record, and they differ between SDKs. Only the record bytes are conformance-tested. The [Rust README](../rust/README.md#error-names-across-the-sdks) has a table that maps them across Rust, Go and Java.
+
+`Measure.record` throws nothing for malformed objects. It records `mismatch`, `not defined` or `not read`.
+
+The programs exit 0 when the record is written, 1 when the object cannot be read or does not decode, and 2 on a usage error. A well-formed CBOR item that is not a map exits 1 here, but 0 in Rust; see [KNOWN-DIVERGENCES.md](../KNOWN-DIVERGENCES.md).
 
 ## Conformance vectors
 
@@ -123,10 +271,19 @@ The `Profile` constructor checks (`SLOT_BYTES`, `TERRAIN_BYTES`, `profile`) guar
 ## Test
 
 ```sh
-bash sdk/test.sh       # every SDK, plus the cross-check (from the repo root)
-bash sdk/java/v2.sh    # this SDK only: javac --release 21 -Xlint:all -Werror, then V2Pack and Spec6Pins
+bash sdk/test.sh       # every SDK, the cross-check, examples and docs (from the repo root)
+bash sdk/java/v2.sh    # this SDK only: javac --release 21 -Xlint:all -Werror, then V2Pack and Spec6Pins; exit 0 on success
 ```
 
 ## Programs
 
-After compiling (as above), run `java -cp build/classes pcoc.cli.Verify --input OBJECT --profile live --index-url https://index.groundinglab.io`, or `pcoc.cli.Produce --help`. The flags are the same as the Rust and Go programs. The default `--profile` is `test`. `--profile conformance-small` uses the section 16.1 sizes, and `--audit-seed HEX` pins the draw. Verify writes the section 14 record to stdout and applies no admission policy. `--chain-rpc URL` is accepted with `--profile live` for flag compatibility, but this program does not read the node: it calls verify without a chain callback, so a stored path in the anchor window counts as bound. `--demo-mnemonic` is not supported in this SDK.
+```sh
+java -cp lib/pcoc-sdk-2.0.0-rc.1.jar pcoc.cli.Verify --input OBJECT --profile live --index-url https://index.groundinglab.io
+java -cp lib/pcoc-sdk-2.0.0-rc.1.jar pcoc.cli.Produce --help
+```
+
+**Verify** takes the same flags as the Rust and Go programs; see [the verify programs](../README.md#the-verify-programs).
+- The default `--profile` is `test`.
+- `--chain-rpc URL` is accepted with `--profile live` for flag compatibility, but this program does not read the node. It calls `Measure.record` without a chain, so a stored path in the anchor window counts as bound.
+
+**Produce** has its own flags: `--tips PATH` and the profiles `test|live|production`. See `--help`. `--demo-mnemonic` is not supported in this SDK.
