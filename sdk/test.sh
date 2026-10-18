@@ -11,6 +11,8 @@
 #   4. java          sdk/java/v2.sh (conformance pack and section 6 pins)
 #   5. cross-check   the Rust, Go and Java verify programs on the same pack
 #                    objects and mutants must write byte-identical records
+#   6. examples      the README quickstarts (sdk/examples/{rust,go,java}) run
+#                    and print the same record digest
 #
 # Needs: python3, Rust (rustup reads sdk/rust/rust-toolchain.toml), Go >= 1.22,
 # JDK >= 21. A missing tool is a failure, not a skip. No network is used
@@ -68,11 +70,25 @@ crosscheck() {
     --java-classes "$work/java"
 }
 
+examples() {
+  need cargo go javac java || return 1
+  local pack="$root/spec/conformance/v2.0" r g j
+  r="$(cd sdk/examples/rust && cargo run -q --locked --release -- "$pack" | grep '^record sha256:')" || return 1
+  g="$(cd sdk/examples/go && go run . "$pack" | grep '^record sha256:')" || return 1
+  mkdir -p "$work/example-java"
+  (cd sdk && find java/src -name '*.java' | sort > "$work/example-java.txt") || return 1
+  javac --release 21 -d "$work/example-java" @<(sed 's#^#sdk/#' "$work/example-java.txt") sdk/examples/java/Quickstart.java || return 1
+  j="$(java -cp "$work/example-java" Quickstart "$pack" | grep '^record sha256:')" || return 1
+  printf '  rust %s\n  go   %s\n  java %s\n' "$r" "$g" "$j"
+  [ -n "$r" ] && [ "$r" = "$g" ] && [ "$g" = "$j" ]
+}
+
 step "pins: spec vectors + sdk version" spec_pin
 step "rust: unit + conformance" rust
 step "go: vet + unit + conformance" go_sdk
 step "java: conformance" java_sdk
 step "cross-check: rust/go/java verify" crosscheck
+step "examples: README quickstarts agree" examples
 
 echo
 echo "sdk/test.sh summary"
