@@ -12,7 +12,7 @@
 //!
 //! On 565add5 (no depth cap) the worker overflows its stack and the whole test
 //! binary aborts (`tokio-rt-worker … stack overflow, aborting`, SIGABRT). After
-//! Techie's depth cap lands (decode returns a `Fail` → `malformed`), the POST
+//! the depth cap lands (decode returns a `Fail` → `malformed`), the POST
 //! returns HTTP 400 `{"error":{"code":"bad_signature"}}` (door maps Undecodable→no key) and the server keeps
 //! serving, so this test passes.
 
@@ -120,7 +120,7 @@ async fn a_deeply_nested_signin_object_is_malformed_and_the_gate_survives() {
     let line = line.expect("worker crashed: peer closed with no response (F1 present)");
     assert!(line.contains(" 400 "), "deep object must be 400, got: {line}");
     // Door maps Undecodable (SDK "malformed cbor") to client bad_signature at step 6
-    // (no key yielded -> signature cannot verify). Same as Techie's locked_wire.rs.
+    // (no key yielded -> signature cannot verify). Same as locked_wire.rs.
     assert!(line.contains("bad_signature"), "expected bad_signature for over-deep nesting, got: {line}");
 
     // Survival probe: the server still answers after the deep POST.
