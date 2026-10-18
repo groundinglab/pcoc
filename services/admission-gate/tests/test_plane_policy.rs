@@ -5,7 +5,6 @@
 //! call it. A skip is recorded beside the gate. It is not a pass.
 #![allow(dead_code)]
 
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GateJudgment {
     Pass,
