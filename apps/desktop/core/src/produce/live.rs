@@ -86,7 +86,7 @@ fn run(config: LiveConfig, stop: &AtomicBool, emit: Emit) {
         Ok(parsed) => parsed,
         Err(_) => {
             emit(ProduceEvent::Failed {
-                message: "the produce settings were refused by the reference parser".into(),
+                message: "the produce settings were refused by the SDK parser".into(),
             });
             return;
         }

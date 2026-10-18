@@ -211,9 +211,10 @@ mod tests {
     fn a_record_with_no_index_is_measured_not_failed() {
         let dir = std::env::temp_dir().join(format!("pcoc-verify-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let v: serde_json::Value =
-            serde_json::from_str(include_str!("../../../../spec/conformance/v2.0/kat-small.json"))
-                .unwrap();
+        let v: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../spec/conformance/v2.0/kat-small.json"
+        ))
+        .unwrap();
         let bytes = crate::hex::decode(v["object_hex"].as_str().unwrap()).unwrap();
         let path = dir.join("kat.cbor");
         std::fs::write(&path, &bytes).unwrap();
@@ -283,9 +284,10 @@ mod tests {
         assert!(!line.to_ascii_lowercase().contains("portable index"));
 
         let truncated = dir.join("old.cbor");
-        let v: serde_json::Value =
-            serde_json::from_str(include_str!("../../../../spec/conformance/v2.0/kat-small.json"))
-                .unwrap();
+        let v: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../spec/conformance/v2.0/kat-small.json"
+        ))
+        .unwrap();
         let bytes = crate::hex::decode(v["object_hex"].as_str().unwrap()).unwrap();
         std::fs::write(&truncated, &bytes[..bytes.len() / 3]).unwrap();
         let old = run(&truncated, &small());

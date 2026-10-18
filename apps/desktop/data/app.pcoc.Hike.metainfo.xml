@@ -9,7 +9,7 @@
     <p>
       PCOC Hike records a Satoshi Hike v2.0 object against the Bitcoin header
       chain, shows the section 14 record for any object, and submits one
-      groundinglab sign-in. It links the pinned Rust reference in-process.
+      groundinglab sign-in. It includes the PCOC Rust SDK in-process.
     </p>
     <p>
       An nsec is pasted or generated for the session. It stays in memory and

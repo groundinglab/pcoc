@@ -657,7 +657,9 @@ mod tests {
             "kat-small" => include_str!("../../../../spec/conformance/v2.0/kat-small.json"),
             "test-3leg" => include_str!("../../../../spec/conformance/v2.0/test-3leg.json"),
             "anchor-window" => include_str!("../../../../spec/conformance/v2.0/anchor-window.json"),
-            "anchor-w16-i17" => include_str!("../../../../spec/conformance/v2.0/anchor-w16-i17.json"),
+            "anchor-w16-i17" => {
+                include_str!("../../../../spec/conformance/v2.0/anchor-w16-i17.json")
+            }
             "earlier-run-b" => include_str!("../../../../spec/conformance/v2.0/earlier-run-b.json"),
             _ => unreachable!(),
         };
