@@ -64,6 +64,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # full history and tags: sdk/tools/check_spec_pin.py checks the SPEC_PIN tag's tree
+          fetch-depth: 0
       - name: sparse worktree (full clone, cone mode, no partial filter)
         run: git sparse-checkout set spec sdk/tools
       - name: ring 1 checks (section 6, sign-in wire, links, manifest hash)
@@ -82,6 +84,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # full history and tags: sdk/tools/check_spec_pin.py checks the SPEC_PIN tag's tree
+          fetch-depth: 0
       - name: sparse worktree (full clone, cone mode, no partial filter)
         run: git sparse-checkout set spec sdk
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
