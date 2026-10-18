@@ -76,7 +76,7 @@ It runs every step, then exits non-zero if any step failed:
 2. **Rust:** `cargo test --locked --release`, covering unit tests, the conformance pack and malformed-input tests;
 3. **Go:** `go vet ./...` and `go test ./...`, covering unit tests and the conformance pack;
 4. **Java:** `java/v2.sh`, covering the conformance pack and the section 6 pins;
-5. **cross-check:** the Rust, Go and Java verify programs run on the pack objects, deterministic mutants of `kat-small` and one-byte non-map CBOR items, and must write byte-identical records and exit codes ([tools/crosscheck.py](tools/crosscheck.py));
+5. **cross-check:** the Rust, Go and Java verify programs run on the pack objects, deterministic mutants of `kat-small`, targeted section 14.1 edits and one-byte non-map CBOR items, and must write byte-identical records and exit codes. Each SDK's verify call is compared the same way at the library level, through the `librecord` examples ([tools/crosscheck.py](tools/crosscheck.py));
 6. **examples:** every example compiles. The quickstarts must reproduce the `kat-small` record byte for byte, and the produce examples must write the same object in all three languages;
 7. **docs:** every version, tag, spec tag, digest, output block and code snippet in these READMEs must match `VERSION`, `SPEC_PIN`, the example output and the example sources ([tools/check_docs.py](tools/check_docs.py)).
 
@@ -92,7 +92,7 @@ sdk/test.sh summary
 sdk/test.sh: PASS
 ```
 
-On some malformed inputs, Rust disagrees with Go and Java. These cases are listed, with their impact and the open spec questions, in [KNOWN-DIVERGENCES.md](KNOWN-DIVERGENCES.md). The harness pins each one by name and by its output digests.
+On a few malformed inputs the SDKs still disagree: one open spec question and one set of bugs not yet fixed. [KNOWN-DIVERGENCES.md](KNOWN-DIVERGENCES.md) lists them, with the two open spec questions and the Rust section 14.1 bug fixed after rc.1. The harness pins each open case by name and by its output digests.
 
 ## The verify programs
 
@@ -129,8 +129,9 @@ Verify writes the section 14 measurement record. It does not judge. Judgment is 
 | [rust/](rust/) | Cargo workspace: `hike`, `hike-net`, `nip06`, and the programs `satoshi-hike-produce` and `satoshi-hike-verify` |
 | [go/](go/) | Go module: package `hike`, programs under `cmd/`, the conformance test under `conformance/` |
 | [java/](java/) | Java sources (`pcoc.hike`, `pcoc.json`, `pcoc.cli`, `pcoc.conformance`) and `v2.sh` |
-| [examples/](examples/) | Quickstart, produce and live examples in each language, all built by `test.sh` |
+| [examples/](examples/) | Quickstart, produce and live examples in each language, all built by `test.sh`, and the `librecord` programs the library-level cross-check runs |
 | [tools/](tools/) | `check_spec_pin.py`, `check_versions.py`, `check_docs.py`, `crosscheck.py` |
 | [VERSION](VERSION), [SPEC_PIN](SPEC_PIN) | SDK version; spec tag and vector hash |
+| [KNOWN-DIVERGENCES.md](KNOWN-DIVERGENCES.md), [RC-NOTES.md](RC-NOTES.md) | Where the SDKs disagree and the open spec questions; release-candidate notes, consumer impact and backlog |
 
 ↑ [root README](../README.md)

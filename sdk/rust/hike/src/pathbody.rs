@@ -310,6 +310,7 @@ pub fn encode_single_leaf(waypoint: &[u8; 32]) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
 
     #[test]
     fn field_readers_return_truncated_instead_of_panicking() {
@@ -320,8 +321,6 @@ mod tests {
         assert_eq!(be_u32(&[0u8; 8], usize::MAX - 1), Err(PathError::Truncated));
         assert_eq!(be_u32(&[0, 0, 1, 2], 0), Ok(0x0102));
     }
-
-    use super::*;
 
     #[test]
     fn single_leaf_round_trip_and_rejects_other_waypoint() {

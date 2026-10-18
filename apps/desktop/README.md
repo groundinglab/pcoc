@@ -8,6 +8,8 @@ A full hike is eighteen stages paced by Bitcoin blocks. That is hours, not a but
 
 **Send to my phone.** On a finished hike, Send to my phone sends the `.cbor` to the object's own npub as one NIP-04 direct message (kind 4), encrypted with the nsec pasted in this session. It goes to relay.damus.io, relay.primal.net and nos.lol; one relay accepting is enough, and nos.lol refuses most objects for size. The phone app signed in with that npub offers it for approval. Making a PCOC never sends it by itself, and the send never touches the admission gate. The code is `core/src/dm.rs`.
 
+**SDK step in this build.** The app version is still 0.1.4, but the Rust SDK under it moved from `ref-rust-v2.0.5` to the in-tree `sdk/rust` (2.0.0-rc.1, which is `ref-rust-v2.0.6` plus an untrusted-input fix and an nsec fix). Since rc.1 it also has the section 14.1 recording fix: checking a malformed object now lists every violated condition and the later measurements. The details are in [sdk/RC-NOTES.md](../../sdk/RC-NOTES.md).
+
 Needs GTK 4.14+ and libadwaita 1.5+ (Ubuntu 24.04, Debian 13, Fedora 40 or newer). Rust 1.99.0 comes from `rust-toolchain.toml` in this folder.
 
 ## 1. Get the code
