@@ -54,10 +54,6 @@ KNOWN_DIVERGENCES = {
     "stage1-uint": ("27aa73761f68f982", "c256b2ba88b2ed8e", "27aa73761f68f982"),
     "stage5-uint": ("f08fa31c1a00a629", "6b3d6543fd428657", "f08fa31c1a00a629"),
     "stage17-uint": ("8e155559c4815735", "ff90075e765126ea", "8e155559c4815735"),
-    # Open spec question Q-a: last_interrupt_height above 2^53 - 1 (and above
-    # stage 17's height). Go also lists `header height order`; Rust and Java
-    # list `height_range` only.
-    "li-height-2^64-1": ("e9b8228be57f3db2", "84bececb692cac10", "e9b8228be57f3db2"),
 }
 
 
@@ -70,7 +66,6 @@ LIB_DIVERGENCES = {
     "stage1-uint": ("c2aa7be545c13037", "67106f05b133a917", "c2aa7be545c13037"),
     "stage5-uint": ("03633a4c23bfd22d", "c542bfedd8f21174", "03633a4c23bfd22d"),
     "stage17-uint": ("badd1c19c04ef720", "dc3c169377aec4ae", "badd1c19c04ef720"),
-    "li-height-2^64-1": ("2109106b1b3e6c43", "971ad8cf01aff7f6", "2109106b1b3e6c43"),
 }
 
 

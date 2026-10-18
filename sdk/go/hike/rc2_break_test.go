@@ -2,8 +2,10 @@ package hike
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -158,6 +160,34 @@ func TestRC2NonMapTopLevelIsUndecoded(t *testing.T) {
 	}
 	if _, decoded := Verify([]byte{0xa0, 0x00}, ConformanceSmallV2, Index{}, nil, false); !decoded {
 		t.Fatal("a map with a trailing byte is a decoded top-level map")
+	}
+}
+
+// F5 / Q-a: last_interrupt_height of 2^53 and of 2^64−1 lists header height
+// order with height_range. The integer compares exactly, so last_interrupt
+// is not listed: 2^53 is greater than stage 17's height.
+func TestF5OutOfRangeInterruptHeightFailsHeaderOrder(t *testing.T) {
+	obj, index := loadKat(t)
+	needle := []byte("\x75last_interrupt_height\x19")
+	pos := nthIndex(t, obj, needle, 0) + len(needle)
+	for _, n := range []uint64{1 << 53, ^uint64(0)} {
+		head := []byte{0x1b}
+		var be [8]byte
+		binary.BigEndian.PutUint64(be[:], n)
+		edited := append(append(append([]byte{}, obj[:pos-1]...), head...), be[:]...)
+		edited = append(edited, obj[pos+2:]...)
+		rec, decoded := katRecord(t, edited, index)
+		if !decoded {
+			t.Fatal("decoded")
+		}
+		got := at(rec, "shape_item")
+		want := []any{"header height order", "height_range"}
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Fatalf("height %d shape %v", n, got)
+		}
+		if at(rec, "headers", 18, "stored_height") != "not defined" {
+			t.Fatalf("height %d stored %v", n, at(rec, "headers", 18, "stored_height"))
+		}
 	}
 }
 

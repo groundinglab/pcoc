@@ -230,6 +230,11 @@ pub(crate) struct StageAbsent {
     pub beacon_height: bool,
     /// The stored `waypoint` is absent, not bytes, or not 32 bytes.
     pub waypoint: bool,
+    /// The decoded `beacon_height`, including a value above 2^53−1.
+    /// `None` when the field is absent or not an unsigned integer.
+    /// Header height order compares this exact integer. The record still
+    /// writes a value above 2^53−1 as `not defined` (`height_range`).
+    pub beacon_height_value: Option<u64>,
     /// The `path` key holds something other than a byte string.
     pub path_bad: bool,
     /// `len(checkpoints)` on the wire, counting an element of the wrong width.
@@ -250,6 +255,7 @@ impl StageAbsent {
         beacon: false,
         beacon_height: false,
         waypoint: false,
+        beacon_height_value: None,
         path_bad: false,
         checkpoint_elems: None,
         checkpoint_heads: Vec::new(),
@@ -320,7 +326,10 @@ fn parse_stage(value: &Cbor) -> ParsedStage {
         }
     };
     let beacon_height = match field_uint(map, "beacon_height") {
-        Ok(height) => height,
+        Ok(height) => {
+            absent.beacon_height_value = Some(height);
+            height
+        }
         Err(fail) => {
             notes.push(fail.0);
             notes.push("beacon height");
@@ -529,6 +538,96 @@ pub(crate) struct MeasuredObject {
     /// `public_key` or `seed_beacon` is absent, mistyped or short. The seed,
     /// the terrain and every recompute that reads them are not available.
     pub seed_absent: bool,
+}
+
+/// Header height order uses the decoded unsigned integer. A height above
+/// 2^53−1 is not a usable ordered height: the record writes it `not defined`
+/// (`height_range`) and the order is violated, the same as an absent height.
+/// A height inside the bound compares as `u64`. No float, no saturation,
+/// no clamp to 2^53−1.
+fn height_in_order(height: Option<u64>) -> Option<u64> {
+    height.filter(|height| *height <= crate::consts::JSON_INT_MAX)
+}
+
+/// True when `height` is not strictly greater than `prev` for header height
+/// order. An absent height or one above 2^53−1 fails the order.
+fn height_order_bad(prev: Option<u64>, height: Option<u64>) -> bool {
+    match (height_in_order(prev), height_in_order(height)) {
+        (Some(prev), Some(height)) => height <= prev,
+        _ => true,
+    }
+}
+
+/// `last_interrupt`'s own condition compares the decoded integers exactly,
+/// including a value above 2^53−1. That value still fails header height order.
+fn interrupt_height_bad(stage_height: Option<u64>, height: u64) -> bool {
+    stage_height.is_none_or(|stored| height <= stored)
+}
+
+/// Header height order and header hash difference over the stages that are
+/// present, then the closing pair against `last_interrupt`.
+fn note_header_order(
+    stages: &[Stage],
+    stage_absent: &[StageAbsent],
+    last_interrupt: Option<[u8; 32]>,
+    last_interrupt_height: Option<u64>,
+    note: &mut impl FnMut(Fail),
+) {
+    let n = stages.len().min(STAGES);
+    for g in 0..n.saturating_sub(1) {
+        let (this, next) = (&stage_absent[g], &stage_absent[g + 1]);
+        if height_order_bad(this.beacon_height_value, next.beacon_height_value) {
+            note(Fail("beacon height"));
+        }
+        if this.beacon || next.beacon || stages[g + 1].beacon == stages[g].beacon {
+            note(Fail("beacon"));
+        }
+    }
+    if n < STAGES {
+        return;
+    }
+    let closing = &stage_absent[17];
+    let stage_height = closing.beacon_height_value;
+    match (last_interrupt, last_interrupt_height) {
+        (Some(hash), Some(height)) => {
+            // `last_interrupt_height` and `last_interrupt` are also the
+            // last stored header: an order or equality failure there is
+            // `header height order` / `header hash differ` as well.
+            // `last_interrupt` compares the decoded integers exactly.
+            // Header height order also fails when either height is above
+            // 2^53−1, because that height is not a usable ordered height.
+            let interrupt_bad = interrupt_height_bad(stage_height, height);
+            let order_bad = height_order_bad(stage_height, Some(height));
+            let hash_bad = closing.beacon || hash == stages[17].beacon;
+            if interrupt_bad || hash_bad {
+                note(Fail("last_interrupt"));
+            }
+            if order_bad {
+                note(Fail("beacon height"));
+            }
+            if hash_bad {
+                note(Fail("beacon"));
+            }
+        }
+        (None, None) => {
+            // The closing header is one of the stored headers. Both fields
+            // absent violates height order and hash difference.
+            note(Fail("beacon height"));
+            note(Fail("beacon"));
+        }
+        (None, Some(height)) => {
+            note(Fail("beacon"));
+            if height_order_bad(stage_height, Some(height)) {
+                note(Fail("beacon height"));
+            }
+        }
+        (Some(hash), None) => {
+            note(Fail("beacon height"));
+            if closing.beacon || hash == stages[17].beacon {
+                note(Fail("beacon"));
+            }
+        }
+    }
 }
 
 /// A section 6 constant field. `wrong_type` is `field set`; `differs` is
@@ -765,14 +864,18 @@ fn read_measured_map(value: &Cbor, trailing: bool, sizes: Sizes) -> Result<Measu
     }
     // Stage 0 beacon is the seed. Its waypoint is the seed value, Rule A2.2.
     // A stage-0 path key is a shape measurement, not a decode failure.
-    if stages.len() == STAGES {
+    // More than 18 stages is `stages length` and is still measured: every
+    // other condition runs over the stages that are present (section 14.1,
+    // the same as the too-short case). The six-leg draw still indexes
+    // stages 0 … 17 only.
+    if stages.len() >= STAGES {
         if path_keys.first() == Some(&true) {
             // Stage 0's section 8 map has no `path` key. The extra key is
             // `field set`, and the key's presence is `stage-0 path key`.
             note(Fail("map field set"));
             note(Fail("stage-0 path"));
         }
-        if path_keys.iter().skip(1).any(|present| !present) {
+        if path_keys.iter().skip(1).take(STAGES - 1).any(|present| !present) {
             note(Fail("path"));
         }
         if seed_beacon_absent || stage_absent[0].beacon || stages[0].beacon != seed_beacon {
@@ -787,61 +890,15 @@ fn read_measured_map(value: &Cbor, trailing: bool, sizes: Sizes) -> Result<Measu
         }
         // Every pair is checked. One violated condition does not hide
         // another (section 14.1); `shape_item` lists each string once.
-        for g in 0..STAGES - 1 {
-            let (this, next) = (&stage_absent[g], &stage_absent[g + 1]);
-            if this.beacon_height
-                || next.beacon_height
-                || stages[g + 1].beacon_height <= stages[g].beacon_height
-            {
-                note(Fail("beacon height"));
-            }
-            if this.beacon || next.beacon || stages[g + 1].beacon == stages[g].beacon {
-                note(Fail("beacon"));
-            }
-        }
-        let closing = &stage_absent[17];
-        match (last_interrupt, last_interrupt_height) {
-            (Some(hash), Some(height)) => {
-                // `last_interrupt_height` and `last_interrupt` are also the
-                // last stored header: an order or equality failure there is
-                // `header height order` / `header hash differ` as well.
-                let height_bad = closing.beacon_height || height <= stages[17].beacon_height;
-                let hash_bad = closing.beacon || hash == stages[17].beacon;
-                if height_bad || hash_bad {
-                    note(Fail("last_interrupt"));
-                }
-                if height_bad {
-                    note(Fail("beacon height"));
-                }
-                if hash_bad {
-                    note(Fail("beacon"));
-                }
-            }
-            (None, None) => {
-                // The closing header is one of the stored headers. Both fields
-                // absent violates height order and hash difference.
-                note(Fail("beacon height"));
-                note(Fail("beacon"));
-            }
-            (None, Some(height)) => {
-                note(Fail("beacon"));
-                if closing.beacon_height || height <= stages[17].beacon_height {
-                    note(Fail("beacon height"));
-                }
-            }
-            (Some(hash), None) => {
-                note(Fail("beacon height"));
-                if closing.beacon || hash == stages[17].beacon {
-                    note(Fail("beacon"));
-                }
-            }
-        }
-    } else if stages.len() < STAGES {
+        // The compared height is the decoded unsigned integer, including a
+        // value above 2^53−1. That value is also `height_range`; it is not
+        // dropped from this order.
+        note_header_order(&stages, &stage_absent, last_interrupt, last_interrupt_height, &mut note);
+    } else {
         // A condition that tests a field's value is violated when that field is absent.
         // Stage 17 missing fails W_17 path, the last-interrupt comparison, and the
         // header-order pair that reads the missing beacons. The missing stages also
-        // have no `leg_count`, so that condition is violated too. More than 18 stages
-        // is only `stages length`: stage 17 may still be present.
+        // have no `leg_count`, so that condition is violated too.
         note(Fail("W_17 path"));
         note(Fail("last_interrupt"));
         note(Fail("beacon height"));

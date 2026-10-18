@@ -145,6 +145,10 @@ def cases(pack):
     add("mixed-1", lambda v: (st(v, 3).set("leg_count", "x"), st(v, 9).drop("beacon_height"), v.set("slot_bytes", "x"), st(v, 12).set("beacon", st(v, 11).get("beacon"))))
     add("mixed-2", lambda v: (v.drop("fill"), st(v, 2).drop("checkpoints"), cpw(7)(v), st(v, 10).drop("beacon")))
     add("height-2^53", lambda v: st(v, 17).set("beacon_height", 2**53))
+    # F5 / Q-a: the closing pair compares the decoded unsigned integer.
+    # 2^53 and 2^64−1 are above 2^53−1, so header height order is listed
+    # with height_range. 2^53 is greater than stage 17's height as an integer.
+    add("li-height-2^53", lambda v: v.set("last_interrupt_height", 2**53))
     add("li-height-2^64-1", lambda v: v.set("last_interrupt_height", 2**64 - 1))
     add("neg-s5-height", lambda v: st(v, 5).set("beacon_height", -1))
     add("leg_count-0-s5", lambda v: st(v, 5).set("leg_count", 0))

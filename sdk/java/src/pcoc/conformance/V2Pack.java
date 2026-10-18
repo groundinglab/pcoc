@@ -646,6 +646,23 @@ public final class V2Pack {
                 throw new AssertionError("six-leg previous " + Arrays.toString(c) + " " + index + " " + result);
             }
         }
+        // F5 / Q-a: last_interrupt_height of 2^53 and of 2^64−1 lists header
+        // height order with height_range. The integer compares exactly.
+        byte[] heightKey = cat(new byte[] {0x75}, "last_interrupt_height".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {0x19});
+        int heightAt = nth(obj, heightKey, 0) + heightKey.length;
+        for (long n : new long[] {1L << 53, -1L}) {
+            byte[] head = new byte[] {0x1b};
+            byte[] be = new byte[8];
+            for (int i = 7; i >= 0; i--) {
+                be[i] = (byte) (n >>> ((7 - i) * 8));
+            }
+            byte[] edited = cat(Arrays.copyOfRange(obj, 0, heightAt - 1), head, be, Arrays.copyOfRange(obj, heightAt + 2, obj.length));
+            Json.Obj rec = Json.asObj(Json.parse(Measure.record(edited, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)));
+            String shape = Json.asArr(rec.fields().get("shape_item")).compact();
+            if (!"[\"header height order\",\"height_range\"]".equals(shape)) {
+                throw new AssertionError("interrupt height " + Long.toUnsignedString(n) + " " + shape);
+            }
+        }
         // F2/F3: a declared length or count past the bytes left is malformed
         // CBOR. The record is the undecoded one; the decoder does not allocate
         // from that length. Depth is a separate change (F1).

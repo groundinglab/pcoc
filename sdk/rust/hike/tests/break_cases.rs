@@ -387,6 +387,25 @@ fn a_top_level_that_is_not_a_map_is_malformed_cbor() {
     assert!(!hike::top_level_map(&[]));
 }
 
+/// F5 / Q-a: last_interrupt_height above 2^53−1 is height_range and, because
+/// that height is not a usable ordered height, header height order. The
+/// integer itself compares exactly: 2^53 is greater than stage 17's height,
+/// so last_interrupt is not listed.
+#[test]
+fn an_out_of_range_interrupt_height_fails_header_order() {
+    for n in [1u64 << 53, u64::MAX] {
+        let mut v = object();
+        v.set("last_interrupt_height", V::U(n));
+        let rec = record(&enc(&v));
+        assert_eq!(
+            items(&rec),
+            ["header height order", "height_range"],
+            "height {n}"
+        );
+        assert_eq!(rec["headers"][18]["stored_height"], "not defined");
+    }
+}
+
 /// F2: a declared byte, text, array or map length past the bytes left is
 /// the undecoded ["malformed cbor"] record. The same heads the Go and Java
 /// decoders reject without allocating from the declared length.

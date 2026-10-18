@@ -484,6 +484,8 @@ public final class Measure {
         if (beacon == null || beaconHeight == null) {
             return true;
         }
+        // Exact unsigned integers, including a value above 2^53−1.
+        // Header height order is a separate condition and fails for that value.
         return Bytes.eq(last, beacon) || Long.compareUnsigned(height, beaconHeight) <= 0;
     }
 
@@ -504,7 +506,10 @@ public final class Measure {
             if (hashes[i] == null) {
                 hashBad = true;
             }
-            if (heights[i] == null) {
+            // A height above 2^53−1 is not a usable ordered height. The record
+            // writes it `not defined` (`height_range`). Inside the bound the
+            // comparison is the decoded unsigned integer, with no clamp.
+            if (orderedHeight(heights[i]) == null) {
                 heightBad = true;
             }
             if (i == 0) {
@@ -513,7 +518,9 @@ public final class Measure {
             if (hashes[i] != null && hashes[i - 1] != null && Bytes.eq(hashes[i], hashes[i - 1])) {
                 hashBad = true;
             }
-            if (heights[i] != null && heights[i - 1] != null && Long.compareUnsigned(heights[i], heights[i - 1]) <= 0) {
+            Long height = orderedHeight(heights[i]);
+            Long prev = orderedHeight(heights[i - 1]);
+            if (height != null && prev != null && Long.compareUnsigned(height, prev) <= 0) {
                 heightBad = true;
             }
         }
@@ -524,6 +531,14 @@ public final class Measure {
             heightBad = true;
         }
         return new boolean[] {heightBad, hashBad};
+    }
+
+    /** A height that can take part in header height order: at most 2^53−1. */
+    private static Long orderedHeight(Long height) {
+        if (height == null || Hike.aboveJson(height)) {
+            return null;
+        }
+        return height;
     }
 
     private static boolean huge(Cbor.Val value) {
