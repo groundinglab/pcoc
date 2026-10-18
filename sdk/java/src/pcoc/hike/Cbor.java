@@ -315,7 +315,9 @@ public final class Cbor {
                     if (countExceeds(argument, 1)) {
                         throw new Problem("truncated");
                     }
-                    List<Val> items = new ArrayList<>((int) argument);
+                    // The count is not a reservation. Nested heads can each name
+                    // one element per byte still in the buffer.
+                    List<Val> items = new ArrayList<>(argument > 64 ? 64 : (int) argument);
                     for (long n = 0; n < argument; n++) {
                         items.add(item());
                     }

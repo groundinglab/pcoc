@@ -114,6 +114,15 @@ def load_cases():
     cases.append(("cbor-text", b"\x60", kat_docs, None))
     # Structural break cases (hikecases.py).
     cases.extend(hikecases.cases(PACK))
+    # F10: 64 heads whose declared count equals the bytes left. The same bytes
+    # as the nested-arr and nested-map repros, plus a short vector.
+    for name, size, major in (
+        ("f10-arr-4KiB", 4096, 0x9A),
+        ("f10-arr-1MiB", 1 << 20, 0x9A),
+        ("f10-arr-2MiB", 2 << 20, 0x9A),
+        ("f10-map-2MiB", 2 << 20, 0xBA),
+    ):
+        cases.append((name, amp_input(size, 64, major), kat_docs, None))
     # Nesting limit (F1): every SDK stops at MAX_CBOR_NESTING = 64.
     for name, obj in nesting_cases(kat_obj):
         cases.append((name, obj, kat_docs, None))
@@ -180,6 +189,20 @@ def field_cases(obj):
 
 
 MAX_CBOR_NESTING = 64
+
+
+def amp_input(size, levels, major):
+    """64-deep array (0x9a) or map (0xba). Each count equals the bytes left."""
+    out = bytearray()
+    for _ in range(levels):
+        rem = size - len(out) - 5
+        cnt = rem // 2 if major == 0xBA else rem
+        out.append(major)
+        out += cnt.to_bytes(4, "big")
+        if major == 0xBA:
+            out += b"\x60"
+    out += b"\x00" * (size - len(out))
+    return bytes(out)
 
 
 def nesting_cases(obj):
