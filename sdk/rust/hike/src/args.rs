@@ -63,7 +63,8 @@ pub enum AdmitPolicy {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MeasureProfile {
     Production,
-    ConformanceSmall,
+    /// The four integers are the ones the verify CLI was given.
+    ConformanceSmall(crate::consts::Sizes),
 }
 
 impl MeasureProfile {
@@ -71,14 +72,14 @@ impl MeasureProfile {
     pub fn sizes(self) -> crate::consts::Sizes {
         match self {
             MeasureProfile::Production => crate::consts::Sizes::production(),
-            MeasureProfile::ConformanceSmall => crate::consts::Sizes::conformance_small(),
+            MeasureProfile::ConformanceSmall(sizes) => sizes,
         }
     }
 
     pub fn record_name(self) -> &'static str {
         match self {
             MeasureProfile::Production => "production",
-            MeasureProfile::ConformanceSmall => "conformance-small",
+            MeasureProfile::ConformanceSmall(_) => "conformance-small",
         }
     }
 }
@@ -122,6 +123,24 @@ fn match_flag<'a>(arg: &'a str, name: &str) -> Option<FlagForm<'a>> {
     } else {
         None
     }
+}
+
+/// One of the four conformance-small integers. Not a decimal integer, a
+/// repeated flag, or a value that does not fit `usize`, is a usage error.
+fn take_profile_int(
+    form: FlagForm<'_>,
+    args: &[String],
+    index: &mut usize,
+    prior: Option<usize>,
+) -> Result<usize, UsageError> {
+    if prior.is_some() {
+        return Err(UsageError);
+    }
+    let text = flag_value(form, args, index)?;
+    if text.is_empty() || !text.bytes().all(|b| b.is_ascii_digit()) || text.len() > 1 && text.starts_with('0') {
+        return Err(UsageError);
+    }
+    text.parse::<usize>().map_err(|_| UsageError)
 }
 
 fn flag_value<'a>(
@@ -470,6 +489,10 @@ pub fn parse_verify(args: &[String]) -> Result<VerifyArgs, UsageError> {
     let mut chain_rpc = None;
     let mut profile = None;
     let mut log = None;
+    let mut sample_bytes = None;
+    let mut slot_bytes = None;
+    let mut terrain_bytes = None;
+    let mut steps_per_leg = None;
     let mut i = 0;
     while i < args.len() {
         let arg = &args[i];
@@ -509,16 +532,45 @@ pub fn parse_verify(args: &[String]) -> Result<VerifyArgs, UsageError> {
                 return Err(UsageError);
             }
             log = Some(VerifyLog::parse(flag_value(form, args, &mut i)?).ok_or(UsageError)?);
+        } else if let Some(form) = match_flag(arg, "--sample-bytes") {
+            sample_bytes = Some(take_profile_int(form, args, &mut i, sample_bytes)?);
+        } else if let Some(form) = match_flag(arg, "--slot-bytes") {
+            slot_bytes = Some(take_profile_int(form, args, &mut i, slot_bytes)?);
+        } else if let Some(form) = match_flag(arg, "--terrain-bytes") {
+            terrain_bytes = Some(take_profile_int(form, args, &mut i, terrain_bytes)?);
+        } else if let Some(form) = match_flag(arg, "--steps-per-leg") {
+            steps_per_leg = Some(take_profile_int(form, args, &mut i, steps_per_leg)?);
         } else {
             return Err(UsageError);
         }
         i += 1;
     }
+    let any_integer = sample_bytes.is_some() || slot_bytes.is_some() || terrain_bytes.is_some() || steps_per_leg.is_some();
+    let all_integers = sample_bytes.is_some() && slot_bytes.is_some() && terrain_bytes.is_some() && steps_per_leg.is_some();
+    let small = profile.as_deref() == Some("conformance-small");
+    // The four integers exist for conformance-small (SPEC §16.1). Any of them
+    // with another profile, or a missing one under conformance-small, is usage.
+    if small {
+        if !all_integers {
+            return Err(UsageError);
+        }
+    } else if any_integer {
+        return Err(UsageError);
+    }
     let (profile, measure) = match profile.as_deref() {
         None | Some("test") | Some("production") => {
             (PlaneProfile::Test, MeasureProfile::Production)
         }
-        Some("conformance-small") => (PlaneProfile::Test, MeasureProfile::ConformanceSmall),
+        Some("conformance-small") => {
+            let sizes = crate::consts::Sizes::conformance_small_checked(
+                sample_bytes.unwrap(),
+                slot_bytes.unwrap(),
+                terrain_bytes.unwrap(),
+                steps_per_leg.unwrap() as u64,
+            )
+            .ok_or(UsageError)?;
+            (PlaneProfile::Test, MeasureProfile::ConformanceSmall(sizes))
+        }
         Some("live") => (PlaneProfile::Live, MeasureProfile::Production),
         Some(_) => return Err(UsageError),
     };
@@ -1203,23 +1255,61 @@ mod tests {
         .unwrap();
         assert_eq!(production.profile, PlaneProfile::Test);
         assert_eq!(production.measure, MeasureProfile::Production);
-        let small = parse_verify(&[
+        let small_flags = [
+            "--sample-bytes",
+            "32",
+            "--slot-bytes",
+            "64",
+            "--terrain-bytes",
+            "256",
+            "--steps-per-leg",
+            "32",
+        ];
+        let mut small_args = vec![
             "--profile".to_owned(),
             "conformance-small".to_owned(),
             "--input".to_owned(),
             "hike.cbor".to_owned(),
             "--index-url".to_owned(),
             "http://127.0.0.1:7".to_owned(),
-        ])
-        .unwrap();
+        ];
+        small_args.extend(small_flags.iter().map(|s| (*s).to_owned()));
+        let small = parse_verify(&small_args).unwrap();
         assert_eq!(small.profile, PlaneProfile::Test);
-        assert_eq!(small.measure, MeasureProfile::ConformanceSmall);
+        assert_eq!(
+            small.measure,
+            MeasureProfile::ConformanceSmall(crate::consts::Sizes::conformance_small())
+        );
         assert_eq!(small.measure.sizes(), crate::consts::Sizes::conformance_small());
         assert_eq!(small.measure.record_name(), "conformance-small");
         assert_ne!(
             MeasureProfile::Production.sizes(),
-            MeasureProfile::ConformanceSmall.sizes()
+            small.measure.sizes()
         );
+        // Missing one integer, a non-integer, a rejected integer, and any of
+        // the four with another profile are usage errors.
+        assert!(parse_verify(&small_args[..small_args.len() - 2]).is_err());
+        let mut bad = small_args.clone();
+        bad.push("--sample-bytes".to_owned());
+        bad.push("nope".to_owned());
+        assert!(parse_verify(&bad).is_err());
+        let mut rejected = small_args.clone();
+        *rejected.iter_mut().find(|s| *s == "64").unwrap() = "7".to_owned();
+        assert!(parse_verify(&rejected).is_err());
+        let mut other = vec![
+            "--profile".to_owned(),
+            "production".to_owned(),
+            "--input".to_owned(),
+            "hike.cbor".to_owned(),
+            "--index-url".to_owned(),
+            "http://127.0.0.1:7".to_owned(),
+            "--sample-bytes".to_owned(),
+            "32".to_owned(),
+        ];
+        assert!(parse_verify(&other).is_err());
+        other[1] = "live".to_owned();
+        other.retain(|s| s != "--index-url" && s != "http://127.0.0.1:7");
+        assert!(parse_verify(&other).is_err());
         assert!(parse_produce(&[
             "--profile".to_owned(),
             "conformance-small".to_owned(),

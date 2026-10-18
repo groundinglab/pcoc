@@ -29,7 +29,7 @@ func run(args []string) int {
 		usage()
 		return 2
 	}
-	profile, ok := measureProfile(parsed.profile)
+	profile, ok := measureProfile(parsed)
 	if !ok {
 		usage()
 		return 2
@@ -85,13 +85,17 @@ func run(args []string) int {
 }
 
 type parsedArgs struct {
-	input    string
-	indexURL string
-	profile  string
-	audit    []byte
-	report   string
-	chainRPC string
-	log      string
+	input        string
+	indexURL     string
+	profile      string
+	audit        []byte
+	report       string
+	chainRPC     string
+	log          string
+	sampleBytes  *int
+	slotBytes    *int
+	terrainBytes *int
+	stepsPerLeg  *int
 }
 
 func parse(args []string) (parsedArgs, bool) {
@@ -161,6 +165,30 @@ func parse(args []string) (parsedArgs, bool) {
 				return parsedArgs{}, false
 			}
 			out.log = v
+		case "sample-bytes":
+			v, ok := needInt(need)
+			if !ok || out.sampleBytes != nil {
+				return parsedArgs{}, false
+			}
+			out.sampleBytes = &v
+		case "slot-bytes":
+			v, ok := needInt(need)
+			if !ok || out.slotBytes != nil {
+				return parsedArgs{}, false
+			}
+			out.slotBytes = &v
+		case "terrain-bytes":
+			v, ok := needInt(need)
+			if !ok || out.terrainBytes != nil {
+				return parsedArgs{}, false
+			}
+			out.terrainBytes = &v
+		case "steps-per-leg":
+			v, ok := needInt(need)
+			if !ok || out.stepsPerLeg != nil {
+				return parsedArgs{}, false
+			}
+			out.stepsPerLeg = &v
 		default:
 			return parsedArgs{}, false
 		}
@@ -171,12 +199,46 @@ func parse(args []string) (parsedArgs, bool) {
 	return out, true
 }
 
-func measureProfile(name string) (hike.Profile, bool) {
-	switch name {
+// A decimal integer with no sign and no leading zero. The profile constructor
+// still rejects a value outside the section 16.1 bounds.
+func needInt(need func() (string, bool)) (int, bool) {
+	text, ok := need()
+	if !ok || text == "" || (len(text) > 1 && text[0] == '0') {
+		return 0, false
+	}
+	n := 0
+	for _, c := range text {
+		if c < '0' || c > '9' {
+			return 0, false
+		}
+		n = n*10 + int(c-'0')
+		if n < 0 {
+			return 0, false
+		}
+	}
+	return n, true
+}
+
+func measureProfile(parsed parsedArgs) (hike.Profile, bool) {
+	given := 0
+	for _, n := range []*int{parsed.sampleBytes, parsed.slotBytes, parsed.terrainBytes, parsed.stepsPerLeg} {
+		if n != nil {
+			given++
+		}
+	}
+	switch parsed.profile {
 	case "", "test", "live", "production":
+		// The four integers exist for conformance-small. Any of them here is usage.
+		if given != 0 {
+			return hike.Profile{}, false
+		}
 		return hike.Production, true
 	case "conformance-small":
-		return hike.ConformanceSmallV2, true
+		if given != 4 {
+			return hike.Profile{}, false
+		}
+		profile, err := hike.NewProfile("conformance-small", hike.Kind, *parsed.sampleBytes, *parsed.slotBytes, *parsed.terrainBytes, *parsed.stepsPerLeg)
+		return profile, err == nil
 	default:
 		return hike.Profile{}, false
 	}
@@ -270,5 +332,5 @@ func decodeHex(s string) ([]byte, error) {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: satoshi-hike-verify --input PATH --index-url URL [--audit-seed HEX] [--report PATH] [--profile production|conformance-small|test|live] [--chain-rpc URL] [--log quiet|verbose]\n       default profile is test. Omitted --index-url is PCOC_TEST_INDEX_URL. Unset is a usage error. This tree does not fill that host. It does not fill https://index.groundinglab.io.\n       --profile live fills that index. --chain-rpc is live-only.\n       --log defaults to quiet. verbose writes the measurement record to stderr. stdout is the measurement record when the object decodes.\n")
+	fmt.Fprintf(os.Stderr, "usage: satoshi-hike-verify --input PATH --index-url URL [--audit-seed HEX] [--report PATH] [--profile production|conformance-small|test|live] [--sample-bytes N --slot-bytes N --terrain-bytes N --steps-per-leg N] [--chain-rpc URL] [--log quiet|verbose]\n       default profile is test. Omitted --index-url is PCOC_TEST_INDEX_URL. Unset is a usage error. This tree does not fill that host. It does not fill https://index.groundinglab.io.\n       --profile live fills that index. --chain-rpc is live-only.\n       --profile conformance-small requires all four integers. Any of them with another profile is a usage error.\n       --log defaults to quiet. verbose writes the measurement record to stderr. stdout is the measurement record when the object decodes.\n")
 }

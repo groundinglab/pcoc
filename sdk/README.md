@@ -98,6 +98,7 @@ On a few malformed inputs the SDKs still disagree, on two open spec questions (a
 
 `satoshi-hike-verify` takes the same flags in all three SDKs:
 - `--input PATH`, `--index-url URL` and `--profile production|conformance-small|test|live`;
+- `--sample-bytes N`, `--slot-bytes N`, `--terrain-bytes N` and `--steps-per-leg N`, all four required with `--profile conformance-small` and a usage error with any other profile;
 - `--audit-seed HEX`, which pins the six-leg draw;
 - `--report PATH`, which also writes a JSON report;
 - `--log quiet|verbose`: with `verbose`, the record is also written to stderr;

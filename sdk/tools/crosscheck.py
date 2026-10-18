@@ -29,6 +29,10 @@ Inputs, all from spec/conformance/v2.0 (the source of truth):
     and truncated;
   * several audit seeds per object, so the drawn legs differ between runs.
 
+`--profile conformance-small` is always passed with the four section 16.1
+integers `--sample-bytes 32 --slot-bytes 64 --terrain-bytes 256
+--steps-per-leg 32`. The record states those integers.
+
 Usage (from the repository root):
   python3 sdk/tools/crosscheck.py --rust BIN --go BIN --java-classes DIR \
       [--lib-rust BIN --lib-go BIN --lib-java-classes DIR]
@@ -279,7 +283,9 @@ def main():
             json.dump({h: b for h, b in docs.items() if b is not None}, open(docs_path, "w"))
             run_seeds = seeds if name in ("kat-small", "test-3leg", "earlier-kind") else seeds[:1]
             for seed in [pinned_seed] if pinned_seed else run_seeds:
-                args = ["--input", path, "--index-url", url, "--profile", "conformance-small", "--audit-seed", seed]
+                args = ["--input", path, "--index-url", url, "--profile", "conformance-small",
+                        "--sample-bytes", "32", "--slot-bytes", "64", "--terrain-bytes", "256",
+                        "--steps-per-leg", "32", "--audit-seed", seed]
                 out = {lang: run(cmd + args, a.timeout) for lang, cmd in langs.items()}
                 runs += 1
                 codes = {lang: o[0] for lang, o in out.items()}

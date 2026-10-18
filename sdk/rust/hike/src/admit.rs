@@ -171,6 +171,7 @@ mod tests {
             },
             stages: crate::verify::StageReport::NotRead,
             record_body: String::new(),
+            measured_sizes: None,
         }
     }
 

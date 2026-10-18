@@ -258,7 +258,7 @@ try {
 
 **Nesting limit (rc.3, implementation resource limit).** The decoder accepts at most `Cbor.MAX_CBOR_NESTING` = 64 nested arrays and maps (an item counts the containers around it, itself included). A deeper item is malformed CBOR: the record is `["malformed cbor"]` and the programs exit 1. A valid section 8 hike object nests 4 deep (top-level map, `stages` array, stage map, `checkpoints`/`leg_results` array), so no valid object is refused. The value is the same in the Rust, Go and Java SDKs; see [KNOWN-DIVERGENCES.md](../KNOWN-DIVERGENCES.md#implementation-resource-limits).
 
-The `Profile` constructor checks (`SLOT_BYTES`, `TERRAIN_BYTES`, `profile`) guard the two built-in profiles, and cannot be reached from outside the package.
+The `Profile` constructor checks (`SLOT_BYTES`, `TERRAIN_BYTES`, `profile`) guard the built-in profiles. `Profile.conformanceSmall` uses the same checks for the four integers a verify CLI passes with `--profile conformance-small`, and returns null when one is rejected.
 
 The diagnostic texts are not part of the record, and they differ between SDKs. Only the record bytes are conformance-tested. The [Rust README](../rust/README.md#error-names-across-the-sdks) has a table that maps them across Rust, Go and Java.
 
@@ -286,6 +286,7 @@ java -cp lib/pcoc-sdk-2.0.0-rc.2.jar pcoc.cli.Produce --help
 
 **Verify** takes the same flags as the Rust and Go programs; see [the verify programs](../README.md#the-verify-programs).
 - The default `--profile` is `test`.
+- `--profile conformance-small` requires `--sample-bytes N --slot-bytes N --terrain-bytes N --steps-per-leg N`. The record states those integers. Any of the four with another profile is a usage error.
 - `--chain-rpc URL` is accepted with `--profile live` for flag compatibility, but this program does not read the node. It calls `Measure.record` without a chain, so a stored path in the anchor window counts as bound.
 
 **Produce** has its own flags: `--tips PATH` and the profiles `test|live|production`. See `--help`. `--demo-mnemonic` is not supported in this SDK.

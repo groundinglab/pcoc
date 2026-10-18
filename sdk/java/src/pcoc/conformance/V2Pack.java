@@ -1,5 +1,8 @@
 package pcoc.conformance;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -45,6 +48,7 @@ public final class V2Pack {
         stage0StartsOnTheLatestKnownHeader(root);
         rc2Break(pack);
         nestingIsBounded(root);
+        verifyCliIntegers();
         System.out.println("v2 pack ok");
     }
 
@@ -593,6 +597,45 @@ public final class V2Pack {
             throw new AssertionError("short " + shortLine.compact());
         }
         agreeSix(Json.asString(shortLine.fields().get("six_leg")), shortFull.fields().get("six_leg"));
+    }
+
+    /** F8: conformance-small without all four integers exits 2. The record states the integers it was given. */
+    private static void verifyCliIntegers() throws Exception {
+        Path input = Files.createTempFile("hike", ".cbor");
+        Files.write(input, new byte[] {(byte) 0xa0});
+        String path = input.toString();
+        String[] base = {"--input", path, "--index-url", "http://127.0.0.1:9", "--profile", "conformance-small"};
+        if (pcoc.cli.Verify.run(base) != 2) {
+            throw new AssertionError("missing all integers");
+        }
+        String[] one = java.util.stream.Stream.concat(Arrays.stream(base),
+                Arrays.stream(new String[] {"--sample-bytes", "32", "--slot-bytes", "64", "--terrain-bytes", "256"})).toArray(String[]::new);
+        if (pcoc.cli.Verify.run(one) != 2) {
+            throw new AssertionError("missing one integer");
+        }
+        String[] bad = java.util.stream.Stream.concat(Arrays.stream(base),
+                Arrays.stream(new String[] {"--sample-bytes", "nope", "--slot-bytes", "64", "--terrain-bytes", "256", "--steps-per-leg", "32"})).toArray(String[]::new);
+        if (pcoc.cli.Verify.run(bad) != 2) {
+            throw new AssertionError("not an integer");
+        }
+        if (pcoc.cli.Verify.run(new String[] {"--input", path, "--index-url", "http://127.0.0.1:9", "--profile", "production", "--sample-bytes", "32"}) != 2) {
+            throw new AssertionError("integers with another profile");
+        }
+        PrintStream saved = System.out;
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(sink, true, StandardCharsets.UTF_8));
+        int code;
+        try {
+            code = pcoc.cli.Verify.run(java.util.stream.Stream.concat(Arrays.stream(base),
+                    Arrays.stream(new String[] {"--sample-bytes", "16", "--slot-bytes", "64", "--terrain-bytes", "128", "--steps-per-leg", "8"})).toArray(String[]::new));
+        } finally {
+            System.setOut(saved);
+        }
+        String record = sink.toString(StandardCharsets.UTF_8);
+        if (code != 0 || !record.contains("\"sample_bytes\":16") || !record.contains("\"terrain_bytes\":128") || !record.contains("\"steps_per_leg\":8")) {
+            throw new AssertionError("record " + code + " " + record);
+        }
+        Files.deleteIfExists(input);
     }
 
     /**
