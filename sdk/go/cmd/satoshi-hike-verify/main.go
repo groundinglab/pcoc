@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/groundinglab/pcoc/reference/go/v2/hike"
+	"github.com/groundinglab/pcoc/sdk/go/v2/hike"
 )
 
 func main() {

@@ -8,7 +8,7 @@ SPEC = "spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md"
 PACK = "spec/conformance/v2.0"
 # spec/README.md may link these repository parents. No other page under spec/ may.
 README_PARENTS = {
-    "reference", "services", "apps", "docs",
+    "sdk", "services", "apps", "docs",
     "STATUS.md", "SECURITY.md", "CONTRIBUTING.md",
     "LICENSE-DOCS.md", "README.md", "PRINCIPLES.md", "LICENSE",
 }

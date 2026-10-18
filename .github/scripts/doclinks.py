@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Light link check: every relative Markdown link in root *.md, docs/, spec/, reference/,
+"""Light link check: every relative Markdown link in root *.md, docs/, spec/, sdk/,
 services/, and apps/ points at a file or directory that exists. External links are not
 fetched. Run from the repo root."""
 import glob, os, re, sys
 files = sorted(set(glob.glob("*.md")
                    + glob.glob("docs/**/*.md", recursive=True)
                    + glob.glob("spec/**/*.md", recursive=True)
-                   + glob.glob("reference/**/*.md", recursive=True)
+                   + glob.glob("sdk/**/*.md", recursive=True)
                    + glob.glob("services/**/*.md", recursive=True)
                    + glob.glob("apps/**/*.md", recursive=True)))
 bad = 0

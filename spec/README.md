@@ -2,11 +2,11 @@
 
 The PCOC specification and its conformance vectors. Together they are the core deliverable of this project.
 
-The point is interoperability. A PCOC made by one implementation must check the same way in every other. Everything else in this repository serves that. The references, the services, and the apps are built from this folder, not the other way round.
+The point is interoperability. A PCOC made by one implementation must check the same way in every other. Everything else in this repository serves that. The SDKs, the services, and the apps are built from this folder, not the other way round.
 
 Anyone, or their AI agents, can build a producer, a verifier, a service, or an app from the specification and the vectors alone, with no groundinglab code, service, or account.
 
-`reference/SPEC_PIN` names `spec-v2.0.5`, the proposed release (2026-10-17: conformance `constants.json` labels the §15.5 leg-rate figures as informative examples; no normative change; not yet tagged). `spec-v2.0.4` is the previous release (policy boundary: the specification sets no threshold value). `spec-v2.0.3` is the release before that (section 15.1 origin amendment and `sign-in-origins.json`). `spec-v2.0.2` is the release on the merge commit that moved the vectors under `spec/conformance/`. `spec-v2.0.1` is the previous release and still resolves at the old vector paths.
+`sdk/SPEC_PIN` names `spec-v2.0.5`, the current release (2026-10-17: conformance `constants.json` labels the §15.5 leg-rate figures as informative examples; no normative change). `spec-v2.0.4` is the previous release (policy boundary: the specification sets no threshold value). `spec-v2.0.3` is the release before that (section 15.1 origin amendment and `sign-in-origins.json`). `spec-v2.0.2` is the release on the merge commit that moved the vectors under `spec/conformance/`. `spec-v2.0.1` is the previous release and still resolves at the old vector paths.
 
 ## What "conforms" means
 
@@ -18,9 +18,9 @@ Part B (§15) is the admission service: its inputs, states, two-phase async, and
 
 The vectors are worked inputs and exact outputs. A text/vector disagreement is a defect in the specification (§16). Open an issue. Do not pick a side.
 
-The Rust, Go, and Java implementations in [reference/](../reference/) are the first tested examples. They are a guide, not a requirement. They conform for the same reason another implementation would: they match the vectors. Where a reference disagrees with the specification, the specification wins and the reference has a bug. Each reference ships its own tests, including a run of the full vector pack, so it also shows how to wire the vectors into a test suite.
+The Rust, Go, and Java SDKs in [sdk/](../sdk/) are the first tested implementations. They are a guide, not a requirement. They conform for the same reason another implementation would: they match the vectors. Where an SDK disagrees with the specification, the specification wins and the SDK has a bug. Each SDK ships its own tests, including a run of the full vector pack, so it also shows how to wire the vectors into a test suite.
 
-The intended use: give the specification and the vectors to your own developers, or your own AI agents, and have them implement PCOC production, verification, or interoperability in your system, service, or application. The references are an optional aid in that work. The vectors decide whether the result conforms.
+The intended use: give the specification and the vectors to your own developers, or your own AI agents, and have them implement PCOC production, verification, or interoperability in your system, service, or application. The SDKs are an optional aid in that work. The vectors decide whether the result conforms.
 
 Only hash-bound values are evidence. The portable index stands in for Bitcoin and can be bypassed by checking Bitcoin directly.
 
@@ -54,8 +54,8 @@ This page is the map. It does not add a second construction. The file is [Satosh
 1. Read Part A in order (§3 through §12, then §13 for a producer or §14 for a verifier).
 2. Implement, then run every file in [spec/conformance/v2.0](conformance/v2.0/).
 3. Compare verify records. `kat-small.json` is the producer byte-equality target. The `record` field is the §14 record.
-4. Optionally compare with a reference: [reference/](../reference/). The references are not required.
-5. The specification and the vectors change together, in one pull request. Implementations pin one spec tag through `reference/SPEC_PIN`. Part A changes need new vectors and a full CI run.
+4. Optionally compare with an SDK: [sdk/](../sdk/). The SDKs are not required.
+5. The specification and the vectors change together, in one pull request. Implementations pin one spec tag through `sdk/SPEC_PIN`. Part A changes need new vectors and a full CI run.
 
 ## Related, not normative here
 

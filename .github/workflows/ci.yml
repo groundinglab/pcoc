@@ -65,11 +65,11 @@ jobs:
         with:
           persist-credentials: false
       - name: sparse worktree (full clone, cone mode, no partial filter)
-        run: git sparse-checkout set spec reference/tools
+        run: git sparse-checkout set spec sdk/tools
       - name: ring 1 checks (section 6, sign-in wire, links, manifest hash)
         run: python3 spec/conformance/tools/ring1_checks.py
       - name: spec pin
-        run: python3 reference/tools/check_spec_pin.py
+        run: python3 sdk/tools/check_spec_pin.py
 
   rust:
     needs: changes
@@ -81,19 +81,19 @@ jobs:
         with:
           persist-credentials: false
       - name: sparse worktree (full clone, cone mode, no partial filter)
-        run: git sparse-checkout set spec reference
+        run: git sparse-checkout set spec sdk
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            reference/rust/target
-          key: rust-${{ runner.os }}-${{ hashFiles('reference/rust/Cargo.lock', 'reference/rust/rust-toolchain.toml') }}
+            sdk/rust/target
+          key: rust-${{ runner.os }}-${{ hashFiles('sdk/rust/Cargo.lock', 'sdk/rust/rust-toolchain.toml') }}
           restore-keys: rust-${{ runner.os }}-
       - name: spec pin
-        run: python3 reference/tools/check_spec_pin.py
+        run: python3 sdk/tools/check_spec_pin.py
       - name: cargo test (includes conformance_v2)
-        working-directory: reference/rust
+        working-directory: sdk/rust
         run: cargo test --locked --release
 
   go:
@@ -106,15 +106,15 @@ jobs:
         with:
           persist-credentials: false
       - name: sparse worktree (full clone, cone mode, no partial filter)
-        run: git sparse-checkout set spec reference
+        run: git sparse-checkout set spec sdk
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: reference/go/go.mod
+          go-version-file: sdk/go/go.mod
           cache: false # no third-party modules (no go.sum)
       - name: spec pin
-        run: python3 reference/tools/check_spec_pin.py
+        run: python3 sdk/tools/check_spec_pin.py
       - name: go vet + test (includes conformance/v2_test.go)
-        working-directory: reference/go
+        working-directory: sdk/go
         run: |
           go vet ./...
           go test ./...
@@ -129,15 +129,15 @@ jobs:
         with:
           persist-credentials: false
       - name: sparse worktree (full clone, cone mode, no partial filter)
-        run: git sparse-checkout set spec reference
+        run: git sparse-checkout set spec sdk
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: "21"
       - name: spec pin
-        run: python3 reference/tools/check_spec_pin.py
+        run: python3 sdk/tools/check_spec_pin.py
       - name: conformance pack (v2.sh)
-        run: bash reference/java/v2.sh
+        run: bash sdk/java/v2.sh
 
   services:
     needs: changes

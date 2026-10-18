@@ -57,6 +57,6 @@ modules:
           - apps/desktop/flatpak/build-dir
           - apps/desktop/flatpak/repo
           - apps/desktop/flatpak/out
-          - reference/rust/target
+          - sdk/rust/target
           - services/target
           - qa/stage-loop/target

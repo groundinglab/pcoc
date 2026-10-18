@@ -20,7 +20,7 @@ The Gate's sign-in origin is a single constant. To run a gate for your site, edi
 | Index the Gate reads | `index_url` in your gate TOML (`deploy/gate.toml:13`) | Your own `pcoc-index`, or any index you trust |
 | Deploy file | `deploy/gate.toml:54` | groundinglab's deploy file. Copy it and edit it for your hosts |
 
-## Rust reference (`reference/rust/hike`)
+## Rust SDK (`sdk/rust/hike`)
 
 | What | Where | Change |
 |---|---|---|
@@ -47,7 +47,7 @@ The Gate's sign-in origin is a single constant. To run a gate for your site, edi
 | Notices shown to people | `admit/SignInNotices.kt:33,35,36,79,81` | Your Gate's host name |
 | Bari and index | `bridge/PcocNative.kt:4` `INDEX_URL`, `:7` `BARI_URL`; `pcoc-bridge/bridge/src/lib.rs:15` `BARI_URL`, `:17` `INDEX_URL` (from `hike::DEFAULT_INDEX_URL`) | Your Bari and index |
 | App Link | `app/src/main/AndroidManifest.xml:126` `android:host="groundinglab.io"` | Your host. App Links also need your site to publish its own asset links file |
-| Vendored reference | `pcoc-bridge/vendor/hike/` | An earlier copy of `reference/rust/hike`. It still has the old live-host check, so update it from the reference |
+| Vendored reference | `pcoc-bridge/vendor/hike/` | An earlier copy of `sdk/rust/hike` (vendored at `ref-rust-v2.0.5`). It still has the old live-host check, so update it from `sdk/rust/hike` |
 
 ## Admission claims (`services/admission-claims`)
 

@@ -6,7 +6,7 @@ This port does not generate the conformance vectors. It reads `spec/conformance/
 
 ## Tag
 
-The current tag is `reference/go/v2.0.3`. `go.mod` declares module `github.com/groundinglab/pcoc/reference/go/v2`, so the tag must have that prefix. There is no `ref-go-` tag.
+The current tag is `reference/go/v2.0.3`. `go.mod` declares module `github.com/groundinglab/pcoc/sdk/go/v2`, so the tag must have that prefix. There is no `ref-go-` tag.
 
 ## Toolchain
 

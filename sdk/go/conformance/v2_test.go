@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/groundinglab/pcoc/reference/go/v2/hike"
+	"github.com/groundinglab/pcoc/sdk/go/v2/hike"
 )
 
 func mustJSON(t *testing.T, path string, dest any) {

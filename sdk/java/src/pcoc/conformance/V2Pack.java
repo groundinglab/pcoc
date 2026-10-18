@@ -126,9 +126,9 @@ public final class V2Pack {
      * ["field set","stage-0 path key","leg_count"].
      */
     private static void ports219(Path root) throws Exception {
-        byte[] hard = Files.readAllBytes(root.resolve("reference/go/hike/testdata/ports219-hard.record"));
-        byte[] trailing = Files.readAllBytes(root.resolve("reference/go/hike/testdata/ports219-trailing.record"));
-        byte[] stage0 = Files.readAllBytes(root.resolve("reference/go/hike/testdata/ports219-stage0.record"));
+        byte[] hard = Files.readAllBytes(root.resolve("sdk/go/hike/testdata/ports219-hard.record"));
+        byte[] trailing = Files.readAllBytes(root.resolve("sdk/go/hike/testdata/ports219-trailing.record"));
+        byte[] stage0 = Files.readAllBytes(root.resolve("sdk/go/hike/testdata/ports219-stage0.record"));
         if (hard.length != 7613 || trailing.length != 7722 || stage0.length != 7748) {
             throw new IllegalStateException("golden length");
         }
@@ -373,7 +373,7 @@ public final class V2Pack {
     private static void checkBookend(Path root) throws Exception {
         Draft object = bookendDraft();
         String got = Summary.packRecord(object.encode(), Profile.PRODUCTION, bookendReader(object), loc -> true, 1, null);
-        String want = Files.readString(root.resolve("reference/go/hike/testdata/bookend.record"));
+        String want = Files.readString(root.resolve("sdk/go/hike/testdata/bookend.record"));
         if (!want.equals(got)) {
             throw new AssertionError("bookend record " + got.length() + " reference " + want.length());
         }
@@ -388,7 +388,7 @@ public final class V2Pack {
         Arrays.fill(object.stages.get(0).waypoint, (byte) 0x22);
         byte[] stream = auditStream(new byte[32], 4096);
         String got = Summary.packRecord(object.encode(), Profile.PRODUCTION, height -> null, loc -> true, 1, stream);
-        String want = Files.readString(root.resolve("reference/go/hike/testdata/seed.record"));
+        String want = Files.readString(root.resolve("sdk/go/hike/testdata/seed.record"));
         if (!want.equals(got)) {
             throw new AssertionError("seed record " + got.length() + " reference " + want.length());
         }
