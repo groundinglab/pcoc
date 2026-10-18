@@ -374,10 +374,22 @@ public final class Measure {
             if (g > 0 && bytes(stage, "path") == null) {
                 return true;
             }
-            // A checkpoint or leg-result value that is not an array is a wrong value type (section 14.1 row 2).
+            // A checkpoint or leg-result value that is not an array is a wrong
+            // value type (section 14.1 row 2). So is an element that is not a
+            // byte string: the width conditions still apply, and field set is
+            // not dropped because another condition is too.
             for (String key : new String[] {"checkpoints", "leg_results"}) {
-                if (stage.map.containsKey(key) && array(stage, key) == null) {
+                if (!stage.map.containsKey(key)) {
+                    continue;
+                }
+                List<Cbor.Val> items = array(stage, key);
+                if (items == null) {
                     return true;
+                }
+                for (Cbor.Val item : items) {
+                    if (item == null || item.kind != Cbor.Val.Kind.BYTES) {
+                        return true;
+                    }
                 }
             }
             if (uint(stage, "beacon_height") == null || uint(stage, "leg_count") == null) {

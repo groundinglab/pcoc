@@ -1231,10 +1231,22 @@ func shapeItems(item cborVal, profile Profile) []string {
 				fieldSet = true
 			}
 			// A checkpoint or leg-result value that is not an array is a wrong
-			// value type (section 14.1 row 2).
+			// value type (section 14.1 row 2). So is an element of that array
+			// that is not a byte string: the width conditions still apply,
+			// and field set is not dropped because another condition is too.
 			for _, key := range []string{"checkpoints", "leg_results"} {
-				if f, ok := st.field(key); ok && f.kind != 4 {
+				f, ok := st.field(key)
+				if !ok {
+					continue
+				}
+				if f.kind != 4 {
 					fieldSet = true
+					continue
+				}
+				for _, item := range f.arr {
+					if item.kind != 2 {
+						fieldSet = true
+					}
 				}
 			}
 			if _, ok, _ := uintField(st, "beacon_height"); !ok {

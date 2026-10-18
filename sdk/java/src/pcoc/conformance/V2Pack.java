@@ -689,6 +689,26 @@ public final class V2Pack {
                 throw new AssertionError("six-leg previous " + Arrays.toString(c) + " " + index + " " + result);
             }
         }
+        // F9: a text checkpoint element and a text leg-result element are field set
+        // as well as the width condition.
+        byte[] cpKey = cat(new byte[] {0x6b}, "checkpoints".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {(byte) 0x81});
+        int cpAt = nth(obj, cpKey, 4) + cpKey.length;
+        byte[] textCp = cat(Arrays.copyOfRange(obj, 0, cpAt), new byte[] {0x61, 'x'}, Arrays.copyOfRange(obj, cpAt + 34, obj.length));
+        String cpShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(textCp, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!cpShape.contains("\"field set\"") || !cpShape.contains("\"checkpoint width\"")) {
+            throw new AssertionError("text checkpoint " + cpShape);
+        }
+        byte[] lrKey = cat(new byte[] {0x6b}, "leg_results".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {(byte) 0x81});
+        int lrAt = nth(obj, lrKey, 4) + lrKey.length;
+        byte[] textLr = cat(Arrays.copyOfRange(obj, 0, lrAt), new byte[] {0x61, 'x'}, Arrays.copyOfRange(obj, lrAt + 9, obj.length));
+        String lrShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(textLr, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!lrShape.contains("\"field set\"") || !lrShape.contains("\"leg result width\"")) {
+            throw new AssertionError("text leg result " + lrShape);
+        }
         // F7: text last_interrupt and text last_interrupt_height are field set.
         byte[] liKey = cat(new byte[] {0x6e}, "last_interrupt".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {0x58, 0x20});
         int liAt = nth(obj, liKey, 0) + liKey.length;

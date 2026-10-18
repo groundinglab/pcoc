@@ -351,7 +351,13 @@ fn parse_stage(value: &Cbor) -> ParsedStage {
                 });
                 match item {
                     Cbor::Bytes(b) if b.len() == 32 => checkpoints.push(arr32(b)),
-                    _ => bad_checkpoint = true,
+                    Cbor::Bytes(_) => bad_checkpoint = true,
+                    // Not a byte string: wrong value type (section 14.1 row 2)
+                    // and the wrong width. Both are listed.
+                    _ => {
+                        notes.push("map field set");
+                        bad_checkpoint = true;
+                    }
                 }
             }
         }
@@ -374,7 +380,12 @@ fn parse_stage(value: &Cbor) -> ParsedStage {
                         limb.copy_from_slice(b);
                         limbs.push(Some(limb));
                     }
+                    Cbor::Bytes(_) => {
+                        bad_limb = true;
+                        limbs.push(None);
+                    }
                     _ => {
+                        notes.push("map field set");
                         bad_limb = true;
                         limbs.push(None);
                     }

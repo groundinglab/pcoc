@@ -387,6 +387,29 @@ fn a_top_level_that_is_not_a_map_is_malformed_cbor() {
     assert!(!hike::top_level_map(&[]));
 }
 
+/// F9: a checkpoint or leg-result element that is not bytes lists field set
+/// with the width condition.
+#[test]
+fn a_non_byte_checkpoint_element_is_field_set() {
+    for (key, value, width) in [
+        ("checkpoints", V::T("x".repeat(32)), "checkpoint width"),
+        ("checkpoints", V::U(7), "checkpoint width"),
+        ("checkpoints", V::M(vec![]), "checkpoint width"),
+        ("checkpoints", V::A(vec![]), "checkpoint width"),
+        ("leg_results", V::T("short".to_owned()), "leg result width"),
+        ("leg_results", V::U(7), "leg result width"),
+        ("leg_results", V::M(vec![]), "leg result width"),
+        ("leg_results", V::A(vec![]), "leg result width"),
+    ] {
+        let mut v = object();
+        v.stage(4).get(key).arr()[0] = value;
+        let rec = record(&enc(&v));
+        let got = items(&rec);
+        assert!(got.contains(&"field set"), "{key} {got:?}");
+        assert!(got.contains(&width), "{key} {got:?}");
+    }
+}
+
 /// F7: text last_interrupt and text last_interrupt_height are wrong value
 /// types, so field set is listed with the conditions those fields already fail.
 #[test]

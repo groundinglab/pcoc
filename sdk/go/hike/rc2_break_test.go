@@ -163,6 +163,36 @@ func TestRC2NonMapTopLevelIsUndecoded(t *testing.T) {
 	}
 }
 
+// F9: a checkpoint or leg-result element that is not bytes is field set
+// as well as the width condition.
+func TestF9NonByteElementIsFieldSet(t *testing.T) {
+	obj, index := loadKat(t)
+	// Stage 4's one checkpoint and one leg result, replaced by text.
+	for _, c := range []struct {
+		needle string
+		width  int
+		want   string
+	}{
+		{"\x6bcheckpoints\x81", 34, "checkpoint width"},
+		{"\x6bleg_results\x81", 9, "leg result width"},
+	} {
+		pos := nthIndex(t, obj, []byte(c.needle), 4) + len(c.needle)
+		edited := append(append(append([]byte{}, obj[:pos]...), 0x61, 'x'), obj[pos+c.width:]...)
+		rec, decoded := katRecord(t, edited, index)
+		if !decoded {
+			t.Fatal(c.needle)
+		}
+		items := at(rec, "shape_item").([]any)
+		has := map[string]bool{}
+		for _, item := range items {
+			has[item.(string)] = true
+		}
+		if !has["field set"] || !has[c.want] {
+			t.Fatalf("%s %v", c.needle, items)
+		}
+	}
+}
+
 // F7: a text last_interrupt or last_interrupt_height is field set.
 func TestF7TextLastInterruptIsFieldSet(t *testing.T) {
 	obj, index := loadKat(t)

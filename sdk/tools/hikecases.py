@@ -95,6 +95,15 @@ def cases(pack):
     add("cpw-s4-33", cpw(4, 33))
     add("cpw-s4-0", cpw(4, 0))
     add("cp-text-s4", lambda v: st(v, 4).get("checkpoints").__setitem__(0, "x" * 32))
+    # F9: a checkpoint or leg-result element that is not bytes is a wrong
+    # value type (section 14.1 row 2) as well as the width condition.
+    add("cp-uint-s4", lambda v: st(v, 4).get("checkpoints").__setitem__(0, 7))
+    add("cp-map-s4", lambda v: st(v, 4).get("checkpoints").__setitem__(0, M()))
+    add("cp-arr-s4", lambda v: st(v, 4).get("checkpoints").__setitem__(0, []))
+    add("lr-text-s4", lambda v: st(v, 4).get("leg_results").__setitem__(0, "short"))
+    add("lr-uint-s4", lambda v: st(v, 4).get("leg_results").__setitem__(0, 7))
+    add("lr-map-s4", lambda v: st(v, 4).get("leg_results").__setitem__(0, M()))
+    add("lr-arr-s4", lambda v: st(v, 4).get("leg_results").__setitem__(0, []))
     def two_cps(first_bad, fix_lc):
         def f(v):
             s = st(v, 3); c = s.get("checkpoints"); l = s.get("leg_results")
