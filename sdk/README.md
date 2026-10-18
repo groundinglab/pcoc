@@ -1,46 +1,76 @@
-# reference
+# PCOC SDKs
 
-Three independent implementations of the PCOC specification, in Rust, Go, and Java. Each is tested against the shared vectors under [spec/conformance/v2.0](../spec/conformance/v2.0/). That is the evidence the specification is complete enough to build from. They are the first tested examples, a guide, and optional. Where a reference disagrees with the specification, the specification wins and the reference has a bug.
+Rust, Go and Java SDKs for Satoshi Hike v2.0, the PCOC specification. Each SDK can verify a PCOC (it writes the section 14 measurement record) and produce one. All three are tested against the same conformance vectors, and each is cross-checked against the other two. The admission gate and the desktop app in this repository build on the Rust SDK.
 
-They follow [SPEC_PIN](SPEC_PIN): tag `spec-v2.0.3`, and the vector hash recorded on the next line. [tools/check_spec_pin.py](tools/check_spec_pin.py) recomputes that hash from `spec/conformance/` (every file except `spec/conformance/tools/`) and fails on a mismatch. Run it from the repository root: `python3 reference/tools/check_spec_pin.py`.
+The [specification](../spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md) and its [conformance vectors](../spec/conformance/v2.0/) are the source of truth. Where an SDK disagrees with them, the specification wins and the SDK has a bug.
 
-Verify writes the section 14 measurement record. It does not judge. Judgment is policy (specification section 15) and is not this folder, except `hike-net`, which is network and test-plane policy kept out of the measurement crate.
+## Which one
 
-Rust generates the vectors (`PCOC_REGEN_V2=1`). Go and Java do not. They compare against the bytes Rust wrote.
+| You are writing | Use | Read |
+|---|---|---|
+| A Rust service or app, or an Android app through the Rust core (JNI) | Rust: crate `hike` (plus `nip06` for demo keys, `hike-net` for direct node reads) | [rust/README.md](rust/README.md) |
+| A Go service or tool | Go: module `github.com/groundinglab/pcoc/sdk/go/v2`, package `hike` | [go/README.md](go/README.md) |
+| A JVM service or tool | Java: packages `pcoc.hike` and `pcoc.json` (JDK 21, no build tool required) | [java/README.md](java/README.md) |
 
-## Read order
+The three SDKs give byte-identical records. [examples/](examples/) has the same quickstart in each language, and all three print the same record digest.
 
-Open [Satoshi Hike v2.0](../spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md) first. Then any of the three. None of them is the specification.
+## Version and pinning
 
-## What the programs do
-
-A leg is `2_000_000` steps and ends in a leg result. Produce records 18 stages. The tip these programs read is the public sequencer: it paces stages and orders them. Payment, confirmation counts, and an archive of the chain sit outside that role.
-
-Rule A4.3 checkpoint comparisons run together. `PCOC_BIND_THREADS` sets how many run at once. Unset, empty, or not a positive integer uses 6. `1` runs them one after another. The verify record does not depend on that number. Section 13.1’s `ANCHOR_WINDOW_OFFSETS` (2, 3, 4) is the only offset list the producer and the verifier use.
-
-## Languages
-
-Each tag below is cut.
-
-| Language | Tag | Toolchain | Test | Binaries |
-|---|---|---|---|---|
-| Rust | `ref-rust-v2.0.6` (the gate pins it; bari and the desktop app pin `ref-rust-v2.0.5`; the index still reaches hike through `bari-v0.6.7`) | Rust 1.99.0 (`rust/rust-toolchain.toml`). Crate `rust-version` 1.83 (`rust/hike/Cargo.toml`) | `cargo test --locked --release` in `reference/rust` | `satoshi-hike-produce`, `satoshi-hike-verify` |
-| Go | `reference/go/v2.0.3`. The module path forces this tag shape (`go/go.mod`, module `github.com/groundinglab/pcoc/reference/go/v2`). There is no `ref-go-` tag | Go 1.22 (`go/go.mod`). No third-party dependencies | `go vet ./...` and `go test ./...` in `reference/go` | `cmd/satoshi-hike-produce`, `cmd/satoshi-hike-verify` |
-| Java | `ref-java-v2.0.2` | Java 21. No build tool. `javac --release 21` (`java/v2.sh`) | `bash reference/java/v2.sh` | `pcoc.cli.Produce`, `pcoc.cli.Verify` (`v2.sh` runs `pcoc.conformance.V2Pack` and `pcoc.hike.Spec6Pins`) |
-
-## Index
-
-| Child | Role |
+| | Value |
 |---|---|
-| [rust/](rust/) | Cargo workspace for the Rust reference. |
-| [rust/hike/](rust/hike/) | Shared library: fill, leg, bind, hike object, path body, and Hashcash. |
-| [rust/hike-net/](rust/hike-net/) | Network and policy code kept out of measurement: the test-plane policy and the direct Bitcoin node read. |
-| [rust/nip06/](rust/nip06/) | DEMO keys only. BIP-39 English 12-word, empty passphrase, NIP-06 path, BIP-340 x-only. Not the hike's `production_seed`. |
-| [rust/satoshi-hike-produce/](rust/satoshi-hike-produce/) | Reference produce program. Lab `--demo-mnemonic` derives the x-only key. |
-| [rust/satoshi-hike-verify/](rust/satoshi-hike-verify/) | Reference verify program. Calls `hike::verify`. |
-| [go/](go/) | Go port. Module path `github.com/groundinglab/pcoc/reference/go/v2`; current tag `reference/go/v2.0.3`. |
-| [java/](java/) | Java port. `reference/java/v2.sh` runs the conformance pack. |
+| SDK version | `2.0.0-rc.1` ([VERSION](VERSION)) |
+| Repository tag | `sdk-v2.0.0-rc.1` (Rust and Java pin this) |
+| Go module tag | `sdk/go/v2.0.0-rc.1` (the module path requires the `sdk/go/` prefix) |
+| Specification | `spec-v2.0.5`, with the vector hash in [SPEC_PIN](SPEC_PIN) |
+
+Pin a tag, never `main`. Inside this repository, the gate and the desktop app pin the SDK by path (`sdk/rust/hike`) and report the version they were built with: the gate in `/v1/health` (`sdk`) and in `admission-service --version`, the desktop app on its About page.
+
+> The `rc.1` tags have been prepared but not yet published. Until they are on the remote, depend on a checkout by path, as `examples/` does.
+
+Earlier tags of these trees (`ref-rust-v2.0.1` … `ref-rust-v2.0.6`, `ref-java-v2.0.1` … `ref-java-v2.0.2`, and the Go module tags under the old module path) are kept as history. Nothing new is tagged under them.
+
+## Conformance vectors: the source of truth
+
+`spec/conformance/v2.0/` holds the vectors: hike objects together with their recorded index replies and the exact section 14 record bytes they must produce (`test-3leg`, `kat-small`, `anchor-window`, `anchor-w16-i17`, `bind-threads`, `earlier-run-b`), known answers at the small `conformance-small` sizes (terrain, one leg, a checkpoint, bookends, the six-leg check), one checkpoint preimage, the P9.14 produce vector (`stage0-start.json`), the section 6 constants, and the section 15.1 sign-in wire vectors. The table in [its README](../spec/conformance/v2.0/README.md) describes each file. A Part A implementation conforms when it reproduces every vector byte for byte.
+
+- [SPEC_PIN](SPEC_PIN) names the spec tag, plus a SHA-256 over every file under `spec/conformance/` except `tools/`. [tools/check_spec_pin.py](tools/check_spec_pin.py) recomputes it. A changed vector without a changed pin fails.
+- Rust is the only program that writes the vectors (`PCOC_REGEN_V2=1`, in a spec change only). Go and Java compare against the bytes Rust wrote. All three read the pack from `spec/conformance/v2.0/`. No SDK carries a hand copy.
+- The SDKs never edit the vectors. A vector change is a spec change: it comes with a new spec tag and a new `SPEC_PIN`.
+
+## One harness
+
+```sh
+bash sdk/test.sh
+```
+
+This runs, in order, and exits non-zero if any step fails:
+
+1. the pins: `SPEC_PIN` against `spec/conformance/`, and every Rust crate version against `VERSION`;
+2. Rust: `cargo test --locked --release` (unit tests, the conformance pack, malformed-input tests);
+3. Go: `go vet ./...` and `go test ./...` (unit tests and the conformance pack);
+4. Java: `java/v2.sh` (the conformance pack and the section 6 pins);
+5. the cross-check: the Rust, Go and Java verify programs run on the pack objects and 25 mutants, and must write byte-identical records ([tools/crosscheck.py](tools/crosscheck.py));
+6. the README quickstarts in `examples/`, which must print the same digest in all three languages.
+
+It needs `python3`, Rust (rustup picks up `rust/rust-toolchain.toml`), Go 1.22 or newer, and JDK 21 or newer. A missing tool is a failure, not a skip. CI runs it as the `sdk` job on the self-hosted runners.
+
+On malformed objects, five cases are known where Rust disagrees with Go and Java. They are listed in [KNOWN-DIVERGENCES.md](KNOWN-DIVERGENCES.md) and pinned by the harness, and they wait on a spec reading.
+
+## Layout
+
+| Path | What |
+|---|---|
+| [rust/](rust/) | Cargo workspace: `hike` (verify, produce, admission helpers), `hike-net` (direct Bitcoin node reads, test-plane policy), `nip06` (DEMO keys), `satoshi-hike-produce` and `satoshi-hike-verify` (programs) |
+| [go/](go/) | Go module: package `hike`, programs under `cmd/`, the conformance test under `conformance/` |
+| [java/](java/) | Java sources (`pcoc.hike`, `pcoc.json`, `pcoc.cli`, `pcoc.conformance`) and `v2.sh` |
+| [examples/](examples/) | The quickstart in each language (run by `test.sh`) |
+| [tools/](tools/) | `check_spec_pin.py`, `check_versions.py`, `crosscheck.py` |
+| [VERSION](VERSION), [SPEC_PIN](SPEC_PIN) | SDK version, and the spec tag plus vector hash |
+
+## What verify does and does not do
+
+Verify writes the section 14 measurement record. It does not judge. Judgment is policy (specification section 15): an admission gate applies a policy to the record. The only policy code in the SDKs is `hike::admit` and the test-plane policy in `hike-net`. A leg is `2_000_000` steps and ends in a leg result. Produce records 18 stages, paced by Bitcoin block headers.
 
 ## Steer
 
-↑ [root README](../README.md) · law ↑ [spec/](../spec/) · services → [services/](../services/)
+↑ [root README](../README.md) · law ↑ [spec/](../spec/) · consumers → [services/admission-gate](../services/admission-gate/), [apps/desktop](../apps/desktop/)
