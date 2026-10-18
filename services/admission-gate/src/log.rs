@@ -75,7 +75,8 @@ pub struct DecisionWrite {
     /// these bytes. It does not parse them. `None` omits `verify_summary`
     /// and writes `measures` instead.
     pub summary: Option<String>,
-    /// Verifier numbers. Present only when `summary` is `None`.
+    /// Verifier numbers. A thorough line writes these instead of `summary`.
+    /// A fast refusal writes both: `measures`, then `verify_summary` last.
     pub measures: Option<Value>,
     /// Gate policy id. Omitted on a fast line, a provisional, and a resume
     /// that still stores the section 14 record.
@@ -469,20 +470,17 @@ fn encode_decision(seq: u64, prev: &str, write: &DecisionWrite) -> Result<Vec<u8
     // New keys are already in the object, immediately before the summary splice.
     // The splice stays last so a section 14 newline still sits inside the object.
     text.pop();
-    match (&write.measures, &write.summary) {
-        (Some(measures), None) => {
-            let encoded = serde_json::to_string(measures)
-                .map_err(|err| LogError::Unusable(err.to_string()))?;
-            text.push_str(",\"measures\":");
-            text.push_str(&encoded);
-        }
-        (_, Some(summary)) => {
-            // The record's trailing newline is inside the object. Re-encoding
-            // would drop it. `profile` stays, and the section 14 key order stays.
-            text.push_str(",\"verify_summary\":");
-            text.push_str(summary);
-        }
-        (None, None) => {}
+    if let Some(measures) = &write.measures {
+        let encoded = serde_json::to_string(measures)
+            .map_err(|err| LogError::Unusable(err.to_string()))?;
+        text.push_str(",\"measures\":");
+        text.push_str(&encoded);
+    }
+    if let Some(summary) = &write.summary {
+        // The record's trailing newline is inside the object. Re-encoding
+        // would drop it. `profile` stays, and the section 14 key order stays.
+        text.push_str(",\"verify_summary\":");
+        text.push_str(summary);
     }
     text.push('}');
     Ok(text.into_bytes())
@@ -678,6 +676,22 @@ mod tests {
             access_ref_seq: None,
             deep: None,
         }
+    }
+
+    #[test]
+    fn a_fast_refusal_writes_measures_then_the_record_last() {
+        let mut write = sample("refuse", 1);
+        let record = "{\"profile\":\"production\",\"N\":1499,\"S\":9557}\n";
+        write.summary = Some(record.to_owned());
+        write.measures = Some(serde_json::json!({"legs": 1499, "span_s": 9557}));
+        let raw = String::from_utf8(encode_decision(0, "00", &write).unwrap()).unwrap();
+        let measures_at = raw.find(",\"measures\":").expect("measures");
+        let summary_at = raw.find(",\"verify_summary\":").expect("verify_summary");
+        assert!(measures_at < summary_at, "{raw}");
+        assert!(raw.ends_with(&format!("{record}}}")), "{raw}");
+        let value: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(value["measures"]["legs"], 1499);
+        assert_eq!(value["verify_summary"]["S"], 9557);
     }
 
     #[test]

@@ -46,9 +46,9 @@ pub const BOOKENDS_NOT_READ_LINE: &str =
 pub const REFUSE_TOO_FEW: &str = "too_few_waypoints_anchored";
 pub const TOO_FEW_LINE: &str = "Too few waypoints among W_1 through W_16 are anchored.";
 
-/// The too-few line with the count, e.g. `4 of 16 anchored, need 6`.
+/// The too-few line with the count, e.g. `Waypoints anchored: 4 of 16, needs 6.`
 pub fn too_few_line(anchored: u64, min: u64) -> String {
-    format!("Too few waypoints anchored: {anchored} of {ANCHORED_SPAN} anchored, need {min}.")
+    format!("Waypoints anchored: {anchored} of {ANCHORED_SPAN}, needs {min}.")
 }
 
 /// Budget exhausted while a measurement stayed `not read`.
@@ -68,9 +68,48 @@ pub const UNREADABLE_LINE: &str = "This file is not a Satoshi Hike v2.0 object."
 pub const NO_KEY_REASON: &str = "no_public_key";
 pub const NO_KEY_LINE: &str = "This object has no public key the gate can check.";
 
-/// Sentence for the configured floor `p/q`. The website shows a `reason` that contains a space.
-pub fn leg_rate_line(p: u64, q: u64) -> String {
-    format!("The leg rate is below this gate's floor of {p}/{q} leg per second.")
+/// Plain decimal with at most `places` places, trailing zeros dropped.
+fn decimal(x: f64, places: usize) -> String {
+    let text = format!("{x:.places$}");
+    if text.contains('.') {
+        text.trim_end_matches('0').trim_end_matches('.').to_owned()
+    } else {
+        text
+    }
+}
+
+/// `this gate needs at least 0.2 legs/s (one leg every 5 s)` for `p/q = 1/5`.
+fn floor_words(p: u64, q: u64) -> String {
+    if p == 0 || q == 0 {
+        return format!("this gate's floor is {p}/{q} legs/s");
+    }
+    format!(
+        "this gate needs at least {} legs/s (one leg every {} s)",
+        decimal(p as f64 / q as f64, 3),
+        decimal(q as f64 / p as f64, 1)
+    )
+}
+
+/// Too-slow sentence with the measured bookends `N` legs in `S` seconds and
+/// the configured floor `p/q`, e.g. `Too slow: 1499 legs in 9557 s = 0.157
+/// legs/s (6.4 s per leg); this gate needs at least 0.2 legs/s (one leg every 5 s).`
+pub fn leg_rate_line(n: i128, s: i128, p: u64, q: u64) -> String {
+    let need = floor_words(p, q);
+    if n > 0 && s > 0 {
+        let (legs, secs) = (n as f64, s as f64);
+        format!(
+            "Too slow: {n} legs in {s} s = {} legs/s ({} s per leg); {need}.",
+            decimal(legs / secs, 3),
+            decimal(secs / legs, 1)
+        )
+    } else {
+        format!("Too slow: {n} legs in {s} s; {need}.")
+    }
+}
+
+/// Too-slow sentence when the bookends were not measured as numbers.
+pub fn leg_rate_floor_line(p: u64, q: u64) -> String {
+    format!("Too slow; {}.", floor_words(p, q))
 }
 
 /// `gl-admit-v` plus a positive integer. Bound to one table for its life.
@@ -408,7 +447,7 @@ fn judge_measured(measured: &Measured, floor_p: u64, floor_q: u64) -> Judgment {
             reasons.insert(0, REFUSE_LEG_RATE.to_owned());
             return Judgment::Refuse {
                 reasons,
-                line: leg_rate_line(floor_p, floor_q),
+                line: leg_rate_line(n, s, floor_p, floor_q),
                 record,
             };
         }
@@ -501,6 +540,26 @@ mod tests {
     }
 
     #[test]
+    fn the_too_slow_line_states_the_measured_numbers_and_the_floor() {
+        assert_eq!(
+            leg_rate_line(1499, 9557, 1, 5),
+            "Too slow: 1499 legs in 9557 s = 0.157 legs/s (6.4 s per leg); this gate needs at least 0.2 legs/s (one leg every 5 s)."
+        );
+        assert_eq!(
+            leg_rate_line(0, 30, 1, 4),
+            "Too slow: 0 legs in 30 s; this gate needs at least 0.25 legs/s (one leg every 4 s)."
+        );
+        assert_eq!(
+            leg_rate_floor_line(1, 5),
+            "Too slow; this gate needs at least 0.2 legs/s (one leg every 5 s)."
+        );
+        assert_eq!(too_few_line(4, 6), "Waypoints anchored: 4 of 16, needs 6.");
+        for line in [leg_rate_line(1499, 9557, 1, 5), too_few_line(4, 6)] {
+            assert!(!line.contains("1/5") && !line.contains("leg per second"), "{line}");
+        }
+    }
+
+    #[test]
     fn a_numeric_pair_under_the_floor_is_refused() {
         let record = pair_record("1", "6");
         let judgment = judge_measured(&measured(&record, &[]), 1, 5);
@@ -508,7 +567,7 @@ mod tests {
             judgment,
             Judgment::Refuse {
                 reasons: vec!["leg_rate_floor".to_owned()],
-                line: leg_rate_line(1, 5),
+                line: leg_rate_line(1, 6, 1, 5),
                 record: record.clone(),
             }
         );
@@ -530,7 +589,7 @@ mod tests {
                 record,
             } => {
                 assert_eq!(reasons, vec!["leg_rate_floor".to_owned()]);
-                assert_eq!(line, leg_rate_line(1, 4));
+                assert_eq!(line, leg_rate_line(1, 5, 1, 4));
                 assert_eq!(record, meets);
             }
             other => panic!("1/4 should refuse N=1 S=5, got {other:?}"),
@@ -543,7 +602,7 @@ mod tests {
         match judge_measured(&measured(&pair_record("1", "9"), &[]), 1, 8) {
             Judgment::Refuse { reasons, line, .. } => {
                 assert_eq!(reasons, vec!["leg_rate_floor".to_owned()]);
-                assert_eq!(line, leg_rate_line(1, 8));
+                assert_eq!(line, leg_rate_line(1, 9, 1, 8));
             }
             other => panic!("1/8 should refuse N=1 S=9, got {other:?}"),
         }
@@ -620,7 +679,10 @@ mod tests {
                     reasons,
                     vec!["leg_rate_floor".to_owned(), "shape is false".to_owned()]
                 );
-                assert!(line.contains("1/5"));
+                assert_eq!(
+                    line,
+                    "Too slow: 0 legs in 5 s; this gate needs at least 0.2 legs/s (one leg every 5 s)."
+                );
                 assert_eq!(stored, record);
             }
             other => panic!("expected a refusal, got {other:?}"),
