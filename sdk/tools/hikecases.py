@@ -180,9 +180,9 @@ def cases(pack):
     add("s17-h-2^53-lt-li", s17_below_li)
     # A stage height of 2^64−1 followed by the next stage's smaller height.
     add("s16-h-2^64-1", lambda v: st(v, 16).set("beacon_height", 2**64 - 1))
-    # Q-j: a non-height integer above 2^53−1. Java lists height_range.
-    # Rust and Go do not. Pinned, not decided.
+    # Q-j: a non-height integer above 2^53−1 is not height_range.
     add("legcount-2^53-s5", lambda v: st(v, 5).set("leg_count", 2**53))
+    add("legcount-2^64-1-s5", lambda v: st(v, 5).set("leg_count", 2**64 - 1))
     add("nslots-2^64-1", lambda v: v.set("n_slots", 2**64 - 1))
     add("neg-s5-height", lambda v: st(v, 5).set("beacon_height", -1))
     add("leg_count-0-s5", lambda v: st(v, 5).set("leg_count", 0))

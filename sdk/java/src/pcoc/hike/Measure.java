@@ -323,7 +323,7 @@ public final class Measure {
         boolean[] order = headerOrder(top, stages);
         bad[10] = order[0];
         bad[11] = order[1];
-        bad[12] = huge(top);
+        bad[12] = heightRange(top, stages);
         return bad;
     }
 
@@ -561,30 +561,22 @@ public final class Measure {
         return height;
     }
 
-    private static boolean huge(Cbor.Val value) {
-        if (value == null) {
+    /** `height_range` is a stored height above 2^53−1: `beacon_height`, `last_interrupt_height`. */
+    private static boolean heightRange(Cbor.Val top, List<Cbor.Val> stages) {
+        Long last = uint(top, "last_interrupt_height");
+        if (last != null && Hike.aboveJson(last)) {
+            return true;
+        }
+        if (stages == null) {
             return false;
         }
-        return switch (value.kind) {
-            case UINT -> Hike.aboveJson(value.uint);
-            case ARRAY -> {
-                for (Cbor.Val item : value.array) {
-                    if (huge(item)) {
-                        yield true;
-                    }
-                }
-                yield false;
+        for (Cbor.Val stage : stages) {
+            Long height = uint(stage, "beacon_height");
+            if (height != null && Hike.aboveJson(height)) {
+                return true;
             }
-            case MAP -> {
-                for (Cbor.Val item : value.map.values()) {
-                    if (huge(item)) {
-                        yield true;
-                    }
-                }
-                yield false;
-            }
-            default -> false;
-        };
+        }
+        return false;
     }
 
     private static Header[] headers(Cbor.Val top, List<Cbor.Val> stages, Reader reader) {
