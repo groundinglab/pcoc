@@ -304,9 +304,7 @@ fn parse_served_origins(raw: Option<Vec<String>>) -> Result<Vec<String>, String>
             .strip_prefix("https://")
             .or_else(|| origin.strip_prefix("http://"));
         let ok = rest.is_some_and(|host| {
-            !host.is_empty()
-                && !host.contains(['/', '?', '#', ' '])
-                && origin.trim() == origin
+            !host.is_empty() && !host.contains(['/', '?', '#', ' ']) && origin.trim() == origin
         });
         if !ok {
             return Err(format!(
@@ -591,7 +589,10 @@ mod tests {
         );
         assert!(cfg.client_ip_header.is_none());
         assert!(cfg.extra_origins.is_empty());
-        assert_eq!(cfg.served_origins, vec!["https://groundinglab.io".to_owned()]);
+        assert_eq!(
+            cfg.served_origins,
+            vec!["https://groundinglab.io".to_owned()]
+        );
     }
 
     /// Defect 26 (gate review r2, finding 26). `served_origins` is required,
@@ -602,7 +603,11 @@ mod tests {
         assert!(error.contains("served_origins is required"), "{error}");
         let error = load_text("served_origins = []\n").unwrap_err();
         assert!(error.contains("at least one"), "{error}");
-        for bad in ["https://site.example/", "site.example", "https://site.example/path"] {
+        for bad in [
+            "https://site.example/",
+            "site.example",
+            "https://site.example/path",
+        ] {
             let error = load_text(&format!("served_origins = [{bad:?}]\n")).unwrap_err();
             assert!(error.contains("exact http(s) origin"), "{bad}: {error}");
         }
@@ -663,7 +668,8 @@ mod tests {
 
     #[test]
     fn an_empty_origin_list_does_not_restore_the_public_sites() {
-        let cfg = load_text("served_origins = [\"https://site.example\"]\nallowed_origins = []\n").unwrap();
+        let cfg = load_text("served_origins = [\"https://site.example\"]\nallowed_origins = []\n")
+            .unwrap();
         assert!(cfg.allowed_origins.is_empty());
     }
 

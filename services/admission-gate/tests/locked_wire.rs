@@ -888,7 +888,10 @@ fn a_banned_resubmit_takes_no_pending_slot() {
         again.nonce[31] = 0xb0 + n as u8;
         let result = lab.door.sign_in_locked(locked_body(&again.body()));
         assert_eq!(result.status, StatusCode::OK);
-        assert!(result.thorough.is_none(), "a banned key starts no thorough job");
+        assert!(
+            result.thorough.is_none(),
+            "a banned key starts no thorough job"
+        );
     }
     assert_eq!(lab.door.ban_ignored(), global);
     let mut legit = Signed::fresh(Vec::new(), exp);

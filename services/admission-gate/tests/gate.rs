@@ -586,7 +586,9 @@ async fn a_restart_does_not_wait_on_a_hung_index() {
     tokio::time::sleep(Duration::from_millis(800)).await;
     let raw = std::fs::read(dir.join("chain.jsonl")).unwrap();
     assert!(
-        json_values(&raw).iter().all(|value| value["phase"] != "thorough"),
+        json_values(&raw)
+            .iter()
+            .all(|value| value["phase"] != "thorough"),
         "a provisional with no stored draw is held"
     );
     let (status, posted) = post_cbor(&router, vec![0x80]).await;

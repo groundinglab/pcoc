@@ -485,8 +485,8 @@ fn encode_decision(seq: u64, prev: &str, write: &DecisionWrite) -> Result<Vec<u8
     // The splice stays last so a section 14 newline still sits inside the object.
     text.pop();
     if let Some(measures) = &write.measures {
-        let encoded = serde_json::to_string(measures)
-            .map_err(|err| LogError::Unusable(err.to_string()))?;
+        let encoded =
+            serde_json::to_string(measures).map_err(|err| LogError::Unusable(err.to_string()))?;
         text.push_str(",\"measures\":");
         text.push_str(&encoded);
     }
@@ -713,7 +713,10 @@ mod tests {
         let log = DecisionLog::open(&dir).unwrap();
         assert_eq!(log.lines().len(), 2);
         assert!(log.lines()[0].value.get("index_network").is_none());
-        assert_eq!(log.lines()[1].value["index_network"], serde_json::json!(["synthetic"]));
+        assert_eq!(
+            log.lines()[1].value["index_network"],
+            serde_json::json!(["synthetic"])
+        );
         assert_eq!(log.lines()[1].value["expected_network"], "main");
         let _ = fs::remove_dir_all(&dir);
     }

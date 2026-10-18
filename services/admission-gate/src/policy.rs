@@ -627,7 +627,10 @@ mod tests {
         );
         assert_eq!(too_few_line(4, 6), "Waypoints anchored: 4 of 16, needs 6.");
         for line in [leg_rate_line(1499, 9557, 1, 5), too_few_line(4, 6)] {
-            assert!(!line.contains("1/5") && !line.contains("leg per second"), "{line}");
+            assert!(
+                !line.contains("1/5") && !line.contains("leg per second"),
+                "{line}"
+            );
         }
     }
 

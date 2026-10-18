@@ -365,7 +365,10 @@ impl IndexClient {
 
     fn note_network(&self, body: &str) {
         if let Some(network) = document_network(body) {
-            self.networks.lock().expect("index networks").insert(network);
+            self.networks
+                .lock()
+                .expect("index networks")
+                .insert(network);
         }
     }
 

@@ -657,10 +657,12 @@ impl Door {
         // pending slot is taken. Checked before the caps so a banned
         // resubmit cannot hold a slot.
         if self.banned(&public_key) {
-            return match self
-                .rows
-                .consume(&body, ClientClass::DeliveryOk, wire::OUTCOME_PENDING, now)
-            {
+            return match self.rows.consume(
+                &body,
+                ClientClass::DeliveryOk,
+                wire::OUTCOME_PENDING,
+                now,
+            ) {
                 Ok(()) => locked_client(ClientClass::DeliveryOk, None),
                 Err(replay) => replay_response(replay),
             };
@@ -1061,7 +1063,12 @@ impl Door {
         }
     }
 
-    fn write_provisional(&self, job: &LockedThorough, record: &str, networks: Value) -> Option<u64> {
+    fn write_provisional(
+        &self,
+        job: &LockedThorough,
+        record: &str,
+        networks: Value,
+    ) -> Option<u64> {
         let now = self.now_unix_s();
         let mut write = DecisionWrite::bare(now, None, "fast", "provisional");
         self.stamp_network(&mut write, networks);
@@ -1360,9 +1367,9 @@ fn show_log(error: LogError) -> String {
 mod tests {
     use super::bookends_from_record;
     use super::{Door, FastPhase, LockedThorough};
-    use crate::policy::AdmissionPolicy;
     use crate::canon;
     use crate::config::Config;
+    use crate::policy::AdmissionPolicy;
     use crate::thorough;
     use std::collections::HashMap;
     use std::io::{Read, Write};
@@ -1623,8 +1630,14 @@ mod tests {
         let honest = job_of(&built.bytes, 1);
         assert_eq!(door.settle_fast_small(&honest), FastPhase::Provisional);
         let honest_seq = provisional_seq(&dir, &honest);
-        thorough::run_for_test(&dir, honest_seq, &built.hike, &honest.object_sha, door.policy())
-            .unwrap();
+        thorough::run_for_test(
+            &dir,
+            honest_seq,
+            &built.hike,
+            &honest.object_sha,
+            door.policy(),
+        )
+        .unwrap();
         let stored = draw_runs(&dir, honest_seq);
         // A job whose process stopped before any draw was stored.
         let undrawn = job_of(&built.bytes, 2);
@@ -1638,7 +1651,8 @@ mod tests {
         fake.public_key = [0x43; 32];
         assert_eq!(door.settle_fast_small(&fake), FastPhase::Provisional);
         let fake_seq = provisional_seq(&dir, &fake);
-        thorough::run_for_test(&dir, fake_seq, &fake_hike, &fake.object_sha, door.policy()).unwrap();
+        thorough::run_for_test(&dir, fake_seq, &fake_hike, &fake.object_sha, door.policy())
+            .unwrap();
         let fake_stored = draw_runs(&dir, fake_seq);
         drop(door);
 
@@ -1647,22 +1661,26 @@ mod tests {
         let jobs = door.unsettled();
         assert_eq!(jobs.len(), 3);
         for job in jobs {
-            let hike = if job.fast_seq == fake_seq { &fake_hike } else { &built.hike };
-            let walked = thorough::resume_for_test(
-                &dir,
-                job.fast_seq,
-                hike,
-                &job.object_sha,
-                door.policy(),
-            );
+            let hike = if job.fast_seq == fake_seq {
+                &fake_hike
+            } else {
+                &built.hike
+            };
+            let walked =
+                thorough::resume_for_test(&dir, job.fast_seq, hike, &job.object_sha, door.policy());
             door.settle_resumed(job, walked);
         }
-        assert!(!dir.join("pending").join(format!("{undrawn_seq}.draw")).exists());
+        assert!(!dir
+            .join("pending")
+            .join(format!("{undrawn_seq}.draw"))
+            .exists());
         let lines = chain(&dir);
         let thorough_for = |seq: u64| {
             lines
                 .iter()
-                .find(|line| line["phase"] == "thorough" && line["fast_seq"] == serde_json::json!(seq))
+                .find(|line| {
+                    line["phase"] == "thorough" && line["fast_seq"] == serde_json::json!(seq)
+                })
                 .cloned()
         };
         let honest_line = thorough_for(honest_seq).expect("honest resume line");
@@ -1672,7 +1690,10 @@ mod tests {
         assert_eq!(fake_line["decision"], "revoke");
         assert_eq!(fake_line["deep"]["indices"], fake_stored);
         assert!(door.banned(&fake.public_key), "the fake leg bans on resume");
-        assert!(thorough_for(undrawn_seq).is_none(), "no draw: held, no line");
+        assert!(
+            thorough_for(undrawn_seq).is_none(),
+            "no draw: held, no line"
+        );
         assert!(
             lines
                 .iter()
@@ -1818,10 +1839,7 @@ mod tests {
         assert_eq!(line["policy_id"], "gl-admit-v7", "{line}");
         assert_eq!(line["expected_network"], "main", "{line}");
         let observed_list = line["index_network"].as_array().expect("index_network");
-        assert!(
-            observed_list.iter().any(|item| item == observed),
-            "{line}"
-        );
+        assert!(observed_list.iter().any(|item| item == observed), "{line}");
     }
 
     /// gl-admit-v7: mainnet index documents are accepted, and both the fast
@@ -1858,7 +1876,12 @@ mod tests {
         let (door, dir) = open_with(&url, shipped_policy("gl-admit-v7.toml"));
         let job = job_of(&built.bytes, 1);
         door.consume_for_test(&job.nonce, job.object_sha, door.now_unix_s());
-        assert_eq!(door.settle_fast_small(&job), FastPhase::Done, "{}", chain_text(&dir));
+        assert_eq!(
+            door.settle_fast_small(&job),
+            FastPhase::Done,
+            "{}",
+            chain_text(&dir)
+        );
         assert!(door.unsettled().is_empty());
         assert_eq!(chain(&dir).len(), 1);
         assert_network_refusal(&dir, "synthetic");
@@ -1879,7 +1902,10 @@ mod tests {
             .is_some_and(|doc| !doc.contains("\"plant\"")));
         for (mirror, observed) in [
             (Mirror::Network(header_only, "synthetic"), "synthetic"),
-            (Mirror::Network(header_only, ""), crate::verifier::NETWORK_ABSENT),
+            (
+                Mirror::Network(header_only, ""),
+                crate::verifier::NETWORK_ABSENT,
+            ),
             (
                 Mirror::PlantUnconfirmedFreshNetwork(built.plant_height, "synthetic"),
                 "synthetic",
@@ -1913,7 +1939,10 @@ mod tests {
         let built = small_honest_on("synthetic");
         let (url, _) = serve(&built.docs, Mirror::Honest);
         let (door, dir) = open_with(&url, v6);
-        assert_eq!(door.settle_fast_small(&job_of(&built.bytes, 1)), FastPhase::Provisional);
+        assert_eq!(
+            door.settle_fast_small(&job_of(&built.bytes, 1)),
+            FastPhase::Provisional
+        );
         let line = fast_line(&dir);
         assert_eq!(line["decision"], "provisional");
         assert_eq!(line["policy_id"], "gl-admit-v6");
@@ -1961,7 +1990,10 @@ mod tests {
         changed.index = Some(crate::policy::IndexPolicy {
             expected_network: "synthetic".to_owned(),
         });
-        assert!(open(changed).is_err(), "a bound id is never reused with other values");
+        assert!(
+            open(changed).is_err(),
+            "a bound id is never reused with other values"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1972,10 +2004,18 @@ mod tests {
         use crate::policy::GateBuild;
         let cfg = Config::for_tests(scratch_dir(), "http://127.0.0.1:9");
         for (policy, build, starts) in [
-            (shipped_policy("gl-admit-v7.toml"), GateBuild::Testing, false),
+            (
+                shipped_policy("gl-admit-v7.toml"),
+                GateBuild::Testing,
+                false,
+            ),
             (synthetic_policy(), GateBuild::Testing, true),
             (shipped_policy("gl-admit-v6.toml"), GateBuild::Testing, true),
-            (shipped_policy("gl-admit-v7.toml"), GateBuild::Production, true),
+            (
+                shipped_policy("gl-admit-v7.toml"),
+                GateBuild::Production,
+                true,
+            ),
         ] {
             let dir = scratch_dir();
             let opened = Door::open_as(
@@ -1989,7 +2029,10 @@ mod tests {
             assert_eq!(opened.is_ok(), starts, "{} {build:?}", policy.policy_id);
             if let Err(error) = opened {
                 assert!(error.contains("testing build"), "{error}");
-                assert!(!dir.join("policy-bind.json").exists(), "refused before binding");
+                assert!(
+                    !dir.join("policy-bind.json").exists(),
+                    "refused before binding"
+                );
             }
             let _ = std::fs::remove_dir_all(&dir);
         }
@@ -2056,7 +2099,9 @@ mod tests {
     fn shipped_policy(name: &str) -> AdmissionPolicy {
         let dir = scratch_dir();
         std::fs::create_dir_all(&dir).unwrap();
-        let file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("policy").join(name);
+        let file = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("policy")
+            .join(name);
         let path = dir.join("gate.toml");
         std::fs::write(
             &path,
