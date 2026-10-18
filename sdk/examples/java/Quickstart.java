@@ -1,13 +1,15 @@
-// Verify the kat-small conformance object against its recorded index replies.
+// Verify the kat-small conformance object and reproduce the vector's stored
+// section 14 record byte for byte.
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import pcoc.hike.Bytes;
 import pcoc.hike.Measure;
 import pcoc.hike.Profile;
+import pcoc.hike.RecordHash;
 import pcoc.json.Json;
 
 public class Quickstart {
@@ -16,7 +18,8 @@ public class Quickstart {
         Json.Obj kat = (Json.Obj) Json.parse(Files.readString(pack.resolve("kat-small.json")));
         byte[] object = Bytes.unhex(((Json.Str) kat.fields().get("object_hex")).value);
 
-        // The index: height -> document body. A real verifier GETs <index>/index/<height>.
+        // The index: height -> section 9 document body. A real verifier GETs
+        // <index>/index/<height>; here the vector carries the replies.
         Map<Long, String> docs = new HashMap<>();
         for (Json d : ((Json.Arr) kat.fields().get("documents")).items()) {
             Json.Obj doc = (Json.Obj) d;
@@ -25,21 +28,26 @@ public class Quickstart {
         }
         Measure.Reader index = docs::get; // null = no body for that height
 
-        // Draw bytes: SHA-256(seed || le64(i)) blocks, as the CLIs' --audit-seed.
-        // Use 4096 bytes from SecureRandom in production.
+        // The six-leg draw bytes. kat-small's draw_bytes_hex is the pinned stream
+        // SHA-256(seed || le64(0)) || SHA-256(seed || le64(1)) || ... for this seed.
+        // Production passes 4096 bytes from SecureRandom.
+        byte[] stream = Bytes.unhex(((Json.Str) kat.fields().get("draw_bytes_hex")).value);
         byte[] seed = new byte[32];
-        java.util.Arrays.fill(seed, (byte) 0x11);
-        byte[] stream = new byte[4096];
-        for (int i = 0, filled = 0; filled < stream.length; i++) {
+        Arrays.fill(seed, (byte) 0x5A);
+        byte[] pinned = new byte[stream.length];
+        for (int i = 0; i * 32 < pinned.length; i++) {
             byte[] block = Bytes.sha256(seed, Bytes.le64(i));
-            int n = Math.min(block.length, stream.length - filled);
-            System.arraycopy(block, 0, stream, filled, n);
-            filled += n;
+            System.arraycopy(block, 0, pinned, i * 32, Math.min(32, pinned.length - i * 32));
         }
+        System.out.println("draw = draw_bytes_hex: " + Arrays.equals(pinned, stream));
 
-        // Profile.PRODUCTION for real objects. null means the object did not decode.
+        // Profile.PRODUCTION for real objects. null means CBOR that is not a map.
         String record = Measure.record(object, Profile.CONFORMANCE_SMALL_V2, index, stream, false);
-        byte[] digest = MessageDigest.getInstance("SHA-256").digest(record.getBytes(StandardCharsets.UTF_8));
-        System.out.println("record sha256: " + Bytes.hex(digest));
+        Json.Obj parsed = (Json.Obj) Json.parse(record);
+        System.out.println("shape: " + ((Json.Str) parsed.fields().get("shape")).value);
+        System.out.println("matches kat-small.json record: "
+                + record.equals(((Json.Str) kat.fields().get("record")).value));
+        System.out.println("record bytes sha256: " + Bytes.hex(Bytes.sha256(record.getBytes(StandardCharsets.UTF_8))));
+        System.out.println("verify_record_sha256: " + Bytes.hex(RecordHash.verifyRecordSha256(record)));
     }
 }
