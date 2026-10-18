@@ -261,9 +261,9 @@ impl Door {
     pub fn finish_thorough(
         &self,
         job: &LockedThorough,
-        walked: Result<crate::thorough::ThoroughOut, String>,
+        outcome: Result<crate::thorough::ThoroughOut, String>,
     ) {
-        match walked {
+        match outcome {
             Ok(out) => self.settle_thorough(job, out),
             Err(error) => {
                 eprintln!("admission-service thorough did not finish; held: {error}");
@@ -330,9 +330,9 @@ impl Door {
     pub fn settle_resumed(
         &self,
         job: ThoroughJob,
-        walked: Result<crate::thorough::ThoroughOut, String>,
+        outcome: Result<crate::thorough::ThoroughOut, String>,
     ) {
-        let out = match walked {
+        let out = match outcome {
             Ok(out) if out.seq == job.fast_seq => out,
             Ok(out) => {
                 eprintln!(
@@ -1666,9 +1666,9 @@ mod tests {
             } else {
                 &built.hike
             };
-            let walked =
+            let outcome =
                 thorough::resume_for_test(&dir, job.fast_seq, hike, &job.object_sha, door.policy());
-            door.settle_resumed(job, walked);
+            door.settle_resumed(job, outcome);
         }
         assert!(!dir
             .join("pending")
@@ -1769,9 +1769,10 @@ mod tests {
             "commitment": canon::hex32(&thorough::commitment(seq, &other, &salt, &runs)),
         });
         std::fs::write(&draw_path, foreign.to_string()).unwrap();
-        let walked = thorough::run_for_test(&dir, seq, &built.hike, &job.object_sha, door.policy());
-        assert!(walked.is_err());
-        door.finish_thorough(&job, walked);
+        let outcome =
+            thorough::run_for_test(&dir, seq, &built.hike, &job.object_sha, door.policy());
+        assert!(outcome.is_err());
+        door.finish_thorough(&job, outcome);
 
         // Fault 2: a committed draw naming a leg the object does not have,
         // so the leg recompute errors.
@@ -1784,9 +1785,10 @@ mod tests {
             "commitment": canon::hex32(&thorough::commitment(seq, &job.object_sha, &salt, &runs)),
         });
         std::fs::write(&draw_path, broken.to_string()).unwrap();
-        let walked = thorough::run_for_test(&dir, seq, &built.hike, &job.object_sha, door.policy());
-        assert!(walked.is_err());
-        door.finish_thorough(&job, walked);
+        let outcome =
+            thorough::run_for_test(&dir, seq, &built.hike, &job.object_sha, door.policy());
+        assert!(outcome.is_err());
+        door.finish_thorough(&job, outcome);
 
         let lines = chain(&dir);
         assert!(

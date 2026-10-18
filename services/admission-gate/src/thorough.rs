@@ -3,7 +3,7 @@
 //! Three runs of six distinct indices, drawn from `OsRng` by the section 14.6
 //! rejection rule, uniform over every leg. The commitment
 //! `H("pcoc-deep-v1" ‖ seq ‖ object_sha ‖ salt ‖ indices)` is fsynced before
-//! any leg is walked. Runs stop at the first mismatch. Rule A4.3 digests for
+//! any leg is checked. Runs stop at the first mismatch. Rule A4.3 digests for
 //! every leg run after the walks. A mismatch revokes when a grant was issued
 //! and, under this policy, bans the public key. The salt and the indices are
 //! revealed on the result. They are not readable over HTTP before that.
@@ -86,7 +86,7 @@ pub fn resume(
     policy: &AdmissionPolicy,
 ) -> Result<ThoroughOut, String> {
     let hike = hike_of(object)?;
-    walk_with(
+    run_draws(
         log_dir,
         seq,
         &hike,
@@ -106,7 +106,7 @@ pub(crate) fn resume_for_test(
     object_sha: &[u8; 32],
     policy: &AdmissionPolicy,
 ) -> Result<ThoroughOut, String> {
-    walk_with(
+    run_draws(
         log_dir,
         seq,
         hike,
@@ -156,7 +156,7 @@ fn walk(
     policy: &AdmissionPolicy,
     sizes: hike::Sizes,
 ) -> Result<ThoroughOut, String> {
-    walk_with(
+    run_draws(
         log_dir,
         seq,
         hike,
@@ -167,7 +167,7 @@ fn walk(
     )
 }
 
-fn walk_with(
+fn run_draws(
     log_dir: &Path,
     seq: u64,
     hike: &hike::Hike,

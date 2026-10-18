@@ -467,14 +467,14 @@ fn spawn_locked(door: Door, jobs: JobStore, job: LockedThorough) {
                 let public_key = job.public_key;
                 let log_dir = jobs.log_dir();
                 let policy = door.policy().clone();
-                let walked = tokio::task::spawn_blocking(move || {
+                let outcome = tokio::task::spawn_blocking(move || {
                     crate::thorough::run(&log_dir, seq, &object, &object_sha, &policy)
                 })
                 .await
                 .unwrap_or_else(|error| Err(format!("thorough worker failed: {error}")));
                 // No fallback: an error is held, never a second check that
                 // could write `accept`.
-                door.finish_thorough(&job, walked);
+                door.finish_thorough(&job, outcome);
                 let _ = public_key;
             }
             (
@@ -518,12 +518,12 @@ fn spawn_thorough(door: Door, jobs: JobStore, job: ThoroughJob) {
         let object = job.object.clone();
         let object_sha = job.object_sha;
         let seq = job.fast_seq;
-        let walked = tokio::task::spawn_blocking(move || {
+        let outcome = tokio::task::spawn_blocking(move || {
             crate::thorough::resume(&log_dir, seq, &object, &object_sha, &policy)
         })
         .await
         .unwrap_or_else(|error| Err(format!("resume worker failed: {error}")));
-        door.settle_resumed(job, walked);
+        door.settle_resumed(job, outcome);
     });
 }
 
