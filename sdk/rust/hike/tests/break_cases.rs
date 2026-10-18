@@ -346,7 +346,7 @@ fn hex8(s: &str) -> [u8; 8] {
     out
 }
 
-/// rc.2 (CoS 1): a top level that is not a map is the undecoded
+/// rc.2 (approved change 1): a top level that is not a map is the undecoded
 /// ["malformed cbor"] record, byte for byte the record of no bytes at all.
 #[test]
 fn a_top_level_that_is_not_a_map_is_malformed_cbor() {
@@ -387,7 +387,7 @@ fn a_top_level_that_is_not_a_map_is_malformed_cbor() {
     assert!(!hike::top_level_map(&[]));
 }
 
-/// rc.2 (CoS 3): decoded_hike refuses trailing bytes.
+/// rc.2 (approved change 3): decoded_hike refuses trailing bytes.
 #[test]
 fn decoded_hike_refuses_trailing_bytes() {
     let mut bytes = object_bytes();

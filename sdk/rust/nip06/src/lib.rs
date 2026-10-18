@@ -198,6 +198,9 @@ pub fn decode_hex32(spelling: &str) -> Result<[u8; 32], String> {
     <[u8; 32]>::try_from(bytes.as_slice()).map_err(|_| "expected 32 bytes of hex".to_owned())
 }
 
+/// NIP-19 human-readable part of a secret key.
+const NSEC_HRP: &str = "nsec";
+
 fn dress(mnemonic: String, secret: [u8; 32]) -> DemoKey {
     let secp = Secp256k1::new();
     let key = SecretKey::from_slice(&secret).expect("derived secret is on the curve");
@@ -205,7 +208,7 @@ fn dress(mnemonic: String, secret: [u8; 32]) -> DemoKey {
     let (xonly, _) = XOnlyPublicKey::from_keypair(&keypair);
     let public_key = xonly.serialize();
     DemoKey {
-        nsec: nip19("nsec", &secret),
+        nsec: nip19(NSEC_HRP, &secret),
         npub: nip19("npub", &public_key),
         mnemonic,
         secret,
@@ -386,7 +389,10 @@ mod tests {
                     "mnemonic word {word} leaked: {shown}"
                 );
             }
-            assert!(!shown.contains("nsec1"), "nsec prefix leaked: {shown}");
+            assert!(
+                !shown.contains(&format!("{NSEC_HRP}1")),
+                "nsec prefix leaked: {shown}"
+            );
         }
     }
 }

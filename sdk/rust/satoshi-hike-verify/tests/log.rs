@@ -233,7 +233,7 @@ fn an_unknown_log_degree_is_a_usage_error() {
     assert!(record_lines(&stderr).is_empty(), "{stderr}");
 }
 
-/// rc.2 (CoS 2): exit 1 only when no top-level map decodes. A map with a
+/// rc.2 (approved change 2): exit 1 only when no top-level map decodes. A map with a
 /// trailing byte writes its record and exits 0; a well-formed item that is
 /// not a map exits 1 with nothing on stdout.
 #[test]
