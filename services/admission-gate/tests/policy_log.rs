@@ -202,6 +202,7 @@ fn ac5_unknown_tip_is_null_and_health_hides_paths() {
         cfg.policy(),
         &cfg.index_url,
         cfg.index_timeout,
+        cfg.served_origins.clone(),
     )
     .unwrap();
     let _ = door;
@@ -259,6 +260,7 @@ fn ac2b_return_line_skips_measurement() {
         cfg.policy(),
         &cfg.index_url,
         cfg.index_timeout,
+        cfg.served_origins.clone(),
     )
     .unwrap();
     let now = 1_800_000_000u64;
@@ -294,6 +296,7 @@ fn ac2b_return_line_skips_measurement() {
         cfg.policy(),
         &cfg.index_url,
         cfg.index_timeout,
+        cfg.served_origins.clone(),
     )
     .unwrap();
     door.set_now_unix_s(Some(now));
@@ -350,6 +353,7 @@ fn ac2b_return_line_skips_measurement() {
         cfg.policy(),
         &cfg.index_url,
         cfg.index_timeout,
+        cfg.served_origins.clone(),
     )
     .unwrap();
     let old = thorough(&door, [7u8; 32], [6u8; 32], 5);

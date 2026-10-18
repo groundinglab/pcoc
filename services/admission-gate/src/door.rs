@@ -30,6 +30,8 @@ pub struct Door {
     policy: AdmissionPolicy,
     index_url: String,
     index_timeout: std::time::Duration,
+    /// Site origins this gate serves (config `served_origins`). Exact bytes.
+    served_origins: Arc<Vec<String>>,
 }
 
 struct Inner {
@@ -89,7 +91,11 @@ impl Door {
         policy: AdmissionPolicy,
         index_url: &str,
         index_timeout: std::time::Duration,
+        served_origins: Vec<String>,
     ) -> Result<Self, String> {
+        if served_origins.is_empty() {
+            return Err("served_origins is empty; the gate serves no site origin".to_owned());
+        }
         policy.bind(dir)?;
         let mut log = DecisionLog::open(dir).map_err(show_log)?;
         log.set_policy_hint(policy::public_document(&policy))
@@ -108,7 +114,13 @@ impl Door {
             policy,
             index_url: index_url.to_owned(),
             index_timeout,
+            served_origins: Arc::new(served_origins),
         })
+    }
+
+    /// The site origins this gate serves for sign-in.
+    pub fn served_origins(&self) -> &[String] {
+        &self.served_origins
     }
 
     /// A banned public key is ignored. No verify, no decision line.
@@ -392,7 +404,7 @@ impl Door {
     /// Test seam. Consumes a nonce the way step 9 does, without a signature.
     pub fn consume_for_test(&self, nonce: &[u8; 32], object_sha: [u8; 32], now: u64) {
         let body = crate::wire::LockedBody {
-            origin: crate::wire::ORIGIN.to_owned(),
+            origin: self.served_origins[0].clone(),
             nonce: *nonce,
             exp: now.saturating_add(120),
             object_sha,
@@ -534,7 +546,7 @@ impl Door {
         let hash_matches = canon::sha256(&body.object) == body.object_sha;
 
         // 2. Origin, field grammar, or the window.
-        if !wire::origin_served(&[wire::ORIGIN], &body.origin)
+        if !wire::origin_served(&self.served_origins, &body.origin)
             || !wire::window_accepts(now, body.exp)
         {
             self.rows
@@ -1258,7 +1270,6 @@ mod tests {
     use crate::canon;
     use crate::config::Config;
     use crate::thorough;
-    use crate::wire;
     use std::collections::HashMap;
     use std::io::{Read, Write};
     use std::net::TcpListener;
@@ -1580,7 +1591,14 @@ mod tests {
 
     fn reopen(dir: &Path, index_url: &str) -> Door {
         let cfg = Config::for_tests(dir.to_path_buf(), index_url);
-        Door::open(&cfg.log_dir, cfg.policy(), &cfg.index_url, cfg.index_timeout).unwrap()
+        Door::open(
+            &cfg.log_dir,
+            cfg.policy(),
+            &cfg.index_url,
+            cfg.index_timeout,
+            cfg.served_origins.clone(),
+        )
+        .unwrap()
     }
 
     /// Defect 2 (gate review r2, finding 2). A thorough error is held. It
@@ -1694,6 +1712,7 @@ mod tests {
             cfg.policy(),
             &cfg.index_url,
             cfg.index_timeout,
+            cfg.served_origins.clone(),
         )
         .unwrap();
         (door, dir)
@@ -1704,7 +1723,7 @@ mod tests {
         nonce[0] = nonce_byte;
         LockedThorough {
             nonce,
-            origin: wire::ORIGIN.to_owned(),
+            origin: "https://groundinglab.io".to_owned(),
             object: bytes.to_vec(),
             submission: [nonce_byte; 32],
             public_key: [0x42; 32],

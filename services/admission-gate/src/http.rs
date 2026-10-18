@@ -59,6 +59,7 @@ impl Service {
             cfg.policy(),
             &cfg.index_url,
             cfg.index_timeout,
+            cfg.served_origins.clone(),
         )?;
         let jobs = JobStore::new(cfg.clone());
         for job in door.unsettled() {
@@ -739,7 +740,7 @@ mod tests {
     use super::*;
 
     fn cfg() -> Config {
-        Config::default()
+        Config::for_tests(std::path::PathBuf::from("unused-log"), "http://127.0.0.1:9")
     }
 
     #[test]

@@ -1,7 +1,8 @@
 //! One config file. The process does not read `GL_VERIFY_*`.
 //!
-//! Every key is optional. An omitted key uses the default documented in
-//! `deploy/DEPLOY.md`. Unknown keys are an error, so a retired flag cannot
+//! Every key but `served_origins` is optional. An omitted key uses the
+//! default documented in `deploy/DEPLOY.md`. `served_origins` has no default:
+//! a file without it is a startup error. Unknown keys are an error, so a retired flag cannot
 //! be turned back on by leaving it in the file.
 
 use crate::policy::{self, AdmissionPolicy, RateFloor};
@@ -42,6 +43,10 @@ pub const DEFAULT_POLICY_FILE: &str = "policy/gl-admit-v6.toml";
 #[derive(Clone, Debug)]
 pub struct Config {
     pub bind: SocketAddr,
+    /// Site origins this gate serves for sign-in (SPEC §15.1 **Origin**):
+    /// the signed body's `origin` must equal one of these exactly. Required,
+    /// no default. Separate from the CORS lists below.
+    pub served_origins: Vec<String>,
     /// Exact CORS origins from the file. Empty (the default) allows loopback only.
     pub allowed_origins: Vec<String>,
     pub extra_origins: Vec<String>,
@@ -76,6 +81,8 @@ struct FileConfig {
     max_concurrent: usize,
     rate_per_min: u32,
     client_ip_header: Option<String>,
+    /// Required. `None` (the key is absent) is a startup error.
+    served_origins: Option<Vec<String>>,
     allowed_origins: Vec<String>,
     extra_origins: Vec<String>,
     bind_threads: usize,
@@ -102,6 +109,7 @@ impl Default for FileConfig {
             max_concurrent: DEFAULT_MAX_CONCURRENT,
             rate_per_min: DEFAULT_RATE_PER_MIN,
             client_ip_header: None,
+            served_origins: None,
             allowed_origins: DEFAULT_ALLOWED_ORIGINS
                 .iter()
                 .map(|origin| (*origin).to_owned())
@@ -154,12 +162,6 @@ struct PolicyFile {
 struct RateFloorFile {
     p: u64,
     q: u64,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self::from_file(FileConfig::default(), None).expect("default config")
-    }
 }
 
 impl Config {
@@ -226,10 +228,12 @@ impl Config {
                 Some(trimmed)
             }
         });
+        let served_origins = parse_served_origins(file.served_origins)?;
         let extra_origins = normalize_origins(file.extra_origins);
         let allowed_origins = normalize_origins(file.allowed_origins);
         Ok(Self {
             bind,
+            served_origins,
             allowed_origins,
             extra_origins,
             max_object_bytes: file.max_object_bytes,
@@ -251,16 +255,57 @@ impl Config {
         self.policy.clone()
     }
 
-    /// A config for tests: empty temp log, limiter off, the given index origin.
+    /// A config for tests: empty temp log, limiter off, the given index
+    /// origin, and [`TEST_SERVED_ORIGIN`] as the one served origin. Every
+    /// other key is its file default. A deploy never uses this.
     pub fn for_tests(log_dir: PathBuf, index_url: &str) -> Self {
+        let file = FileConfig {
+            served_origins: Some(vec![TEST_SERVED_ORIGIN.to_owned()]),
+            ..FileConfig::default()
+        };
+        let cfg = Self::from_file(file, None).expect("test config");
         Self {
             rate_per_min: 0,
             index_url: index_url.to_owned(),
             log_dir,
             index_timeout: Duration::from_secs(1),
-            ..Self::default()
+            ..cfg
         }
     }
+}
+
+/// Served origin of [`Config::for_tests`]. The signed test vectors use it.
+/// It is not a default: a config file must name its own `served_origins`.
+pub const TEST_SERVED_ORIGIN: &str = "https://groundinglab.io";
+
+/// `served_origins`: required, at least one, each an exact `http(s)://`
+/// origin with no path and no trailing slash. Kept byte for byte.
+fn parse_served_origins(raw: Option<Vec<String>>) -> Result<Vec<String>, String> {
+    let Some(raw) = raw else {
+        return Err(
+            "served_origins is required: list the exact site origins this gate serves for sign-in, e.g. served_origins = [\"https://site.example\"]; there is no default"
+                .to_owned(),
+        );
+    };
+    if raw.is_empty() {
+        return Err("served_origins must name at least one site origin".to_owned());
+    }
+    for origin in &raw {
+        let rest = origin
+            .strip_prefix("https://")
+            .or_else(|| origin.strip_prefix("http://"));
+        let ok = rest.is_some_and(|host| {
+            !host.is_empty()
+                && !host.contains(['/', '?', '#', ' '])
+                && origin.trim() == origin
+        });
+        if !ok {
+            return Err(format!(
+                "served_origins entry {origin:?} must be an exact http(s) origin with no path or trailing slash"
+            ));
+        }
+    }
+    Ok(raw)
 }
 
 fn normalize_origins(origins: Vec<String>) -> Vec<String> {
@@ -412,9 +457,18 @@ pub fn parse_index_url(raw: &str) -> Result<String, String> {
 mod tests {
     use super::*;
 
+    /// File defaults plus the one required key.
+    fn defaults() -> Config {
+        let file = FileConfig {
+            served_origins: Some(vec!["https://site.example".to_owned()]),
+            ..FileConfig::default()
+        };
+        Config::from_file(file, None).unwrap()
+    }
+
     #[test]
     fn defaults_match_the_documented_values() {
-        let cfg = Config::default();
+        let cfg = defaults();
         assert_eq!(cfg.bind, "127.0.0.1:8787".parse().unwrap());
         assert_eq!(cfg.index_url, DEFAULT_INDEX_URL);
         assert_eq!(cfg.log_dir, PathBuf::from(DEFAULT_LOG_DIR));
@@ -445,14 +499,14 @@ mod tests {
         assert!(cfg.max_body_bytes() >= b64 + JSON_ENVELOPE_BYTES || raw > cfg.max_object_bytes);
         let sized = Config {
             max_object_bytes: raw,
-            ..Config::default()
+            ..defaults()
         };
         assert!(sized.max_body_bytes() >= b64 + JSON_ENVELOPE_BYTES);
         assert!(sized.max_body_bytes() >= raw + MULTIPART_ENVELOPE_SLACK);
     }
 
     #[test]
-    fn an_empty_file_uses_defaults() {
+    fn an_empty_file_is_an_error_and_served_origins_alone_uses_defaults() {
         let dir = std::env::temp_dir().join(format!(
             "pcoc-gate-cfg-{}-{}",
             std::process::id(),
@@ -464,9 +518,13 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("gate.toml");
         fs::write(&path, "").unwrap();
+        let error = Config::load(&path).unwrap_err();
+        assert!(error.contains("served_origins is required"), "{error}");
+        fs::write(&path, "served_origins = [\"https://site.example\"]\n").unwrap();
         let cfg = Config::load(&path).unwrap();
-        assert_eq!(cfg.bind, Config::default().bind);
+        assert_eq!(cfg.bind, defaults().bind);
         assert_eq!(cfg.policy.leg_rate_floor.q, 5);
+        assert_eq!(cfg.served_origins, vec!["https://site.example".to_owned()]);
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -492,12 +550,12 @@ mod tests {
     fn the_deploy_example_loads_the_documented_defaults() {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("deploy/gate.toml");
         let cfg = Config::load(&path).unwrap();
-        assert_eq!(cfg.bind, Config::default().bind);
+        assert_eq!(cfg.bind, defaults().bind);
         assert_eq!(cfg.index_url, DEFAULT_INDEX_URL);
         assert_eq!(cfg.log_dir, PathBuf::from(DEFAULT_LOG_DIR));
         assert_eq!(cfg.max_object_bytes, DEFAULT_MAX_OBJECT_BYTES);
         assert_eq!(cfg.rate_per_min, DEFAULT_RATE_PER_MIN);
-        assert_eq!(cfg.policy, Config::default().policy);
+        assert_eq!(cfg.policy, defaults().policy);
         assert_eq!(cfg.bind_threads, 6);
         assert_eq!(
             cfg.allowed_origins,
@@ -508,12 +566,31 @@ mod tests {
         );
         assert!(cfg.client_ip_header.is_none());
         assert!(cfg.extra_origins.is_empty());
+        assert_eq!(cfg.served_origins, vec!["https://groundinglab.io".to_owned()]);
+    }
+
+    /// Defect 26 (gate review r2, finding 26). `served_origins` is required,
+    /// has no default, and is separate from the CORS lists.
+    #[test]
+    fn served_origins_is_required_and_separate_from_cors() {
+        let error = load_text("allowed_origins = [\"https://site.example\"]\n").unwrap_err();
+        assert!(error.contains("served_origins is required"), "{error}");
+        let error = load_text("served_origins = []\n").unwrap_err();
+        assert!(error.contains("at least one"), "{error}");
+        for bad in ["https://site.example/", "site.example", "https://site.example/path"] {
+            let error = load_text(&format!("served_origins = [{bad:?}]\n")).unwrap_err();
+            assert!(error.contains("exact http(s) origin"), "{bad}: {error}");
+        }
+        let cfg = load_text("served_origins = [\"https://site.example\"]\n").unwrap();
+        assert_eq!(cfg.served_origins, vec!["https://site.example".to_owned()]);
+        assert!(cfg.allowed_origins.is_empty(), "served is not CORS");
     }
 
     #[test]
     fn a_configured_fraction_is_applied() {
         let cfg = load_text(
             r#"
+            served_origins = ["https://site.example"]
             [policy_table]
             policy_id = "gl-admit-v9"
             leg_rate_floor = { p = 7, q = 20 }
@@ -561,7 +638,7 @@ mod tests {
 
     #[test]
     fn an_empty_origin_list_does_not_restore_the_public_sites() {
-        let cfg = load_text("allowed_origins = []\n").unwrap();
+        let cfg = load_text("served_origins = [\"https://site.example\"]\nallowed_origins = []\n").unwrap();
         assert!(cfg.allowed_origins.is_empty());
     }
 
