@@ -155,6 +155,15 @@ struct PolicyFile {
     pending_global: Option<u64>,
     #[serde(default)]
     verify_cap_per_door_session: Option<u64>,
+    /// `[index]`, gl-admit-v7 on. Optional; gl-admit-v6 omits it.
+    #[serde(default)]
+    index: Option<IndexPolicyFile>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct IndexPolicyFile {
+    expected_network: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -398,6 +407,21 @@ fn policy_from_file(file: PolicyFile, max_concurrent: usize) -> Result<Admission
     if pending_per_source == 0 || pending_global == 0 {
         return Err("pending caps must each be at least 1".to_owned());
     }
+    let index = match file.index {
+        Some(index) => {
+            if !policy::NETWORKS.contains(&index.expected_network.as_str()) {
+                return Err(format!(
+                    "index.expected_network {:?} must be one of {:?}",
+                    index.expected_network,
+                    policy::NETWORKS
+                ));
+            }
+            Some(policy::IndexPolicy {
+                expected_network: index.expected_network,
+            })
+        }
+        None => None,
+    };
     let verify_cap_per_door_session = file.verify_cap_per_door_session.unwrap_or(3);
     if verify_cap_per_door_session == 0 {
         return Err("verify_cap_per_door_session must be at least 1".to_owned());
@@ -422,6 +446,7 @@ fn policy_from_file(file: PolicyFile, max_concurrent: usize) -> Result<Admission
         pending_per_source,
         pending_global,
         verify_cap_per_door_session,
+        index,
     })
 }
 

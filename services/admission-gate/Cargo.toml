@@ -14,6 +14,12 @@ path = "src/lib.rs"
 name = "admission-service"
 path = "src/main.rs"
 
+[features]
+# Testing build. Off in every deploy build. A gate built with it refuses to
+# start under a policy whose [index] expected_network is "main"
+# (policy::check_build); it serves only a synthetic policy.
+testing = []
+
 [dependencies]
 axum = "0.8"
 base64 = "0.22"

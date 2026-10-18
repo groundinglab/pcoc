@@ -308,6 +308,29 @@ pub trait IndexRead {
     fn beacon_fresh(&self, height: u64) -> Result<hike::IndexBeacon, ()>;
     fn plant(&self, loc: &hike::PathLocators) -> hike::ChainRead;
     fn plant_fresh(&self, loc: &hike::PathLocators) -> hike::ChainRead;
+    /// The `network` of every index document this reader returned, header
+    /// and plant reads alike, including fresh (confirming) reads. Distinct
+    /// and sorted. A document with no string `network` is [`NETWORK_ABSENT`].
+    fn observed_networks(&self) -> Vec<String> {
+        Vec::new()
+    }
+}
+
+/// Recorded for an index document that carries no string `network` field.
+pub const NETWORK_ABSENT: &str = "absent";
+
+/// The `network` field of one index document. `None` when the body is not a
+/// JSON object (not a document).
+pub fn document_network(body: &str) -> Option<String> {
+    let value = serde_json::from_str::<serde_json::Value>(body).ok()?;
+    let object = value.as_object()?;
+    Some(
+        object
+            .get("network")
+            .and_then(|item| item.as_str())
+            .unwrap_or(NETWORK_ABSENT)
+            .to_owned(),
+    )
 }
 
 #[derive(Clone)]
@@ -327,6 +350,7 @@ pub struct IndexClient {
     agent: ureq::Agent,
     url: String,
     cache: Arc<std::sync::Mutex<std::collections::HashMap<String, Cached>>>,
+    networks: Arc<std::sync::Mutex<std::collections::BTreeSet<String>>>,
 }
 
 impl IndexClient {
@@ -335,6 +359,13 @@ impl IndexClient {
             agent: index_agent(timeout),
             url: url.to_owned(),
             cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+            networks: Arc::new(std::sync::Mutex::new(std::collections::BTreeSet::new())),
+        }
+    }
+
+    fn note_network(&self, body: &str) {
+        if let Some(network) = document_network(body) {
+            self.networks.lock().expect("index networks").insert(network);
         }
     }
 
@@ -348,12 +379,20 @@ impl IndexClient {
             let cache = self.cache.lock().expect("index cache");
             if let Some(hit) = cache.get(&key) {
                 return match hit {
-                    Cached::Body(body) => Ok(body.clone()),
+                    Cached::Body(body) => {
+                        let body = body.clone();
+                        drop(cache);
+                        self.note_network(&body);
+                        Ok(body)
+                    }
                     Cached::Unread => Err(()),
                 };
             }
         }
         let fetched = fetch_body(&self.agent, url, fresh);
+        if let Ok(body) = &fetched {
+            self.note_network(body);
+        }
         if !fresh {
             let slot = match &fetched {
                 Ok(body) => Cached::Body(body.clone()),
@@ -399,6 +438,15 @@ impl IndexRead for IndexClient {
 
     fn plant_fresh(&self, loc: &hike::PathLocators) -> hike::ChainRead {
         self.plant_at(loc, true)
+    }
+
+    fn observed_networks(&self) -> Vec<String> {
+        self.networks
+            .lock()
+            .expect("index networks")
+            .iter()
+            .cloned()
+            .collect()
     }
 }
 

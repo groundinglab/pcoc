@@ -77,3 +77,6 @@ extra_origins = []
 # table. A later start with the same id and a different table exits before
 # it listens. A value change needs a new id.
 policy = "../policy/gl-admit-v6.toml"
+# gl-admit-v7 (../policy/gl-admit-v7.toml) is v6 plus [index]
+# expected_network = "main": mainnet index evidence only. It binds as a new
+# id beside v6 in policy-bind.json. Switching is a deploy decision.

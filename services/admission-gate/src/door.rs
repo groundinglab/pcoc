@@ -93,6 +93,27 @@ impl Door {
         index_timeout: std::time::Duration,
         served_origins: Vec<String>,
     ) -> Result<Self, String> {
+        Self::open_as(
+            dir,
+            policy,
+            index_url,
+            index_timeout,
+            served_origins,
+            policy::gate_build(),
+        )
+    }
+
+    /// [`Door::open`] for a named build. A policy that expects mainnet index
+    /// evidence refuses to start in a testing build ([`policy::check_build`]).
+    pub fn open_as(
+        dir: &Path,
+        policy: AdmissionPolicy,
+        index_url: &str,
+        index_timeout: std::time::Duration,
+        served_origins: Vec<String>,
+        build: policy::GateBuild,
+    ) -> Result<Self, String> {
+        policy::check_build(&policy, build)?;
         if served_origins.is_empty() {
             return Err("served_origins is empty; the gate serves no site origin".to_owned());
         }
@@ -142,6 +163,24 @@ impl Door {
             .last()
             .and_then(|line| line.value.get("seq").and_then(|item| item.as_u64()))
             .unwrap_or(0)
+    }
+
+    /// Gate 0.5.4 fields on every new line: the observed index networks, and
+    /// the policy's `expected_network` when it sets one.
+    fn stamp_network(&self, write: &mut DecisionWrite, networks: Value) {
+        write.index_network = Some(networks);
+        write.expected_network = self.policy.expected_network().map(str::to_owned);
+    }
+
+    /// `index_network` of line `seq`. `null` for a line written before 0.5.4.
+    fn line_networks(&self, seq: u64) -> Value {
+        let inner = self.lock();
+        inner
+            .log
+            .lines()
+            .get(seq as usize)
+            .and_then(|line| line.value.get("index_network").cloned())
+            .unwrap_or(Value::Null)
     }
 
     /// Whether line `seq` is the fast `provisional` this job wrote.
@@ -248,6 +287,9 @@ impl Door {
             DecisionWrite::bare(now, None, "thorough", "revoke")
         };
         write.fast_seq = Some(out.seq);
+        // The thorough check reads no index. It rests on the provisional's reads.
+        let networks = self.line_networks(out.seq);
+        self.stamp_network(&mut write, networks);
         write.submission_sha256 = submission;
         write.public_key = public_key;
         write.object_sha256 = object_sha;
@@ -728,6 +770,8 @@ impl Door {
                 return;
             }
             let mut write = DecisionWrite::bare(now, None, "return", "return");
+            // A return reads no index; it rests on the accept it points at.
+            self.stamp_network(&mut write, Value::Null);
             write.submission_sha256 = job.submission;
             write.public_key = job.public_key;
             write.object_sha256 = job.object_sha;
@@ -806,6 +850,7 @@ impl Door {
             "thorough",
             if accept { "accept" } else { "refuse" },
         );
+        self.stamp_network(&mut write, Value::Null);
         write.submission_sha256 = job.submission;
         write.public_key = job.public_key;
         write.object_sha256 = job.object_sha;
@@ -854,10 +899,9 @@ impl Door {
         if let Some(phase) = self.sticky_phase(job) {
             return (phase, None);
         }
-        self.finish_fast(
-            job,
-            fast::decide(&job.object, &self.policy, &self.index_client()),
-        )
+        let index = self.index_client();
+        let decision = fast::decide(&job.object, &self.policy, &index);
+        self.finish_fast_read(job, decision, &index)
     }
 
     /// [`settle_fast`] at `conformance-small` sizes.
@@ -875,10 +919,36 @@ impl Door {
         if let Some(phase) = self.sticky_phase(job) {
             return (phase, None);
         }
-        self.finish_fast(
-            job,
-            fast::decide_small(&job.object, &self.policy, &self.index_client()),
-        )
+        let index = self.index_client();
+        let decision = fast::decide_small(&job.object, &self.policy, &index);
+        self.finish_fast_read(job, decision, &index)
+    }
+
+    /// Apply the policy's `[index] expected_network` to the documents the
+    /// fast phase read, then write the fast line with the observed networks.
+    /// Any document from another network, or with no `network`, refuses as
+    /// `index_network_not_expected` (class `invalid`), whatever the fast
+    /// checks found. A policy with no `[index]` table (gl-admit-v6) does not
+    /// judge the network; the observation is still recorded.
+    fn finish_fast_read(
+        &self,
+        job: &LockedThorough,
+        decision: FastDecision,
+        index: &impl verifier::IndexRead,
+    ) -> (FastPhase, Option<u64>) {
+        let networks = index.observed_networks();
+        let decision = match self.policy.expected_network() {
+            Some(expected) if networks.iter().any(|network| network != expected) => {
+                FastDecision::Refuse {
+                    reasons: vec![reasons::CODE_INDEX_NETWORK_NOT_EXPECTED.to_owned()],
+                    line: policy::network_line(expected),
+                    record: "{}".to_owned(),
+                    website: wire::OUTCOME_REJECTED,
+                }
+            }
+            _ => decision,
+        };
+        self.finish_fast(job, decision, networks_json(&networks))
     }
 
     /// A stored refuse or revoke for this pair. No index read.
@@ -892,7 +962,12 @@ impl Door {
         verifier::IndexClient::open(&self.index_url, self.index_timeout)
     }
 
-    fn finish_fast(&self, job: &LockedThorough, decision: FastDecision) -> (FastPhase, Option<u64>) {
+    fn finish_fast(
+        &self,
+        job: &LockedThorough,
+        decision: FastDecision,
+        networks: Value,
+    ) -> (FastPhase, Option<u64>) {
         let phase = match decision {
             FastDecision::Refuse {
                 website,
@@ -900,7 +975,7 @@ impl Door {
                 line,
                 record,
             } => {
-                self.write_fast_refuse(job, &reasons, &line, &record);
+                self.write_fast_refuse(job, &reasons, &line, &record, networks);
                 self.rows.settle(&job.nonce, website, self.now_unix_s());
                 FastPhase::Done
             }
@@ -909,7 +984,7 @@ impl Door {
                 FastPhase::Held
             }
             FastDecision::Provisional { record } => {
-                return match self.write_provisional(job, &record) {
+                return match self.write_provisional(job, &record, networks) {
                     Some(seq) => (FastPhase::Provisional, Some(seq)),
                     // No provisional line, so no thorough ticket. Held.
                     None => (FastPhase::Held, None),
@@ -957,9 +1032,11 @@ impl Door {
         reasons: &[String],
         line: &str,
         record: &str,
+        networks: Value,
     ) {
         let now = self.now_unix_s();
         let mut write = DecisionWrite::bare(now, None, "fast", "refuse");
+        self.stamp_network(&mut write, networks);
         write.submission_sha256 = job.submission;
         write.public_key = job.public_key;
         write.object_sha256 = job.object_sha;
@@ -984,9 +1061,10 @@ impl Door {
         }
     }
 
-    fn write_provisional(&self, job: &LockedThorough, record: &str) -> Option<u64> {
+    fn write_provisional(&self, job: &LockedThorough, record: &str, networks: Value) -> Option<u64> {
         let now = self.now_unix_s();
         let mut write = DecisionWrite::bare(now, None, "fast", "provisional");
+        self.stamp_network(&mut write, networks);
         write.submission_sha256 = job.submission;
         write.public_key = job.public_key;
         write.object_sha256 = job.object_sha;
@@ -1053,6 +1131,10 @@ impl Door {
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
         self.inner.lock().expect("admission log")
     }
+}
+
+fn networks_json(networks: &[String]) -> Value {
+    Value::Array(networks.iter().cloned().map(Value::String).collect())
 }
 
 /// Key of the per-source pending cap: the submitter's public key, in hex.
@@ -1278,6 +1360,7 @@ fn show_log(error: LogError) -> String {
 mod tests {
     use super::bookends_from_record;
     use super::{Door, FastPhase, LockedThorough};
+    use crate::policy::AdmissionPolicy;
     use crate::canon;
     use crate::config::Config;
     use crate::thorough;
@@ -1629,7 +1712,7 @@ mod tests {
         let cfg = Config::for_tests(dir.to_path_buf(), index_url);
         Door::open(
             &cfg.log_dir,
-            cfg.policy(),
+            synthetic_policy(),
             &cfg.index_url,
             cfg.index_timeout,
             cfg.served_origins.clone(),
@@ -1715,6 +1798,204 @@ mod tests {
         draw["runs"].clone()
     }
 
+    fn fast_line(dir: &Path) -> serde_json::Value {
+        chain(dir)
+            .into_iter()
+            .find(|line| line["phase"] == "fast")
+            .expect("fast line")
+    }
+
+    fn assert_network_refusal(dir: &Path, observed: &str) {
+        let line = fast_line(dir);
+        assert_eq!(line["decision"], "refuse", "{line}");
+        assert_eq!(line["reason_code"], "index_network_not_expected", "{line}");
+        assert_eq!(line["class"], "invalid", "{line}");
+        assert_eq!(
+            line["reason"],
+            "The index evidence is not from the Bitcoin mainnet, so it cannot support admission here.",
+            "{line}"
+        );
+        assert_eq!(line["policy_id"], "gl-admit-v7", "{line}");
+        assert_eq!(line["expected_network"], "main", "{line}");
+        let observed_list = line["index_network"].as_array().expect("index_network");
+        assert!(
+            observed_list.iter().any(|item| item == observed),
+            "{line}"
+        );
+    }
+
+    /// gl-admit-v7: mainnet index documents are accepted, and both the fast
+    /// line and the thorough line record the network.
+    #[test]
+    fn v7_accepts_mainnet_index_evidence() {
+        let built = small_honest_on("main");
+        let (url, _) = serve(&built.docs, Mirror::Honest);
+        let (door, dir) = open_with(&url, shipped_policy("gl-admit-v7.toml"));
+        let job = job_of(&built.bytes, 1);
+        let (phase, seq) = door.settle_fast_small_seq(&job);
+        assert_eq!(phase, FastPhase::Provisional, "{}", chain_text(&dir));
+        let seq = seq.unwrap();
+        let out =
+            thorough::run_for_test(&dir, seq, &built.hike, &job.object_sha, door.policy()).unwrap();
+        door.settle_thorough(&job, out);
+        let lines = chain(&dir);
+        assert_eq!(lines.len(), 2, "{lines:?}");
+        for line in &lines {
+            assert_eq!(line["policy_id"], "gl-admit-v7", "{line}");
+            assert_eq!(line["expected_network"], "main", "{line}");
+            assert_eq!(line["index_network"], serde_json::json!(["main"]), "{line}");
+        }
+        assert_eq!(lines[1]["decision"], "accept");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// gl-admit-v7: synthetic index documents refuse as
+    /// `index_network_not_expected`, class `invalid`, with no thorough run.
+    #[test]
+    fn v7_refuses_synthetic_index_evidence() {
+        let built = small_honest_on("synthetic");
+        let (url, _) = serve(&built.docs, Mirror::Honest);
+        let (door, dir) = open_with(&url, shipped_policy("gl-admit-v7.toml"));
+        let job = job_of(&built.bytes, 1);
+        door.consume_for_test(&job.nonce, job.object_sha, door.now_unix_s());
+        assert_eq!(door.settle_fast_small(&job), FastPhase::Done, "{}", chain_text(&dir));
+        assert!(door.unsettled().is_empty());
+        assert_eq!(chain(&dir).len(), 1);
+        assert_network_refusal(&dir, "synthetic");
+        assert_eq!(door.sign_in_result(&job.nonce)["outcome"], "rejected");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// gl-admit-v7 checks header reads and plant reads, including the fresh
+    /// confirming read, and refuses a document with no `network`.
+    #[test]
+    fn v7_checks_header_plant_and_fresh_reads_and_a_missing_network() {
+        let built = small_honest_on("main");
+        // The seed beacon's height is read as a header only (no plant there).
+        let header_only = built.header_height;
+        assert!(built
+            .docs
+            .get(&header_only)
+            .is_some_and(|doc| !doc.contains("\"plant\"")));
+        for (mirror, observed) in [
+            (Mirror::Network(header_only, "synthetic"), "synthetic"),
+            (Mirror::Network(header_only, ""), crate::verifier::NETWORK_ABSENT),
+            (
+                Mirror::PlantUnconfirmedFreshNetwork(built.plant_height, "synthetic"),
+                "synthetic",
+            ),
+        ] {
+            let (url, _) = serve(&built.docs, mirror);
+            let (door, dir) = open_with(&url, shipped_policy("gl-admit-v7.toml"));
+            let phase = door.settle_fast_small(&job_of(&built.bytes, 1));
+            assert_eq!(phase, FastPhase::Done, "{}", chain_text(&dir));
+            assert_network_refusal(&dir, observed);
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+
+    /// gl-admit-v6 is unchanged: no network judgment (synthetic documents
+    /// still reach `provisional`), no `expected_network` key, the same bind
+    /// hash and the same published policy document as gate 0.5.3.
+    #[test]
+    fn v6_is_unchanged_by_the_network_rule() {
+        let v6 = shipped_policy("gl-admit-v6.toml");
+        assert_eq!(v6, AdmissionPolicy::default());
+        assert_eq!(v6.expected_network(), None);
+        assert_eq!(
+            v6.bind_key(),
+            "97d868a1d68f6e8b3a3fd4e3e656028fab04625b61ee3f9c030e70681ed88039"
+        );
+        assert_eq!(
+            serde_json::to_string(&crate::policy::public_document(&v6)).unwrap(),
+            r#"{"policy_id":"gl-admit-v6","leg_rate_floor":{"p":1,"q":5},"min_anchored_paths":6,"thorough_six_leg_runs":3,"thorough_early_stop":true,"provisional":"on","held_on_not_read":true,"ban_key_on_fake_leg":true,"draw_commitment":"sha256(draw || salt), revealed with the result","reverify_max_attempts":3,"max_held_blocks":6,"pending_per_source":1,"pending_global":4,"verify_cap_per_door_session":3,"source":"recommendation, not specification","spec":"Satoshi Hike v2.0","anchored_span":16}"#
+        );
+        let built = small_honest_on("synthetic");
+        let (url, _) = serve(&built.docs, Mirror::Honest);
+        let (door, dir) = open_with(&url, v6);
+        assert_eq!(door.settle_fast_small(&job_of(&built.bytes, 1)), FastPhase::Provisional);
+        let line = fast_line(&dir);
+        assert_eq!(line["decision"], "provisional");
+        assert_eq!(line["policy_id"], "gl-admit-v6");
+        assert!(line.get("expected_network").is_none(), "{line}");
+        assert_eq!(line["index_network"], serde_json::json!(["synthetic"]));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// gl-admit-v7 is gl-admit-v6 plus `[index] expected_network = "main"`,
+    /// and binds cleanly beside an existing gl-admit-v6 binding.
+    #[test]
+    fn v7_is_v6_plus_the_network_key_and_binds_beside_v6() {
+        let v6 = shipped_policy("gl-admit-v6.toml");
+        let v7 = shipped_policy("gl-admit-v7.toml");
+        assert_eq!(v7.policy_id, "gl-admit-v7");
+        assert_eq!(v7.expected_network(), Some("main"));
+        let mut same = v7.clone();
+        same.policy_id = v6.policy_id.clone();
+        same.index = None;
+        assert_eq!(same, v6);
+        let doc = crate::policy::public_document(&v7);
+        assert_eq!(doc["index"]["expected_network"], "main");
+        let dir = scratch_dir();
+        let cfg = Config::for_tests(dir.clone(), "http://127.0.0.1:9");
+        let open = |policy: AdmissionPolicy| {
+            Door::open(
+                &dir,
+                policy,
+                &cfg.index_url,
+                cfg.index_timeout,
+                cfg.served_origins.clone(),
+            )
+        };
+        drop(open(v6.clone()).unwrap());
+        drop(open(v7.clone()).unwrap());
+        drop(open(v6.clone()).unwrap());
+        let bind: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(dir.join("policy-bind.json")).unwrap()).unwrap();
+        assert_eq!(
+            bind["gl-admit-v6"],
+            "97d868a1d68f6e8b3a3fd4e3e656028fab04625b61ee3f9c030e70681ed88039"
+        );
+        assert_eq!(bind["gl-admit-v7"], serde_json::json!(v7.bind_key()));
+        let mut changed = v7.clone();
+        changed.index = Some(crate::policy::IndexPolicy {
+            expected_network: "synthetic".to_owned(),
+        });
+        assert!(open(changed).is_err(), "a bound id is never reused with other values");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A testing build does not start under a mainnet policy. It may start
+    /// under a synthetic policy. A production build starts under either.
+    #[test]
+    fn a_testing_build_refuses_a_mainnet_policy() {
+        use crate::policy::GateBuild;
+        let cfg = Config::for_tests(scratch_dir(), "http://127.0.0.1:9");
+        for (policy, build, starts) in [
+            (shipped_policy("gl-admit-v7.toml"), GateBuild::Testing, false),
+            (synthetic_policy(), GateBuild::Testing, true),
+            (shipped_policy("gl-admit-v6.toml"), GateBuild::Testing, true),
+            (shipped_policy("gl-admit-v7.toml"), GateBuild::Production, true),
+        ] {
+            let dir = scratch_dir();
+            let opened = Door::open_as(
+                &dir,
+                policy.clone(),
+                &cfg.index_url,
+                cfg.index_timeout,
+                cfg.served_origins.clone(),
+                build,
+            );
+            assert_eq!(opened.is_ok(), starts, "{} {build:?}", policy.policy_id);
+            if let Err(error) = opened {
+                assert!(error.contains("testing build"), "{error}");
+                assert!(!dir.join("policy-bind.json").exists(), "refused before binding");
+            }
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+        assert_eq!(crate::policy::gate_build(), GateBuild::Production);
+    }
+
     struct Hits {
         normal: AtomicU64,
         fresh: AtomicU64,
@@ -1723,6 +2004,11 @@ mod tests {
     #[derive(Clone, Copy)]
     enum Mirror {
         Honest,
+        /// Both reads of this height carry this `network` ("" drops the key).
+        Network(u64, &'static str),
+        /// The cached plant read mismatches; the fresh confirming read is
+        /// honest but carries this `network`.
+        PlantUnconfirmedFreshNetwork(u64, &'static str),
         PlantConfirmed(u64),
         PlantUnconfirmed(u64),
         HeaderConfirmed(u64),
@@ -1737,21 +2023,61 @@ mod tests {
         header_height: u64,
     }
 
+    /// The honest-path fixtures serve `"network":"synthetic"` documents, so
+    /// they run on a synthetic-policy gate: gl-admit-v7's table with
+    /// `[index] expected_network = "synthetic"` under a test-only id.
     fn open_at(index_url: &str) -> (Door, PathBuf) {
+        open_with(index_url, synthetic_policy())
+    }
+
+    fn scratch_dir() -> PathBuf {
         static N: AtomicU64 = AtomicU64::new(0);
         let n = N.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("pcoc-gate-fast-{}-{n}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
+        dir
+    }
+
+    fn open_with(index_url: &str, policy: AdmissionPolicy) -> (Door, PathBuf) {
+        let dir = scratch_dir();
         let cfg = Config::for_tests(dir.clone(), index_url);
         let door = Door::open(
             &cfg.log_dir,
-            cfg.policy(),
+            policy,
             &cfg.index_url,
             cfg.index_timeout,
             cfg.served_origins.clone(),
         )
         .unwrap();
         (door, dir)
+    }
+
+    /// A shipped policy file, read the way a deploy reads it.
+    fn shipped_policy(name: &str) -> AdmissionPolicy {
+        let dir = scratch_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("policy").join(name);
+        let path = dir.join("gate.toml");
+        std::fs::write(
+            &path,
+            format!(
+                "served_origins = [\"https://groundinglab.io\"]\npolicy = {:?}\n",
+                file.display().to_string()
+            ),
+        )
+        .unwrap();
+        let policy = Config::load(&path).unwrap().policy;
+        let _ = std::fs::remove_dir_all(&dir);
+        policy
+    }
+
+    fn synthetic_policy() -> AdmissionPolicy {
+        let mut policy = shipped_policy("gl-admit-v7.toml");
+        policy.policy_id = "gl-admit-v9007".to_owned();
+        policy.index = Some(crate::policy::IndexPolicy {
+            expected_network: "synthetic".to_owned(),
+        });
+        policy
     }
 
     fn job_of(bytes: &[u8], nonce_byte: u8) -> LockedThorough {
@@ -1858,12 +2184,31 @@ mod tests {
     fn mirror_body(honest: &str, height: u64, fresh: bool, mode: Mirror) -> String {
         match mode {
             Mirror::Honest => honest.to_owned(),
+            Mirror::Network(target, network) if height == target => with_network(honest, network),
+            Mirror::PlantUnconfirmedFreshNetwork(target, _) if height == target && !fresh => {
+                bad_root(honest)
+            }
+            Mirror::PlantUnconfirmedFreshNetwork(target, network) if height == target => {
+                with_network(honest, network)
+            }
             Mirror::PlantConfirmed(target) if height == target => bad_root(honest),
             Mirror::PlantUnconfirmed(target) if height == target && !fresh => bad_root(honest),
             Mirror::HeaderConfirmed(target) if height == target => bad_hash(honest),
             Mirror::HeaderUnconfirmed(target) if height == target && !fresh => bad_hash(honest),
             _ => honest.to_owned(),
         }
+    }
+
+    /// Replace the document's `network`. An empty name drops the key.
+    fn with_network(body: &str, network: &str) -> String {
+        let mut value: serde_json::Value = serde_json::from_str(body).unwrap();
+        let map = value.as_object_mut().unwrap();
+        if network.is_empty() {
+            map.remove("network");
+        } else {
+            map.insert("network".to_owned(), serde_json::json!(network));
+        }
+        value.to_string()
     }
 
     fn bad_root(body: &str) -> String {
@@ -1884,6 +2229,10 @@ mod tests {
     /// Eighteen stages, one real leg each, six anchored paths (`W_1`…`W_5`
     /// and `W_16`). Section 6 sizes are not filled.
     fn small_honest() -> SmallHonest {
+        small_honest_on("synthetic")
+    }
+
+    fn small_honest_on(network: &str) -> SmallHonest {
         use sha2::{Digest, Sha256};
         let sizes = hike::Sizes::conformance_small();
         let public_key = [0x42u8; 32];
@@ -1960,6 +2309,7 @@ mod tests {
             docs.insert(
                 stage.beacon_height,
                 index_document(
+                    network,
                     &stage.beacon,
                     stage.beacon_height,
                     time,
@@ -1973,6 +2323,7 @@ mod tests {
         docs.insert(
             last_height,
             index_document(
+                network,
                 &last,
                 last_height,
                 1_700_000_000 + last_height,
@@ -2014,6 +2365,7 @@ mod tests {
     }
 
     fn index_document(
+        network: &str,
         natural: &[u8; 32],
         height: u64,
         time: u64,
@@ -2021,7 +2373,7 @@ mod tests {
     ) -> String {
         let hash = hike::pathchain::display_hex(natural);
         let mut body = format!(
-            "{{\"network\":\"synthetic\",\"header\":{{\"hash\":\"{hash}\",\"height\":{height},\"time\":{time}}}"
+            "{{\"network\":\"{network}\",\"header\":{{\"hash\":\"{hash}\",\"height\":{height},\"time\":{time}}}"
         );
         if let Some(loc) = plants.first() {
             body.push_str(",\"plant\":");
