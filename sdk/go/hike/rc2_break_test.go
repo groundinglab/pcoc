@@ -395,6 +395,30 @@ func TestPlantNotReadWhenIndexReturnsNoDocument(t *testing.T) {
 	}
 }
 
+// Q-b: stage 5 replaced by the unsigned integer 7 is a stage with every field
+// absent, so its path is skip, not an absent stage.
+func TestQBNonMapStageIsEveryFieldAbsent(t *testing.T) {
+	obj, index := loadKat(t)
+	item, err := decodeItem(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stages, ok := item.field("stages")
+	if !ok || len(stages.arr) < 6 {
+		t.Fatal("stages")
+	}
+	stages.arr[5] = cborVal{kind: 0, u: 7}
+	rec, decoded := katRecord(t, encodeCBOR(item), index)
+	if !decoded {
+		t.Fatal("decoded")
+	}
+	paths, _ := rec["paths"].([]any)
+	row, _ := paths[4].(map[string]any)
+	if row["path_state"] != "skip" || row["plant"] != "n/a" {
+		t.Fatalf("stage 5 %+v", row)
+	}
+}
+
 func pathPlant(rec map[string]any, token string) bool {
 	paths, _ := rec["paths"].([]any)
 	for _, row := range paths {

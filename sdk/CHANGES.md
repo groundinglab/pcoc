@@ -21,6 +21,8 @@ rc.3 is version `2.0.0-rc.3` in [VERSION](VERSION). The repository tag for this 
 - **F9 (Q-i resolved).** A checkpoint element or a leg-result element that is not a byte string lists `field set` as well as `checkpoint width` or `leg result width`. A byte string of the wrong width stays the width condition only.
 - **F10.** An array or map count read from the input is not a reservation. Rust, Go and Java reserve at most 64 slots and grow as elements arrive. The depth cap and the length checks are unchanged.
 - **F11.** A stage at index 18 or later does not add `header hash differ` or `header height order`. `field set`, `leg_count` and the width conditions still apply.
+- **Q-b resolved.** A non-map `stages` element is a stage with every field absent. A `stages` value that is not an array lists `field set` and `stages length`.
+
 ## Rust API
 
 - `MeasureProfile::ConformanceSmall` now carries `Sizes`, the four integers the verify run was given. `MeasureProfile::sizes()` returns them. Produce does not select this profile.

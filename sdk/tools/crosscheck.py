@@ -54,10 +54,6 @@ KNOWN_DIVERGENCES = {
     # is not a map. Rust and Java read it as a stage map with every field
     # absent (checkpoint_count 0, path `skip`, w17_path `not fetched by
     # design`); Go reads it as an absent stage (`not defined`). Shape agrees.
-    "stage0-uint": ("87d54be634f67630", "5119a87ef7d4d3cd", "87d54be634f67630"),
-    "stage1-uint": ("27aa73761f68f982", "c256b2ba88b2ed8e", "27aa73761f68f982"),
-    "stage5-uint": ("f08fa31c1a00a629", "6b3d6543fd428657", "f08fa31c1a00a629"),
-    "stage17-uint": ("8e155559c4815735", "ff90075e765126ea", "8e155559c4815735"),
 }
 
 
@@ -65,11 +61,6 @@ KNOWN_DIVERGENCES = {
 # Verify + Record.Marshal, Java Measure.record), pinned the same way;
 # "none" is a Java null. Filled from a run; see sdk/KNOWN-DIVERGENCES.md.
 LIB_DIVERGENCES = {
-    # The two program-level spec questions above, at the library level.
-    "stage0-uint": ("ca096d74bf2e1b47", "c85ec5ba690252fd", "ca096d74bf2e1b47"),
-    "stage1-uint": ("c2aa7be545c13037", "67106f05b133a917", "c2aa7be545c13037"),
-    "stage5-uint": ("03633a4c23bfd22d", "c542bfedd8f21174", "03633a4c23bfd22d"),
-    "stage17-uint": ("badd1c19c04ef720", "dc3c169377aec4ae", "badd1c19c04ef720"),
 }
 
 

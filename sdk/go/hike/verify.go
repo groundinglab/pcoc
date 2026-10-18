@@ -1499,7 +1499,8 @@ func stageAt(stages cborVal, g int) (cborVal, bool) {
 	}
 	st := stages.arr[g]
 	if st.kind != 5 {
-		return cborVal{}, false
+		// A non-map element is a stage with every field absent.
+		return cborVal{kind: 5}, true
 	}
 	return st, true
 }

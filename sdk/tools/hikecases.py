@@ -161,6 +161,14 @@ def cases(pack):
     add("f11-s19-s18-beacon-31", lambda v: (more_stages(19)(v), st(v, 18).set("beacon", b"\1" * 31)))
     add("f11-s19-s18-empty", lambda v: (more_stages(19)(v), v.get("stages").__setitem__(18, M())))
     add("f11-s20-s19-beacon-text", lambda v: (more_stages(20)(v), st(v, 19).set("beacon", "x")))
+    # Q-b: one non-map element, and stages values that are not arrays.
+    add("qb-stages-bstr32", lambda v: v.set("stages", [b"\x11" * 32]))
+    add("qb-stages-bstr", lambda v: v.set("stages", b"\x11" * 32))
+    add("qb-stages-text", lambda v: v.set("stages", "x"))
+    add("qb-stages-uint", lambda v: v.set("stages", 7))
+    add("qb-stages-map", lambda v: v.set("stages", M()))
+    add("qb-stages-null", lambda v: v.set("stages", None))
+    add("qb-stages-bool", lambda v: v.set("stages", False))
     # F6: 19 stages, and stage 3's header duplicates stage 2's. stages length
     # does not drop the other conditions over the stages that are present.
     def stages19_dup(v):

@@ -923,6 +923,13 @@ fn read_measured_map(value: &Cbor, trailing: bool, sizes: Sizes) -> Result<Measu
         note_header_order(&stages, &stage_absent, last_interrupt, last_interrupt_height, &mut note);
     } else {
         // A condition that tests a field's value is violated when that field is absent.
+        // Stage 0, when the array has it, is still the seed beacon. A non-map
+        // element is a stage with every field absent, so that beacon is absent.
+        if !stages.is_empty()
+            && (seed_beacon_absent || stage_absent[0].beacon || stages[0].beacon != seed_beacon)
+        {
+            note(Fail("seed beacon"));
+        }
         // Stage 17 missing fails W_17 path, the last-interrupt comparison, and the
         // header-order pair that reads the missing beacons. The missing stages also
         // have no `leg_count`, so that condition is violated too.
