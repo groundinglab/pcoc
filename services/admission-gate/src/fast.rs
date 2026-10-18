@@ -342,7 +342,7 @@ fn judge_fast(
         {
             refuse_now(
                 vec![policy::REFUSE_LEG_RATE.to_owned()],
-                policy::leg_rate_line(policy.leg_rate_floor.p, policy.leg_rate_floor.q),
+                policy::leg_rate_line(n, s, policy.leg_rate_floor.p, policy.leg_rate_floor.q),
                 record,
                 crate::wire::OUTCOME_REJECTED,
             )
@@ -437,6 +437,31 @@ fn anchor_could(token: Option<&serde_json::Value>) -> bool {
     )
 }
 
+/// Measured numbers for a fast-phase log line, read off its section 14
+/// record: bookends `N` (legs) and `S` (seconds) on the timed span, `N/S`,
+/// and the anchored count among `W_1` … `W_16`. Numbers only, no threshold.
+/// `None` when the record holds none of them.
+pub fn fast_measures(record: &str) -> Option<serde_json::Value> {
+    let value = serde_json::from_str::<serde_json::Value>(record).ok()?;
+    let legs = value.get("N").and_then(|item| item.as_u64());
+    let span_s = value.get("S").and_then(|item| item.as_u64());
+    let anchored = value.get("anchored_total").and_then(|item| item.as_u64());
+    if legs.is_none() && span_s.is_none() && anchored.is_none() {
+        return None;
+    }
+    let leg_rate = match (legs, span_s) {
+        (Some(n), Some(s)) if s > 0 => Some(n as f64 / s as f64),
+        _ => None,
+    };
+    Some(serde_json::json!({
+        "legs": legs,
+        "span_s": span_s,
+        "leg_rate": leg_rate,
+        "anchored": anchored,
+        "anchored_span": policy::ANCHORED_SPAN,
+    }))
+}
+
 fn record_json(measurements: &hike::Measurements, profile: &str) -> Option<serde_json::Value> {
     let record = hike::verify_record_json(profile, measurements);
     serde_json::from_str(record.trim_end()).ok()
@@ -506,6 +531,24 @@ mod tests {
 
     fn policy() -> AdmissionPolicy {
         AdmissionPolicy::default()
+    }
+
+    #[test]
+    fn fast_measures_reads_the_bookends_and_the_anchored_count() {
+        let m = fast_measures(
+            "{\"profile\":\"production\",\"anchored_total\":12,\"N\":1499,\"S\":9557}\n",
+        )
+        .expect("measures");
+        assert_eq!(m["legs"], 1499);
+        assert_eq!(m["span_s"], 9557);
+        assert_eq!(m["anchored"], 12);
+        assert_eq!(m["anchored_span"], 16);
+        assert!((m["leg_rate"].as_f64().unwrap() - 1499.0 / 9557.0).abs() < 1e-12);
+        let words = fast_measures("{\"N\":\"not read\",\"S\":\"not read\",\"anchored_total\":3}")
+            .expect("count");
+        assert!(words["legs"].is_null() && words["leg_rate"].is_null());
+        assert_eq!(words["anchored"], 3);
+        assert!(fast_measures("{}").is_none());
     }
 
     /// One anchored waypoint and a bookend rate of 0.05. Terrain stays 0.

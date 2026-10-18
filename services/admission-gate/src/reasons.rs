@@ -116,7 +116,11 @@ pub fn from_report(report: &Report, checks: &[PolicyCheck], policy: &AdmissionPo
             return from_notes(&measured.verifier_notes, &measured.measures);
         }
     }
-    if let Some(reason) = policy_reason(checks, policy) {
+    let measures = match report {
+        Report::Read(measured) => Some(&measured.measures),
+        _ => None,
+    };
+    if let Some(reason) = policy_reason(checks, policy, measures) {
         return reason;
     }
     match report {
@@ -134,7 +138,12 @@ pub fn from_report(report: &Report, checks: &[PolicyCheck], policy: &AdmissionPo
     }
 }
 
-fn policy_reason(checks: &[PolicyCheck], policy: &AdmissionPolicy) -> Option<Reason> {
+fn policy_reason(
+    checks: &[PolicyCheck],
+    policy: &AdmissionPolicy,
+    measures: Option<&Measures>,
+) -> Option<Reason> {
+    let (p, q) = (policy.leg_rate_floor.p, policy.leg_rate_floor.q);
     let rate = checks.iter().find(|check| check.field == "leg_rate")?;
     let waypoints = checks
         .iter()
@@ -143,18 +152,24 @@ fn policy_reason(checks: &[PolicyCheck], policy: &AdmissionPolicy) -> Option<Rea
         return Some(Reason {
             code: CODE_BELOW_LEG_RATE,
             class: CLASS_BELOW_POLICY,
-            line: policy::leg_rate_line(policy.leg_rate_floor.p, policy.leg_rate_floor.q),
+            line: match measures.and_then(|m| m.legs.zip(m.span_s)) {
+                Some((n, s)) => policy::leg_rate_line(i128::from(n), i128::from(s), p, q),
+                None => policy::leg_rate_floor_line(p, q),
+            },
         });
     }
     if !waypoints.met {
         return Some(Reason {
             code: CODE_BELOW_WAYPOINTS,
             class: CLASS_BELOW_POLICY,
-            line: format!(
-                "Valid, fewer than {} of {} waypoints among W_1 through W_16 were anchored.",
-                policy.min_anchored_paths,
-                policy::ANCHORED_SPAN
-            ),
+            line: match measures.and_then(|m| m.waypoints_fetched) {
+                Some(anchored) => policy::too_few_line(anchored, policy.min_anchored_paths),
+                None => format!(
+                    "Waypoints anchored: fewer than {min} of {}, needs {min}.",
+                    policy::ANCHORED_SPAN,
+                    min = policy.min_anchored_paths
+                ),
+            },
         });
     }
     None

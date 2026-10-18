@@ -850,6 +850,7 @@ impl Door {
         write.reasons = reasons.to_vec();
         write.reason = Some(line.to_owned());
         write.summary = Some(record.to_owned());
+        write.measures = crate::fast::fast_measures(record);
         write.policy_id = Some(self.policy.policy_id.clone());
         let code = reasons
             .first()
