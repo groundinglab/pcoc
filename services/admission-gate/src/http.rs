@@ -414,12 +414,10 @@ fn sign_in_locked(svc: &Service, headers: &HeaderMap, bytes: &[u8]) -> Response 
         svc.door.note_transport_rejected(bytes);
         return bare_delivery(svc, headers, StatusCode::PAYLOAD_TOO_LARGE);
     }
+    // A banned key is ignored inside the door, before any pending slot is
+    // taken, so a thorough job here is never for a banned key.
     let result = svc.door.sign_in_locked(locked);
     if let Some(job) = result.thorough.clone() {
-        // A banned key is ignored after the signature: no fast phase, no line.
-        if svc.door.banned(&job.public_key) {
-            return locked_response(svc, headers, result.status, result.body);
-        }
         spawn_locked(svc.door.clone(), svc.jobs.clone(), job);
     }
     locked_response(svc, headers, result.status, result.body)
@@ -452,7 +450,7 @@ fn locked_response(
 
 fn spawn_locked(door: Door, jobs: JobStore, job: LockedThorough) {
     tokio::spawn(async move {
-        let source = job.origin.clone();
+        let source = job.pending_key();
         // A prior thorough accept with policy_id skips measurement.
         if job.prior_accept.is_some() {
             door.settle_locked(job, Ok(crate::verifier::Report::Unreadable));

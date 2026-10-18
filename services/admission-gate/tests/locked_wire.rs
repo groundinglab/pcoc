@@ -843,3 +843,41 @@ async fn the_rate_limit_is_delivery_ok_and_does_not_consume() {
     assert_eq!(outcome_of(&lab, &second.nonce).await, "rejected");
     assert!(!lab.door.consumed_nonce(&second.nonce));
 }
+
+fn locked_body(body: &Value) -> pcoc_admission::wire::LockedBody {
+    match pcoc_admission::wire::classify_json(body.to_string().as_bytes()) {
+        Ok(pcoc_admission::wire::LockedParse::Ready(locked)) => locked,
+        _ => panic!("not a ready locked body: {body}"),
+    }
+}
+
+/// Defect 9 (gate review r2, finding 9). A banned resubmit is ignored before
+/// any pending slot is taken, and the per-source cap is keyed on the public
+/// key, not the signed site origin. Banned resubmits up to the global cap
+/// leave the slots free, and a following legitimate sign-in from the same
+/// origin is taken.
+#[test]
+fn a_banned_resubmit_takes_no_pending_slot() {
+    let lab = lab();
+    let exp = NOW_2026_10_10 + 60;
+    let mut banned = Signed::fresh(Vec::new(), exp);
+    banned.object = v2_object(&banned.secret);
+    lab.door.ban_key(&pubkey(&banned.secret), 0);
+    let global = lab.door.policy().pending_global;
+    for n in 0..global {
+        let mut again = banned.clone();
+        again.nonce[31] = 0xb0 + n as u8;
+        let result = lab.door.sign_in_locked(locked_body(&again.body()));
+        assert_eq!(result.status, StatusCode::OK);
+        assert!(result.thorough.is_none(), "a banned key starts no thorough job");
+    }
+    assert_eq!(lab.door.ban_ignored(), global);
+    let mut legit = Signed::fresh(Vec::new(), exp);
+    legit.object = v2_object(&legit.secret);
+    let result = lab.door.sign_in_locked(locked_body(&legit.body()));
+    assert_eq!(result.status, StatusCode::OK);
+    let job = result
+        .thorough
+        .expect("a legitimate sign-in from the same origin is taken");
+    assert_eq!(job.origin, "https://groundinglab.io");
+}

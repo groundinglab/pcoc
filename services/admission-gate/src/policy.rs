@@ -184,6 +184,9 @@ pub struct AdmissionPolicy {
     pub draw_commitment: String,
     pub reverify_max_attempts: u64,
     pub max_held_blocks: u64,
+    /// Open sign-ins per source. Since gate 0.5.4 the source is the
+    /// submitter's public key, not the signed site origin. The value and
+    /// its key name are unchanged, so the policy hash is unchanged.
     pub pending_per_source: u64,
     /// `None` means `max_concurrent × 2`, filled when the config is built.
     pub pending_global: u64,

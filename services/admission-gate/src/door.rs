@@ -598,15 +598,32 @@ impl Door {
             );
         }
 
+        // A banned key is ignored after the signature: the nonce is consumed
+        // (the website token stays `pending`), no fast phase, no line, and no
+        // pending slot is taken. Checked before the caps so a banned
+        // resubmit cannot hold a slot.
+        if self.banned(&public_key) {
+            return match self
+                .rows
+                .consume(&body, ClientClass::DeliveryOk, wire::OUTCOME_PENDING, now)
+            {
+                Ok(()) => locked_client(ClientClass::DeliveryOk, None),
+                Err(replay) => replay_response(replay),
+            };
+        }
+
         // Pending caps, before the nonce is consumed. Over a cap the website
         // stays `pending` (the locked token; a `held` token is not in §15.1)
-        // and this function returns no thorough job.
-        if self.over_pending_cap(&body.origin) {
+        // and this function returns no thorough job. The per-source cap is
+        // keyed on the submitter's public key, not on the signed site origin,
+        // so one submitter cannot hold every sign-in for a site.
+        let pending_key = pending_key(&public_key);
+        if self.over_pending_cap(&pending_key) {
             // No row. The nonce is not consumed. The result read of an
             // unknown nonce is `pending`, which is the locked token.
             return locked_client(ClientClass::DeliveryOk, None);
         }
-        self.begin_pending(&body.origin);
+        self.begin_pending(&pending_key);
 
         // 9. v2.0. Consume when this step starts. Policy settles later.
         let submission =
@@ -615,7 +632,11 @@ impl Door {
             .rows
             .consume(&body, ClientClass::DeliveryOk, wire::OUTCOME_PENDING, now)
         {
-            Err(replay) => replay_response(replay),
+            Err(replay) => {
+                // No thorough job follows, so the slot is released here.
+                self.end_pending(&pending_key);
+                replay_response(replay)
+            }
             Ok(()) => {
                 self.rows.note_holder(&body.nonce, public_key);
                 let prior_accept = {
@@ -1019,6 +1040,18 @@ impl Door {
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
         self.inner.lock().expect("admission log")
+    }
+}
+
+/// Key of the per-source pending cap: the submitter's public key, in hex.
+pub fn pending_key(public_key: &[u8; 32]) -> String {
+    hex32(public_key)
+}
+
+impl LockedThorough {
+    /// The pending-cap key this job holds. `end_pending` takes this value.
+    pub fn pending_key(&self) -> String {
+        pending_key(&self.public_key)
     }
 }
 
