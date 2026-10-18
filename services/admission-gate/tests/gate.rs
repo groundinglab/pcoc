@@ -375,6 +375,7 @@ async fn health_reports_version_commit_spec_and_config() {
     assert_eq!(body["ok"], true);
     assert_eq!(body["service"], "admission-service");
     assert_eq!(body["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(body["version"], "0.5.4");
     assert!(body["commit"].as_str().unwrap().len() >= 7);
     assert_eq!(body["spec"], "Satoshi Hike v2.0");
     assert_eq!(body["spec_kind"], "v2.0");

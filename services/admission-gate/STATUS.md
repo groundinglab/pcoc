@@ -1,6 +1,6 @@
 # Service status
 
-Admission gate service, crate `pcoc-admission` 0.5.3. This page is the service's status. Evidence and withdrawn claims are in [EVIDENCE.md](EVIDENCE.md). Policy is in [POLICY.md](POLICY.md). The wire is in [WIRE.md](WIRE.md).
+Admission gate service, crate `pcoc-admission` 0.5.4. This page is the service's status. Evidence and withdrawn claims are in [EVIDENCE.md](EVIDENCE.md). Policy is in [POLICY.md](POLICY.md). The wire is in [WIRE.md](WIRE.md).
 
 ## Implemented
 
