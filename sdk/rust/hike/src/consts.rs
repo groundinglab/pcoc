@@ -28,11 +28,10 @@ pub const ANCHOR_WINDOW_OFFSETS: [u64; 3] = [2, 3, 4];
 /// How many Rule A4.3 checkpoint comparisons run at once when `PCOC_BIND_THREADS` is unset.
 pub const DEFAULT_BIND_THREADS: usize = 6;
 
-/// Section 15.5 informative examples, not conformance and not a gate default.
-/// `leg_rate_floor` as `(p, q)` legs per second: 7/20, 1/4, 1/8. A policy sets the value.
-pub const LEG_RATE_FLOOR_STRICT: (u64, u64) = (7, 20);
-pub const LEG_RATE_FLOOR_DEFAULT: (u64, u64) = (1, 4);
-pub const LEG_RATE_FLOOR_LENIENT: (u64, u64) = (1, 8);
+// No leg-rate floor here: the spec defines measurements, a policy sets the
+// values. The section 15.5 examples (7/20, 1/4, 1/8) live in test fixtures and
+// in spec/conformance/v2.0/constants.json; the admission gate's floor is its
+// policy file (services/admission-gate/policy).
 
 pub const MIX_ADD: u64 = 0x9E3779B97F4A7C15;
 pub const MIX_MUL1: u64 = 0xBF58476D1CE4E5B9;
@@ -63,14 +62,6 @@ const _: () = assert!(STAGES == 18);
 const _: () = assert!(ANCHOR_WINDOW_OFFSETS[0] == 2);
 const _: () = assert!(ANCHOR_WINDOW_OFFSETS[1] == ANCHOR_WINDOW_OFFSETS[0] + 1);
 const _: () = assert!(ANCHOR_WINDOW_OFFSETS[2] == ANCHOR_WINDOW_OFFSETS[1] + 1);
-const _: () = assert!(
-    LEG_RATE_FLOOR_STRICT.0 * LEG_RATE_FLOOR_DEFAULT.1
-        > LEG_RATE_FLOOR_DEFAULT.0 * LEG_RATE_FLOOR_STRICT.1
-);
-const _: () = assert!(
-    LEG_RATE_FLOOR_DEFAULT.0 * LEG_RATE_FLOOR_LENIENT.1
-        > LEG_RATE_FLOOR_LENIENT.0 * LEG_RATE_FLOOR_DEFAULT.1
-);
 
 /// Section 6 sizes, or the one SPEC §16.1 `conformance-small` set.
 ///
@@ -176,14 +167,14 @@ pub fn bind_threads_from(text: Option<&str>) -> usize {
 mod tests {
     use super::*;
 
+    /// Section 15.5 example floors, as test fixtures (policy values, not SDK constants).
+    const FLOOR_EXAMPLES: [(u64, u64); 3] = [(7, 20), (1, 4), (1, 8)];
+
     #[test]
-    fn leg_rate_floors_scale_with_the_leg() {
-        assert_eq!(LEG_RATE_FLOOR_STRICT, (7, 20));
-        assert_eq!(LEG_RATE_FLOOR_DEFAULT, (1, 4));
-        assert_eq!(LEG_RATE_FLOOR_LENIENT, (1, 8));
+    fn leg_rate_floor_examples_scale_with_the_leg() {
         let higher = |left: (u64, u64), right: (u64, u64)| left.0 * right.1 > right.0 * left.1;
-        assert!(higher(LEG_RATE_FLOOR_STRICT, LEG_RATE_FLOOR_DEFAULT));
-        assert!(higher(LEG_RATE_FLOOR_DEFAULT, LEG_RATE_FLOOR_LENIENT));
+        assert!(higher(FLOOR_EXAMPLES[0], FLOOR_EXAMPLES[1]));
+        assert!(higher(FLOOR_EXAMPLES[1], FLOOR_EXAMPLES[2]));
     }
 
     /// Section 6 domains. The seal preimage starts with these 12 bytes. The seed fold starts with these 8.
@@ -235,12 +226,7 @@ mod tests {
     fn a4_9_rate_floor_compares_integers() {
         let below = |p: u64, q: u64, n: u64, s: u64| q * n < p * s;
         let meets = |p: u64, q: u64, n: u64, s: u64| q * n >= p * s;
-        let floors = [
-            LEG_RATE_FLOOR_STRICT,
-            LEG_RATE_FLOOR_DEFAULT,
-            LEG_RATE_FLOOR_LENIENT,
-        ];
-        assert_eq!(floors, [(7, 20), (1, 4), (1, 8)]);
+        let floors = FLOOR_EXAMPLES;
         for (p, q) in floors {
             assert!(below(p, q, 0, 1));
             assert!(meets(p, q, p, q));

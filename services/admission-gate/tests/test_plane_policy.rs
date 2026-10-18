@@ -1,5 +1,10 @@
-//! Test-plane gate policy. Measurement stays in `hike`; this judges it.
-//! A skip is recorded beside the gate. It is not a pass.
+//! Test-plane gate policy, moved out of the SDK (`hike-net`) in rc.2: the
+//! spec defines measurements, a policy sets the values (QA B2). This is the
+//! test-plane judgment Bari's test-plane gate tests use; it is a fixture
+//! here, not part of the admission door's v7 policy, and the door does not
+//! call it. A skip is recorded beside the gate. It is not a pass.
+#![allow(dead_code)]
+
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GateJudgment {

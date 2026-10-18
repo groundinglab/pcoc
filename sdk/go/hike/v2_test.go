@@ -31,16 +31,12 @@ func TestV20ProfileNumbers(t *testing.T) {
 	if ConformanceSmallV2.SampleBytes != 32 || ConformanceSmallV2.StepsPerLeg != 32 {
 		t.Fatal("small sizes")
 	}
-	if LegRateFloorP != 1 || LegRateFloorQ != 4 {
-		t.Fatal("rate floor")
-	}
-	if LegRateFloorStrict != (LegRateFloor{P: 7, Q: 20}) ||
-		LegRateFloorDefault != (LegRateFloor{P: 1, Q: 4}) ||
-		LegRateFloorLenient != (LegRateFloor{P: 1, Q: 8}) {
-		t.Fatal("three floors")
-	}
-	higher := func(left, right LegRateFloor) bool { return left.P*right.Q > right.P*left.Q }
-	if !higher(LegRateFloorStrict, LegRateFloorDefault) || !higher(LegRateFloorDefault, LegRateFloorLenient) {
+	// Section 15.5 example floors (strict, default, lenient) as test fixtures:
+	// policy values, not SDK constants (rc.2).
+	type floor struct{ p, q uint64 }
+	strict, def, lenient := floor{7, 20}, floor{1, 4}, floor{1, 8}
+	higher := func(left, right floor) bool { return left.p*right.q > right.p*left.q }
+	if !higher(strict, def) || !higher(def, lenient) {
 		t.Fatal("floors do not scale with the leg")
 	}
 	if AnchorWindowOrigin(17) != 17 {

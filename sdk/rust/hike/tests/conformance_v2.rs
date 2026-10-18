@@ -8,8 +8,7 @@ use hike::{
     structural_object, verify, verify_record_json, verify_sized, verify_with_bind_threads,
     AuditDraw, ChainRead, PathLocators, ANCHOR_WINDOW_OFFSETS, BEACON_BYTES,
     CHECKPOINT_PREIMAGE_LEN, DEFAULT_BIND_THREADS, EARLIER_KINDS, FILL, HASH_BYTES, KIND,
-    LEG_RATE_FLOOR_DEFAULT, LEG_RATE_FLOOR_LENIENT, LEG_RATE_FLOOR_STRICT, LEG_RESULT_BYTES,
-    MIX_ADD, MIX_MUL1, MIX_MUL2, N_SLOTS, OFFSET_MODULUS, PARENT_MUL, PUBLIC_KEY_BYTES,
+    LEG_RESULT_BYTES, MIX_ADD, MIX_MUL1, MIX_MUL2, N_SLOTS, OFFSET_MODULUS, PARENT_MUL, PUBLIC_KEY_BYTES,
     SAMPLE_BYTES, SEAL_DOMAIN, SEED_DOMAIN, SLOT_BYTES, SLOT_MUL, STAGES, STEPS_PER_LEG,
     TERRAIN_BYTES, WORDS_PER_SLOT, WORD_XOR,
 };
@@ -424,10 +423,12 @@ fn pack() -> Vec<(&'static str, Value)> {
                 "ANCHOR_WINDOW_OFFSETS": ANCHOR_WINDOW_OFFSETS,
                 "DEFAULT_BIND_THREADS": DEFAULT_BIND_THREADS,
                 "DEFAULT_BIND_THREADS_NOTE": "non-normative reference default",
+                // Section 15.5 informative examples. Policy values, not SDK
+                // constants: the pack carries them as fixtures.
                 "LEG_RATE_FLOOR": {
-                    "strict": {"p": LEG_RATE_FLOOR_STRICT.0, "q": LEG_RATE_FLOOR_STRICT.1},
-                    "default": {"p": LEG_RATE_FLOOR_DEFAULT.0, "q": LEG_RATE_FLOOR_DEFAULT.1},
-                    "lenient": {"p": LEG_RATE_FLOOR_LENIENT.0, "q": LEG_RATE_FLOOR_LENIENT.1},
+                    "strict": {"p": 7, "q": 20},
+                    "default": {"p": 1, "q": 4},
+                    "lenient": {"p": 1, "q": 8},
                 },
                 "LEG_RATE_FLOOR_NOTE": "Informative example values from §15.5 (Part B). Not a conformance target; policy sets the value.",
             }),

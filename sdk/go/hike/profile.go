@@ -33,13 +33,9 @@ const (
 	DefaultBindThreads = 6
 	JSONIntMax         = (1 << 53) - 1
 	HeaderTimeMax      = uint64(1<<32 - 1)
-	// LegRateFloorP and LegRateFloorQ are the default pair, 1/4 leg per second.
-	// The three section 15.5 pairs are LegRateFloorStrict (7, 20),
-	// LegRateFloorDefault (1, 4), and LegRateFloorLenient (1, 8).
-	// The comparison q·N ≥ p·S_eff is Gate policy. This package names the
-	// pairs and does not apply them. It does not emit earlier_version.
-	LegRateFloorP = 1
-	LegRateFloorQ = 4
+	// No leg-rate floor here (rc.2): the spec defines measurements, a policy
+	// sets the values. The section 15.5 example pairs are test fixtures and
+	// spec/conformance/v2.0/constants.json; q·N ≥ p·S_eff is gate policy.
 	// AnchorWindow is the locked count of blocks in the path-ask window.
 	AnchorWindow = 3
 )
@@ -67,20 +63,6 @@ var anchorOffsetsAfterPost = []int{2, 3, 4}
 func AnchorOffsetsAfterPost() []int {
 	return append([]int(nil), anchorOffsetsAfterPost...)
 }
-
-// LegRateFloor is one section 15.5 pair. P and Q are the numerator and the
-// denominator. Strict is higher than default, and default is higher than
-// lenient, by the cross-multiply p·q_other. None of the three is applied here.
-type LegRateFloor struct {
-	P uint64
-	Q uint64
-}
-
-var (
-	LegRateFloorStrict  = LegRateFloor{P: 7, Q: 20}
-	LegRateFloorDefault = LegRateFloor{P: LegRateFloorP, Q: LegRateFloorQ}
-	LegRateFloorLenient = LegRateFloor{P: 1, Q: 8}
-)
 
 // AnchorWindowOrigin is SPEC §13.1. The one height H is the stage's stored
 // beacon height. The Hashcash tip on the POST is not H. The object does not

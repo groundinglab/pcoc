@@ -31,20 +31,9 @@ public final class Hike {
      * H+3, and H+4.
      */
     private static final int[] ANCHOR_OFFSETS_AFTER_POST = {2, 3, 4};
-    /**
-     * Section 15.5 informative examples, legs per second as {@code p/q}.
-     * 7/20, 1/4, and 1/8. They are not conformance and they are not applied.
-     * A policy sets the value. {@code LEG_RATE_FLOOR_P} and
-     * {@code LEG_RATE_FLOOR_Q} name the 1/4 example.
-     */
-    public static final int LEG_RATE_FLOOR_STRICT_P = 7;
-    public static final int LEG_RATE_FLOOR_STRICT_Q = 20;
-    public static final int LEG_RATE_FLOOR_DEFAULT_P = 1;
-    public static final int LEG_RATE_FLOOR_DEFAULT_Q = 4;
-    public static final int LEG_RATE_FLOOR_LENIENT_P = 1;
-    public static final int LEG_RATE_FLOOR_LENIENT_Q = 8;
-    public static final int LEG_RATE_FLOOR_P = LEG_RATE_FLOOR_DEFAULT_P;
-    public static final int LEG_RATE_FLOOR_Q = LEG_RATE_FLOOR_DEFAULT_Q;
+    // No leg-rate floor here (rc.2): the spec defines measurements, a policy
+    // sets the values. The section 15.5 examples are test fixtures and
+    // spec/conformance/v2.0/constants.json.
 
     private Hike() {}
 

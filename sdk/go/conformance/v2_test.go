@@ -97,9 +97,10 @@ func TestV20Pack(t *testing.T) {
 		if doc.Steps == doc.Sample {
 			t.Fatal("steps and sample collapsed")
 		}
-		if doc.Floor.Strict.P != hike.LegRateFloorStrict.P || doc.Floor.Strict.Q != hike.LegRateFloorStrict.Q ||
-			doc.Floor.Default.P != hike.LegRateFloorDefault.P || doc.Floor.Default.Q != hike.LegRateFloorDefault.Q ||
-			doc.Floor.Lenient.P != hike.LegRateFloorLenient.P || doc.Floor.Lenient.Q != hike.LegRateFloorLenient.Q {
+		// The section 15.5 examples are pack fixtures; the SDK carries no floor (rc.2).
+		if doc.Floor.Strict.P != 7 || doc.Floor.Strict.Q != 20 ||
+			doc.Floor.Default.P != 1 || doc.Floor.Default.Q != 4 ||
+			doc.Floor.Lenient.P != 1 || doc.Floor.Lenient.Q != 8 {
 			t.Fatalf("floors %+v", doc.Floor)
 		}
 		if doc.BindNote != "non-normative reference default" || doc.FloorNote != "Informative example values from §15.5 (Part B). Not a conformance target; policy sets the value." {

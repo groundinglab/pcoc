@@ -26,6 +26,11 @@ import pcoc.json.Json;
 public final class V2Pack {
     private V2Pack() {}
 
+    /** Section 15.5 example floors {p, q}: pack fixtures, not SDK constants. */
+    private static final int[] FLOOR_STRICT = {7, 20};
+    private static final int[] FLOOR_DEFAULT = {1, 4};
+    private static final int[] FLOOR_LENIENT = {1, 8};
+
     public static void main(String[] args) throws Exception {
         Path root = repoRoot();
         selfCheck(root);
@@ -220,16 +225,10 @@ public final class V2Pack {
         if (!header.equals("{\"stored_hash\":\"ab\",\"stored_height\":1,\"index_comparison\":\"match\",\"T\":2}")) {
             throw new AssertionError("header keys " + header);
         }
-        if (Hike.LEG_RATE_FLOOR_P != 1 || Hike.LEG_RATE_FLOOR_Q != 4
-                || Hike.LEG_RATE_FLOOR_STRICT_P != 7 || Hike.LEG_RATE_FLOOR_STRICT_Q != 20
-                || Hike.LEG_RATE_FLOOR_DEFAULT_P != 1 || Hike.LEG_RATE_FLOOR_DEFAULT_Q != 4
-                || Hike.LEG_RATE_FLOOR_LENIENT_P != 1 || Hike.LEG_RATE_FLOOR_LENIENT_Q != 8) {
-            throw new AssertionError("rate floor");
-        }
-        if (Hike.LEG_RATE_FLOOR_STRICT_P * Hike.LEG_RATE_FLOOR_DEFAULT_Q
-                        <= Hike.LEG_RATE_FLOOR_DEFAULT_P * Hike.LEG_RATE_FLOOR_STRICT_Q
-                || Hike.LEG_RATE_FLOOR_DEFAULT_P * Hike.LEG_RATE_FLOOR_LENIENT_Q
-                        <= Hike.LEG_RATE_FLOOR_LENIENT_P * Hike.LEG_RATE_FLOOR_DEFAULT_Q) {
+        // Section 15.5 example floors as fixtures (strict, default, lenient):
+        // policy values, not SDK constants (rc.2).
+        if (FLOOR_STRICT[0] * FLOOR_DEFAULT[1] <= FLOOR_DEFAULT[0] * FLOOR_STRICT[1]
+                || FLOOR_DEFAULT[0] * FLOOR_LENIENT[1] <= FLOOR_LENIENT[0] * FLOOR_DEFAULT[1]) {
             throw new AssertionError("floors do not scale with the leg");
         }
         if (Hike.anchorWindowOrigin(17) != 17) {
@@ -957,9 +956,9 @@ public final class V2Pack {
             }
         }
         Json.Obj floors = Json.asObj(doc.fields().get("LEG_RATE_FLOOR"));
-        if (!floorEq(floors, "strict", Hike.LEG_RATE_FLOOR_STRICT_P, Hike.LEG_RATE_FLOOR_STRICT_Q)
-                || !floorEq(floors, "default", Hike.LEG_RATE_FLOOR_DEFAULT_P, Hike.LEG_RATE_FLOOR_DEFAULT_Q)
-                || !floorEq(floors, "lenient", Hike.LEG_RATE_FLOOR_LENIENT_P, Hike.LEG_RATE_FLOOR_LENIENT_Q)) {
+        if (!floorEq(floors, "strict", FLOOR_STRICT[0], FLOOR_STRICT[1])
+                || !floorEq(floors, "default", FLOOR_DEFAULT[0], FLOOR_DEFAULT[1])
+                || !floorEq(floors, "lenient", FLOOR_LENIENT[0], FLOOR_LENIENT[1])) {
             throw new IllegalStateException("floors");
         }
         if (!"non-normative reference default".equals(text(doc, "DEFAULT_BIND_THREADS_NOTE"))
