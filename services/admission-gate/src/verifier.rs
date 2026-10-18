@@ -1,8 +1,8 @@
 //! Verifier seam.
 //!
-//! [`linked_measure`] is the only function that calls the v2.0 reference
+//! [`linked_measure`] is the only function that calls the Rust SDK
 //! crate (`hike::verify`). Callers see [`Report`]. An earlier kind is the
-//! reference's Rule A5 (`earlier version`), which policy spells `earlier_version`.
+//! SDK's Rule A5 (`earlier version`), which policy spells `earlier_version`.
 #![forbid(unsafe_code)]
 
 use std::io::Read;
@@ -16,7 +16,7 @@ pub const SPEC_NAME: &str = "Satoshi Hike v2.0";
 /// Health field. The parenthetical in the ticket.
 pub const SPEC_KIND_LABEL: &str = "v2.0";
 
-/// Wire KIND exported by the v2.0 reference.
+/// Wire KIND exported by the Rust SDK.
 pub const SPEC_KIND: &str = hike::KIND;
 
 /// A one-shot index read did not return a document. Not a retry.
@@ -38,7 +38,7 @@ pub const EARLIER_VERSION_NOTE: &str = "earlier version";
 /// Gate token for that note. `hike::failure_facts` uses this spelling.
 pub const EARLIER_VERSION_FACT: &str = "earlier_version";
 
-/// Measurements the reference verifier returned for a v2.0 object.
+/// Measurements the SDK verifier returned for a v2.0 object.
 ///
 /// `record` is the bytes of `hike::verify_record_json("production", …)`,
 /// including the trailing newline. Policy reads `(N, S)` from that text.
@@ -95,7 +95,7 @@ pub const MEASURE_THRESHOLD_KEYS: &[&str] = &[
     "threshold",
 ];
 
-/// Read measures off a reference [`hike::Measurements`]. No judgment.
+/// Read measures off an SDK [`hike::Measurements`]. No judgment.
 pub fn measures_of(measurements: &hike::Measurements) -> Measures {
     let (legs, span_s, leg_rate) = bookend_measures(&measurements.record_body);
     let waypoints_fetched = match &measurements.waypoints {
@@ -171,7 +171,7 @@ pub struct Facts {
     pub public_key: Option<[u8; 32]>,
 }
 
-/// The v2.0 reference crate is linked. Thorough verify can run.
+/// The Rust SDK crate (`hike`) is linked. Thorough verify can run.
 pub fn reference_linked() -> bool {
     true
 }
@@ -191,7 +191,7 @@ pub enum Class {
 
 /// Kind and key only. This does not run section 14, so the fast sign-in
 /// response stays ahead of thorough verify. An earlier kind is Rule A5 in
-/// the reference (`hike::earlier_object_kind`), the same check `hike::verify` runs first.
+/// the SDK (`hike::earlier_object_kind`), the same check `hike::verify` runs first.
 pub fn classify(object: &[u8]) -> Class {
     if let Some(kind) = hike::earlier_object_kind(object) {
         return Class::Earlier { kind };
@@ -199,8 +199,8 @@ pub fn classify(object: &[u8]) -> Class {
     if !kind_is_current(object) {
         return Class::Unreadable;
     }
-    // The reference parser decides the key. A local scan can see a key the
-    // reference will not yield (a duplicate key is one case) and must not
+    // The SDK parser decides the key. A local scan can see a key the
+    // SDK will not yield (a duplicate key is one case) and must not
     // open a provisional line for those bytes.
     match hike::yielded_public_key(object) {
         hike::YieldedKey::PublicKey(public_key) => Class::Ready { public_key },
@@ -232,12 +232,12 @@ pub fn measure(object: &[u8], opts: &MeasureOpts) -> Report {
     linked_measure(object, opts)
 }
 
-/// The only call into the v2.0 reference verifier.
+/// The only call into the Rust SDK verifier.
 ///
 /// Index reads are one shot. `hike::read_index_beacon` is not called here.
-/// A failed read is `Err` to the reference, which records that beacon as
+/// A failed read is `Err` to the SDK, which records that beacon as
 /// `not read`. This function adds [`INDEX_UNREAD_NOTE`] only when the
-/// reference also recorded a fact. The slot returns either way.
+/// SDK also recorded a fact. The slot returns either way.
 fn linked_measure(object: &[u8], opts: &MeasureOpts) -> Report {
     let agent = index_agent(opts.timeout);
     let beacon_agent = agent.clone();
@@ -268,8 +268,8 @@ fn linked_measure(object: &[u8], opts: &MeasureOpts) -> Report {
         .map(str::to_owned)
         .collect::<Vec<_>>();
     // A failed read is already "not read" in the section 14 record. It becomes
-    // a public note only when the reference also recorded a fact, so an unread
-    // closing header does not refuse an object the reference admitted.
+    // a public note only when the SDK also recorded a fact, so an unread
+    // closing header does not refuse an object the SDK admitted.
     if beacon_failures.load(Ordering::Relaxed) > 0 && !verifier_notes.is_empty() {
         verifier_notes.push(INDEX_UNREAD_NOTE.to_owned());
     }
@@ -733,7 +733,7 @@ mod tests {
         ));
     }
 
-    /// B2. The Gate library, through the linked reference, reproduces the TEST vector.
+    /// B2. The Gate library, through the linked SDK, reproduces the TEST vector.
     /// This does not open a socket and does not call the live service.
     #[test]
     fn b2_test_3leg_record_matches_the_committed_vector() {
@@ -862,7 +862,7 @@ mod tests {
     }
 
     /// Section 14.1. Absent stages include `leg_count` in table order.
-    /// The Gate records that string through the linked reference.
+    /// The Gate records that string through the linked SDK.
     #[test]
     fn absent_stages_include_leg_count_in_shape_item() {
         let bytes = small_hike(

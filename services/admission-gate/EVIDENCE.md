@@ -6,7 +6,7 @@ This note records evidence and withdrawn claims. It is not the service status ([
 
 **Not fully closed.** Measured produce and verify cost for Satoshi Hike v2.0 on bare metal, timed against the released `satoshi-hike-verify`, is a follow-up. This item is not waived, and it is not treated as unmeasured.
 
-The construction is Satoshi Hike v2.0 (`spec/satoshi-hike-v2.0/` in this repository). The programs are `satoshi-hike-produce` and `satoshi-hike-verify` under `reference/rust/`.
+The construction is Satoshi Hike v2.0 (`spec/satoshi-hike-v2.0/` in this repository). The programs are `satoshi-hike-produce` and `satoshi-hike-verify` under `sdk/rust/`.
 
 ## Killed slogans
 

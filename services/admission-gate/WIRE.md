@@ -153,7 +153,7 @@ Sign-in posts JSON. The transport limit is large enough for the base64 of an obj
 
 ## Health
 
-`GET /v1/health` returns `version` (crate), `commit` (git SHA baked in at build), `sdk` (the Rust SDK version from Cargo.lock, for example `2.0.0-rc.1 (path)`), `spec` (`Satoshi Hike v2.0`), `spec_kind` (`v2.0`), and `config` (the file: bind, index, log directory, limits, rate, leg-rate floor). No secrets.
+`GET /v1/health` returns `version` (crate), `commit` (git SHA baked in at build), `sdk` (the Rust SDK version from Cargo.lock, for example `2.0.0-rc.1 (path)`, or `2.0.0-rc.1 (path, dirty)` when the SDK files had uncommitted changes at build time), `spec` (`Satoshi Hike v2.0`), `spec_kind` (`v2.0`), and `config` (the file: bind, index, log directory, limits, rate, leg-rate floor). No secrets.
 
 ## Verify job
 
