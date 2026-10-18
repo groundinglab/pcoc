@@ -1,5 +1,8 @@
 package pcoc.conformance;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -45,6 +48,7 @@ public final class V2Pack {
         stage0StartsOnTheLatestKnownHeader(root);
         rc2Break(pack);
         nestingIsBounded(root);
+        verifyCliIntegers();
         System.out.println("v2 pack ok");
     }
 
@@ -595,6 +599,45 @@ public final class V2Pack {
         agreeSix(Json.asString(shortLine.fields().get("six_leg")), shortFull.fields().get("six_leg"));
     }
 
+    /** F8: conformance-small without all four integers exits 2. The record states the integers it was given. */
+    private static void verifyCliIntegers() throws Exception {
+        Path input = Files.createTempFile("hike", ".cbor");
+        Files.write(input, new byte[] {(byte) 0xa0});
+        String path = input.toString();
+        String[] base = {"--input", path, "--index-url", "http://127.0.0.1:9", "--profile", "conformance-small"};
+        if (pcoc.cli.Verify.run(base) != 2) {
+            throw new AssertionError("missing all integers");
+        }
+        String[] one = java.util.stream.Stream.concat(Arrays.stream(base),
+                Arrays.stream(new String[] {"--sample-bytes", "32", "--slot-bytes", "64", "--terrain-bytes", "256"})).toArray(String[]::new);
+        if (pcoc.cli.Verify.run(one) != 2) {
+            throw new AssertionError("missing one integer");
+        }
+        String[] bad = java.util.stream.Stream.concat(Arrays.stream(base),
+                Arrays.stream(new String[] {"--sample-bytes", "nope", "--slot-bytes", "64", "--terrain-bytes", "256", "--steps-per-leg", "32"})).toArray(String[]::new);
+        if (pcoc.cli.Verify.run(bad) != 2) {
+            throw new AssertionError("not an integer");
+        }
+        if (pcoc.cli.Verify.run(new String[] {"--input", path, "--index-url", "http://127.0.0.1:9", "--profile", "production", "--sample-bytes", "32"}) != 2) {
+            throw new AssertionError("integers with another profile");
+        }
+        PrintStream saved = System.out;
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(sink, true, StandardCharsets.UTF_8));
+        int code;
+        try {
+            code = pcoc.cli.Verify.run(java.util.stream.Stream.concat(Arrays.stream(base),
+                    Arrays.stream(new String[] {"--sample-bytes", "16", "--slot-bytes", "64", "--terrain-bytes", "128", "--steps-per-leg", "8"})).toArray(String[]::new));
+        } finally {
+            System.setOut(saved);
+        }
+        String record = sink.toString(StandardCharsets.UTF_8);
+        if (code != 0 || !record.contains("\"sample_bytes\":16") || !record.contains("\"terrain_bytes\":128") || !record.contains("\"steps_per_leg\":8")) {
+            throw new AssertionError("record " + code + " " + record);
+        }
+        Files.deleteIfExists(input);
+    }
+
     /**
      * rc.2 break pass (Rust tests/break_cases.rs and sdk/tools/hikecases.py
      * cover the same facts across the three SDKs): a non-map top level is the
@@ -646,12 +689,201 @@ public final class V2Pack {
                 throw new AssertionError("six-leg previous " + Arrays.toString(c) + " " + index + " " + result);
             }
         }
+        // F9: a text checkpoint element and a text leg-result element are field set
+        // as well as the width condition.
+        byte[] cpKey = cat(new byte[] {0x6b}, "checkpoints".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {(byte) 0x81});
+        int cpAt = nth(obj, cpKey, 4) + cpKey.length;
+        byte[] textCp = cat(Arrays.copyOfRange(obj, 0, cpAt), new byte[] {0x61, 'x'}, Arrays.copyOfRange(obj, cpAt + 34, obj.length));
+        String cpShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(textCp, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!cpShape.contains("\"field set\"") || !cpShape.contains("\"checkpoint width\"")) {
+            throw new AssertionError("text checkpoint " + cpShape);
+        }
+        byte[] lrKey = cat(new byte[] {0x6b}, "leg_results".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {(byte) 0x81});
+        int lrAt = nth(obj, lrKey, 4) + lrKey.length;
+        byte[] textLr = cat(Arrays.copyOfRange(obj, 0, lrAt), new byte[] {0x61, 'x'}, Arrays.copyOfRange(obj, lrAt + 9, obj.length));
+        String lrShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(textLr, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!lrShape.contains("\"field set\"") || !lrShape.contains("\"leg result width\"")) {
+            throw new AssertionError("text leg result " + lrShape);
+        }
+        // F7: text last_interrupt and text last_interrupt_height are field set.
+        byte[] liKey = cat(new byte[] {0x6e}, "last_interrupt".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {0x58, 0x20});
+        int liAt = nth(obj, liKey, 0) + liKey.length;
+        byte[] textHash = cat(Arrays.copyOfRange(obj, 0, liAt - 2), new byte[] {0x61, 'x'}, Arrays.copyOfRange(obj, liAt + 32, obj.length));
+        String hashShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(textHash, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!hashShape.contains("\"field set\"") || !hashShape.contains("\"last_interrupt\"")) {
+            throw new AssertionError("text last_interrupt " + hashShape);
+        }
+        byte[] lihKey = cat(new byte[] {0x75}, "last_interrupt_height".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {0x19});
+        int lihAt = nth(obj, lihKey, 0) + lihKey.length;
+        byte[] textHeight = cat(Arrays.copyOfRange(obj, 0, lihAt - 1), new byte[] {0x61, 'x'}, Arrays.copyOfRange(obj, lihAt + 2, obj.length));
+        String heightShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(textHeight, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!heightShape.contains("\"field set\"") || !heightShape.contains("\"last_interrupt\"")) {
+            throw new AssertionError("text last_interrupt_height " + heightShape);
+        }
+        // short-li: a 31-byte last_interrupt is the wrong width, not a wrong
+        // type. shape_item has no field set.
+        byte[] shortLi = cat(Arrays.copyOfRange(obj, 0, liAt - 1), new byte[] {0x1f}, Arrays.copyOfRange(obj, liAt, liAt + 31), Arrays.copyOfRange(obj, liAt + 32, obj.length));
+        String shortShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(shortLi, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!"[\"last_interrupt\",\"header hash differ\"]".equals(shortShape)) {
+            throw new AssertionError("short-li " + shortShape);
+        }
+        // F6: 19 stages, stage 3's header copied from stage 2. stages length
+        // does not drop header height order or header hash differ.
+        Cbor.Val top = Cbor.decode(obj);
+        List<Cbor.Val> stageList = new ArrayList<>(top.map.get("stages").array);
+        Cbor.Val from = stageList.get(2);
+        List<java.util.Map.Entry<String, byte[]>> stage3 = new ArrayList<>();
+        for (java.util.Map.Entry<String, Cbor.Val> entry : stageList.get(3).map.entrySet()) {
+            Cbor.Val value = entry.getValue();
+            if ("beacon".equals(entry.getKey()) || "beacon_height".equals(entry.getKey())) {
+                value = from.map.get(entry.getKey());
+            }
+            stage3.add(java.util.Map.entry(entry.getKey(), encodeVal(value)));
+        }
+        List<byte[]> encodedStages = new ArrayList<>();
+        for (int g = 0; g < stageList.size(); g++) {
+            encodedStages.add(g == 3 ? Cbor.encodeMap(stage3) : encodeVal(stageList.get(g)));
+        }
+        encodedStages.add(encodeVal(stageList.get(17)));
+        List<java.util.Map.Entry<String, byte[]>> fields = new ArrayList<>();
+        for (java.util.Map.Entry<String, Cbor.Val> entry : top.map.entrySet()) {
+            byte[] value = "stages".equals(entry.getKey()) ? Cbor.encodeArray(encodedStages) : encodeVal(entry.getValue());
+            fields.add(java.util.Map.entry(entry.getKey(), value));
+        }
+        String longShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(Cbor.encodeMap(fields), Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!"[\"stages length\",\"header height order\",\"header hash differ\"]".equals(longShape)) {
+            throw new AssertionError("stages 19 " + longShape);
+        }
+        // F5 / Q-a: last_interrupt_height of 2^53 and of 2^64−1 is height_range
+        // only. The order comparison uses the exact integer.
+        byte[] heightKey = cat(new byte[] {0x75}, "last_interrupt_height".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {0x19});
+        for (long n : new long[] {1L << 53, -1L}) {
+            byte[] edited = putUint19(obj, heightKey, 0, n);
+            Json.Obj rec = Json.asObj(Json.parse(Measure.record(edited, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)));
+            String shape = Json.asArr(rec.fields().get("shape_item")).compact();
+            if (!"[\"height_range\"]".equals(shape)) {
+                throw new AssertionError("interrupt height " + Long.toUnsignedString(n) + " " + shape);
+            }
+        }
+        // Stage 17 at 2^53 stays below last_interrupt_height 2^64−1.
+        byte[] bhKey = cat(new byte[] {0x6d}, "beacon_height".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {0x19});
+        byte[] below = putUint19(putUint19(obj, heightKey, 0, -1L), bhKey, 17, 1L << 53);
+        String belowShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(below, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!"[\"height_range\"]".equals(belowShape)) {
+            throw new AssertionError("stage 17 below last " + belowShape);
+        }
+        // Stage 16 at 2^64−1 is followed by a smaller height.
+        byte[] gap = putUint19(obj, bhKey, 16, -1L);
+        String gapShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(gap, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!"[\"header height order\",\"height_range\"]".equals(gapShape)) {
+            throw new AssertionError("stage 16 max " + gapShape);
+        }
+        // Q-j: a non-height integer above 2^53−1 does not list height_range.
+        // leg_count stays leg_count. n_slots stays constant.
+        byte[] lcKey = cat(new byte[] {0x69}, "leg_count".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {0x01});
+        int lcAt = nth(obj, lcKey, 5) + lcKey.length;
+        byte[] hugeLeg = cat(Arrays.copyOfRange(obj, 0, lcAt - 1), new byte[] {0x1b, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, Arrays.copyOfRange(obj, lcAt, obj.length));
+        String legShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(hugeLeg, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!"[\"leg_count\"]".equals(legShape)) {
+            throw new AssertionError("leg_count 2^53 " + legShape);
+        }
+        byte[] hugeLegMax = cat(Arrays.copyOfRange(obj, 0, lcAt - 1), new byte[] {0x1b, -1, -1, -1, -1, -1, -1, -1, -1}, Arrays.copyOfRange(obj, lcAt, obj.length));
+        String legMaxShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(hugeLegMax, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!"[\"leg_count\"]".equals(legMaxShape)) {
+            throw new AssertionError("leg_count 2^64-1 " + legMaxShape);
+        }
+        byte[] nsKey = cat(new byte[] {0x67}, "n_slots".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {0x04});
+        int nsAt = nth(obj, nsKey, 0) + nsKey.length;
+        byte[] hugeSlots = cat(Arrays.copyOfRange(obj, 0, nsAt - 1), new byte[] {0x1b, -1, -1, -1, -1, -1, -1, -1, -1}, Arrays.copyOfRange(obj, nsAt, obj.length));
+        String slotShape = Json.asArr(Json.asObj(Json.parse(
+                Measure.record(hugeSlots, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false)))
+                .fields().get("shape_item")).compact();
+        if (!"[\"constant\"]".equals(slotShape)) {
+            throw new AssertionError("n_slots 2^64-1 " + slotShape);
+        }
+        // A reader that returns no document is the refused connection.
+        if (!pathPlant(Json.asObj(Json.parse(Measure.record(obj, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false))), "match")) {
+            throw new AssertionError("pack index plant");
+        }
+        Json.Obj refused = Json.asObj(Json.parse(Measure.record(obj, Profile.CONFORMANCE_SMALL_V2, height -> null, stream, false)));
+        if (pathPlant(refused, "match") || !pathPlant(refused, "not read")) {
+            throw new AssertionError("refused plant " + Json.asArr(refused.fields().get("paths")).compact());
+        }
+        // F2/F3: a declared length or count past the bytes left is malformed
+        // CBOR. The record is the undecoded one; the decoder does not allocate
+        // from that length. Depth is a separate change (F1).
+        for (byte[] in : new byte[][] {
+            {0x5b, 0x7f, -1, -1, -1, -1, -1, -1, -1},
+            {0x7b, 0x7f, -1, -1, -1, -1, -1, -1, -1},
+            {(byte) 0x9b, -1, -1, -1, -1, -1, -1, -1, -1},
+            {(byte) 0xba, -1, -1, -1, -1},
+            {(byte) 0x9a, 0x3b, (byte) 0x9a, (byte) 0xca, 0x00},
+            // Integer.MAX_VALUE element or pair counts. 9a and ba are 5 bytes;
+            // 9b 000000007fffffff is 9 bytes. The collection is not sized from
+            // that count.
+            {(byte) 0x9a, 0x7f, -1, -1, -1},
+            {(byte) 0xba, 0x7f, -1, -1, -1},
+            {(byte) 0x9b, 0x00, 0x00, 0x00, 0x00, 0x7f, -1, -1, -1},
+        }) {
+            String got = Measure.record(in, Profile.CONFORMANCE_SMALL_V2, height -> null, null, false);
+            if (got == null || !got.equals(none) || Cbor.issue(in).isEmpty()) {
+                throw new AssertionError("oversized length " + Arrays.toString(in) + " " + got);
+            }
+            try {
+                Cbor.decode(in);
+                throw new AssertionError("oversized length decoded " + Arrays.toString(in));
+            } catch (Cbor.Problem problem) {
+                if (!"truncated".equals(problem.issue)) {
+                    throw new AssertionError("oversized length issue " + problem.issue);
+                }
+            }
+        }
     }
 
     private static byte[] filled(byte b) {
         byte[] out = new byte[32];
         Arrays.fill(out, b);
         return out;
+    }
+
+    /** Replace the k-th 2-byte unsigned whose head the needle ends on. */
+    private static byte[] putUint19(byte[] obj, byte[] needle, int k, long n) {
+        int at = nth(obj, needle, k) + needle.length;
+        byte[] be = new byte[8];
+        for (int i = 7; i >= 0; i--) {
+            be[i] = (byte) (n >>> ((7 - i) * 8));
+        }
+        return cat(Arrays.copyOfRange(obj, 0, at - 1), new byte[] {0x1b}, be, Arrays.copyOfRange(obj, at + 2, obj.length));
+    }
+
+    private static boolean pathPlant(Json.Obj rec, String token) {
+        for (Json row : Json.asArr(rec.fields().get("paths")).items()) {
+            Json plant = Json.asObj(row).fields().get("plant");
+            if (plant instanceof Json.Str && token.equals(Json.asString(plant))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static int nth(byte[] data, byte[] needle, int k) {

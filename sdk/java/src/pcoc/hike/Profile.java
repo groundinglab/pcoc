@@ -16,6 +16,18 @@ public final class Profile {
     public static final Profile CONFORMANCE_SMALL_V2 = new Profile(
             "conformance-small", Hike.KIND, 32, 64, 256, 32);
 
+    /**
+     * Section 16.1 profile from the four integers the verify CLI was given.
+     * A value the constructor rejects is null, which the CLI reports as usage.
+     */
+    public static Profile conformanceSmall(int sample, int slot, int terrain, int steps) {
+        try {
+            return new Profile("conformance-small", Hike.KIND, sample, slot, terrain, steps);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
     /** Verifier name selector. {@code conformance-small} is the v2 profile. */
     public static Profile forVerify(String name) {
         return switch (name) {
@@ -44,13 +56,14 @@ public final class Profile {
     public final long offsetModulus;
 
     private Profile(String name, String kind, int sampleBytes, int slotBytes, int terrainBytes, int stepsPerLeg) {
-        if (slotBytes < 8 || slotBytes % 8 != 0) {
+        if (slotBytes < 8 || slotBytes % 8 != 0 || slotBytes > 16_384) {
             throw new IllegalArgumentException("SLOT_BYTES");
         }
-        if (terrainBytes % slotBytes != 0) {
+        if (terrainBytes % slotBytes != 0 || terrainBytes > 268_435_456) {
             throw new IllegalArgumentException("TERRAIN_BYTES");
         }
-        if (sampleBytes < 1 || terrainBytes < sampleBytes || stepsPerLeg < 1 || kind == null || kind.isEmpty()) {
+        if (sampleBytes < 1 || sampleBytes > 1024 || terrainBytes < sampleBytes || stepsPerLeg < 1 || stepsPerLeg > 2_000_000
+                || kind == null || kind.isEmpty()) {
             throw new IllegalArgumentException("profile");
         }
         this.name = name;

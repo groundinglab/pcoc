@@ -155,7 +155,7 @@ dependencies = [
 
 [[package]]
 name = "hike"
-version = "2.0.0-rc.2"
+version = "2.0.0-rc.3"
 dependencies = [
  "getrandom",
  "rayon",
@@ -170,7 +170,7 @@ dependencies = [
 
 [[package]]
 name = "hike-net"
-version = "2.0.0-rc.2"
+version = "2.0.0-rc.3"
 dependencies = [
  "hike",
  "serde_json",
@@ -243,7 +243,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "nip06"
-version = "2.0.0-rc.2"
+version = "2.0.0-rc.3"
 dependencies = [
  "bech32",
  "bip39",
@@ -357,7 +357,7 @@ dependencies = [
 
 [[package]]
 name = "satoshi-hike-produce"
-version = "2.0.0-rc.2"
+version = "2.0.0-rc.3"
 dependencies = [
  "hike",
  "nip06",
@@ -366,7 +366,7 @@ dependencies = [
 
 [[package]]
 name = "satoshi-hike-verify"
-version = "2.0.0-rc.2"
+version = "2.0.0-rc.3"
 dependencies = [
  "hike",
  "hike-net",

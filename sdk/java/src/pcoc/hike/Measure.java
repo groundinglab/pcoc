@@ -86,7 +86,7 @@ public final class Measure {
         int[] counts = new int[Hike.STAGES];
         Json.Arr checkpointRows = checkpoints(stages, terrain, computedSeed, counts);
         Json.Arr waypointRows = waypoints(stages, terrain);
-        PathTally paths = paths(top, stages, profile, headers, chain);
+        PathTally paths = paths(top, stages, profile, headers, chain, reader);
         BookFields book = v2
                 ? v2Book(paths, headers, counts, reader)
                 : BookFields.token("not defined");
@@ -323,7 +323,7 @@ public final class Measure {
         boolean[] order = headerOrder(top, stages);
         bad[10] = order[0];
         bad[11] = order[1];
-        bad[12] = huge(top);
+        bad[12] = heightRange(top, stages);
         return bad;
     }
 
@@ -345,6 +345,18 @@ public final class Measure {
         if (stages == null) {
             return true;
         }
+        // last_interrupt present and not a byte string, or last_interrupt_height
+        // present and not an unsigned integer, is field set (section 14.1 row 2).
+        // A byte string of the wrong width is last_interrupt only (row 11).
+        if (top.map.containsKey("last_interrupt")) {
+            Cbor.Val value = top.map.get("last_interrupt");
+            if (value == null || value.kind != Cbor.Val.Kind.BYTES) {
+                return true;
+            }
+        }
+        if (top.map.containsKey("last_interrupt_height") && uint(top, "last_interrupt_height") == null) {
+            return true;
+        }
         for (int g = 0; g < stages.size(); g++) {
             Cbor.Val stage = stages.get(g);
             if (stage == null || stage.kind != Cbor.Val.Kind.MAP) {
@@ -362,10 +374,22 @@ public final class Measure {
             if (g > 0 && bytes(stage, "path") == null) {
                 return true;
             }
-            // A checkpoint or leg-result value that is not an array is a wrong value type (section 14.1 row 2).
+            // A checkpoint or leg-result value that is not an array is a wrong
+            // value type (section 14.1 row 2). So is an element that is not a
+            // byte string: the width conditions still apply, and field set is
+            // not dropped because another condition is too.
             for (String key : new String[] {"checkpoints", "leg_results"}) {
-                if (stage.map.containsKey(key) && array(stage, key) == null) {
+                if (!stage.map.containsKey(key)) {
+                    continue;
+                }
+                List<Cbor.Val> items = array(stage, key);
+                if (items == null) {
                     return true;
+                }
+                for (Cbor.Val item : items) {
+                    if (item == null || item.kind != Cbor.Val.Kind.BYTES) {
+                        return true;
+                    }
                 }
             }
             if (uint(stage, "beacon_height") == null || uint(stage, "leg_count") == null) {
@@ -484,6 +508,8 @@ public final class Measure {
         if (beacon == null || beaconHeight == null) {
             return true;
         }
+        // Exact unsigned integers, including a value above 2^53−1.
+        // Header height order uses the same integers.
         return Bytes.eq(last, beacon) || Long.compareUnsigned(height, beaconHeight) <= 0;
     }
 
@@ -504,7 +530,9 @@ public final class Measure {
             if (hashes[i] == null) {
                 hashBad = true;
             }
-            if (heights[i] == null) {
+            // A height above 2^53−1 is written `not defined` (`height_range`)
+            // and still takes part in the order, by its exact unsigned value.
+            if (orderedHeight(heights[i]) == null) {
                 heightBad = true;
             }
             if (i == 0) {
@@ -513,7 +541,9 @@ public final class Measure {
             if (hashes[i] != null && hashes[i - 1] != null && Bytes.eq(hashes[i], hashes[i - 1])) {
                 hashBad = true;
             }
-            if (heights[i] != null && heights[i - 1] != null && Long.compareUnsigned(heights[i], heights[i - 1]) <= 0) {
+            Long height = orderedHeight(heights[i]);
+            Long prev = orderedHeight(heights[i - 1]);
+            if (height != null && prev != null && Long.compareUnsigned(height, prev) <= 0) {
                 heightBad = true;
             }
         }
@@ -526,30 +556,27 @@ public final class Measure {
         return new boolean[] {heightBad, hashBad};
     }
 
-    private static boolean huge(Cbor.Val value) {
-        if (value == null) {
+    /** The exact stored height. A value above 2^53−1 still takes part in the order. */
+    private static Long orderedHeight(Long height) {
+        return height;
+    }
+
+    /** `height_range` is a stored height above 2^53−1: `beacon_height`, `last_interrupt_height`. */
+    private static boolean heightRange(Cbor.Val top, List<Cbor.Val> stages) {
+        Long last = uint(top, "last_interrupt_height");
+        if (last != null && Hike.aboveJson(last)) {
+            return true;
+        }
+        if (stages == null) {
             return false;
         }
-        return switch (value.kind) {
-            case UINT -> Hike.aboveJson(value.uint);
-            case ARRAY -> {
-                for (Cbor.Val item : value.array) {
-                    if (huge(item)) {
-                        yield true;
-                    }
-                }
-                yield false;
+        for (Cbor.Val stage : stages) {
+            Long height = uint(stage, "beacon_height");
+            if (height != null && Hike.aboveJson(height)) {
+                return true;
             }
-            case MAP -> {
-                for (Cbor.Val item : value.map.values()) {
-                    if (huge(item)) {
-                        yield true;
-                    }
-                }
-                yield false;
-            }
-            default -> false;
-        };
+        }
+        return false;
     }
 
     private static Header[] headers(Cbor.Val top, List<Cbor.Val> stages, Reader reader) {
@@ -662,7 +689,7 @@ public final class Measure {
         return rows;
     }
 
-    private static PathTally paths(Cbor.Val top, List<Cbor.Val> stages, Profile profile, Header[] headers, Summary.Chain chain) {
+    private static PathTally paths(Cbor.Val top, List<Cbor.Val> stages, Profile profile, Header[] headers, Summary.Chain chain, Reader reader) {
         PathTally tally = new PathTally();
         boolean v2 = Hike.KIND.equals(profile.kind);
         for (int g = 1; g < Hike.STAGES; g++) {
@@ -757,9 +784,21 @@ public final class Measure {
             String plant = "not read";
             String anchor = "not anchored";
             if (inWindow && interrupt) {
-                boolean ok = chain == null || chain.ok(loc);
-                plant = ok ? "match" : "mismatch";
-                anchor = ok ? "anchored" : "not anchored";
+                if (chain != null) {
+                    boolean ok = chain.ok(loc);
+                    plant = ok ? "match" : "mismatch";
+                    anchor = ok ? "anchored" : "not anchored";
+                } else if (reader != null && reader.body(loc.blockHeight) != null) {
+                    // A document that was read counts as bound. Comparing the
+                    // plant fields is the chain callback's job.
+                    plant = "match";
+                    anchor = "anchored";
+                } else {
+                    // No document: the connection was refused, or the height is absent.
+                    plant = "not read";
+                    anchor = "not anchored";
+                    tally.plantReadNotRead = true;
+                }
             }
             tally.anchors.add(anchor);
             tally.present++;

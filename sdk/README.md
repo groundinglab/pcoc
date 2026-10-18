@@ -29,9 +29,9 @@ Only Rust has the section 15 helpers (`admit`, `failure_facts`) and direct node 
 
 | | Value |
 |---|---|
-| SDK version | `2.0.0-rc.2`, in [VERSION](VERSION) |
-| Repository tag | `sdk-v2.0.0-rc.2`. Rust and Java pin this one. |
-| Go module tag | `sdk/go/v2.0.0-rc.2`. The module path requires the `sdk/go/` prefix. |
+| SDK version | `2.0.0-rc.3`, in [VERSION](VERSION) |
+| Repository tag | `sdk-v2.0.0-rc.3`. Rust and Java pin this one. |
+| Go module tag | `sdk/go/v2.0.0-rc.3`. The module path requires the `sdk/go/` prefix. |
 | Specification | The tag and vector hash in [SPEC_PIN](SPEC_PIN). `sdk/test.sh` checks both. |
 
 Both tags point at the same commit. Pin a tag, never `main`.
@@ -40,7 +40,7 @@ Inside this repository, the gate and the desktop app pin the SDK by path (`sdk/r
 - the gate: in `/v1/health` (`sdk`) and in `admission-service --version`;
 - the desktop app: on its About page.
 
-> Both `rc.2` tags are published on GitHub. Inside a checkout you can also depend by path, as `examples/` does. `git rev-parse sdk-v2.0.0-rc.2^{commit}` shows the commit the tag names.
+> The rc.3 tags name this version (`sdk-v2.0.0-rc.3` and `sdk/go/v2.0.0-rc.3`). Inside a checkout you can depend by path, as `examples/` does. Those tags are not created by this commit.
 
 Earlier tags of these trees are kept as history: `ref-rust-v2.0.1` … `ref-rust-v2.0.6`, `ref-java-v2.0.1` … `ref-java-v2.0.2`, and the Go module tags under the old module path. Nothing new is tagged under them.
 
@@ -92,12 +92,13 @@ sdk/test.sh summary
 sdk/test.sh: PASS
 ```
 
-On a few malformed inputs the SDKs still disagree, on two open spec questions (a `stages` element that is not a map, and a `last_interrupt_height` above 2^53 − 1). [KNOWN-DIVERGENCES.md](KNOWN-DIVERGENCES.md) lists them with the other open spec questions, and the rows fixed for rc.2; [CHANGES.md](CHANGES.md) describes rc.1 → rc.2. The harness pins each open case by name and by its output digests.
+The three SDKs agree on the cross-check, including a `stages` element that is not a map. [KNOWN-DIVERGENCES.md](KNOWN-DIVERGENCES.md) lists the rows fixed for rc.2 and rc.3; [CHANGES.md](CHANGES.md) describes rc.1 → rc.2 and rc.2 → rc.3. The harness pins each open case by name and by its output digests. There are no open pins.
 
 ## The verify programs
 
 `satoshi-hike-verify` takes the same flags in all three SDKs:
 - `--input PATH`, `--index-url URL` and `--profile production|conformance-small|test|live`;
+- `--sample-bytes N`, `--slot-bytes N`, `--terrain-bytes N` and `--steps-per-leg N`, all four required with `--profile conformance-small`. Any of the four with another profile is a usage error, exit 2;
 - `--audit-seed HEX`, which pins the six-leg draw;
 - `--report PATH`, which also writes a JSON report;
 - `--log quiet|verbose`: with `verbose`, the record is also written to stderr;

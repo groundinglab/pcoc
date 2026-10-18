@@ -7,15 +7,15 @@ It uses only the Go standard library, and needs Go 1.22 or newer.
 ## Install / pin
 
 ```sh
-go get github.com/groundinglab/pcoc/sdk/go/v2@v2.0.0-rc.2
+go get github.com/groundinglab/pcoc/sdk/go/v2@v2.0.0-rc.3
 ```
 
-The module lives under `sdk/go/`, so its tag is `sdk/go/v2.0.0-rc.2`. That is the same commit as the repository tag `sdk-v2.0.0-rc.2`.
+The module lives under `sdk/go/`, so its tag is `sdk/go/v2.0.0-rc.3`. That is the same commit as the repository tag `sdk-v2.0.0-rc.3`.
 
-> The tag is published, so `go get` resolves it. To work from a checkout instead, add a `replace`. Its path is relative to your `go.mod` and points at `<clone>/sdk/go`:
+> When that tag is published, `go get` resolves it. To work from a checkout instead, add a `replace`. Its path is relative to your `go.mod` and points at `<clone>/sdk/go`:
 >
 > ```
-> require github.com/groundinglab/pcoc/sdk/go/v2 v2.0.0-rc.2
+> require github.com/groundinglab/pcoc/sdk/go/v2 v2.0.0-rc.3
 > replace github.com/groundinglab/pcoc/sdk/go/v2 => ../pcoc/sdk/go
 > ```
 
@@ -286,6 +286,7 @@ go run ./cmd/satoshi-hike-produce --pubkey-hex HEX --output PATH --gossip-peer H
 
 **Verify** takes the same flags as the Rust and Java programs; see [the verify programs](../README.md#the-verify-programs).
 - The default `--profile` is `test`. It does not dial `https://index.groundinglab.io`; it reads `PCOC_TEST_INDEX_URL` when `--index-url` is omitted.
-- `--chain-rpc URL` is accepted with `--profile live` for flag compatibility, but this program does not read the node. It calls `Verify` without a chain callback, so a stored path in the anchor window counts as bound.
+- `--profile conformance-small` requires `--sample-bytes N --slot-bytes N --terrain-bytes N --steps-per-leg N`. The record states those integers. Any of the four with another profile is a usage error, exit 2.
+- `--chain-rpc URL` is accepted with `--profile live` for flag compatibility, but this program does not read the node. It calls `Verify` without a chain callback. A stored path in the anchor window counts as bound when the index returned a document for that block. When the connection is refused and no document is read, `plant` is `not read`.
 
 **Produce** has its own flags: `--tips PATH` and the profiles `test|live|production`. See `--help`. This SDK does not derive a production seed from a mnemonic.

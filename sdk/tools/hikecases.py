@@ -95,6 +95,15 @@ def cases(pack):
     add("cpw-s4-33", cpw(4, 33))
     add("cpw-s4-0", cpw(4, 0))
     add("cp-text-s4", lambda v: st(v, 4).get("checkpoints").__setitem__(0, "x" * 32))
+    # F9: a checkpoint or leg-result element that is not bytes is a wrong
+    # value type (section 14.1 row 2) as well as the width condition.
+    add("cp-uint-s4", lambda v: st(v, 4).get("checkpoints").__setitem__(0, 7))
+    add("cp-map-s4", lambda v: st(v, 4).get("checkpoints").__setitem__(0, M()))
+    add("cp-arr-s4", lambda v: st(v, 4).get("checkpoints").__setitem__(0, []))
+    add("lr-text-s4", lambda v: st(v, 4).get("leg_results").__setitem__(0, "short"))
+    add("lr-uint-s4", lambda v: st(v, 4).get("leg_results").__setitem__(0, 7))
+    add("lr-map-s4", lambda v: st(v, 4).get("leg_results").__setitem__(0, M()))
+    add("lr-arr-s4", lambda v: st(v, 4).get("leg_results").__setitem__(0, []))
     def two_cps(first_bad, fix_lc):
         def f(v):
             s = st(v, 3); c = s.get("checkpoints"); l = s.get("leg_results")
@@ -117,15 +126,56 @@ def cases(pack):
     add("absent-s17-height", lambda v: st(v, 17).drop("beacon_height"))
     add("absent-s17-path", lambda v: st(v, 17).drop("path"))
     add("short-s5-waypoint", lambda v: st(v, 5).set("waypoint", b"\0" * 31))
+    # F4: seed 11*32 draws stage 5 leg 0. A waypoint that is not 32 bytes
+    # makes that leg mismatch (section 14.6 reads the stored waypoint).
+    DRAW_S5_J0 = "11" * 32
+    add("s5-waypoint-31", lambda v: st(v, 5).set("waypoint", st(v, 5).get("waypoint")[:31]), DRAW_S5_J0)
+    add("s5-waypoint-33", lambda v: st(v, 5).set("waypoint", st(v, 5).get("waypoint") + b"\0"), DRAW_S5_J0)
+    add("s5-waypoint-8", lambda v: st(v, 5).set("waypoint", st(v, 5).get("waypoint")[:8]), DRAW_S5_J0)
     add("short-s8-beacon", lambda v: st(v, 8).set("beacon", st(v, 8).get("beacon")[:31]))
+    # 31 bytes is the wrong width (section 14.1 row 11), not a wrong type.
+    # shape_item lists last_interrupt and does not list field set.
     add("short-li", lambda v: v.set("last_interrupt", v.get("last_interrupt")[:31]))
     for key in ("public_key", "seed_beacon", "stages", "last_interrupt", "last_interrupt_height", "kind", "n_slots"):
         add(f"absent-top-{key}", lambda v, key=key: v.drop(key))
     add("text-top-li-height", lambda v: v.set("last_interrupt_height", "x"))
+    # F7: a text last_interrupt or last_interrupt_height is a wrong value type
+    # (section 14.1 row 2), so field set is listed with last_interrupt.
+    add("text-last_interrupt", lambda v: v.set("last_interrupt", "x"))
+    add("text-last_interrupt_height", lambda v: v.set("last_interrupt_height", "not-a-height"))
     add("text-top-stages", lambda v: v.set("stages", "x"))
     add("short-pubkey", lambda v: v.set("public_key", v.get("public_key")[:31]))
     add("stages-17", lambda v: v.get("stages").pop())
     add("stages-19", lambda v: v.get("stages").append(copy.deepcopy(st(v, 17))))
+    # F11: a broken stage at index 18 or later adds no header condition.
+    def more_stages(n):
+        def f(v):
+            stages = v.get("stages")
+            while len(stages) < n:
+                stages.append(copy.deepcopy(stages[17]))
+        return f
+    add("f11-s19-s18-beacon-text", lambda v: (more_stages(19)(v), st(v, 18).set("beacon", "x")))
+    add("f11-s19-s18-beacon-absent", lambda v: (more_stages(19)(v), st(v, 18).drop("beacon")))
+    add("f11-s19-s18-bh-absent", lambda v: (more_stages(19)(v), st(v, 18).drop("beacon_height")))
+    add("f11-s19-s18-bh-text", lambda v: (more_stages(19)(v), st(v, 18).set("beacon_height", "x")))
+    add("f11-s19-s18-beacon-31", lambda v: (more_stages(19)(v), st(v, 18).set("beacon", b"\1" * 31)))
+    add("f11-s19-s18-empty", lambda v: (more_stages(19)(v), v.get("stages").__setitem__(18, M())))
+    add("f11-s20-s19-beacon-text", lambda v: (more_stages(20)(v), st(v, 19).set("beacon", "x")))
+    # Q-b: one non-map element, and stages values that are not arrays.
+    add("qb-stages-bstr32", lambda v: v.set("stages", [b"\x11" * 32]))
+    add("qb-stages-bstr", lambda v: v.set("stages", b"\x11" * 32))
+    add("qb-stages-text", lambda v: v.set("stages", "x"))
+    add("qb-stages-uint", lambda v: v.set("stages", 7))
+    add("qb-stages-map", lambda v: v.set("stages", M()))
+    add("qb-stages-null", lambda v: v.set("stages", None))
+    add("qb-stages-bool", lambda v: v.set("stages", False))
+    # F6: 19 stages, and stage 3's header duplicates stage 2's. stages length
+    # does not drop the other conditions over the stages that are present.
+    def stages19_dup(v):
+        v.get("stages").append(copy.deepcopy(st(v, 17)))
+        st(v, 3).set("beacon", st(v, 2).get("beacon"))
+        st(v, 3).set("beacon_height", st(v, 2).get("beacon_height"))
+    add("stages19-dup-header", stages19_dup)
     add("stage5-uint", lambda v: v.get("stages").__setitem__(5, 7))
     add("extra-top-key", lambda v: v.append(["zzz", 1]))
     add("extra-s5-key", lambda v: st(v, 5).append(["zzz", 1]))
@@ -139,7 +189,23 @@ def cases(pack):
     add("mixed-1", lambda v: (st(v, 3).set("leg_count", "x"), st(v, 9).drop("beacon_height"), v.set("slot_bytes", "x"), st(v, 12).set("beacon", st(v, 11).get("beacon"))))
     add("mixed-2", lambda v: (v.drop("fill"), st(v, 2).drop("checkpoints"), cpw(7)(v), st(v, 10).drop("beacon")))
     add("height-2^53", lambda v: st(v, 17).set("beacon_height", 2**53))
+    # F5 / Q-a: header height order compares the exact unsigned integer.
+    # A height above 2^53−1 is height_range and is written not defined, and
+    # it still takes part in the order. 2^53 and 2^64−1 are greater than
+    # stage 17's height, so those rows list height_range only.
+    add("li-height-2^53", lambda v: v.set("last_interrupt_height", 2**53))
     add("li-height-2^64-1", lambda v: v.set("last_interrupt_height", 2**64 - 1))
+    # Stage 17 above 2^53−1 and still below last_interrupt_height: no order violation.
+    def s17_below_li(v):
+        st(v, 17).set("beacon_height", 2**53)
+        v.set("last_interrupt_height", 2**64 - 1)
+    add("s17-h-2^53-lt-li", s17_below_li)
+    # A stage height of 2^64−1 followed by the next stage's smaller height.
+    add("s16-h-2^64-1", lambda v: st(v, 16).set("beacon_height", 2**64 - 1))
+    # Q-j: a non-height integer above 2^53−1 is not height_range.
+    add("legcount-2^53-s5", lambda v: st(v, 5).set("leg_count", 2**53))
+    add("legcount-2^64-1-s5", lambda v: st(v, 5).set("leg_count", 2**64 - 1))
+    add("nslots-2^64-1", lambda v: v.set("n_slots", 2**64 - 1))
     add("neg-s5-height", lambda v: st(v, 5).set("beacon_height", -1))
     add("leg_count-0-s5", lambda v: st(v, 5).set("leg_count", 0))
     add("all-empty-s5", lambda v: (st(v, 5).set("checkpoints", []), st(v, 5).set("leg_results", []), st(v, 5).set("leg_count", 0)))
@@ -194,6 +260,20 @@ def cases(pack):
     trail("trail-s0-path-key", lambda v: st(v, 0).append(["path", b""]))
     trail("trail-absent-top-last_interrupt", lambda v: v.drop("last_interrupt"))
     trail("trail-earlier-kind-only", lambda v: v.__setitem__(slice(None), M([["kind", "satoshi-hike-v1.35-object"]])))
+    # F2: a declared length or count past the bytes still in the buffer.
+    # Each is one CBOR head and nothing after it.
+    for nm, b in [
+        ("os-top-bstr-2pow63", bytes.fromhex("5b7fffffffffffffff")),
+        ("os-top-text-2pow63", bytes.fromhex("7b7fffffffffffffff")),
+        ("os-top-arr-2pow64-1", bytes.fromhex("9bffffffffffffffff")),
+        ("os-top-map-2pow32", bytes.fromhex("baffffffff")),
+        ("os-top-arr-1e9", bytes.fromhex("9a3b9aca00")),
+    ]:
+        out.append((nm, b, docs, None))
+    # The same array head in place of kat-small's stages value.
+    def stages_huge(v):
+        v.set("stages", Raw(bytes.fromhex("9a3b9aca00")))
+    add("os-stages-arr-1e9", stages_huge)
     full = enc(base)
     out.append(("indef-map", b"\xbf" + full[1 + (1 if full[0] & 31 >= 24 else 0):] + b"\xff", docs, None))
     out.append(("tagged-map", b"\xd8\x18" + full, docs, None))

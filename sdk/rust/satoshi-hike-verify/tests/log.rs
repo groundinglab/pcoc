@@ -233,6 +233,55 @@ fn an_unknown_log_degree_is_a_usage_error() {
     assert!(record_lines(&stderr).is_empty(), "{stderr}");
 }
 
+/// F8: conformance-small without all four integers is a usage error. The
+/// record states the integers it was given.
+#[test]
+fn conformance_small_requires_the_four_integers() {
+    let dir = Scratch::new("small");
+    let input = dir.path("hike.cbor");
+    fs::write(&input, &[0xa0]).unwrap();
+    let base = [
+        "--input",
+        input.to_str().unwrap(),
+        "--index-url",
+        "http://127.0.0.1:9",
+        "--profile",
+        "conformance-small",
+    ];
+    let missing = verify(&base);
+    assert_eq!(missing.status.code(), Some(2));
+    assert!(missing.stdout.is_empty());
+    let mut one = base.to_vec();
+    one.extend(["--sample-bytes", "32", "--slot-bytes", "64", "--terrain-bytes", "256"]);
+    let short = verify(&one);
+    assert_eq!(short.status.code(), Some(2));
+    assert!(short.stdout.is_empty());
+    let mut bad = base.to_vec();
+    bad.extend(["--sample-bytes", "nope", "--slot-bytes", "64", "--terrain-bytes", "256", "--steps-per-leg", "32"]);
+    assert_eq!(verify(&bad).status.code(), Some(2));
+    let mut rejected = base.to_vec();
+    rejected.extend(["--sample-bytes", "32", "--slot-bytes", "7", "--terrain-bytes", "256", "--steps-per-leg", "32"]);
+    assert_eq!(verify(&rejected).status.code(), Some(2));
+    let other = ["--input", input.to_str().unwrap(), "--index-url", "http://127.0.0.1:9", "--profile", "test", "--sample-bytes", "32"];
+    let other_out = verify(&other);
+    assert_eq!(
+        other_out.status.code(),
+        Some(2),
+        "args {other:?} stdout {} stderr {}",
+        String::from_utf8_lossy(&other_out.stdout),
+        String::from_utf8_lossy(&other_out.stderr)
+    );
+    let mut given = base.to_vec();
+    given.extend(["--sample-bytes", "16", "--slot-bytes", "64", "--terrain-bytes", "128", "--steps-per-leg", "8"]);
+    let out = verify(&given);
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("\"sample_bytes\":16"), "{stdout}");
+    assert!(stdout.contains("\"slot_bytes\":64"), "{stdout}");
+    assert!(stdout.contains("\"terrain_bytes\":128"), "{stdout}");
+    assert!(stdout.contains("\"steps_per_leg\":8"), "{stdout}");
+}
+
 /// rc.2 (approved change 2): exit 1 only when no top-level map decodes. A map with a
 /// trailing byte writes its record and exits 0; a well-formed item that is
 /// not a map exits 1 with nothing on stdout.

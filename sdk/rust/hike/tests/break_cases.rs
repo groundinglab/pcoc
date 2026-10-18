@@ -387,6 +387,179 @@ fn a_top_level_that_is_not_a_map_is_malformed_cbor() {
     assert!(!hike::top_level_map(&[]));
 }
 
+/// F9: a checkpoint or leg-result element that is not bytes lists field set
+/// with the width condition.
+#[test]
+fn a_non_byte_checkpoint_element_is_field_set() {
+    for (key, value, width) in [
+        ("checkpoints", V::T("x".repeat(32)), "checkpoint width"),
+        ("checkpoints", V::U(7), "checkpoint width"),
+        ("checkpoints", V::M(vec![]), "checkpoint width"),
+        ("checkpoints", V::A(vec![]), "checkpoint width"),
+        ("leg_results", V::T("short".to_owned()), "leg result width"),
+        ("leg_results", V::U(7), "leg result width"),
+        ("leg_results", V::M(vec![]), "leg result width"),
+        ("leg_results", V::A(vec![]), "leg result width"),
+    ] {
+        let mut v = object();
+        v.stage(4).get(key).arr()[0] = value;
+        let rec = record(&enc(&v));
+        let got = items(&rec);
+        assert!(got.contains(&"field set"), "{key} {got:?}");
+        assert!(got.contains(&width), "{key} {got:?}");
+    }
+}
+
+/// F7: text last_interrupt and text last_interrupt_height are wrong value
+/// types, so field set is listed with the conditions those fields already fail.
+#[test]
+fn a_text_last_interrupt_is_field_set() {
+    let mut hash = object();
+    hash.set("last_interrupt", V::T("x".to_owned()));
+    let rec = record(&enc(&hash));
+    let got = items(&rec);
+    assert!(got.contains(&"field set"), "{got:?}");
+    assert!(got.contains(&"last_interrupt"), "{got:?}");
+    assert!(got.contains(&"header hash differ"), "{got:?}");
+
+    let mut height = object();
+    height.set("last_interrupt_height", V::T("not-a-height".to_owned()));
+    let rec = record(&enc(&height));
+    let got = items(&rec);
+    assert!(got.contains(&"field set"), "{got:?}");
+    assert!(got.contains(&"last_interrupt"), "{got:?}");
+    assert!(got.contains(&"header height order"), "{got:?}");
+}
+
+/// short-li: a 31-byte last_interrupt is a byte string of the wrong width.
+/// That is last_interrupt (section 14.1 row 11), not field set.
+#[test]
+fn a_short_last_interrupt_is_not_field_set() {
+    let mut v = object();
+    let short = v.get("last_interrupt").bytes();
+    v.set("last_interrupt", V::B(short[..31].to_vec()));
+    let rec = record(&enc(&v));
+    assert_eq!(items(&rec), ["last_interrupt", "header hash differ"]);
+}
+
+/// F6: more than 18 stages still lists every other violated condition over
+/// the stages that are present. A duplicated stage-3 header is header height
+/// order and header hash differ, with stages length.
+#[test]
+fn nineteen_stages_keep_the_other_shape_conditions() {
+    let mut v = object();
+    let extra = v.stage(17).clone();
+    v.get("stages").arr().push(extra);
+    let beacon = v.stage(2).get("beacon").clone();
+    let height = v.stage(2).get("beacon_height").clone();
+    v.stage(3).set("beacon", beacon);
+    v.stage(3).set("beacon_height", height);
+    let rec = record(&enc(&v));
+    assert_eq!(
+        items(&rec),
+        ["stages length", "header height order", "header hash differ"]
+    );
+}
+
+/// Q-j: an integer above 2^53−1 that is not a height does not list
+/// height_range here. `leg_count` stays `leg_count`. `n_slots` stays `constant`.
+#[test]
+fn a_non_height_integer_above_the_json_bound_is_not_height_range() {
+    let mut legs = object();
+    legs.stage(5).set("leg_count", V::U(1 << 53));
+    assert_eq!(items(&record(&enc(&legs))), ["leg_count"]);
+    let mut slots = object();
+    slots.set("n_slots", V::U(u64::MAX));
+    assert_eq!(items(&record(&enc(&slots))), ["constant"]);
+}
+
+/// F5 / Q-a: last_interrupt_height above 2^53−1 is `height_range` and is
+/// written `not defined`. Header height order compares the exact integer, so
+/// 2^53 and 2^64−1, both greater than stage 17's height, do not list
+/// `header height order`. `last_interrupt` is not listed either.
+#[test]
+fn an_out_of_range_interrupt_height_keeps_exact_order() {
+    for n in [1u64 << 53, u64::MAX] {
+        let mut v = object();
+        v.set("last_interrupt_height", V::U(n));
+        let rec = record(&enc(&v));
+        assert_eq!(items(&rec), ["height_range"], "height {n}");
+        assert_eq!(rec["headers"][18]["stored_height"], "not defined");
+    }
+}
+
+/// F5: every header pair uses the exact integer. Stage 17 at 2^53 is still
+/// below last_interrupt_height 2^64−1, so the order holds. Stage 16 at
+/// 2^64−1 is not below the next height, so the order fails.
+#[test]
+fn header_pairs_order_over_range_heights_by_exact_value() {
+    let mut below = object();
+    below.stage(17).set("beacon_height", V::U(1 << 53));
+    below.set("last_interrupt_height", V::U(u64::MAX));
+    let rec = record(&enc(&below));
+    assert_eq!(items(&rec), ["height_range"]);
+    assert_eq!(rec["headers"][17]["stored_height"], "not defined");
+    assert_eq!(rec["headers"][18]["stored_height"], "not defined");
+
+    let mut gap = object();
+    gap.stage(16).set("beacon_height", V::U(u64::MAX));
+    let rec = record(&enc(&gap));
+    assert_eq!(items(&rec), ["header height order", "height_range"]);
+    assert_eq!(rec["headers"][16]["stored_height"], "not defined");
+}
+
+/// No index document (the connection was refused, or the height is absent)
+/// records plant `not read` on an issued path, not `match`.
+#[test]
+fn a_missing_index_document_records_plant_not_read() {
+    let measurements = hike::verify_sized(
+        &object_bytes(),
+        hike::AuditDraw::PinnedSeed([0x11; 32]),
+        |_| Err(()),
+        |_| hike::ChainRead::NotRead,
+        hike::Sizes::conformance_small(),
+    );
+    let line = hike::verify_record_json("conformance-small", &measurements);
+    let rec: Value = serde_json::from_str(line.trim_end()).unwrap();
+    let paths = rec["paths"].as_array().unwrap();
+    assert!(paths.iter().any(|row| row.get("plant").and_then(|p| p.as_str()) == Some("not read")));
+    assert!(paths.iter().all(|row| row.get("plant").and_then(|p| p.as_str()) != Some("match")));
+}
+
+/// F11: a broken stage at index 18 or later does not add a header condition.
+#[test]
+fn a_broken_stage_past_17_adds_no_header_condition() {
+    let mut v = object();
+    let extra = v.stage(17).clone();
+    v.get("stages").arr().push(extra);
+    v.stage(18).set("beacon", V::T("x".into()));
+    let rec = record(&enc(&v));
+    let got = items(&rec);
+    assert!(got.contains(&"field set"), "{got:?}");
+    assert!(got.contains(&"stages length"), "{got:?}");
+    assert!(!got.iter().any(|item| *item == "header hash differ"), "{got:?}");
+    assert!(!got.iter().any(|item| *item == "header height order"), "{got:?}");
+}
+
+/// F2: a declared byte, text, array or map length past the bytes left is
+/// the undecoded ["malformed cbor"] record. The same heads the Go and Java
+/// decoders reject without allocating from the declared length.
+#[test]
+fn an_oversized_length_is_malformed_cbor() {
+    let none = undecoded();
+    let inputs: &[&[u8]] = &[
+        &[0x5b, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff],
+        &[0x7b, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff],
+        &[0x9b, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff],
+        &[0xba, 0xff, 0xff, 0xff, 0xff],
+        &[0x9a, 0x3b, 0x9a, 0xca, 0x00],
+    ];
+    for bytes in inputs {
+        assert!(!hike::top_level_map(bytes), "{bytes:?}");
+        assert_eq!(record(bytes), none, "{bytes:?}");
+    }
+}
+
 /// rc.2 (approved change 3): decoded_hike refuses trailing bytes.
 #[test]
 fn decoded_hike_refuses_trailing_bytes() {

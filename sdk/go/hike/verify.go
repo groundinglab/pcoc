@@ -17,19 +17,31 @@ type Index struct {
 }
 
 func (x Index) Read(height uint64) *HeaderRead {
+	body, ok := x.hasBody(height)
+	if !ok {
+		return nil
+	}
+	return ReadIndexDocument(body)
+}
+
+// hasBody reports whether a document was returned for height.
+// A refused connection, a missing key in a supplied map, and a non-200
+// response are false. A body that section 9 rejects is still true: the
+// document was read. An index with no map and no fetch was not asked, and
+// the nil chain stays a successful bind.
+func (x Index) hasBody(height uint64) (string, bool) {
 	if x.Documents != nil {
 		if body, ok := x.Documents[height]; ok {
-			return ReadIndexDocument(body)
+			return body, true
 		}
 	}
 	if x.Fetch != nil {
-		body, ok := x.Fetch(height)
-		if !ok {
-			return nil
-		}
-		return ReadIndexDocument(body)
+		return x.Fetch(height)
 	}
-	return nil
+	if x.Documents != nil {
+		return "", false
+	}
+	return "", true
 }
 
 // Verify measures one hike object. It does not apply section 15.
@@ -43,7 +55,8 @@ func Verify(data []byte, profile Profile, index Index, stream []byte, omitSix bo
 
 // verifyWithChain is Verify. pathChain is the section 14.3 bind for a present
 // path that sits in the anchor window and names a stored interrupt header.
-// A nil callback is a successful bind. It is not called for an earlier kind.
+// A nil callback is a successful bind when the index returned a document for
+// that block. No document is plant `not read`. It is not called for an earlier kind.
 func verifyWithChain(data []byte, profile Profile, index Index, pathChain func(PathLocators) error, stream []byte, omitSix bool) (Record, bool) {
 	item, trailing, err := decodeHead(data)
 	if err != nil {
@@ -472,7 +485,7 @@ func measure(item cborVal, profile Profile, index Index, pathChain func(PathLoca
 			measured = absentStagePath(g)
 			row, pathState, plant, anchor = measured.row, measured.state, measured.plant, measured.anchor
 		} else if profile.Kind == Kind {
-			measured = section14Path(g, path, waypoint, beaconHeight, headers[g], item, stages, pathChain)
+			measured = section14Path(g, path, waypoint, beaconHeight, headers[g], item, stages, pathChain, index)
 			row, pathState, plant, anchor = measured.row, measured.state, measured.plant, measured.anchor
 		} else {
 			row, pathState, plant = pathRow(g, path)
@@ -901,9 +914,11 @@ func absentStagePath(g int) pathMeasure {
 // section14Path is the section 14.3 row for one stage of a v2.0 object.
 // The chain bind runs only after the inclusion height is in the anchor
 // window and the block is a stored interrupt header. A nil chain is a
-// successful bind. A body that does not validate is plant mismatch and
-// does not call the chain. H is the stage's stored beacon height.
-func section14Path(g int, path, waypoint []byte, beaconHeight uint64, header Header, item, stages cborVal, chain func(PathLocators) error) pathMeasure {
+// successful bind when the index returned a document for that block. A
+// refused connection, with no document, is plant `not read`. A body that
+// does not validate is plant mismatch and does not call the chain. H is
+// the stage's stored beacon height.
+func section14Path(g int, path, waypoint []byte, beaconHeight uint64, header Header, item, stages cborVal, chain func(PathLocators) error, index Index) pathMeasure {
 	nd := jstr("not defined")
 	out := pathMeasure{anchor: "not anchored"}
 	if g == 17 {
@@ -942,9 +957,21 @@ func section14Path(g int, path, waypoint []byte, beaconHeight uint64, header Hea
 	}
 	out.plantRead = true
 	out.plant = "mismatch"
-	if chain == nil || chain(loc) == nil {
-		out.plant = "match"
-		out.anchor = "anchored"
+	switch {
+	case chain != nil:
+		if chain(loc) == nil {
+			out.plant = "match"
+			out.anchor = "anchored"
+		}
+	default:
+		// No chain callback. A document that was read counts as bound.
+		// No document (connection refused, or the height is absent) is not read.
+		if _, ok := index.hasBody(out.height); ok {
+			out.plant = "match"
+			out.anchor = "anchored"
+		} else {
+			out.plant = "not read"
+		}
 	}
 	pg, heightPG, dg := nd, nd, nd
 	if out.plant == "match" {
@@ -1052,9 +1079,12 @@ func sixLeg(terrain *Terrain, stages cborVal, counts []int, computed []byte, str
 		}
 		var previous []byte
 		if j == 0 {
+			// Section 14.6: the leg-0 start is the stored waypoint, which is
+			// 32 bytes (section 12.2). A shorter or longer value is not that
+			// start, so the leg is mismatch. Stage 0 uses the computed seed.
 			if g == 0 {
 				previous = computed
-			} else if wp, ok := bytesField(st, "waypoint"); ok {
+			} else if wp, ok := bytesField(st, "waypoint"); ok && len(wp) == 32 {
 				previous = wp
 			}
 		} else if checks != nil && j-1 < len(checks) {
@@ -1188,6 +1218,16 @@ func shapeItems(item cborVal, profile Profile) []string {
 	if !hasStages || stages.kind != 4 {
 		fieldSet = true
 	}
+	// last_interrupt present and not a byte string, or last_interrupt_height
+	// present and not an unsigned integer, is a wrong value type (section
+	// 14.1 row 2). A byte string of the wrong width is last_interrupt only
+	// (row 11), the same as a wrong-width checkpoint.
+	if f, ok := item.field("last_interrupt"); ok && f.kind != 2 {
+		fieldSet = true
+	}
+	if f, ok := item.field("last_interrupt_height"); ok && f.kind != 0 {
+		fieldSet = true
+	}
 	stage0Path := false
 	w17Bad := true
 	if stages.kind == 4 {
@@ -1218,10 +1258,22 @@ func shapeItems(item cborVal, profile Profile) []string {
 				fieldSet = true
 			}
 			// A checkpoint or leg-result value that is not an array is a wrong
-			// value type (section 14.1 row 2).
+			// value type (section 14.1 row 2). So is an element of that array
+			// that is not a byte string: the width conditions still apply,
+			// and field set is not dropped because another condition is too.
 			for _, key := range []string{"checkpoints", "leg_results"} {
-				if f, ok := st.field(key); ok && f.kind != 4 {
+				f, ok := st.field(key)
+				if !ok {
+					continue
+				}
+				if f.kind != 4 {
 					fieldSet = true
+					continue
+				}
+				for _, item := range f.arr {
+					if item.kind != 2 {
+						fieldSet = true
+					}
 				}
 			}
 			if _, ok, _ := uintField(st, "beacon_height"); !ok {
@@ -1315,6 +1367,8 @@ func shapeItems(item cborVal, profile Profile) []string {
 	if lastOK && len(last) == 32 && lastHOK {
 		if st, ok := stageAt(stages, 17); ok {
 			beacon, okB := bytesField(st, "beacon")
+			// Exact unsigned integers, including a value above 2^53−1.
+			// Header height order uses the same integers.
 			bh, okBH, _ := uintField(st, "beacon_height")
 			if okB && len(beacon) == 32 && okBH && !bytes.Equal(last, beacon) && lastH > bh {
 				lastBad = false
@@ -1330,14 +1384,16 @@ func shapeItems(item cborVal, profile Profile) []string {
 	for g := 0; g < Stages; g++ {
 		if st, ok := stageAt(stages, g); ok {
 			d, okD := bytesField(st, "beacon")
-			h, okH, over := uintField(st, "beacon_height")
-			headers[g] = pair{d: d, h: h, okD: okD && len(d) == 32, okH: okH && !over}
+			h, okH, _ := uintField(st, "beacon_height")
+			// A height above 2^53−1 still takes part, by its exact value.
+			// The record writes it `not defined` (`height_range`).
+			headers[g] = pair{d: d, h: h, okD: okD && len(d) == 32, okH: okH}
 		}
 	}
 	{
 		d, okD := bytesOf(item, "last_interrupt")
-		h, okH, over := uintField(item, "last_interrupt_height")
-		headers[Stages] = pair{d: d, h: h, okD: okD && len(d) == 32, okH: okH && !over}
+		h, okH, _ := uintField(item, "last_interrupt_height")
+		headers[Stages] = pair{d: d, h: h, okD: okD && len(d) == 32, okH: okH}
 	}
 	heightBad := false
 	hashBad := false
@@ -1443,7 +1499,8 @@ func stageAt(stages cborVal, g int) (cborVal, bool) {
 	}
 	st := stages.arr[g]
 	if st.kind != 5 {
-		return cborVal{}, false
+		// A non-map element is a stage with every field absent.
+		return cborVal{kind: 5}, true
 	}
 	return st, true
 }

@@ -81,10 +81,7 @@ fn run() -> i32 {
     if !decoded {
         return 1;
     }
-    let profile = match parsed.measure {
-        hike::MeasureProfile::Production => "production",
-        hike::MeasureProfile::ConformanceSmall => "conformance-small",
-    };
+    let profile = parsed.measure.record_name();
     let record = hike::verify_record_json(profile, &measurements);
     write_out(record.as_bytes(), parsed.report.as_deref())
 }
@@ -112,7 +109,7 @@ fn chain_rpc(parsed: &hike::VerifyArgs) -> Result<Option<hike_net::ChainRpc>, ()
 
 fn usage() {
     eprintln!(
-        "usage: satoshi-hike-verify --input PATH --index-url URL [--audit-seed HEX] [--report PATH] [--profile production|conformance-small|test|live] [--chain-rpc URL] [--log quiet|verbose]\n       default profile is test. Omitted --index-url is PCOC_TEST_INDEX_URL. Unset is a usage error. This tree does not fill that host. It does not fill https://index.groundinglab.io.\n       --profile live fills that index. --chain-rpc is live-only.\n       --log defaults to quiet. verbose writes the measurement record to stderr. stdout is the measurement record when the object decodes."
+        "usage: satoshi-hike-verify --input PATH --index-url URL [--audit-seed HEX] [--report PATH] [--profile production|conformance-small|test|live] [--sample-bytes N --slot-bytes N --terrain-bytes N --steps-per-leg N] [--chain-rpc URL] [--log quiet|verbose]\n       default profile is test. Omitted --index-url is PCOC_TEST_INDEX_URL. Unset is a usage error. This tree does not fill that host. It does not fill https://index.groundinglab.io.\n       --profile live fills that index. --chain-rpc is live-only.\n       --profile conformance-small requires all four integers. Any of them with another profile is a usage error, exit 2.\n       --log defaults to quiet. verbose writes the measurement record to stderr. stdout is the measurement record when the object decodes."
     );
 }
 

@@ -133,7 +133,8 @@ func NewProfile(name, kind string, sample, slot, terrain, steps int) (Profile, e
 	if terrain%slot != 0 {
 		return Profile{}, errProfile
 	}
-	if sample < 1 || terrain < sample || steps < 1 {
+	// Section 16.1: each free integer is at most the section 6 value.
+	if sample < 1 || sample > 1024 || terrain < sample || terrain > 268435456 || steps < 1 || steps > 2000000 || slot > 16384 {
 		return Profile{}, errProfile
 	}
 	if kind == "" {

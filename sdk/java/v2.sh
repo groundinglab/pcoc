@@ -13,5 +13,6 @@ trap 'rm -rf "$out"' EXIT
 mkdir -p "$out/classes"
 find src -name '*.java' | sort > "$out/sources.txt"
 javac --release 21 -Xlint:all -Werror -d "$out/classes" @"$out/sources.txt"
+java -Xmx128m -cp "$out/classes" pcoc.hike.F10Reserve
 java -cp "$out/classes" pcoc.conformance.V2Pack
 java -cp "$out/classes" pcoc.hike.Spec6Pins

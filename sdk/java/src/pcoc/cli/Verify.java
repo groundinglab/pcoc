@@ -24,13 +24,13 @@ public final class Verify {
         System.exit(run(args));
     }
 
-    static int run(String[] args) {
+    public static int run(String[] args) {
         Parsed parsed = parse(args);
         if (parsed == null) {
             usage();
             return 2;
         }
-        Profile profile = profile(parsed.profile);
+        Profile profile = profile(parsed);
         if (profile == null) {
             usage();
             return 2;
@@ -100,8 +100,24 @@ public final class Verify {
         return 0;
     }
 
-    private static Profile profile(String name) {
-        return Profile.forVerify(name);
+    private static Profile profile(Parsed parsed) {
+        int given = 0;
+        for (Integer n : new Integer[] {parsed.sampleBytes, parsed.slotBytes, parsed.terrainBytes, parsed.stepsPerLeg}) {
+            if (n != null) {
+                given++;
+            }
+        }
+        if ("conformance-small".equals(parsed.profile)) {
+            if (given != 4) {
+                return null;
+            }
+            return Profile.conformanceSmall(parsed.sampleBytes, parsed.slotBytes, parsed.terrainBytes, parsed.stepsPerLeg);
+        }
+        // The four integers exist for conformance-small. Any of them here is usage.
+        if (given != 0) {
+            return null;
+        }
+        return Profile.forVerify(parsed.profile);
     }
 
     private static String resolveIndex(Parsed parsed) {
@@ -270,6 +286,41 @@ public final class Verify {
                     }
                     out.log = v;
                 }
+                case "sample-bytes", "slot-bytes", "terrain-bytes", "steps-per-leg" -> {
+                    Integer v = decimal(need.take());
+                    if (!inline) {
+                        i++;
+                    }
+                    if (v == null) {
+                        return null;
+                    }
+                    switch (name) {
+                        case "sample-bytes" -> {
+                            if (out.sampleBytes != null) {
+                                return null;
+                            }
+                            out.sampleBytes = v;
+                        }
+                        case "slot-bytes" -> {
+                            if (out.slotBytes != null) {
+                                return null;
+                            }
+                            out.slotBytes = v;
+                        }
+                        case "terrain-bytes" -> {
+                            if (out.terrainBytes != null) {
+                                return null;
+                            }
+                            out.terrainBytes = v;
+                        }
+                        default -> {
+                            if (out.stepsPerLeg != null) {
+                                return null;
+                            }
+                            out.stepsPerLeg = v;
+                        }
+                    }
+                }
                 default -> {
                     return null;
                 }
@@ -281,9 +332,26 @@ public final class Verify {
         return out;
     }
 
+    /** A decimal integer with no sign and no leading zero. */
+    private static Integer decimal(String text) {
+        if (text == null || text.isEmpty() || (text.length() > 1 && text.charAt(0) == '0')) {
+            return null;
+        }
+        int n = 0;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c < '0' || c > '9' || n > (Integer.MAX_VALUE - (c - '0')) / 10) {
+                return null;
+            }
+            n = n * 10 + (c - '0');
+        }
+        return n;
+    }
+
     private static void usage() {
-        System.err.println("usage: satoshi-hike-verify --input PATH --index-url URL [--audit-seed HEX] [--report PATH] [--profile production|conformance-small|test|live] [--chain-rpc URL] [--log quiet|verbose]");
+        System.err.println("usage: satoshi-hike-verify --input PATH --index-url URL [--audit-seed HEX] [--report PATH] [--profile production|conformance-small|test|live] [--sample-bytes N --slot-bytes N --terrain-bytes N --steps-per-leg N] [--chain-rpc URL] [--log quiet|verbose]");
         System.err.println("       default profile is test. Omitted --index-url is PCOC_TEST_INDEX_URL. Unset is a usage error. This tree does not fill that host. It does not fill https://index.groundinglab.io.");
+        System.err.println("       --profile conformance-small requires all four integers. Any of them with another profile is a usage error, exit 2.");
         System.err.println("       --profile live fills that index. --chain-rpc is live-only.");
         System.err.println("       --log defaults to quiet. verbose writes the measurement record to stderr. stdout is the measurement record when the object decodes.");
     }
@@ -296,5 +364,9 @@ public final class Verify {
         String report;
         String chainRpc;
         String log;
+        Integer sampleBytes;
+        Integer slotBytes;
+        Integer terrainBytes;
+        Integer stepsPerLeg;
     }
 }

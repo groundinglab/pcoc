@@ -29,6 +29,10 @@ Inputs, all from spec/conformance/v2.0 (the source of truth):
     and truncated;
   * several audit seeds per object, so the drawn legs differ between runs.
 
+`--profile conformance-small` is always passed with the four section 16.1
+integers `--sample-bytes 32 --slot-bytes 64 --terrain-bytes 256
+--steps-per-leg 32`. The record states those integers.
+
 Usage (from the repository root):
   python3 sdk/tools/crosscheck.py --rust BIN --go BIN --java-classes DIR \
       [--lib-rust BIN --lib-go BIN --lib-java-classes DIR]
@@ -50,14 +54,6 @@ KNOWN_DIVERGENCES = {
     # is not a map. Rust and Java read it as a stage map with every field
     # absent (checkpoint_count 0, path `skip`, w17_path `not fetched by
     # design`); Go reads it as an absent stage (`not defined`). Shape agrees.
-    "stage0-uint": ("87d54be634f67630", "5119a87ef7d4d3cd", "87d54be634f67630"),
-    "stage1-uint": ("27aa73761f68f982", "c256b2ba88b2ed8e", "27aa73761f68f982"),
-    "stage5-uint": ("f08fa31c1a00a629", "6b3d6543fd428657", "f08fa31c1a00a629"),
-    "stage17-uint": ("8e155559c4815735", "ff90075e765126ea", "8e155559c4815735"),
-    # Open spec question Q-a: last_interrupt_height above 2^53 - 1 (and above
-    # stage 17's height). Go also lists `header height order`; Rust and Java
-    # list `height_range` only.
-    "li-height-2^64-1": ("e9b8228be57f3db2", "84bececb692cac10", "e9b8228be57f3db2"),
 }
 
 
@@ -65,12 +61,6 @@ KNOWN_DIVERGENCES = {
 # Verify + Record.Marshal, Java Measure.record), pinned the same way;
 # "none" is a Java null. Filled from a run; see sdk/KNOWN-DIVERGENCES.md.
 LIB_DIVERGENCES = {
-    # The two program-level spec questions above, at the library level.
-    "stage0-uint": ("ca096d74bf2e1b47", "c85ec5ba690252fd", "ca096d74bf2e1b47"),
-    "stage1-uint": ("c2aa7be545c13037", "67106f05b133a917", "c2aa7be545c13037"),
-    "stage5-uint": ("03633a4c23bfd22d", "c542bfedd8f21174", "03633a4c23bfd22d"),
-    "stage17-uint": ("badd1c19c04ef720", "dc3c169377aec4ae", "badd1c19c04ef720"),
-    "li-height-2^64-1": ("2109106b1b3e6c43", "971ad8cf01aff7f6", "2109106b1b3e6c43"),
 }
 
 
@@ -109,6 +99,18 @@ def load_cases():
     cases.append(("cbor-text", b"\x60", kat_docs, None))
     # Structural break cases (hikecases.py).
     cases.extend(hikecases.cases(PACK))
+    # Closed local port: the index connection is refused and no document is
+    # read. The library run gets an empty document map, the same fact.
+    cases.append(("index-refused", kat_obj, {}, None))
+    # F10: 64 heads whose declared count equals the bytes left. The same bytes
+    # as the nested-arr and nested-map repros, plus a short vector.
+    for name, size, major in (
+        ("f10-arr-4KiB", 4096, 0x9A),
+        ("f10-arr-1MiB", 1 << 20, 0x9A),
+        ("f10-arr-2MiB", 2 << 20, 0x9A),
+        ("f10-map-2MiB", 2 << 20, 0xBA),
+    ):
+        cases.append((name, amp_input(size, 64, major), kat_docs, None))
     # Nesting limit (F1): every SDK stops at MAX_CBOR_NESTING = 64.
     for name, obj in nesting_cases(kat_obj):
         cases.append((name, obj, kat_docs, None))
@@ -175,6 +177,20 @@ def field_cases(obj):
 
 
 MAX_CBOR_NESTING = 64
+
+
+def amp_input(size, levels, major):
+    """64-deep array (0x9a) or map (0xba). Each count equals the bytes left."""
+    out = bytearray()
+    for _ in range(levels):
+        rem = size - len(out) - 5
+        cnt = rem // 2 if major == 0xBA else rem
+        out.append(major)
+        out += cnt.to_bytes(4, "big")
+        if major == 0xBA:
+            out += b"\x60"
+    out += b"\x00" * (size - len(out))
+    return bytes(out)
 
 
 def nesting_cases(obj):
@@ -283,8 +299,11 @@ def main():
             # a null body is a 404: leave that height out
             json.dump({h: b for h, b in docs.items() if b is not None}, open(docs_path, "w"))
             run_seeds = seeds if name in ("kat-small", "test-3leg", "earlier-kind") else seeds[:1]
+            index_url = "http://127.0.0.1:9" if name == "index-refused" else url
             for seed in [pinned_seed] if pinned_seed else run_seeds:
-                args = ["--input", path, "--index-url", url, "--profile", "conformance-small", "--audit-seed", seed]
+                args = ["--input", path, "--index-url", index_url, "--profile", "conformance-small",
+                        "--sample-bytes", "32", "--slot-bytes", "64", "--terrain-bytes", "256",
+                        "--steps-per-leg", "32", "--audit-seed", seed]
                 out = {lang: run(cmd + args, a.timeout) for lang, cmd in langs.items()}
                 runs += 1
                 codes = {lang: o[0] for lang, o in out.items()}

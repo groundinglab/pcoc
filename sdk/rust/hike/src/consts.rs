@@ -118,6 +118,36 @@ impl Sizes {
     pub const fn offset_modulus(self) -> u64 {
         (self.terrain_bytes - self.sample_bytes + 1) as u64
     }
+
+    /// SPEC §16.1 bounds on the four free integers. `SLOT_BYTES` is at least 8
+    /// and a multiple of 8, at most the section 6 value. `TERRAIN_BYTES` is a
+    /// multiple of the slot, at least the sample, at most section 6.
+    /// `SAMPLE_BYTES` and `STEPS_PER_LEG` are at least 1 and at most section 6.
+    pub const fn conformance_small_checked(
+        sample_bytes: usize,
+        slot_bytes: usize,
+        terrain_bytes: usize,
+        steps_per_leg: u64,
+    ) -> Option<Self> {
+        if slot_bytes < 8 || slot_bytes % 8 != 0 || slot_bytes > SLOT_BYTES {
+            return None;
+        }
+        if sample_bytes < 1 || sample_bytes > SAMPLE_BYTES || terrain_bytes < sample_bytes {
+            return None;
+        }
+        if terrain_bytes > TERRAIN_BYTES || terrain_bytes % slot_bytes != 0 {
+            return None;
+        }
+        if steps_per_leg < 1 || steps_per_leg > STEPS_PER_LEG {
+            return None;
+        }
+        Some(Self {
+            sample_bytes,
+            slot_bytes,
+            terrain_bytes,
+            steps_per_leg,
+        })
+    }
 }
 
 // Section 6 small-size profile, checked at compile time.

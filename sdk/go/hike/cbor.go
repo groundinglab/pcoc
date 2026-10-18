@@ -167,6 +167,16 @@ func readHead(data []byte, i int) (major byte, arg *uint64, next int, err error)
 	return major, &v, i + width, nil
 }
 
+// capCount is the reservation for one array or map. The decoded count is
+// not used as a size: nested heads can each name a count as large as the
+// bytes still in the buffer.
+func capCount(n uint64) int {
+	if n > 64 {
+		return 64
+	}
+	return int(n)
+}
+
 func decodeOne(data []byte, i int) (cborVal, int, error) {
 	return decodeNested(data, i, 0)
 }
@@ -186,25 +196,35 @@ func decodeNested(data []byte, i int, depth int) (cborVal, int, error) {
 	case 1:
 		return cborVal{}, i, errNegative
 	case 2:
-		if i+int(*arg) > len(data) {
+		// Compare the declared length as uint64 against the bytes still in
+		// the buffer. i+int(*arg) overflows for a length near 2^63.
+		if *arg > uint64(len(data)-i) {
 			return cborVal{}, i, errTruncated
 		}
-		b := append([]byte(nil), data[i:i+int(*arg)]...)
-		return cborVal{kind: 2, b: b}, i + int(*arg), nil
+		n := int(*arg)
+		b := append([]byte(nil), data[i:i+n]...)
+		return cborVal{kind: 2, b: b}, i + n, nil
 	case 3:
-		if i+int(*arg) > len(data) {
+		if *arg > uint64(len(data)-i) {
 			return cborVal{}, i, errTruncated
 		}
-		raw := data[i : i+int(*arg)]
+		n := int(*arg)
+		raw := data[i : i+n]
 		if !utf8.Valid(raw) {
 			return cborVal{}, i, errCbor
 		}
-		return cborVal{kind: 3, s: string(raw)}, i + int(*arg), nil
+		return cborVal{kind: 3, s: string(raw)}, i + n, nil
 	case 4:
 		if depth >= MaxCBORNesting {
 			return cborVal{}, i, errDepth
 		}
-		arr := make([]cborVal, 0, *arg)
+		// One item is at least one byte, so a count past the bytes left
+		// cannot be a well-formed array. The reservation is capped; the
+		// count is not a size.
+		if *arg > uint64(len(data)-i) {
+			return cborVal{}, i, errTruncated
+		}
+		arr := make([]cborVal, 0, capCount(*arg))
 		for n := uint64(0); n < *arg; n++ {
 			item, next, err := decodeNested(data, i, depth+1)
 			if err != nil {
@@ -218,8 +238,13 @@ func decodeNested(data []byte, i int, depth int) (cborVal, int, error) {
 		if depth >= MaxCBORNesting {
 			return cborVal{}, i, errDepth
 		}
-		keys := make([]string, 0, *arg)
-		vals := make([]cborVal, 0, *arg)
+		// A map entry is a key and a value, at least two bytes.
+		// The reservation is capped; the count is not a size.
+		if *arg > uint64(len(data)-i)/2 {
+			return cborVal{}, i, errTruncated
+		}
+		keys := make([]string, 0, capCount(*arg))
+		vals := make([]cborVal, 0, capCount(*arg))
 		seen := map[string]struct{}{}
 		for n := uint64(0); n < *arg; n++ {
 			key, next, err := decodeNested(data, i, depth+1)

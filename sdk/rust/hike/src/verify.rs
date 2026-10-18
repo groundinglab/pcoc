@@ -219,6 +219,9 @@ pub struct Measurements {
     pub stages: StageReport,
     /// Section 14 JSON object, without the trailing newline. Empty on a hand-built fixture.
     pub record_body: String,
+    /// The sizes this measurement used. `None` on a hand-built fixture, which
+    /// then states the section 16.1 conformance-small integers.
+    pub measured_sizes: Option<crate::consts::Sizes>,
 }
 
 /// `L_g` for each stage: the number of checkpoints, `len(stages[g].checkpoints)`.
@@ -911,6 +914,7 @@ fn earlier_measurements(kind: String) -> Measurements {
         six_legs: SixLegs::NotObtained,
         stages: StageReport::NotRead,
         record_body: String::new(),
+        measured_sizes: None,
     }
 }
 
@@ -1083,6 +1087,7 @@ where
                 // or it is not a map. Either way the record is exactly
                 // `["malformed cbor"]` with nothing measured.
                 record_body: crate::section14::undecoded_tail(&["malformed cbor"]),
+                measured_sizes: Some(sizes),
             };
         }
     };
@@ -1175,6 +1180,7 @@ where
         six_legs: SixLegs::NotObtained,
         stages,
         record_body,
+        measured_sizes: Some(sizes),
     }
 }
 
@@ -1278,6 +1284,7 @@ where
                 // or it is not a map. Either way the record is exactly
                 // `["malformed cbor"]` with nothing measured.
                 record_body: crate::section14::undecoded_tail(&["malformed cbor"]),
+                measured_sizes: Some(sizes),
             };
         }
     };
@@ -1429,6 +1436,7 @@ where
         six_legs,
         stages,
         record_body,
+        measured_sizes: Some(sizes),
     }
 }
 
@@ -1441,7 +1449,11 @@ pub fn verify_record_json(profile: &str, measurements: &Measurements) -> String 
     let mut line = String::from("{\"profile\":");
     line.push_str(&quoted(profile));
     if profile == "conformance-small" {
-        let sizes = Sizes::conformance_small();
+        // The integers this run measured with. A hand-built fixture has none
+        // and states the section 16.1 set. The CLI does not substitute these.
+        let sizes = measurements
+            .measured_sizes
+            .unwrap_or_else(Sizes::conformance_small);
         line.push_str(&format!(
             ",\"sample_bytes\":{},\"slot_bytes\":{},\"terrain_bytes\":{},\"steps_per_leg\":{}",
             sizes.sample_bytes, sizes.slot_bytes, sizes.terrain_bytes, sizes.steps_per_leg
@@ -2608,14 +2620,18 @@ mod tests {
         assert_eq!(value["six_leg_runs"], serde_json::json!([]));
         assert!(value.get("leg_rate").is_none());
         assert_eq!(top_level_keys(record.trim()), SECTION_14_KEYS);
-        let small = verify_record_json("conformance-small", &measurements);
-        let small_sizes = Sizes::conformance_small();
+        // This object was measured at production sizes. A conformance-small
+        // record states the sizes the measurement used.
+        let mut measured_small = measurements.clone();
+        measured_small.measured_sizes = Some(Sizes::production());
+        let small = verify_record_json("conformance-small", &measured_small);
+        let small_sizes = Sizes::production();
         assert!(small.contains(&format!("\"sample_bytes\":{}", small_sizes.sample_bytes)));
         assert!(small.contains(&format!("\"slot_bytes\":{}", small_sizes.slot_bytes)));
         assert!(small.contains(&format!("\"terrain_bytes\":{}", small_sizes.terrain_bytes)));
         assert!(small.contains(&format!("\"steps_per_leg\":{}", small_sizes.steps_per_leg)));
-        assert!(small.contains("\"sample_bytes\":32"));
-        assert!(small.contains("\"steps_per_leg\":32"));
+        assert!(small.contains("\"sample_bytes\":1024"));
+        assert!(small.contains("\"steps_per_leg\":2000000"));
         assert!(!record.contains("\"sample_bytes\""));
     }
 

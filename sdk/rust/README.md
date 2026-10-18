@@ -19,12 +19,12 @@ The admission gate and the desktop app use this SDK as their engine, and the And
 ```toml
 [dependencies]
 # a tag (Rust and Java share the repository tag)
-hike = { git = "https://github.com/groundinglab/pcoc", tag = "sdk-v2.0.0-rc.2" }
+hike = { git = "https://github.com/groundinglab/pcoc", tag = "sdk-v2.0.0-rc.3" }
 # or a checkout: the path is relative to your Cargo.toml, pointing at <clone>/sdk/rust/hike
 hike = { path = "../pcoc/sdk/rust/hike" }
 ```
 
-> `sdk-v2.0.0-rc.2` is published as a repository tag, so the git form works. The path form is for a local checkout.
+> `sdk-v2.0.0-rc.3` is the repository tag for this version. The path form is for a local checkout; the git form works once the tag exists.
 
 Cargo finds `hike` inside the repository by its package name, so you don't need a `subdir` key. Add `nip06` or `hike-net` the same way if you need them.
 
@@ -38,7 +38,7 @@ Cargo finds `hike` inside the repository by its package name, so you don't need 
 ```toml
 [dependencies]
 # In your own project, pin the tag instead:
-# hike = { git = "https://github.com/groundinglab/pcoc", tag = "sdk-v2.0.0-rc.2" }
+# hike = { git = "https://github.com/groundinglab/pcoc", tag = "sdk-v2.0.0-rc.3" }
 hike = { path = "../../rust/hike" }
 serde_json = "=1.0.151"
 sha2 = "0.10"
@@ -388,7 +388,7 @@ cd sdk/rust && cargo build --release --locked
 
 `satoshi-hike-verify` takes the same flags as the Go and Java programs (see [the verify programs](../README.md#the-verify-programs)):
 - The default `--profile` is `test`. It does not dial `https://index.groundinglab.io`; it reads `PCOC_TEST_INDEX_URL` when `--index-url` is omitted.
-- `--profile conformance-small` uses the section 16.1 sizes.
+- `--profile conformance-small` requires `--sample-bytes N --slot-bytes N --terrain-bytes N --steps-per-leg N`. The record states those integers. Any of the four with another profile is a usage error, exit 2.
 - Without `--chain-rpc`, the plant check reads the index document (`proxy_matches`). With `--chain-rpc` (live profile only), it reads the node (`hike-net`).
 
 `satoshi-hike-produce` has flags of its own: `--demo-mnemonic`, `--report`, `--clock-source`, `--gossip-network`, and the profiles `test|live|slow-lan`. See its `--help`.
