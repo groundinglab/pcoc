@@ -24,7 +24,7 @@ hike = { git = "https://github.com/groundinglab/pcoc", tag = "sdk-v2.0.0-rc.2" }
 hike = { path = "../pcoc/sdk/rust/hike" }
 ```
 
-> `sdk-v2.0.0-rc.2` is prepared but not yet published. Use the path form until it is on the remote.
+> `sdk-v2.0.0-rc.2` is published as a repository tag, so the git form works. The path form is for a local checkout.
 
 Cargo finds `hike` inside the repository by its package name, so you don't need a `subdir` key. Add `nip06` or `hike-net` the same way if you need them.
 

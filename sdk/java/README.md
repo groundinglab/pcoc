@@ -26,7 +26,7 @@ jar --create --file lib/pcoc-sdk-2.0.0-rc.2.jar -C "$OUT/sdk-classes" .
 
 Then compile and run against the jar: `javac --release 21 -cp lib/pcoc-sdk-2.0.0-rc.2.jar …` and `java -cp lib/pcoc-sdk-2.0.0-rc.2.jar:… YourMain`. `pcoc.conformance` is the test harness, and is not needed at run time.
 
-> `sdk-v2.0.0-rc.2` is prepared but not yet published. Until it is, use a checkout of this repository at the commit the tag names: `git rev-parse sdk-v2.0.0-rc.2^{commit}` in a clone that has the tag.
+> `sdk-v2.0.0-rc.2` is published as a repository tag. `git rev-parse sdk-v2.0.0-rc.2^{commit}` shows the commit it names.
 
 ## Quickstart (run by `sdk/test.sh`)
 

@@ -40,7 +40,7 @@ Inside this repository, the gate and the desktop app pin the SDK by path (`sdk/r
 - the gate: in `/v1/health` (`sdk`) and in `admission-service --version`;
 - the desktop app: on its About page.
 
-> The `rc.2` tags are prepared but not yet published. Until they are on the remote, depend on a checkout by path, as `examples/` does. `git rev-parse sdk-v2.0.0-rc.2^{commit}` in a clone that has the tag shows the commit it names.
+> Both `rc.2` tags are published on GitHub. Inside a checkout you can also depend by path, as `examples/` does. `git rev-parse sdk-v2.0.0-rc.2^{commit}` shows the commit the tag names.
 
 Earlier tags of these trees are kept as history: `ref-rust-v2.0.1` … `ref-rust-v2.0.6`, `ref-java-v2.0.1` … `ref-java-v2.0.2`, and the Go module tags under the old module path. Nothing new is tagged under them.
 

@@ -12,7 +12,7 @@ go get github.com/groundinglab/pcoc/sdk/go/v2@v2.0.0-rc.2
 
 The module lives under `sdk/go/`, so its tag is `sdk/go/v2.0.0-rc.2`. That is the same commit as the repository tag `sdk-v2.0.0-rc.2`.
 
-> The tag is prepared but not yet published. Until it is, use a checkout of this repository. The `replace` path is relative to your `go.mod` and points at `<clone>/sdk/go`:
+> The tag is published, so `go get` resolves it. To work from a checkout instead, add a `replace`. Its path is relative to your `go.mod` and points at `<clone>/sdk/go`:
 >
 > ```
 > require github.com/groundinglab/pcoc/sdk/go/v2 v2.0.0-rc.2
