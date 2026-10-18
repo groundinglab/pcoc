@@ -49,8 +49,11 @@ func verifyWithChain(data []byte, profile Profile, index Index, pathChain func(P
 	if err != nil {
 		return undecodedV2(profile), false
 	}
+	// A top level that is not a map is no hike at all: the same undecoded
+	// ["malformed cbor"] record as bytes that do not decode (rc.2; Rust, Go
+	// and Java agree).
 	if item.kind != 5 {
-		return malformedRecord(profile), false
+		return undecodedV2(profile), false
 	}
 	if kind, ok := textOf(item, "kind"); ok && IsEarlierKind(kind) {
 		return earlierVersionRecord(kind), true
@@ -68,7 +71,8 @@ func verifyWithChain(data []byte, profile Profile, index Index, pathChain func(P
 	return rec, true
 }
 
-func malformedRecord(profile Profile) Record {
+// undecodedBase is the bookend skeleton undecodedV2 starts from.
+func undecodedBase(profile Profile) Record {
 	header := Header{
 		StoredHash:      jstr("not defined"),
 		StoredHeight:    jstr("not defined"),
@@ -93,7 +97,7 @@ func malformedRecord(profile Profile) Record {
 // shape_item is exactly ["malformed cbor"]. Counts and results are not
 // defined. six_leg and six_leg_runs are not read.
 func undecodedV2(profile Profile) Record {
-	rec := malformedRecord(profile)
+	rec := undecodedBase(profile)
 	rec.SeedValue = "not defined"
 	for i := range rec.Waypoints {
 		rec.Waypoints[i].Result = "not defined"
@@ -679,12 +683,12 @@ func v2Book(present int, facts []pathMeasure, anchors []string, headers []Header
 	fixedDelta := fixedDelta(header1, cmp, heightPBJSON)
 	return book{
 		a: jnum(int64(a)), b: jnum(int64(b)),
-		n: countRange(cps, counts, a, b), s: subRaw(timePBJSON, timeI, "not read"),
+		n: countRange(counts, a, b), s: subRaw(timePBJSON, timeI, "not read"),
 		delta: subRaw(heightPBJSON, heightI, "not defined"),
 		pb:    blockRaw(pathB.hash, pathB.height), heightPB: heightPBJSON, cmpPB: jstr(cmp), tpb: timePBJSON,
 		heightI: heightI, tI: timeI,
-		fixedN: countRange(cps, counts, 1, b), fixedS: fixedS, fixedD: fixedDelta,
-		outside: legsOutside(cps, counts, a, b),
+		fixedN: countRange(counts, 1, b), fixedS: fixedS, fixedD: fixedDelta,
+		outside: legsOutside(counts, a, b),
 	}
 }
 
@@ -743,23 +747,24 @@ func fixedDelta(header Header, pbCmp string, heightPB json.RawMessage) json.RawM
 	return subRaw(heightPB, heightI, "not defined")
 }
 
-func countDefined(cps []CheckpointRow, counts []int, g int) (int, bool) {
-	if g < 0 || g >= len(cps) || len(cps[g].Legs) == 0 || cps[g].Legs[0] == '"' {
-		return 0, false
-	}
-	if g >= len(counts) {
+// countDefined is len(stages[g].checkpoints), counting an element of the
+// wrong width: N, fixed_start.N and legs_outside count checkpoints (section
+// 14.4, Rule A4.7: "An integer when bookends exist"). Only a missing stage
+// has no count. A stage whose legs are "not defined" still has a count.
+func countDefined(counts []int, g int) (int, bool) {
+	if g < 0 || g >= len(counts) || counts[g] < 0 {
 		return 0, false
 	}
 	return counts[g], true
 }
 
-func countRange(cps []CheckpointRow, counts []int, from, until int) json.RawMessage {
+func countRange(counts []int, from, until int) json.RawMessage {
 	if from >= until {
 		return jnum(0)
 	}
 	var total int64
 	for g := from; g < until; g++ {
-		count, ok := countDefined(cps, counts, g)
+		count, ok := countDefined(counts, g)
 		if !ok {
 			return jstr("not defined")
 		}
@@ -768,13 +773,13 @@ func countRange(cps []CheckpointRow, counts []int, from, until int) json.RawMess
 	return jnum(total)
 }
 
-func legsOutside(cps []CheckpointRow, counts []int, a, b int) json.RawMessage {
+func legsOutside(counts []int, a, b int) json.RawMessage {
 	var total int64
 	for g := 0; g < Stages; g++ {
 		if g >= a && g < b {
 			continue
 		}
-		count, ok := countDefined(cps, counts, g)
+		count, ok := countDefined(counts, g)
 		if !ok {
 			return jstr("not defined")
 		}
@@ -1080,6 +1085,8 @@ func locate(counts []int, index int) (int, int) {
 
 func headerFromStage(st cborVal, index Index) Header {
 	digest, okD := bytesField(st, "beacon")
+	// A stored hash that is not 32 bytes has no usable value: `not defined`.
+	okD = okD && len(digest) == 32
 	height, okH, over := uintField(st, "beacon_height")
 	if !okD && !okH {
 		return unreadHeader(false, false, 0)
@@ -1093,6 +1100,7 @@ func headerFromStage(st cborVal, index Index) Header {
 
 func headerFromLast(item cborVal, index Index) Header {
 	digest, okD := bytesOf(item, "last_interrupt")
+	okD = okD && len(digest) == 32
 	height, okH, over := uintField(item, "last_interrupt_height")
 	if !okD && !okH {
 		return unreadHeader(false, false, 0)
@@ -1208,6 +1216,13 @@ func shapeItems(item cborVal, profile Profile) []string {
 			}
 			if p, ok := st.field("path"); ok && p.kind != 2 {
 				fieldSet = true
+			}
+			// A checkpoint or leg-result value that is not an array is a wrong
+			// value type (section 14.1 row 2).
+			for _, key := range []string{"checkpoints", "leg_results"} {
+				if f, ok := st.field(key); ok && f.kind != 4 {
+					fieldSet = true
+				}
 			}
 			if _, ok, _ := uintField(st, "beacon_height"); !ok {
 				fieldSet = true

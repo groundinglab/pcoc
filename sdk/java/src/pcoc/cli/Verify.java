@@ -66,11 +66,12 @@ public final class Verify {
                 stream = null;
             }
         }
-        // A buffer that does not open is not written here. The library
-        // record still exists for that buffer. A trailing byte opens the item.
+        // Exit 1 only when no top-level map decodes: the record is not written
+        // here, though the library record still exists for that buffer. A
+        // trailing byte after a map still opens it.
         boolean opened = true;
         try {
-            Cbor.decodeHead(object);
+            opened = Cbor.decodeHead(object).value.kind == Cbor.Val.Kind.MAP;
         } catch (Cbor.Problem problem) {
             opened = false;
         }

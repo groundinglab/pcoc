@@ -224,21 +224,56 @@ fn arr32(bytes: &[u8]) -> [u8; 32] {
 /// `beacon_height` is `header height order`, and the record writes the stored
 /// value as `not defined` with no index read. The [`Stage`] keeps a zero in
 /// that slot; these flags say it is not a stored value.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct StageAbsent {
     pub beacon: bool,
     pub beacon_height: bool,
+    /// The stored `waypoint` is absent, not bytes, or not 32 bytes.
+    pub waypoint: bool,
+    /// The `path` key holds something other than a byte string.
+    pub path_bad: bool,
     /// `len(checkpoints)` on the wire, counting an element of the wrong width.
-    /// Section 14.6 indexes legs by it. `None` for a hike built in code.
+    /// Section 14.6 indexes legs by it. An absent or mistyped array is 0.
+    /// `None` for a hike built in code.
     pub checkpoint_elems: Option<usize>,
+    /// Bytes 0..8 of each wire checkpoint element (section 11.2 reads only
+    /// these from a previous checkpoint). `None` when the element is not a
+    /// byte string of at least 8 bytes.
+    pub checkpoint_heads: Vec<Option<[u8; 8]>>,
+    /// Each wire leg result, `None` when it is not 8 bytes.
+    pub limbs: Vec<Option<[u8; 8]>>,
 }
 
+impl StageAbsent {
+    /// No wire facts: a stage built in code.
+    pub(crate) const NONE: StageAbsent = StageAbsent {
+        beacon: false,
+        beacon_height: false,
+        waypoint: false,
+        path_bad: false,
+        checkpoint_elems: None,
+        checkpoint_heads: Vec::new(),
+        limbs: Vec::new(),
+    };
+}
+
+/// The stage, whether it has a `path` key, its shape notes, and its wire facts.
 type ParsedStage = (Stage, bool, Vec<&'static str>, StageAbsent);
 
-fn parse_stage(value: &Cbor) -> Result<ParsedStage, Fail> {
-    let map = pairs(value)?;
-    let path_key = map.iter().any(|(key, _)| key == "path");
+/// One stage map. Section 14.1: every field that is absent or of the wrong
+/// type records its condition and leaves a zero placeholder flagged in
+/// [`StageAbsent`]; the measurement goes on. A stage element that is not a
+/// map is read as a map with no keys.
+fn parse_stage(value: &Cbor) -> ParsedStage {
     let mut notes = Vec::new();
+    let map: &[(String, Cbor)] = match pairs(value) {
+        Ok(map) => map,
+        Err(fail) => {
+            notes.push(fail.0);
+            &[]
+        }
+    };
+    let path_key = map.iter().any(|(key, _)| key == "path");
     let mut absent = StageAbsent::default();
     // A wrong key set is `field set`. The fields that did decode stay usable.
     if exact_keys(map, if path_key { STAGE_KEYS } else { STAGE0_KEYS }).is_err() {
@@ -253,11 +288,26 @@ fn parse_stage(value: &Cbor) -> Result<ParsedStage, Fail> {
             [0u8; 32]
         }
     };
-    let waypoint = arr32(&field_bytes(map, "waypoint", 32)?);
+    let waypoint = match field_bytes(map, "waypoint", 32) {
+        Ok(bytes) => arr32(&bytes),
+        Err(fail) => {
+            notes.push(fail.0);
+            absent.waypoint = true;
+            [0u8; 32]
+        }
+    };
     // Shape does not decode `path`. Empty bytes are the section 13.3 produce fact.
-    // Stage 0 has no path key (Rule A3.3).
+    // Stage 0 has no path key (Rule A3.3). A path that is not a byte string is
+    // `field set` and is read as empty (`skip`), as an absent path key is.
     let path = if path_key {
-        field_byte_string(map, "path")?
+        match field_byte_string(map, "path") {
+            Ok(bytes) => bytes,
+            Err(fail) => {
+                notes.push(fail.0);
+                absent.path_bad = true;
+                Vec::new()
+            }
+        }
     } else {
         Vec::new()
     };
@@ -281,35 +331,61 @@ fn parse_stage(value: &Cbor) -> Result<ParsedStage, Fail> {
     let mut checkpoints = Vec::new();
     let mut checkpoint_elems = 0usize;
     let mut bad_checkpoint = false;
-    for item in field_array(map, "checkpoints")? {
-        checkpoint_elems += 1;
-        match item {
-            Cbor::Bytes(b) if b.len() == 32 => checkpoints.push(arr32(b)),
-            _ => bad_checkpoint = true,
+    let mut heads = Vec::new();
+    match field_array(map, "checkpoints") {
+        Ok(items) => {
+            for item in items {
+                checkpoint_elems += 1;
+                heads.push(match item {
+                    Cbor::Bytes(b) if b.len() >= 8 => Some(b[..8].try_into().unwrap_or([0u8; 8])),
+                    _ => None,
+                });
+                match item {
+                    Cbor::Bytes(b) if b.len() == 32 => checkpoints.push(arr32(b)),
+                    _ => bad_checkpoint = true,
+                }
+            }
+        }
+        Err(fail) => {
+            // An absent checkpoint array violates every condition that tests
+            // it: `checkpoint width` and `leg_count` (section 14.1).
+            notes.push(fail.0);
+            notes.push("leg_count");
+            bad_checkpoint = true;
         }
     }
     let mut limbs: Vec<Option<[u8; 8]>> = Vec::new();
     let mut bad_limb = false;
-    for item in field_array(map, "leg_results")? {
-        match item {
-            Cbor::Bytes(b) if b.len() == 8 => {
-                let mut limb = [0u8; 8];
-                limb.copy_from_slice(b);
-                limbs.push(Some(limb));
+    match field_array(map, "leg_results") {
+        Ok(items) => {
+            for item in items {
+                match item {
+                    Cbor::Bytes(b) if b.len() == 8 => {
+                        let mut limb = [0u8; 8];
+                        limb.copy_from_slice(b);
+                        limbs.push(Some(limb));
+                    }
+                    _ => {
+                        bad_limb = true;
+                        limbs.push(None);
+                    }
+                }
             }
-            _ => {
-                bad_limb = true;
-                limbs.push(None);
-            }
+        }
+        Err(fail) => {
+            notes.push(fail.0);
+            notes.push("leg_count");
+            bad_limb = true;
         }
     }
     absent.checkpoint_elems = Some(checkpoint_elems);
+    absent.checkpoint_heads = heads;
+    absent.limbs = limbs.clone();
     // Array length is the element count, including a short-width element.
-    // A short width is `checkpoint width` or `leg result width`, not `leg_count`,
-    // when those counts still agree.
+    // `leg_count` is its own condition: a wrong width does not hide it.
     let counts_agree =
         leg_count as usize == checkpoint_elems && limbs.len() == checkpoint_elems;
-    if !bad_checkpoint && !counts_agree {
+    if !counts_agree {
         notes.push("leg_count");
     }
     if bad_checkpoint {
@@ -343,7 +419,7 @@ fn parse_stage(value: &Cbor) -> Result<ParsedStage, Fail> {
             leg_result_missing = flags;
         }
     }
-    Ok((
+    (
         Stage {
             beacon,
             beacon_height,
@@ -358,7 +434,7 @@ fn parse_stage(value: &Cbor) -> Result<ParsedStage, Fail> {
         path_key,
         notes,
         absent,
-    ))
+    )
 }
 
 /// Object public key from a hike whose shape is true.
@@ -408,6 +484,14 @@ pub fn earlier_object_kind(bytes: &[u8]) -> Option<String> {
     }
 }
 
+/// The first CBOR item decodes under section 7.3 and is a map. Bytes after
+/// that item do not matter here. This is the verify CLI's line: with no
+/// top-level map it exits 1 and writes no record; otherwise it writes the
+/// record (which may still say `malformed cbor`) and exits 0.
+pub fn top_level_map(bytes: &[u8]) -> bool {
+    matches!(cbor::decode_head(bytes), Ok((Cbor::Map(_), _)))
+}
+
 pub fn yielded_public_key(bytes: &[u8]) -> YieldedKey {
     let Ok((value, _trailing)) = cbor::decode_head(bytes) else {
         return YieldedKey::Undecodable;
@@ -442,6 +526,9 @@ pub(crate) struct MeasuredObject {
     pub shape_notes: Vec<&'static str>,
     /// One entry per stage: which stored header fields the wire did not carry.
     pub stage_absent: Vec<StageAbsent>,
+    /// `public_key` or `seed_beacon` is absent, mistyped or short. The seed,
+    /// the terrain and every recompute that reads them are not available.
+    pub seed_absent: bool,
 }
 
 /// A section 6 constant field. `wrong_type` is `field set`; `differs` is
@@ -466,6 +553,56 @@ fn top_keys_exact(map: &[(String, Cbor)]) -> bool {
     map.len() == TOP_KEYS.len() && TOP_KEYS.iter().all(|key| map.iter().any(|(k, _)| k == key))
 }
 
+/// Every required field present and typed, every stage map exact, every
+/// width right and `leg_count` equal to both array lengths. Only consulted
+/// when a trailing byte follows the map.
+fn strictly_usable(value: &Cbor) -> bool {
+    let Ok(map) = pairs(value) else {
+        return false;
+    };
+    let text = |key| matches!(field(map, key), Ok(Cbor::Text(_)));
+    if !text("kind") || !text("fill") {
+        return false;
+    }
+    if ["slot_bytes", "n_slots", "sample_bytes", "steps_per_leg"].iter().any(|key| field_uint(map, key).is_err()) {
+        return false;
+    }
+    if field_bytes(map, "public_key", 32).is_err() || field_bytes(map, "seed_beacon", 32).is_err() {
+        return false;
+    }
+    let Ok(stages) = field_array(map, "stages") else {
+        return false;
+    };
+    stages.iter().all(stage_strictly_usable)
+}
+
+fn stage_strictly_usable(stage: &Cbor) -> bool {
+    let Ok(map) = pairs(stage) else {
+        return false;
+    };
+    let path_key = field(map, "path").is_ok();
+    if exact_keys(map, if path_key { STAGE_KEYS } else { STAGE0_KEYS }).is_err() {
+        return false;
+    }
+    if field_bytes(map, "beacon", 32).is_err() || field_bytes(map, "waypoint", 32).is_err() {
+        return false;
+    }
+    if path_key && field_byte_string(map, "path").is_err() {
+        return false;
+    }
+    let (Ok(leg_count), Ok(_)) = (field_uint(map, "leg_count"), field_uint(map, "beacon_height")) else {
+        return false;
+    };
+    let width = |key, len| match field_array(map, key) {
+        Ok(items) if items.iter().all(|item| matches!(item, Cbor::Bytes(b) if b.len() == len)) => Some(items.len()),
+        _ => None,
+    };
+    match (width("checkpoints", 32), width("leg_results", 8)) {
+        (Some(checks), Some(legs)) => checks as u64 == leg_count && checks == legs,
+        _ => false,
+    }
+}
+
 pub(crate) fn read_measured_object(bytes: &[u8]) -> Result<MeasuredObject, Fail> {
     read_measured_object_sized(bytes, Sizes::production())
 }
@@ -474,7 +611,13 @@ pub(crate) fn read_measured_object_sized(bytes: &[u8], sizes: Sizes) -> Result<M
     let (value, trailing) = cbor::decode_head(bytes)?;
     // A byte after the one data item is exactly `malformed cbor` (section 14).
     // A later field error must not replace that note. A map that still yields
-    // a hike is measured; the trailing byte only makes the shape false.
+    // a hike is measured; the trailing byte only makes the shape false. With a
+    // trailing byte, a map that is not a strictly usable hike gets the
+    // undecoded record (PORTS-219 item 17, the same boundary as Go v2Usable
+    // and Java usable; see sdk/KNOWN-DIVERGENCES.md).
+    if trailing && !strictly_usable(&value) {
+        return Err(Fail("trailing bytes"));
+    }
     match read_measured_map(&value, trailing, sizes) {
         Ok(measured) => Ok(measured),
         Err(_) if trailing => Err(Fail("trailing bytes")),
@@ -542,17 +685,51 @@ fn read_measured_map(value: &Cbor, trailing: bool, sizes: Sizes) -> Result<Measu
             note(Fail(key));
         }
     }
-    let public_key = arr32(&field_bytes(map, "public_key", 32)?);
-    let seed_beacon = arr32(&field_bytes(map, "seed_beacon", 32)?);
-    let stage_items = field_array(map, "stages")?;
+    // An absent, mistyped or short seed field is `field set`. The seed
+    // (and so the terrain) is then not available: see `seed_absent`.
+    let mut seed_absent = false;
+    let public_key = match field_bytes(map, "public_key", 32) {
+        Ok(bytes) => arr32(&bytes),
+        Err(fail) => {
+            note(fail);
+            seed_absent = true;
+            [0u8; 32]
+        }
+    };
+    let mut seed_beacon_absent = false;
+    let seed_beacon = match field_bytes(map, "seed_beacon", 32) {
+        Ok(bytes) => arr32(&bytes),
+        Err(fail) => {
+            note(fail);
+            seed_absent = true;
+            seed_beacon_absent = true;
+            [0u8; 32]
+        }
+    };
+    // An absent or mistyped `stages` is read as no stages. It also violates
+    // every condition that tests a stage field: the widths and the seed beacon.
+    let stage_items: &[Cbor] = match field_array(map, "stages") {
+        Ok(items) => items,
+        Err(fail) => {
+            note(fail);
+            &[]
+        }
+    };
     if stage_items.len() != STAGES {
         note(Fail("stages"));
+    }
+    if stage_items.is_empty() {
+        // No stage at all: stage 0's beacon is absent (`seed beacon`), and
+        // no checkpoint or leg result array is present to test.
+        note(Fail("checkpoint"));
+        note(Fail("leg result"));
+        note(Fail("seed beacon"));
     }
     let mut stages = Vec::with_capacity(stage_items.len());
     let mut path_keys = Vec::with_capacity(stage_items.len());
     let mut stage_absent = Vec::with_capacity(stage_items.len());
     for item in stage_items {
-        let (stage, path_key, stage_notes, absent) = parse_stage(item)?;
+        let (stage, path_key, stage_notes, absent) = parse_stage(item);
         for fail in stage_notes {
             note(Fail(fail));
         }
@@ -598,19 +775,20 @@ fn read_measured_map(value: &Cbor, trailing: bool, sizes: Sizes) -> Result<Measu
         if path_keys.iter().skip(1).any(|present| !present) {
             note(Fail("path"));
         }
-        if stage_absent[0].beacon || stages[0].beacon != seed_beacon {
+        if seed_beacon_absent || stage_absent[0].beacon || stages[0].beacon != seed_beacon {
             note(Fail("seed beacon"));
         }
         // Equality with SHA-256(seed) is `seed_value`, not a shape_item.
         // The shape condition is that the waypoint is 32 bytes, which the
         // field decoder already required.
-        if !stages[17].path.is_empty() {
+        // An absent or mistyped stage-17 path also violates it (section 14.1).
+        if !stages[17].path.is_empty() || !path_keys[17] || stage_absent[17].path_bad {
             note(Fail("W_17 path"));
         }
         // Every pair is checked. One violated condition does not hide
         // another (section 14.1); `shape_item` lists each string once.
         for g in 0..STAGES - 1 {
-            let (this, next) = (stage_absent[g], stage_absent[g + 1]);
+            let (this, next) = (&stage_absent[g], &stage_absent[g + 1]);
             if this.beacon_height
                 || next.beacon_height
                 || stages[g + 1].beacon_height <= stages[g].beacon_height
@@ -621,7 +799,7 @@ fn read_measured_map(value: &Cbor, trailing: bool, sizes: Sizes) -> Result<Measu
                 note(Fail("beacon"));
             }
         }
-        let closing = stage_absent[17];
+        let closing = &stage_absent[17];
         match (last_interrupt, last_interrupt_height) {
             (Some(hash), Some(height)) => {
                 // `last_interrupt_height` and `last_interrupt` are also the
@@ -683,6 +861,7 @@ fn read_measured_map(value: &Cbor, trailing: bool, sizes: Sizes) -> Result<Measu
         shape_fail,
         shape_notes,
         stage_absent,
+        seed_absent,
         hike: Hike {
             public_key,
             seed_beacon,
@@ -696,12 +875,18 @@ fn read_measured_map(value: &Cbor, trailing: bool, sizes: Sizes) -> Result<Measu
     })
 }
 
-/// The hike a definite-length object carries, even when shape is `mismatch`.
+/// The hike an object carries, even when shape is `mismatch`.
 ///
 /// The thorough walk reads checkpoints and leg results from this value.
-/// Shape is judged earlier. `Err` is bytes that are not a hike map.
+/// Shape is judged earlier. `Err` is bytes whose first CBOR item does not
+/// decode or is not a map, and bytes with anything after that item. A field
+/// that is absent or of the wrong type is not an error: its slot holds zero.
 pub fn decoded_hike(bytes: &[u8]) -> Result<Hike, ()> {
-    read_measured_object(bytes).map(|measured| measured.hike).map_err(|_| ())
+    let measured = read_measured_object(bytes).map_err(|_| ())?;
+    if measured.shape_notes.contains(&"trailing bytes") {
+        return Err(());
+    }
+    Ok(measured.hike)
 }
 
 pub fn decode_hike(bytes: &[u8]) -> Result<Hike, Fail> {
@@ -1198,7 +1383,14 @@ mod tests {
         assert!(items.iter().any(|item| item == "checkpoint width"));
         assert_eq!(record["checkpoints"][2]["legs"], "not defined");
         assert!(record["checkpoints"][3]["legs"].is_array());
-        assert_eq!(record["waypoints"][2]["result"], "mismatch");
+        // Section 14.2: W_3 reads stage 2's checkpoints, which are unusable:
+        // `not defined` "in that same case" as legs. It is not `mismatch`.
+        assert_eq!(record["waypoints"][2]["g"], 3);
+        assert_eq!(record["waypoints"][2]["result"], "not defined");
+        // The counts are the array length, the short element included
+        // (section 14.4 checkpoint_count, section 14.6 L_g).
+        assert_eq!(record["analysis"]["per_stage"][2]["checkpoint_count"], 1);
+        assert!(record["analysis"]["whole_hike_legs"].is_u64());
     }
 
     #[test]

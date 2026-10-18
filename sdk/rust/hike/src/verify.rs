@@ -223,9 +223,11 @@ pub struct Measurements {
 
 /// `L_g` for each stage: the number of checkpoints, `len(stages[g].checkpoints)`.
 /// Section 14.6: the draw does not read `leg_count`.
+/// `leg_total = start_STAGES`: a stage after stage 17 is not in the draw.
 fn leg_lens(hike: &Hike, wire: &[StageAbsent]) -> Vec<u64> {
     hike.stages
         .iter()
+        .take(STAGES)
         .enumerate()
         .map(|(g, stage)| {
             absent_at(wire, g)
@@ -271,8 +273,9 @@ fn terrain_of(hike: &Hike, sizes: Sizes) -> Vec<u8> {
 }
 
 /// Absence flags for stage `g`. A hike built in code (no wire) has none.
-fn absent_at(absent: &[StageAbsent], g: usize) -> StageAbsent {
-    absent.get(g).copied().unwrap_or_default()
+fn absent_at(absent: &[StageAbsent], g: usize) -> &StageAbsent {
+    static NO_WIRE: StageAbsent = StageAbsent::NONE;
+    absent.get(g).unwrap_or(&NO_WIRE)
 }
 
 fn beacon_records<F>(
@@ -457,8 +460,23 @@ fn binding_digest(
     out
 }
 
+#[cfg(test)]
 fn digest_records(
     hike: &Hike,
+    terrain: Option<&[u8]>,
+    threads: usize,
+    sizes: Sizes,
+) -> Vec<Vec<bool>> {
+    digest_records_wire(hike, &[], false, terrain, threads, sizes)
+}
+
+/// Rule A4.3 checkpoint comparisons. A leg whose inputs the object does not
+/// carry (the seed when `seed_absent`, or the stored waypoint that is the
+/// stage limb on `g ≥ 1`) is `mismatch`: there is no digest to compare.
+fn digest_records_wire(
+    hike: &Hike,
+    absent: &[StageAbsent],
+    seed_absent: bool,
     terrain: Option<&[u8]>,
     threads: usize,
     sizes: Sizes,
@@ -469,6 +487,10 @@ fn digest_records(
     for (stage_index, stage) in hike.stages.iter().enumerate() {
         if !stage.checkpoint_rows_defined || stage.checkpoints.is_empty() {
             out.push(Vec::new());
+            continue;
+        }
+        if seed_absent || (stage_index >= 1 && absent_at(absent, stage_index).waypoint) {
+            out.push(vec![false; stage.checkpoints.len()]);
             continue;
         }
         let terrain = terrain.expect("a stored checkpoint is checked against terrain");
@@ -660,21 +682,27 @@ where
 fn waypoint_records(
     hike: &Hike,
     absent: &[StageAbsent],
+    seed_absent: bool,
     terrain: &[u8],
     paths: &[BoundPath],
     sizes: Sizes,
 ) -> WaypointMeasurement {
     // `W_1` uses the stored field. The computed seed is the seed-value comparison.
-    let seed_value = computed_seed(hike);
-    let seed_value_matches = hike
-        .stages
-        .first()
-        .is_some_and(|stage| stage.waypoint == seed_value);
+    let seed_value_matches = opening_matches(hike, absent, seed_absent).unwrap_or(false);
     let mut successor_differs = Vec::with_capacity(STAGES - 1);
     for g in 0..STAGES - 1 {
         // A missing stage of the pair is `not defined`. The record still has 17 rows.
-        // So is an absent `I_g` (the next stage's beacon): the recompute has no input.
-        if hike.stages.len() <= g + 1 || absent_at(absent, g + 1).beacon {
+        // So is a recompute whose stage bytes are absent or unusable (section 14,
+        // `waypoints`): `I_g` (the next stage's beacon), this stage's stored
+        // waypoint or checkpoints, the next stage's stored waypoint, or the seed
+        // that the terrain is filled from.
+        if hike.stages.len() <= g + 1
+            || seed_absent
+            || absent_at(absent, g + 1).beacon
+            || absent_at(absent, g).waypoint
+            || absent_at(absent, g + 1).waypoint
+            || !hike.stages[g].checkpoint_rows_defined
+        {
             successor_differs.push(None);
             continue;
         }
@@ -730,6 +758,7 @@ fn rewalk_pool() -> rayon::ThreadPool {
 fn rewalk(
     hike: &Hike,
     wire: &[StageAbsent],
+    seed_absent: bool,
     terrain: &[u8],
     indices: &[u64],
     sizes: Sizes,
@@ -743,6 +772,32 @@ fn rewalk(
             .map(|&q| {
                 let (g, j) = locate(&lens, q);
                 let stage = &hike.stages[g];
+                let facts = absent_at(wire, g);
+                // No terrain without the seed: every recomputed leg is `mismatch`.
+                if seed_absent {
+                    return false;
+                }
+                if facts.checkpoint_elems.is_some() {
+                    // Section 14.6 reads the stored bytes: `leg_results[j]`,
+                    // and `checkpoints[j − 1]` of which section 11.2 reads
+                    // bytes 0..8. A checkpoint of the wrong width is still
+                    // a previous checkpoint when it has those 8 bytes.
+                    let Some(Some(limb)) = facts.limbs.get(j) else {
+                        return false;
+                    };
+                    let start: [u8; 8] = if j == 0 {
+                        if g >= 1 && facts.waypoint {
+                            return false;
+                        }
+                        binding_previous_head(stage, g, &seed)
+                    } else {
+                        match facts.checkpoint_heads.get(j - 1) {
+                            Some(Some(head)) => *head,
+                            _ => return false,
+                        }
+                    };
+                    return leg_result_from_head(terrain, &start, sizes) == u64::from_le_bytes(*limb);
+                }
                 // A leg with no usable stored result is `mismatch`. Checked
                 // before `previous`, which reads `checkpoints[j − 1]`.
                 if stage.leg_result_missing.get(j).copied().unwrap_or(false)
@@ -759,9 +814,51 @@ fn rewalk(
     })
 }
 
+/// Section 14.1: Rule A4.3 records `match` if `stages[0].waypoint` equals
+/// `SHA-256(seed)`, and `mismatch` otherwise. An absent stage 0 or stored
+/// waypoint, or no seed to hash, is `mismatch`.
+fn opening_matches(hike: &Hike, absent: &[StageAbsent], seed_absent: bool) -> Option<bool> {
+    Some(hike.stages.first().is_some_and(|stage| {
+        !seed_absent && !absent_at(absent, 0).waypoint && stage.waypoint == computed_seed(hike)
+    }))
+}
+
+/// `checkpoint_count` for each stage index: `len(stages[g].checkpoints)` on the
+/// wire, counting an element of the wrong width (section 14: the count, `N`,
+/// `fixed_start.N`, `legs_outside` and `whole_hike_legs` count checkpoints and do
+/// not read `leg_count`). An absent array counts 0. A missing stage has no count.
+fn checkpoint_counts(hike: &Hike, absent: &[StageAbsent]) -> Vec<Option<u64>> {
+    (0..STAGES)
+        .map(|g| {
+            hike.stages.get(g).map(|stage| {
+                absent_at(absent, g)
+                    .checkpoint_elems
+                    .unwrap_or(stage.checkpoints.len()) as u64
+            })
+        })
+        .collect()
+}
+
+/// Bytes 0..8 of the leg-0 start (Rule A2.2): the computed seed on stage 0,
+/// the stored waypoint on stage `g ≥ 1`.
+fn binding_previous_head(stage: &Stage, g: usize, seed: &[u8; 32]) -> [u8; 8] {
+    let start = if g == 0 { seed } else { &stage.waypoint };
+    let mut head = [0u8; 8];
+    head.copy_from_slice(&start[..8]);
+    head
+}
+
+/// Section 11.2 from the 8 bytes it reads: `S_0 = u64_le(previous[0:8])`.
+fn leg_result_from_head(terrain: &[u8], head: &[u8; 8], sizes: Sizes) -> u64 {
+    let mut previous = [0u8; 32];
+    previous[..8].copy_from_slice(head);
+    leg_result_sized(terrain, &previous, sizes)
+}
+
 fn measure_six(
     hike: &Hike,
     wire: &[StageAbsent],
+    seed_absent: bool,
     terrain: &[u8],
     source: &mut dyn Entropy,
     sizes: Sizes,
@@ -776,7 +873,7 @@ fn measure_six(
         Ok(indices) => indices,
         Err(()) => return SixLegs::DrawNotObtained,
     };
-    let matches = rewalk(hike, wire, terrain, &indices, sizes);
+    let matches = rewalk(hike, wire, seed_absent, terrain, &indices, sizes);
     SixLegs::Rewalked { indices, matches }
 }
 
@@ -875,13 +972,15 @@ where
                 anchored_indices: Vec::new(),
                 possible_indices: Vec::new(),
                 legs: None,
-                record_body: crate::section14::undecoded_tail(&[fail.0]),
+                // Section 14.1: the first item does not decode under section 7.3,
+                // or it is not a map. Either way the record is exactly
+                // `["malformed cbor"]` with nothing measured.
+                record_body: crate::section14::undecoded_tail(&["malformed cbor"]),
             };
         }
     };
     let hike = &measured.hike;
-    let seed = computed_seed(hike);
-    let seed_matches = hike.stages.first().map(|stage| stage.waypoint == seed);
+    let seed_matches = opening_matches(hike, &measured.stage_absent, measured.seed_absent);
     let successors_present = if sizes.is_production() {
         successor_inputs_present(hike)
     } else {
@@ -970,7 +1069,7 @@ where
     }
     let measured = match read_measured_object_sized(bytes, sizes) {
         Ok(item) => item,
-        Err(fail) => {
+        Err(_) => {
             return Measurements {
                 version: ObjectLineage::Current,
                 shape: false,
@@ -980,7 +1079,10 @@ where
                 paths_included: Recorded::NotObtained,
                 six_legs: SixLegs::NotObtained,
                 stages: StageReport::NotRead,
-                record_body: crate::section14::undecoded_tail(&[fail.0]),
+                // Section 14.1: the first item does not decode under section 7.3,
+                // or it is not a map. Either way the record is exactly
+                // `["malformed cbor"]` with nothing measured.
+                record_body: crate::section14::undecoded_tail(&["malformed cbor"]),
             };
         }
     };
@@ -1010,6 +1112,7 @@ where
         Recorded::Obtained(waypoint_records(
             hike,
             &measured.stage_absent,
+            measured.seed_absent,
             terrain.as_deref().expect("waypoint rehash reads terrain"),
             &bound,
             sizes,
@@ -1023,11 +1126,7 @@ where
         &observed,
     ));
     let paths_included = Recorded::Obtained(count_paths_included(hike));
-    let seed_value = computed_seed(hike);
-    let opening_match = hike
-        .stages
-        .first()
-        .map(|stage| stage.waypoint == seed_value);
+    let opening_match = opening_matches(hike, &measured.stage_absent, measured.seed_absent);
     let successor = match &waypoints {
         Recorded::Obtained(found) => Some(found.successor_differs.as_slice()),
         Recorded::NotObtained => None,
@@ -1036,15 +1135,7 @@ where
         Recorded::Obtained(found) => found.anchors.clone(),
         Recorded::NotObtained => bound.iter().take(16).map(|path| path.anchor).collect(),
     };
-    let counts: Vec<Option<u64>> = (0..STAGES)
-        .map(|index| {
-            hike.stages.get(index).and_then(|stage| {
-                stage
-                    .checkpoint_rows_defined
-                    .then_some(stage.checkpoints.len() as u64)
-            })
-        })
-        .collect();
+    let counts = checkpoint_counts(hike, &measured.stage_absent);
     let rows_defined: Vec<bool> = (0..STAGES)
         .map(|index| {
             hike.stages
@@ -1173,7 +1264,7 @@ where
     }
     let measured = match read_measured_object_sized(bytes, sizes) {
         Ok(item) => item,
-        Err(fail) => {
+        Err(_) => {
             return Measurements {
                 version: ObjectLineage::Current,
                 shape: false,
@@ -1183,7 +1274,10 @@ where
                 paths_included: Recorded::NotObtained,
                 six_legs: SixLegs::NotObtained,
                 stages: StageReport::NotRead,
-                record_body: crate::section14::undecoded_tail(&[fail.0]),
+                // Section 14.1: the first item does not decode under section 7.3,
+                // or it is not a map. Either way the record is exactly
+                // `["malformed cbor"]` with nothing measured.
+                record_body: crate::section14::undecoded_tail(&["malformed cbor"]),
             };
         }
     };
@@ -1209,7 +1303,14 @@ where
         if digests || measure_successors {
             terrain = Some(terrain_of(hike, sizes));
         }
-        let digest_matches = digest_records(hike, terrain.as_deref(), bind_threads, sizes);
+        let digest_matches = digest_records_wire(
+            hike,
+            &measured.stage_absent,
+            measured.seed_absent,
+            terrain.as_deref(),
+            bind_threads,
+            sizes,
+        );
         let mismatch = checkpoint_mismatch(&beacon_matches_index, &digest_matches);
         (
             Recorded::Obtained(CheckpointMeasurement {
@@ -1240,6 +1341,7 @@ where
         Recorded::Obtained(waypoint_records(
             hike,
             &measured.stage_absent,
+            measured.seed_absent,
             _terrain,
             &bound,
             sizes,
@@ -1269,6 +1371,7 @@ where
             measure_six(
                 hike,
                 &measured.stage_absent,
+                measured.seed_absent,
                 terrain.as_deref().expect("a recomputed leg reads terrain"),
                 source.as_mut(),
                 sizes,
@@ -1276,11 +1379,7 @@ where
         }
     };
 
-    let seed_value = computed_seed(hike);
-    let opening_match = hike
-        .stages
-        .first()
-        .map(|stage| stage.waypoint == seed_value);
+    let opening_match = opening_matches(hike, &measured.stage_absent, measured.seed_absent);
     let digest_rows = match &checkpoints {
         Recorded::Obtained(found) => Some(found.digest_matches.as_slice()),
         Recorded::NotObtained => None,
@@ -1293,15 +1392,7 @@ where
         Recorded::Obtained(found) => found.anchors.clone(),
         Recorded::NotObtained => bound.iter().take(16).map(|path| path.anchor).collect(),
     };
-    let counts: Vec<Option<u64>> = (0..STAGES)
-        .map(|index| {
-            hike.stages.get(index).and_then(|stage| {
-                stage
-                    .checkpoint_rows_defined
-                    .then_some(stage.checkpoints.len() as u64)
-            })
-        })
-        .collect();
+    let counts = checkpoint_counts(hike, &measured.stage_absent);
     let rows_defined: Vec<bool> = (0..STAGES)
         .map(|index| {
             hike.stages
@@ -1745,7 +1836,7 @@ mod tests {
                 differs: false,
             })
             .collect();
-        let found = waypoint_records(&hike, &[], &terrain, &paths, sizes);
+        let found = waypoint_records(&hike, &[], false, &terrain, &paths, sizes);
         assert_eq!(found.successor_differs.len(), 17);
         assert!(found.successor_differs[0].is_some());
         assert!(found.successor_differs[1].is_some());
@@ -1865,7 +1956,7 @@ mod tests {
             stage.leg_results.clear();
         }
         assert_eq!(
-            measure_six(&hike, &[], &[], &mut Boom, Sizes::production()),
+            measure_six(&hike, &[], false, &[], &mut Boom, Sizes::production()),
             SixLegs::CouldNotDraw
         );
         assert_eq!(draw_count(0), None);
@@ -1878,7 +1969,7 @@ mod tests {
     fn a_failed_byte_source_records_that_the_draw_was_not_obtained() {
         let hike = structural_object();
         assert_eq!(
-            measure_six(&hike, &[], &[], &mut Empty, Sizes::production()),
+            measure_six(&hike, &[], false, &[], &mut Empty, Sizes::production()),
             SixLegs::DrawNotObtained
         );
     }
@@ -2428,7 +2519,7 @@ mod tests {
         hike.stages[0].waypoint = [0x22; 32];
         assert_ne!(seed[..8], hike.stages[0].waypoint[..8]);
         assert_eq!(
-            rewalk(&hike, &[], &terrain, &[0], Sizes::production()),
+            rewalk(&hike, &[], false, &terrain, &[0], Sizes::production()),
             vec![true]
         );
         assert_ne!(

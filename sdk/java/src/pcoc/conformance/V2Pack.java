@@ -43,6 +43,7 @@ public final class V2Pack {
         absentStagesIncludeLegCount();
         blockHashDisplayOrder(root);
         stage0StartsOnTheLatestKnownHeader(root);
+        rc2Break(pack);
         System.out.println("v2 pack ok");
     }
 
@@ -514,6 +515,107 @@ public final class V2Pack {
             throw new AssertionError("short " + shortLine.compact());
         }
         agreeSix(Json.asString(shortLine.fields().get("six_leg")), shortFull.fields().get("six_leg"));
+    }
+
+    /**
+     * rc.2 break pass (Rust tests/break_cases.rs and sdk/tools/hikecases.py
+     * cover the same facts across the three SDKs): a non-map top level is the
+     * undecoded record, Problem.getMessage() is the issue, and a six-leg
+     * previous that is short, text, or on a stage with no waypoint never
+     * throws and reads checkpoints[j - 1][0:8] (sections 11.2 and 14.6).
+     */
+    private static void rc2Break(Path pack) throws Exception {
+        String none = Measure.record(new byte[0], Profile.CONFORMANCE_SMALL_V2, height -> null, null, false);
+        for (byte[] in : new byte[][] {{0x01}, {(byte) 0x80}, {0x60}, {0x40}, {0x01, 0x00}}) {
+            String got = Measure.record(in, Profile.CONFORMANCE_SMALL_V2, height -> null, null, false);
+            if (got == null || !got.equals(none) || !got.contains("\"shape_item\":[\"malformed cbor\"]")) {
+                throw new AssertionError("non-map " + Arrays.toString(in));
+            }
+        }
+        try {
+            Cbor.decode(new byte[] {0x01, 0x00});
+            throw new AssertionError("trailing decoded");
+        } catch (Cbor.Problem problem) {
+            if (problem.getMessage() == null || !problem.getMessage().equals(problem.issue)) {
+                throw new AssertionError("Problem.getMessage " + problem.getMessage());
+            }
+        }
+        Json.Obj kat = Json.asObj(Json.parse(Files.readString(pack.resolve("kat-small.json"))));
+        byte[] obj = Bytes.unhex(Json.asString(kat.fields().get("object_hex")));
+        Map<Long, String> docs = new HashMap<>();
+        for (Json d : Json.asArr(kat.fields().get("documents")).items()) {
+            Json.Obj doc = Json.asObj(d);
+            if (doc.fields().get("body") instanceof Json.Str) {
+                docs.put(Long.parseLong(Json.asNumber(doc.fields().get("height"))), Json.asString(doc.fields().get("body")));
+            }
+        }
+        // Seed 01*32 draws global index 4 = stage 3 leg 1 (sdk/tools/hikecases.py DRAW_S3_J1).
+        byte[] stream = auditStream(filled((byte) 0x01), 4096);
+        byte[] leg = Bytes.unhex("0594e6d98cd90356");
+        // width of checkpoints[0], whether stage 3 keeps its waypoint, text previous, want
+        Object[][] cases = {
+            {32, true, false, "match"}, {31, true, false, "match"}, {8, true, false, "match"},
+            {7, true, false, "mismatch"}, {32, false, false, "match"}, {10, true, true, "mismatch"},
+        };
+        for (Object[] c : cases) {
+            byte[] edited = twoLegsInStage3(obj, (Integer) c[0], (Boolean) c[1], (Boolean) c[2], leg);
+            String record = Measure.record(edited, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false);
+            Json.Obj rec = Json.asObj(Json.parse(record));
+            Json.Obj six = Json.asObj(rec.fields().get("six_leg"));
+            long index = Long.parseLong(Json.asNumber(Json.asArr(six.fields().get("indices")).items().get(1)));
+            String result = Json.asString(Json.asArr(six.fields().get("results")).items().get(1));
+            if (index != 4 || !c[3].equals(result)) {
+                throw new AssertionError("six-leg previous " + Arrays.toString(c) + " " + index + " " + result);
+            }
+        }
+    }
+
+    private static byte[] filled(byte b) {
+        byte[] out = new byte[32];
+        Arrays.fill(out, b);
+        return out;
+    }
+
+    private static int nth(byte[] data, byte[] needle, int k) {
+        int seen = 0;
+        for (int i = 0; i + needle.length <= data.length; i++) {
+            if (Arrays.equals(data, i, i + needle.length, needle, 0, needle.length)) {
+                if (seen++ == k) {
+                    return i;
+                }
+            }
+        }
+        throw new AssertionError("needle " + k);
+    }
+
+    private static byte[] cat(byte[]... parts) {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        for (byte[] part : parts) {
+            out.writeBytes(part);
+        }
+        return out.toByteArray();
+    }
+
+    /** Stage 3 of kat-small with two legs: checkpoints [cp0 cut to width (or text), cp0], leg_results [lr0, leg]. */
+    private static byte[] twoLegsInStage3(byte[] obj, int width, boolean waypoint, boolean text, byte[] leg) {
+        byte[] cpKey = cat(new byte[] {0x6b}, "checkpoints".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {(byte) 0x81, 0x58, 0x20});
+        int c = nth(obj, cpKey, 3) + cpKey.length;
+        byte[] cp0 = Arrays.copyOfRange(obj, c, c + 32);
+        byte[] first = text ? cat(new byte[] {(byte) (0x60 + width)}, Arrays.copyOf("abcdefghijklmnopqrstuvwxyz".getBytes(java.nio.charset.StandardCharsets.US_ASCII), width))
+                : cat(new byte[] {(byte) 0x58, (byte) width}, Arrays.copyOf(cp0, width));
+        byte[] out = cat(Arrays.copyOfRange(obj, 0, c - 3), new byte[] {(byte) 0x82}, first, new byte[] {0x58, 0x20}, cp0, Arrays.copyOfRange(obj, c + 32, obj.length));
+        byte[] lrKey = cat(new byte[] {0x6b}, "leg_results".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {(byte) 0x81, 0x48});
+        int l = nth(out, lrKey, 3) + lrKey.length;
+        out = cat(Arrays.copyOfRange(out, 0, l - 2), new byte[] {(byte) 0x82, 0x48}, Arrays.copyOfRange(out, l, l + 8), new byte[] {0x48}, leg, Arrays.copyOfRange(out, l + 8, out.length));
+        byte[] lcKey = cat(new byte[] {0x69}, "leg_count".getBytes(java.nio.charset.StandardCharsets.US_ASCII), new byte[] {0x01});
+        int k = nth(out, lcKey, 3) + lcKey.length - 1;
+        out[k] = 0x02;
+        if (!waypoint) {
+            byte[] wpKey = cat(new byte[] {0x68}, "waypoint".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+            int w = nth(out, wpKey, 3);
+            out[w + wpKey.length - 1] = 'X';
+        }
+        return out;
     }
 
     private static byte[] auditStream(byte[] seed, int bytes) throws Exception {

@@ -232,3 +232,34 @@ fn an_unknown_log_degree_is_a_usage_error() {
     assert!(stderr.contains("--log quiet|verbose"), "{stderr}");
     assert!(record_lines(&stderr).is_empty(), "{stderr}");
 }
+
+/// rc.2 (CoS 2): exit 1 only when no top-level map decodes. A map with a
+/// trailing byte writes its record and exits 0; a well-formed item that is
+/// not a map exits 1 with nothing on stdout.
+#[test]
+fn exit_one_only_when_no_top_level_map_decodes() {
+    let dir = Scratch::new("exit");
+    let input = dir.path("hike.cbor");
+    for (bytes, code) in [
+        (&[0x01u8][..], 1),
+        (&[0x80], 1),
+        (&[0x60], 1),
+        (&[0x01, 0x00], 1),
+        (&[0xa0], 0),
+        (&[0xa0, 0x00], 0),
+    ] {
+        fs::write(&input, bytes).unwrap();
+        let out = verify(&[
+            "--input",
+            input.to_str().unwrap(),
+            "--index-url",
+            "http://127.0.0.1:9",
+        ]);
+        assert_eq!(out.status.code(), Some(code), "{bytes:?}");
+        assert_eq!(out.stdout.is_empty(), code == 1, "{bytes:?}");
+        if code == 0 {
+            let stdout = String::from_utf8(out.stdout).unwrap();
+            assert!(stdout.contains("\"shape\":\"mismatch\""), "{stdout}");
+        }
+    }
+}

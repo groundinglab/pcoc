@@ -1,0 +1,162 @@
+package hike
+
+import (
+	"bytes"
+	"encoding/hex"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+// rc.2 break pass: byte edits of the kat-small object (Rust tests/break_cases.rs
+// and sdk/tools/hikecases.py cover the same facts across the three SDKs).
+
+type katPack struct {
+	ObjectHex string `json:"object_hex"`
+	Documents []struct {
+		Height uint64  `json:"height"`
+		Body   *string `json:"body"`
+	} `json:"documents"`
+}
+
+func loadKat(t *testing.T) ([]byte, Index) {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "spec", "conformance", "v2.0", "kat-small.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var k katPack
+	if err := json.Unmarshal(raw, &k); err != nil {
+		t.Fatal(err)
+	}
+	obj, err := hex.DecodeString(k.ObjectHex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	docs := map[uint64]string{}
+	for _, d := range k.Documents {
+		if d.Body != nil {
+			docs[d.Height] = *d.Body
+		}
+	}
+	return obj, Index{Documents: docs}
+}
+
+func nthIndex(t *testing.T, data, needle []byte, k int) int {
+	t.Helper()
+	at := -1
+	for i := 0; i <= k; i++ {
+		next := bytes.Index(data[at+1:], needle)
+		if next < 0 {
+			t.Fatalf("needle %q #%d", needle, k)
+		}
+		at += 1 + next
+	}
+	return at
+}
+
+// shorten makes the 32-byte string that follows the k-th needle 31 bytes long.
+func shorten(t *testing.T, obj, needle []byte, k int) []byte {
+	at := nthIndex(t, obj, needle, k) + len(needle) - 2 // the 0x58 0x20 head
+	out := append([]byte{}, obj[:at]...)
+	out = append(out, 0x58, 0x1f)
+	out = append(out, obj[at+2:at+33]...)
+	return append(out, obj[at+34:]...)
+}
+
+func katRecord(t *testing.T, data []byte, index Index) (map[string]any, bool) {
+	t.Helper()
+	rec, decoded := Verify(data, ConformanceSmallV2, index, AuditStream(bytes.Repeat([]byte{0x11}, 32), 4096), false)
+	var out map[string]any
+	if err := json.Unmarshal(rec.Marshal(), &out); err != nil {
+		t.Fatal(err)
+	}
+	return out, decoded
+}
+
+func at(v any, path ...any) any {
+	for _, p := range path {
+		switch k := p.(type) {
+		case string:
+			v = v.(map[string]any)[k]
+		case int:
+			v = v.([]any)[k]
+		}
+	}
+	return v
+}
+
+// A 31-byte checkpoint in stage 2: N, fixed_start.N and legs_outside still
+// count it (section 14.4: "An integer when bookends exist"; section 14.6 L_g).
+func TestRC2ShortCheckpointStillCounts(t *testing.T) {
+	obj, index := loadKat(t)
+	rec, _ := katRecord(t, shorten(t, obj, []byte("\x6bcheckpoints\x81\x58\x20"), 2), index)
+	for _, c := range []struct {
+		path []any
+		want any
+	}{
+		{[]any{"N"}, 1.0},
+		{[]any{"fixed_start", "N"}, 1.0},
+		{[]any{"analysis", "legs_outside"}, 17.0},
+		{[]any{"analysis", "whole_hike_legs"}, 17.0},
+		{[]any{"analysis", "per_stage", 2, "checkpoint_count"}, 1.0},
+		{[]any{"checkpoints", 2, "legs"}, "not defined"},
+		{[]any{"waypoints", 2, "result"}, "not defined"},
+	} {
+		if got := at(rec, c.path...); got != c.want {
+			t.Fatalf("%v = %v, want %v", c.path, got, c.want)
+		}
+	}
+}
+
+// A stored hash that is not 32 bytes is `not defined`, for a stage beacon and
+// for last_interrupt.
+func TestRC2ShortStoredHashIsNotDefined(t *testing.T) {
+	obj, index := loadKat(t)
+	rec, _ := katRecord(t, shorten(t, obj, []byte("\x66beacon\x58\x20"), 8), index)
+	if got := at(rec, "headers", 8, "stored_hash"); got != "not defined" {
+		t.Fatalf("stage 8 stored_hash %v", got)
+	}
+	rec, _ = katRecord(t, shorten(t, obj, []byte("\x6elast_interrupt\x58\x20"), 0), index)
+	if got := at(rec, "headers", 18, "stored_hash"); got != "not defined" {
+		t.Fatalf("last_interrupt stored_hash %v", got)
+	}
+}
+
+// A checkpoints or leg_results value that is not an array is `field set`.
+func TestRC2NonArrayCheckpointsIsFieldSet(t *testing.T) {
+	obj, index := loadKat(t)
+	for _, key := range []string{"\x6bcheckpoints", "\x6bleg_results"} {
+		needle := []byte(key + "\x81")
+		at0 := nthIndex(t, obj, needle, 5) + len(needle) - 1
+		width := 34 // 0x58 0x20 + 32 bytes
+		if key == "\x6bleg_results" {
+			width = 9 // 0x48 + 8 bytes
+		}
+		edited := append(append(append([]byte{}, obj[:at0]...), 0x61, 'x'), obj[at0+1+width:]...)
+		rec, decoded := katRecord(t, edited, index)
+		items := at(rec, "shape_item").([]any)
+		if !decoded || len(items) == 0 || items[0] != "field set" {
+			t.Fatalf("%q: %v", key, items)
+		}
+	}
+}
+
+// rc.2: a top level that is not a map is the undecoded ["malformed cbor"]
+// record, the same bytes as no input at all, and does not decode.
+func TestRC2NonMapTopLevelIsUndecoded(t *testing.T) {
+	none, decoded := Verify(nil, ConformanceSmallV2, Index{}, nil, false)
+	if decoded {
+		t.Fatal("empty input decoded")
+	}
+	for _, in := range [][]byte{{0x01}, {0x80}, {0x60}, {0x40}, {0x01, 0x00}} {
+		rec, decoded := Verify(in, ConformanceSmallV2, Index{}, nil, false)
+		if decoded || !bytes.Equal(rec.Marshal(), none.Marshal()) {
+			t.Fatalf("%x decoded=%v", in, decoded)
+		}
+	}
+	if _, decoded := Verify([]byte{0xa0, 0x00}, ConformanceSmallV2, Index{}, nil, false); !decoded {
+		t.Fatal("a map with a trailing byte is a decoded top-level map")
+	}
+}

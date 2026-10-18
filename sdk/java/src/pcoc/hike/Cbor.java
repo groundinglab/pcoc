@@ -69,6 +69,7 @@ public final class Cbor {
         public final String issue;
 
         Problem(String issue) {
+            super(issue);
             this.issue = issue;
         }
     }

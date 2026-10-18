@@ -35,7 +35,7 @@ public final class Measure {
 
     private Measure() {}
 
-    /** Compact record JSON, or null when the buffer does not decode. */
+    /** Compact record JSON. Bytes whose first item does not decode, or is not a map, get the {@code ["malformed cbor"]} record. */
     public static String record(byte[] object, Profile profile, Reader reader, byte[] stream, boolean omitSix) {
         return record(object, profile, reader, null, stream, omitSix);
     }
@@ -55,7 +55,8 @@ public final class Measure {
             return undecoded(profile);
         }
         if (head.value.kind != Cbor.Val.Kind.MAP) {
-            return null;
+            // Section 14.1: a top level that is not a map is exactly ["malformed cbor"].
+            return undecoded(profile);
         }
         top = head.value;
         trailing = head.trailing;
@@ -360,6 +361,12 @@ public final class Measure {
             }
             if (g > 0 && bytes(stage, "path") == null) {
                 return true;
+            }
+            // A checkpoint or leg-result value that is not an array is a wrong value type (section 14.1 row 2).
+            for (String key : new String[] {"checkpoints", "leg_results"}) {
+                if (stage.map.containsKey(key) && array(stage, key) == null) {
+                    return true;
+                }
             }
             if (uint(stage, "beacon_height") == null || uint(stage, "leg_count") == null) {
                 return true;
@@ -988,9 +995,19 @@ public final class Measure {
                 Cbor.Val stage = stages.get(g);
                 List<Cbor.Val> stored = array(stage, "leg_results");
                 List<Cbor.Val> checkpoints = array(stage, "checkpoints");
-                byte[] limb = g == 0 ? computedSeed : bytes(stage, "waypoint", 32);
-                if (stored != null && j < stored.size() && stored.get(j).kind == Cbor.Val.Kind.BYTES && stored.get(j).bytes.length == 8 && limb != null) {
-                    byte[] previous = j == 0 ? limb : checkpoints.get(j - 1).bytes;
+                // Section 14.6: leg 0 starts from the waypoint (or the computed seed on
+                // stage 0); leg j >= 1 starts from the stored checkpoints[j - 1] alone.
+                // Section 11.2 reads only its first 8 bytes. A previous that is not a
+                // byte string of at least 8 bytes recomputes nothing: mismatch.
+                byte[] previous = j == 0
+                        ? (g == 0 ? computedSeed : bytes(stage, "waypoint", 32))
+                        : (checkpoints != null && j - 1 < checkpoints.size()
+                                && checkpoints.get(j - 1).kind == Cbor.Val.Kind.BYTES
+                                ? checkpoints.get(j - 1).bytes : null);
+                if (previous != null && previous.length < 8) {
+                    previous = null;
+                }
+                if (stored != null && j < stored.size() && stored.get(j).kind == Cbor.Val.Kind.BYTES && stored.get(j).bytes.length == 8 && previous != null) {
                     long recomputed = terrain.leg(previous);
                     if (recomputed == Bytes.u64le(stored.get(j).bytes)) {
                         token = "match";

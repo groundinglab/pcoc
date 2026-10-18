@@ -62,7 +62,8 @@ pub use http::{
 };
 pub use object::{
     canonical_object, decoded_hike, earlier_object_kind, encode_hike, encode_hike_sized,
-    object_public_key, structural_object, yielded_public_key, Hike, Stage, YieldedKey,
+    object_public_key, structural_object, top_level_map, yielded_public_key, Hike, Stage,
+    YieldedKey,
 };
 pub use pathbody::{
     encode_path_for_block, encode_path_in_block, encode_single_leaf, path_locators, PathError,

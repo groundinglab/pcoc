@@ -68,10 +68,9 @@ fn run() -> i32 {
         },
         parsed.measure.sizes(),
     );
-    let decoded = !matches!(
-        hike::yielded_public_key(&bytes),
-        hike::YieldedKey::Undecodable
-    );
+    // Exit 1 only when no top-level map decodes (a well-formed item that is
+    // not a map included). Any other input gets its record and exit 0.
+    let decoded = hike::top_level_map(&bytes);
     if parsed.log.emits(decoded) {
         emit_record(&hike::VerifyObservation::opened(
             &parsed.input,
