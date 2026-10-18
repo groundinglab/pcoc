@@ -108,6 +108,9 @@ def load_cases():
     cases.append(("cbor-text", b"\x60", kat_docs, None))
     # Structural break cases (hikecases.py).
     cases.extend(hikecases.cases(PACK))
+    # Closed local port: the index connection is refused and no document is
+    # read. The library run gets an empty document map, the same fact.
+    cases.append(("index-refused", kat_obj, {}, None))
     # F10: 64 heads whose declared count equals the bytes left. The same bytes
     # as the nested-arr and nested-map repros, plus a short vector.
     for name, size, major in (
@@ -305,8 +308,9 @@ def main():
             # a null body is a 404: leave that height out
             json.dump({h: b for h, b in docs.items() if b is not None}, open(docs_path, "w"))
             run_seeds = seeds if name in ("kat-small", "test-3leg", "earlier-kind") else seeds[:1]
+            index_url = "http://127.0.0.1:9" if name == "index-refused" else url
             for seed in [pinned_seed] if pinned_seed else run_seeds:
-                args = ["--input", path, "--index-url", url, "--profile", "conformance-small",
+                args = ["--input", path, "--index-url", index_url, "--profile", "conformance-small",
                         "--sample-bytes", "32", "--slot-bytes", "64", "--terrain-bytes", "256",
                         "--steps-per-leg", "32", "--audit-seed", seed]
                 out = {lang: run(cmd + args, a.timeout) for lang, cmd in langs.items()}

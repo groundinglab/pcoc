@@ -86,7 +86,7 @@ public final class Measure {
         int[] counts = new int[Hike.STAGES];
         Json.Arr checkpointRows = checkpoints(stages, terrain, computedSeed, counts);
         Json.Arr waypointRows = waypoints(stages, terrain);
-        PathTally paths = paths(top, stages, profile, headers, chain);
+        PathTally paths = paths(top, stages, profile, headers, chain, reader);
         BookFields book = v2
                 ? v2Book(paths, headers, counts, reader)
                 : BookFields.token("not defined");
@@ -689,7 +689,7 @@ public final class Measure {
         return rows;
     }
 
-    private static PathTally paths(Cbor.Val top, List<Cbor.Val> stages, Profile profile, Header[] headers, Summary.Chain chain) {
+    private static PathTally paths(Cbor.Val top, List<Cbor.Val> stages, Profile profile, Header[] headers, Summary.Chain chain, Reader reader) {
         PathTally tally = new PathTally();
         boolean v2 = Hike.KIND.equals(profile.kind);
         for (int g = 1; g < Hike.STAGES; g++) {
@@ -784,9 +784,21 @@ public final class Measure {
             String plant = "not read";
             String anchor = "not anchored";
             if (inWindow && interrupt) {
-                boolean ok = chain == null || chain.ok(loc);
-                plant = ok ? "match" : "mismatch";
-                anchor = ok ? "anchored" : "not anchored";
+                if (chain != null) {
+                    boolean ok = chain.ok(loc);
+                    plant = ok ? "match" : "mismatch";
+                    anchor = ok ? "anchored" : "not anchored";
+                } else if (reader != null && reader.body(loc.blockHeight) != null) {
+                    // A document that was read counts as bound. Comparing the
+                    // plant fields is the chain callback's job.
+                    plant = "match";
+                    anchor = "anchored";
+                } else {
+                    // No document: the connection was refused, or the height is absent.
+                    plant = "not read";
+                    anchor = "not anchored";
+                    tally.plantReadNotRead = true;
+                }
             }
             tally.anchors.add(anchor);
             tally.present++;

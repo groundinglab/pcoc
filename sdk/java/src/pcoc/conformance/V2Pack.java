@@ -821,6 +821,14 @@ public final class V2Pack {
         if (!"[\"constant\"]".equals(slotShape)) {
             throw new AssertionError("n_slots 2^64-1 " + slotShape);
         }
+        // A reader that returns no document is the refused connection.
+        if (!pathPlant(Json.asObj(Json.parse(Measure.record(obj, Profile.CONFORMANCE_SMALL_V2, docs::get, stream, false))), "match")) {
+            throw new AssertionError("pack index plant");
+        }
+        Json.Obj refused = Json.asObj(Json.parse(Measure.record(obj, Profile.CONFORMANCE_SMALL_V2, height -> null, stream, false)));
+        if (pathPlant(refused, "match") || !pathPlant(refused, "not read")) {
+            throw new AssertionError("refused plant " + Json.asArr(refused.fields().get("paths")).compact());
+        }
         // F2/F3: a declared length or count past the bytes left is malformed
         // CBOR. The record is the undecoded one; the decoder does not allocate
         // from that length. Depth is a separate change (F1).
@@ -866,6 +874,16 @@ public final class V2Pack {
             be[i] = (byte) (n >>> ((7 - i) * 8));
         }
         return cat(Arrays.copyOfRange(obj, 0, at - 1), new byte[] {0x1b}, be, Arrays.copyOfRange(obj, at + 2, obj.length));
+    }
+
+    private static boolean pathPlant(Json.Obj rec, String token) {
+        for (Json row : Json.asArr(rec.fields().get("paths")).items()) {
+            Json plant = Json.asObj(row).fields().get("plant");
+            if (plant instanceof Json.Str && token.equals(Json.asString(plant))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static int nth(byte[] data, byte[] needle, int k) {

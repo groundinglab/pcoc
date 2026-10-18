@@ -381,6 +381,31 @@ func TestF5OutOfRangeInterruptHeightKeepsExactOrder(t *testing.T) {
 	shapeIs(t, rec, []any{"header height order", "height_range"})
 }
 
+// A refused index read returns no document. plant on an issued path is not read.
+func TestPlantNotReadWhenIndexReturnsNoDocument(t *testing.T) {
+	obj, index := loadKat(t)
+	got, decoded := katRecord(t, obj, index)
+	if !decoded || !pathPlant(got, "match") {
+		t.Fatal("pack index plant")
+	}
+	refused := Index{Fetch: func(uint64) (string, bool) { return "", false }}
+	got, decoded = katRecord(t, obj, refused)
+	if !decoded || pathPlant(got, "match") || !pathPlant(got, "not read") {
+		t.Fatalf("refused plant %v", at(got, "paths"))
+	}
+}
+
+func pathPlant(rec map[string]any, token string) bool {
+	paths, _ := rec["paths"].([]any)
+	for _, row := range paths {
+		obj, _ := row.(map[string]any)
+		if obj["plant"] == token {
+			return true
+		}
+	}
+	return false
+}
+
 // F4: seed 11*32 draws stage 5 leg 0. A waypoint that is not 32 bytes makes
 // that leg mismatch. Section 14.6 reads the stored waypoint; section 11.2
 // does not take the first 8 bytes of a value of another width.

@@ -508,6 +508,24 @@ fn header_pairs_order_over_range_heights_by_exact_value() {
     assert_eq!(rec["headers"][16]["stored_height"], "not defined");
 }
 
+/// No index document (the connection was refused, or the height is absent)
+/// records plant `not read` on an issued path, not `match`.
+#[test]
+fn a_missing_index_document_records_plant_not_read() {
+    let measurements = hike::verify_sized(
+        &object_bytes(),
+        hike::AuditDraw::PinnedSeed([0x11; 32]),
+        |_| Err(()),
+        |_| hike::ChainRead::NotRead,
+        hike::Sizes::conformance_small(),
+    );
+    let line = hike::verify_record_json("conformance-small", &measurements);
+    let rec: Value = serde_json::from_str(line.trim_end()).unwrap();
+    let paths = rec["paths"].as_array().unwrap();
+    assert!(paths.iter().any(|row| row.get("plant").and_then(|p| p.as_str()) == Some("not read")));
+    assert!(paths.iter().all(|row| row.get("plant").and_then(|p| p.as_str()) != Some("match")));
+}
+
 /// F2: a declared byte, text, array or map length past the bytes left is
 /// the undecoded ["malformed cbor"] record. The same heads the Go and Java
 /// decoders reject without allocating from the declared length.

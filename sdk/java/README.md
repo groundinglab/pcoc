@@ -287,6 +287,6 @@ java -cp lib/pcoc-sdk-2.0.0-rc.3.jar pcoc.cli.Produce --help
 **Verify** takes the same flags as the Rust and Go programs; see [the verify programs](../README.md#the-verify-programs).
 - The default `--profile` is `test`.
 - `--profile conformance-small` requires `--sample-bytes N --slot-bytes N --terrain-bytes N --steps-per-leg N`. The record states those integers. Any of the four with another profile is a usage error, exit 2.
-- `--chain-rpc URL` is accepted with `--profile live` for flag compatibility, but this program does not read the node. It calls `Measure.record` without a chain, so a stored path in the anchor window counts as bound.
+- `--chain-rpc URL` is accepted with `--profile live` for flag compatibility, but this program does not read the node. It calls `Measure.record` without a chain. A stored path in the anchor window counts as bound when the index returned a document for that block. When the connection is refused and no document is read, `plant` is `not read`.
 
 **Produce** has its own flags: `--tips PATH` and the profiles `test|live|production`. See `--help`. `--demo-mnemonic` is not supported in this SDK.

@@ -100,7 +100,7 @@ func TestPathInclusionHeightIsUnread(t *testing.T) {
 		reads++
 		return nil
 	}
-	measured := section14Path(1, []byte{0x01}, bytes.Repeat([]byte{0x02}, 32), 100, Header{}, cborVal{}, cborVal{}, chain)
+	measured := section14Path(1, []byte{0x01}, bytes.Repeat([]byte{0x02}, 32), 100, Header{}, cborVal{}, cborVal{}, chain, Index{})
 	state, plant, anchor := measured.state, measured.plant, measured.anchor
 	if state != "present" || plant != "mismatch" || anchor != "not anchored" || reads != 0 {
 		t.Fatalf("%s %s %s reads %d", state, plant, anchor, reads)

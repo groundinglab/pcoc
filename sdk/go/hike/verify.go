@@ -17,19 +17,31 @@ type Index struct {
 }
 
 func (x Index) Read(height uint64) *HeaderRead {
+	body, ok := x.hasBody(height)
+	if !ok {
+		return nil
+	}
+	return ReadIndexDocument(body)
+}
+
+// hasBody reports whether a document was returned for height.
+// A refused connection, a missing key in a supplied map, and a non-200
+// response are false. A body that section 9 rejects is still true: the
+// document was read. An index with no map and no fetch was not asked, and
+// the nil chain stays a successful bind.
+func (x Index) hasBody(height uint64) (string, bool) {
 	if x.Documents != nil {
 		if body, ok := x.Documents[height]; ok {
-			return ReadIndexDocument(body)
+			return body, true
 		}
 	}
 	if x.Fetch != nil {
-		body, ok := x.Fetch(height)
-		if !ok {
-			return nil
-		}
-		return ReadIndexDocument(body)
+		return x.Fetch(height)
 	}
-	return nil
+	if x.Documents != nil {
+		return "", false
+	}
+	return "", true
 }
 
 // Verify measures one hike object. It does not apply section 15.
@@ -43,7 +55,8 @@ func Verify(data []byte, profile Profile, index Index, stream []byte, omitSix bo
 
 // verifyWithChain is Verify. pathChain is the section 14.3 bind for a present
 // path that sits in the anchor window and names a stored interrupt header.
-// A nil callback is a successful bind. It is not called for an earlier kind.
+// A nil callback is a successful bind when the index returned a document for
+// that block. No document is plant `not read`. It is not called for an earlier kind.
 func verifyWithChain(data []byte, profile Profile, index Index, pathChain func(PathLocators) error, stream []byte, omitSix bool) (Record, bool) {
 	item, trailing, err := decodeHead(data)
 	if err != nil {
@@ -472,7 +485,7 @@ func measure(item cborVal, profile Profile, index Index, pathChain func(PathLoca
 			measured = absentStagePath(g)
 			row, pathState, plant, anchor = measured.row, measured.state, measured.plant, measured.anchor
 		} else if profile.Kind == Kind {
-			measured = section14Path(g, path, waypoint, beaconHeight, headers[g], item, stages, pathChain)
+			measured = section14Path(g, path, waypoint, beaconHeight, headers[g], item, stages, pathChain, index)
 			row, pathState, plant, anchor = measured.row, measured.state, measured.plant, measured.anchor
 		} else {
 			row, pathState, plant = pathRow(g, path)
@@ -901,9 +914,11 @@ func absentStagePath(g int) pathMeasure {
 // section14Path is the section 14.3 row for one stage of a v2.0 object.
 // The chain bind runs only after the inclusion height is in the anchor
 // window and the block is a stored interrupt header. A nil chain is a
-// successful bind. A body that does not validate is plant mismatch and
-// does not call the chain. H is the stage's stored beacon height.
-func section14Path(g int, path, waypoint []byte, beaconHeight uint64, header Header, item, stages cborVal, chain func(PathLocators) error) pathMeasure {
+// successful bind when the index returned a document for that block. A
+// refused connection, with no document, is plant `not read`. A body that
+// does not validate is plant mismatch and does not call the chain. H is
+// the stage's stored beacon height.
+func section14Path(g int, path, waypoint []byte, beaconHeight uint64, header Header, item, stages cborVal, chain func(PathLocators) error, index Index) pathMeasure {
 	nd := jstr("not defined")
 	out := pathMeasure{anchor: "not anchored"}
 	if g == 17 {
@@ -942,9 +957,21 @@ func section14Path(g int, path, waypoint []byte, beaconHeight uint64, header Hea
 	}
 	out.plantRead = true
 	out.plant = "mismatch"
-	if chain == nil || chain(loc) == nil {
-		out.plant = "match"
-		out.anchor = "anchored"
+	switch {
+	case chain != nil:
+		if chain(loc) == nil {
+			out.plant = "match"
+			out.anchor = "anchored"
+		}
+	default:
+		// No chain callback. A document that was read counts as bound.
+		// No document (connection refused, or the height is absent) is not read.
+		if _, ok := index.hasBody(out.height); ok {
+			out.plant = "match"
+			out.anchor = "anchored"
+		} else {
+			out.plant = "not read"
+		}
 	}
 	pg, heightPG, dg := nd, nd, nd
 	if out.plant == "match" {
