@@ -2,7 +2,7 @@
 
 **Early prototype.** Specification: Satoshi Hike v2.0 (`spec-v2.0.5`). Website: https://groundinglab.io
 
-A PCOC (production-constrained observable commitment) is a self-issued identifier backed by a resource commitment, not a payment. You make it on your own device by holding memory through a hike paced by Bitcoin blocks. Anyone can check the file cheaply, without trusting you or us. The design aims to give bulk making no discount: copying the file is cheap, but a new public key means a new hike.
+A PCOC (production-constrained observable commitment) is a self-issued identifier backed by a resource commitment, not a payment. You make it on your own device by holding memory through a hike, the timed making process, paced by Bitcoin blocks. The result is the PCOC object (the specification's hike object): the bytes you keep and present, holding your public key and the record of the hike. Anyone can check the PCOC object cheaply, without trusting you or us. The design aims to give bulk making no discount: copying the PCOC object is cheap, but a new public key means a new hike.
 
 An identifier is not an identity: a PCOC says nothing about who made it.
 
@@ -19,10 +19,10 @@ A PCOC is self-issued: you create it on your own device from your own key, with 
 ## Three separate steps
 
 1. **Create (the hike).** Your computer fills a block of memory fixed by your public key and a Bitcoin block, then works through it in legs of two million steps, each ending in a leg result. Bitcoin blocks pace the stages: Satoshi Hike v2.0 records eighteen. The cost is your own device's work. Bitcoin only timestamps it: Bari records each tip's pooled waypoints in one Bitcoin transaction. Bitcoin's proof-of-work does not secure a PCOC or pay for it.
-2. **Check (verify).** A verifier recomputes from the file and the public index and records measurements: `match`, `mismatch`, `present`, `skip`, `not defined`, `not read`, `not fetched by design`, `n/a`, `anchored`, `not anchored`, and `earlier version`. It never says pass or fail. The index stands in for Bitcoin; anyone can bypass it by checking Bitcoin directly.
-3. **Admit (policy).** Accept, refuse, and revoke are each relying party's own decisions. groundinglab's Admission Gate is one configured instance. Its policy is a recommendation ([services/admission-gate/POLICY.md](services/admission-gate/POLICY.md)); the specification sets no threshold value. Policy can change without changing the file.
+2. **Check (verify).** A verifier recomputes from the PCOC object and the public index and records measurements: `match`, `mismatch`, `present`, `skip`, `not defined`, `not read`, `not fetched by design`, `n/a`, `anchored`, `not anchored`, and `earlier version`. It never says pass or fail. The index stands in for Bitcoin; anyone can bypass it by checking Bitcoin directly.
+3. **Admit (policy).** Accept, refuse, and revoke are each relying party's own decisions. groundinglab's Admission Gate is one configured instance. Its policy is a recommendation ([services/admission-gate/POLICY.md](services/admission-gate/POLICY.md)); the specification sets no threshold value. Policy can change without changing the PCOC object.
 
-The Bitcoin tip is the shared public sequencer. Successive tips pace the stages and order them. That is the whole of its role: not a payment, not a confirmation count, and not an archive of the chain. The hike is the quantity of work.
+The Bitcoin tip (the newest block's hash and height) is the shared public tick that paces the staged work. That is the whole of its role: not a fee, not a confirmation count, and not an archive of the chain. The hike is the quantity of work.
 
 ## What this does not claim
 
