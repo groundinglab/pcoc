@@ -50,9 +50,20 @@ Policy values come from the policy file, not from the specification. This build 
 
 The public log starts empty. The process creates `log_dir`. A chain that is not Satoshi Hike v2.0 is not opened and not served.
 
-This directory is a standalone crate with its own `Cargo.lock`. It depends on the Rust SDK crate `hike` by path (`../../sdk/rust/hike`), so a checkout needs `services/admission-gate` and `sdk/rust`. Build and test from this directory:
+This directory is a standalone crate with its own `Cargo.lock`. It depends on the Rust SDK crate `hike` by path (`../../sdk/rust/hike`), so a checkout needs `services/admission-gate` and `sdk/rust`.
+
+`rust-toolchain.toml` in this directory pins Rust 1.99.0, the same pin as `sdk/rust`. On Debian or Ubuntu, install the build tools and rustup; rustup installs the pinned toolchain on the first `cargo` command:
 
 ```bash
+sudo apt install -y build-essential git curl
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
+. "$HOME/.cargo/env"
+```
+
+Build and test from this directory:
+
+```bash
+cargo --version   # prints cargo 1.99.0, the pinned version
 cargo build --locked --release
 cargo test --locked
 ```

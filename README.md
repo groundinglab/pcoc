@@ -77,7 +77,7 @@ Don't use `--depth 1`. The test harness compares the conformance vectors with th
 | JDK | 21 or newer | the Java SDK |
 | GTK and libadwaita | GTK 4.14+, libadwaita 1.5+ | the desktop app only ([apps/desktop](apps/desktop/)) |
 
-`sdk/rust/` and `apps/desktop/` each pin Rust 1.99.0 in a `rust-toolchain.toml`, and rustup installs it on the first `cargo` command there. The services and `sdk/examples/rust/` have no pin, so give rustup a default as well:
+`sdk/rust/`, `sdk/examples/rust/`, `services/admission-gate/` and `apps/desktop/` each pin Rust 1.99.0 in a `rust-toolchain.toml`, and rustup installs it on the first `cargo` command there. The other services (`services/bari/`, `services/index/` and `services/admission-claims/`) have no pin yet, so give rustup a default as well:
 
 ```sh
 rustup default 1.99.0
