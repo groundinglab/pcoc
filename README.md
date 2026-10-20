@@ -50,6 +50,113 @@ The specification and the conformance vectors are the core deliverable. The poin
 | Docs | [docs/](docs/README.md) | Plain-language briefs and rationale. Explanatory, not normative |
 | Your own deployment | [docs/run-under-your-own-name.md](docs/run-under-your-own-name.md) | Every place a builder changes to run the pieces under their own name |
 
+## Get started
+
+This section takes you from no code to a checked PCOC on your own machine: get the code, install the tools, run the tests, and verify a real PCOC. Every command below was run on Debian 13 (x86-64). Other systems have not been tried with these steps.
+
+For the ideas behind each step, see [How it works](https://groundinglab.io/how-it-works/) and [Technical](https://groundinglab.io/technical/) on groundinglab.io.
+
+### 1. Get the code
+
+The code is public at https://github.com/groundinglab/pcoc. Make a full clone:
+
+```sh
+git clone https://github.com/groundinglab/pcoc.git
+cd pcoc
+```
+
+Don't use `--depth 1`. The test harness compares the conformance vectors with the specification's git tag (`spec-v2.0.5`), and a shallow clone has no tags, so the first check fails. If you already have a shallow clone, run `git fetch --tags`.
+
+### 2. Install the tools
+
+| Tool | Version | Needed for |
+|---|---|---|
+| Python | 3 | the test harness and its checks |
+| Rust, installed with [rustup](https://rustup.rs) | 1.99.0 | the Rust SDK, the services and the desktop app |
+| Go | 1.22 or newer | the Go SDK |
+| JDK | 21 or newer | the Java SDK |
+| GTK and libadwaita | GTK 4.14+, libadwaita 1.5+ | the desktop app only ([apps/desktop](apps/desktop/)) |
+
+`sdk/rust/` and `apps/desktop/` each pin Rust 1.99.0 in a `rust-toolchain.toml`, and rustup installs it on the first `cargo` command there. The services and `sdk/examples/rust/` have no pin, so give rustup a default as well:
+
+```sh
+rustup default 1.99.0
+```
+
+Without a default, those folders stop with "rustup could not choose a version of cargo to run".
+
+### 3. Run the tests
+
+An SDK (software development kit) is the library you add to your own app or service to make or check a PCOC. The conformance vectors are the shared test cases in [spec/conformance/v2.0/](spec/conformance/v2.0/): exact bytes that every implementation must reproduce. One script tests all three SDKs against them, and against each other:
+
+```sh
+bash sdk/test.sh
+```
+
+It runs seven steps (version pins, Rust, Go, Java, a cross-check of the three verifiers, the examples, and the docs) and ends with `sdk/test.sh: PASS`. On an 8-core machine it took about four minutes, most of it compiling Rust and the cross-check. [sdk/README.md](sdk/README.md#one-harness) describes each step.
+
+To run only the specification's own checks (section 6 constants, sign-in wire vectors, links and the vector manifest hash):
+
+```sh
+python3 spec/conformance/tools/ring1_checks.py
+```
+
+Each service builds and tests on its own:
+
+```sh
+cd services/admission-gate   # or bari, index, admission-claims
+cargo test --locked --release
+```
+
+The desktop app's core logic tests without GTK:
+
+```sh
+cd apps/desktop
+cargo test --locked -p pcoc-hike-core
+```
+
+### 4. Verify a real PCOC
+
+To verify is to measure a PCOC against Bitcoin's public block record, read through an index (a read-only copy of the block data a verifier needs, one entry per block height). The verifier writes a measurement record: JSON, with values such as `match` and `anchored`. It never says pass or fail; deciding who gets in is a service's policy.
+
+Download the PCOC object that groundinglab made, build the Rust verify program, and run it:
+
+```sh
+curl -fsSLO https://groundinglab.io/verify/groundinglab.pcoc.cbor
+(cd sdk/rust && cargo build --locked --release -p satoshi-hike-verify)
+sdk/rust/target/release/satoshi-hike-verify --input groundinglab.pcoc.cbor --profile live > record.json
+```
+
+`--profile live` reads the hosted index at `https://index.groundinglab.io`. To use your own index, add `--index-url URL` (see [Run it yourself](#run-it-yourself)). The check took under a minute here, and `record.json` started with `{"profile":"production","shape":"match",...`.
+
+The same check as a short program, which also applies the specification's section 15 refusals the way a gate does:
+
+```sh
+cd sdk/examples/rust
+cargo run --locked --release --bin live -- ../../../groundinglab.pcoc.cbor
+```
+
+It prints the record and then `clear: no section 15 refusal and no held read`. The [verify page](https://groundinglab.io/verify/) does the same check in a browser.
+
+### 5. Make a PCOC
+
+Making a PCOC takes 18 Bitcoin blocks, typically around three hours, but it varies. The desktop app makes one on your own machine with your own key, with Bitcoin's live blocks as the clock. Build and run steps are in [apps/desktop/README.md](apps/desktop/README.md), and the plain-language guide is [Make a PCOC](https://groundinglab.io/make/). The Android app is built from [groundinglab/primal-pcoc](https://github.com/groundinglab/primal-pcoc).
+
+To produce one in code, the produce examples in [sdk/examples/](sdk/examples/) run offline at the small test sizes and finish in under a second.
+
+## Repository map
+
+| Folder | What is in it | Test it with |
+|---|---|---|
+| [spec/](spec/) | The Satoshi Hike v2.0 specification and its conformance vectors | `python3 spec/conformance/tools/ring1_checks.py` |
+| [sdk/](sdk/) | The Rust, Go and Java SDKs, runnable examples in each language, and the harness tools | `bash sdk/test.sh` |
+| [services/](services/) | Bari (the anchoring service), the index, the Admission Gate, the claims service, and a Cloudflare Worker. Each builds alone | `cargo test --locked --release` in each Rust service; `node --test test/` in `cf-claims-worker` |
+| [apps/](apps/) | The desktop app (Linux), and notes and checks for the Android app | `cargo test --locked -p pcoc-hike-core` in `apps/desktop` |
+| [docs/](docs/README.md) | Plain-language briefs, rationale, architecture and integration notes. Explanatory, not normative | |
+| [.github/](.github/) | CI (self-hosted runners), its scripts, and issue templates | |
+
+At the top level: [STATUS](STATUS.md) (what is specified, measured and open), [DEPLOYABLES](DEPLOYABLES.md) (what is released and how it is tagged), [PRINCIPLES](PRINCIPLES.md), [CONTRIBUTING](CONTRIBUTING.md), [SECURITY](SECURITY.md) and the licences.
+
 ## Run it yourself
 
 Hosted services are opt-in. `https://index.groundinglab.io` and `https://bari.groundinglab.io` are a convenience, not a dependency. A verifier takes `--index-url`. Omit it on the live profile and the SDK verify program uses the hosted index. Pass your own and it does not.
