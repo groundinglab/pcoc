@@ -2,7 +2,7 @@
 <component type="desktop-application">
   <id>app.pcoc.Hike</id>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>LicenseRef-proprietary</project_license>
+  <project_license>Apache-2.0</project_license>
   <name>PCOC Hike</name>
   <summary>Produce, verify and sign in with Satoshi Hike v2.0 objects</summary>
   <description>
