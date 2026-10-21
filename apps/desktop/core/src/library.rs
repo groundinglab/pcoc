@@ -462,15 +462,18 @@ mod tests {
     fn counts_checkpoints_and_reads_the_key() {
         let bytes = vector_object("test-3leg.json");
         let e = Entry::from_bytes(PathBuf::from("/x/test-3leg.cbor"), &bytes, 1_791_322_260);
-        assert_eq!(e.kind, Kind::V2);
-        assert_eq!(e.legs, Some(3));
-        assert_eq!(e.public_key, Some([0x42; 32]));
-        assert_eq!(e.line(e.public_key), "6 Oct 21:31 UTC · 3 legs");
-        assert_eq!(e.line(Some([0x22; 32])), "opened · other npub");
-
+        assert_eq!(e.kind, Kind::Earlier("satoshi-hike-v2.0-object".to_owned()));
+        assert_eq!(e.line(e.public_key), "earlier version");
         let structural = hike::encode_hike(&hike::structural_object());
-        let s = Entry::from_bytes(PathBuf::from("s.cbor"), &structural, 0);
-        assert_eq!(s.legs, Some(18));
+        let current = Entry::from_bytes(PathBuf::from("/x/v21.cbor"), &structural, 1_791_322_260);
+        assert_eq!(current.kind, Kind::V2);
+        assert_eq!(current.legs, Some(18));
+        assert_eq!(
+            current.line(current.public_key),
+            format!("{} · 18 legs", crate::format::day_month_time(1_791_322_260))
+        );
+        assert_eq!(current.line(Some([0x22; 32])), "opened · other npub");
+        assert_eq!(e.public_key, Some([0x42; 32]));
     }
 
     #[test]

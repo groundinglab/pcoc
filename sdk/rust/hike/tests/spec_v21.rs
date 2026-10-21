@@ -60,6 +60,22 @@ fn sizes_of(slot: usize, terrain: usize) -> Sizes {
 }
 
 #[test]
+fn production_leg0_matches_the_pack() {
+    let doc = load("prod-leg0.json");
+    let pk = hex32(doc["public_key_hex"].as_str().unwrap());
+    let beacon = hex32(doc["seed_beacon_hex"].as_str().unwrap());
+    let digest = seed(&pk, &beacon);
+    let sizes = Sizes::production();
+    let terrain = fill_terrain_sized(&digest, sizes);
+    assert_eq!(sha256(&terrain), doc["terrain_sha256"].as_str().unwrap());
+    let leg = leg_result_sized(&terrain, &digest, sizes);
+    assert_eq!(format!("{leg:016x}"), doc["leg0_u64_hex"].as_str().unwrap());
+    let sample = hike::terrain_sample_sized(&terrain, &digest, sizes);
+    let checkpoint = checkpoint_sized(&digest, &digest, &sample, leg, sizes);
+    assert_eq!(encode(checkpoint), doc["checkpoint0_hex"].as_str().unwrap());
+}
+
+#[test]
 fn seed_and_nl4_words_match_the_pack() {
     let seed_doc = load("seed.json");
     let pk = hex32(seed_doc["public_key_hex"].as_str().unwrap());
