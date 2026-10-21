@@ -3,6 +3,10 @@
 //! `cargo run -p hike --release --example bench_leg`
 
 fn main() {
+    println!(
+        "sha_ni={}",
+        std::is_x86_feature_detected!("sha")
+    );
     let public_key = [0x11u8; 32];
     let beacon = [0x22u8; 32];
     let seed = hike::seed(&public_key, &beacon);

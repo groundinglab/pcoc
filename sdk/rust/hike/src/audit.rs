@@ -106,6 +106,31 @@ pub fn draw_distinct(n: u64, k: usize, src: &mut dyn Entropy) -> Result<Vec<u64>
     Ok(chosen)
 }
 
+/// Thorough indices. Distinct while an unused index remains.
+///
+/// When `k` is at most `n`, this is one draw without replacement. When `k`
+/// is larger, the next index may repeat only after every index in `0..n`
+/// has been used. `leg_total` below 6 does not call this.
+pub fn draw_thorough(n: u64, k: usize, src: &mut dyn Entropy) -> Result<Vec<u64>, ()> {
+    if n == 0 || k == 0 {
+        return Err(());
+    }
+    let mut chosen = Vec::with_capacity(k);
+    let mut used = Vec::new();
+    while chosen.len() < k {
+        if used.len() as u64 == n {
+            used.clear();
+        }
+        let q = draw_one(n, src)?;
+        if used.contains(&q) {
+            continue;
+        }
+        used.push(q);
+        chosen.push(q);
+    }
+    Ok(chosen)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

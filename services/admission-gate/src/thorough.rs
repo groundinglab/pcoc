@@ -13,7 +13,7 @@
 
 use crate::canon::{self, hex32};
 use crate::policy::AdmissionPolicy;
-use hike::{draw_distinct, Entropy, OsEntropy};
+use hike::{draw_thorough, Entropy, OsEntropy};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::Write;
@@ -193,11 +193,7 @@ fn run_draws(
         // revoke a grant. There is no grant to revoke, and this is not a ban.
         return Err("fewer than 6 legs".to_owned());
     } else {
-        let draw = match fresh_draw(seq, object_sha, legs, policy) {
-            Ok(draw) => draw,
-            Err(err) if err.starts_with("short of") => return Ok(not_drawn(seq, legs)),
-            Err(err) => return Err(err),
-        };
+        let draw = fresh_draw(seq, object_sha, legs, policy)?;
         store_draw(log_dir, &draw)?;
         draw
     };
@@ -302,12 +298,10 @@ fn fresh_draw(
     let sample = width
         .checked_mul(rounds)
         .ok_or_else(|| "thorough draw count overflowed".to_owned())?;
-    if (legs as usize) < sample {
-        return Err(format!("short of {sample} distinct legs"));
-    }
-    // One draw, without replacement. The rounds are a split of that draw,
-    // so an index is not selected twice across rounds.
-    let drawn = draw_distinct(legs, sample, &mut entropy as &mut dyn Entropy)
+    // One sequence, distinct while an unused index remains. At 18 or more
+    // legs the 18 indices do not repeat. Below 18 a later index may repeat
+    // only after every leg has been used.
+    let drawn = draw_thorough(legs, sample, &mut entropy as &mut dyn Entropy)
         .map_err(|_| format!("could not draw {sample} legs"))?;
     let runs: Vec<Vec<u64>> = drawn.chunks(width).map(|chunk| chunk.to_vec()).collect();
     let mut salt = [0u8; 32];
@@ -620,7 +614,7 @@ mod tests {
         ));
         let object = [7u8; 32];
         let mut entropy = OsEntropy;
-        let runs = vec![draw_distinct(20, 6, &mut entropy).unwrap()];
+        let runs = vec![draw_thorough(20, 6, &mut entropy).unwrap()];
         let mut salt = [0u8; 32];
         (&mut entropy as &mut dyn Entropy)
             .fill_bytes(&mut salt)

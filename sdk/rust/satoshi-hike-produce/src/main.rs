@@ -206,25 +206,30 @@ fn print_hike_summary(bytes: &[u8], clock: &hike::HeaderClock) {
         None => (None, None),
     };
     let last_time = clock.n_time(&hike.last_interrupt);
+    let steps = legs.saturating_mul(hike::STEPS_PER_LEG);
     let raw_rate = rate_per_s(legs, first_time, last_time);
+    let raw_steps = rate_per_s(steps, first_time, last_time);
     let first_mtp = hike
         .stages
         .first()
         .and_then(|stage| clock.median_time_past(&stage.beacon));
     let last_mtp = clock.median_time_past(&hike.last_interrupt);
     let mtp_rate = rate_per_s(legs, first_mtp, last_mtp);
+    let mtp_steps = rate_per_s(steps, first_mtp, last_mtp);
     let show = |value: Option<u64>| value.map(|item| item.to_string()).unwrap_or_else(|| "not read".to_owned());
     let show_u32 = |value: Option<u32>| value.map(|item| item.to_string()).unwrap_or_else(|| "not read".to_owned());
     eprintln!(
-        "satoshi-hike-produce: hike_summary legs={legs} first_beacon_height={} first_beacon_time={} last_beacon_height={} last_beacon_time={} legs_per_s_raw_ntime={} first_beacon_mtp={} last_beacon_mtp={} legs_per_s_mtp={}",
+        "satoshi-hike-produce: hike_summary legs={legs} steps={steps} first_beacon_height={} first_beacon_time={} last_beacon_height={} last_beacon_time={} legs_per_s_raw_ntime={} steps_per_s_raw_ntime={} first_beacon_mtp={} last_beacon_mtp={} legs_per_s_mtp={} steps_per_s_mtp={}",
         show(first_height),
         show_u32(first_time),
         hike.last_interrupt_height,
         show_u32(last_time),
         show_rate(raw_rate),
+        show_rate(raw_steps),
         show_u32(first_mtp),
         show_u32(last_mtp),
-        show_rate(mtp_rate)
+        show_rate(mtp_rate),
+        show_rate(mtp_steps)
     );
 }
 

@@ -365,8 +365,12 @@ fn apply_deadline(
         return decision;
     };
     let last = last_beacon_height(record);
-    match (index.tip_height().ok(), last) {
-        (Some(tip), Some(last)) if tip > last && tip - last > k => refuse_now(
+    match (index.tip_height(), last) {
+        (Ok(tip), Some(last)) if tip < last && policy.held_on_not_read => FastDecision::Held {
+            record: record.clone(),
+        },
+        (Ok(tip), Some(last)) if tip < last => decision,
+        (Ok(tip), Some(last)) if tip.saturating_sub(last) > k => refuse_now(
             vec!["submission deadline".to_owned()],
             format!(
                 "Too late: tip {tip} is more than {k} blocks after last beacon {last}. placeholder, not ratified."
@@ -374,7 +378,7 @@ fn apply_deadline(
             record.clone(),
             crate::wire::OUTCOME_REJECTED,
         ),
-        (Some(_), Some(_)) => decision,
+        (Ok(_), Some(_)) => decision,
         _ if policy.held_on_not_read => FastDecision::Held {
             record: record.clone(),
         },
@@ -604,6 +608,8 @@ mod tests {
         }
         let on_time = apply_deadline(provisional.clone(), &policy, &Tip(1013));
         assert!(matches!(on_time, FastDecision::Provisional { .. }));
+        let below = apply_deadline(provisional.clone(), &policy, &Tip(1009));
+        assert!(matches!(below, FastDecision::Held { .. }));
         let unread = apply_deadline(provisional, &policy, &ClosedIndex);
         assert!(matches!(unread, FastDecision::Held { .. }));
     }
