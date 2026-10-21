@@ -56,7 +56,15 @@ pub fn fill_all4(seed: &[u8; 32], sizes: Sizes) -> Vec<u8> {
 /// The accumulator is still wrapping addition. Only the mixer is bare.
 pub fn step_bare_finalizer(terrain: &[u8], state: u64, sizes: Sizes) -> u64 {
     fold_add(terrain, state, sizes, |word, w, state| {
-        bare_mix(word ^ w ^ state)
+        bare_mix(word ^ state.wrapping_add(w))
+    })
+}
+
+/// Withdrawn per-word input `word XOR w XOR S`, still with wrapping addition.
+/// `word XOR w` does not depend on `S`. Vector key `xor_w_fold`.
+pub fn step_xor_w(terrain: &[u8], state: u64, sizes: Sizes) -> u64 {
+    fold_add(terrain, state, sizes, |word, w, state| {
+        mix64(word ^ w ^ state)
     })
 }
 
@@ -88,7 +96,7 @@ pub fn step_partial_words(terrain: &[u8], state: u64, sizes: Sizes, keep: usize)
     let slot = slot_of(terrain, state, sizes);
     let mut acc = 0u64;
     for (w, word) in slot.iter().take(keep).enumerate() {
-        acc = acc.wrapping_add(mix64(word ^ (w as u64) ^ state));
+        acc = acc.wrapping_add(mix64(*word ^ state.wrapping_add(w as u64)));
     }
     seal(acc)
 }

@@ -15,6 +15,7 @@
 //! until a second read that bypasses the mirror cache confirms it. Only that
 //! confirmed mismatch refuses (§15.3, Rule B9).
 
+use crate::deadline::{self, Verdict};
 use crate::policy::{self, AdmissionPolicy};
 use crate::verifier::{self, IndexRead, MeasureOpts, Report};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -50,21 +51,40 @@ pub enum FastDecision {
 /// `Copy`: the index client is not `Copy`. A height the reader does not hold
 /// is `not read`.
 pub fn decide(object: &[u8], policy: &AdmissionPolicy, index: &impl IndexRead) -> FastDecision {
-    decide_at(object, policy, index, hike::Sizes::production())
+    decide_with(object, policy, index, None).0
 }
 
-/// Same phase at `conformance-small` sizes.
+/// [`decide`], plus a verdict to store when this call read a tip.
 ///
-/// The profile is not offered on the production path. [`decide`] always uses
-/// section 6. Tests use this so a small object can reach the index reads
-/// without filling the production terrain.
-#[cfg(test)]
-pub(crate) fn decide_small(
+/// `frozen` is the decision already stored for this submission. When it is
+/// set, the tip is not read again.
+pub(crate) fn decide_with(
     object: &[u8],
     policy: &AdmissionPolicy,
     index: &impl IndexRead,
-) -> FastDecision {
-    decide_at(object, policy, index, hike::Sizes::conformance_small())
+    frozen: Option<Verdict>,
+) -> (FastDecision, Option<Verdict>) {
+    decide_at(object, policy, index, hike::Sizes::production(), frozen)
+}
+
+/// Conformance-small sizes, with the same deadline clock as [`decide_with`].
+///
+/// The profile is not offered on the production path. [`decide`] always uses
+/// section 6. The door's small settle uses this so a test object can reach
+/// the index reads without filling the production terrain.
+pub(crate) fn decide_small_with(
+    object: &[u8],
+    policy: &AdmissionPolicy,
+    index: &impl IndexRead,
+    frozen: Option<Verdict>,
+) -> (FastDecision, Option<Verdict>) {
+    decide_at(
+        object,
+        policy,
+        index,
+        hike::Sizes::conformance_small(),
+        frozen,
+    )
 }
 
 fn decide_at(
@@ -72,15 +92,19 @@ fn decide_at(
     policy: &AdmissionPolicy,
     index: &impl IndexRead,
     sizes: hike::Sizes,
-) -> FastDecision {
+    frozen: Option<Verdict>,
+) -> (FastDecision, Option<Verdict>) {
     TERRAIN_BEFORE.store(hike::terrain_builds(), Ordering::Relaxed);
     if !canonical(object) {
-        return FastDecision::Refuse {
-            reasons: vec!["malformed".to_owned()],
-            line: "The object is not the canonical encoding.".to_owned(),
-            record: "{}".to_owned(),
-            website: crate::wire::OUTCOME_REJECTED,
-        };
+        return (
+            FastDecision::Refuse {
+                reasons: vec!["malformed".to_owned()],
+                line: "The object is not the canonical encoding.".to_owned(),
+                record: "{}".to_owned(),
+                website: crate::wire::OUTCOME_REJECTED,
+            },
+            None,
+        );
     }
     // An unconfirmed plant mismatch is reported as `not read`, so the screen
     // holds it. A second mismatch is the confirmed refuse.
@@ -98,7 +122,7 @@ fn decide_at(
     // A miss those checks settle does not call verify_fast.
     let screen = hike::screen_fast_sized(object, &plant, sizes);
     if let Some(decision) = settled_without_terrain(&screen, policy) {
-        return decision;
+        return (decision, None);
     }
     let measurements = hike::verify_fast_sized(object, &beacon, &plant, sizes);
     let profile = if sizes.is_production() {
@@ -106,7 +130,12 @@ fn decide_at(
     } else {
         "conformance-small"
     };
-    let decision = apply_deadline(judge_fast(&measurements, policy, profile), policy, index);
+    let (decision, store) = apply_deadline_clock(
+        judge_fast(&measurements, policy, profile),
+        policy,
+        index,
+        frozen,
+    );
     if let FastDecision::Refuse {
         reasons, record, ..
     } = &decision
@@ -116,12 +145,15 @@ fn decide_at(
         if reasons.iter().any(|reason| reason == "checkpoint mismatch")
             && !header_mismatch_confirmed(record, index)
         {
-            return FastDecision::Held {
-                record: record.clone(),
-            };
+            return (
+                FastDecision::Held {
+                    record: record.clone(),
+                },
+                store,
+            );
         }
     }
-    decision
+    (decision, store)
 }
 
 /// `true` when a fresh read still disagrees with a stored header.
@@ -353,36 +385,80 @@ fn judge_fast(
 /// Placeholder K, not ratified. A missing tip or last beacon is `held`.
 /// A pass that is more than K blocks behind the gate's observed tip is a refuse.
 /// This is a cheap check: it does not ban the key.
+#[cfg(test)]
 fn apply_deadline(
     decision: FastDecision,
     policy: &AdmissionPolicy,
     index: &impl IndexRead,
 ) -> FastDecision {
+    apply_deadline_clock(decision, policy, index, None).0
+}
+
+/// Rule B10. `frozen` is reused and the tip is not read. A fresh tip is the
+/// highest successful source. The `Some` verdict is what the caller stores;
+/// a frozen reuse and a not-read return `None` so the first decision stays.
+fn apply_deadline_clock(
+    decision: FastDecision,
+    policy: &AdmissionPolicy,
+    index: &impl IndexRead,
+    frozen: Option<Verdict>,
+) -> (FastDecision, Option<Verdict>) {
+    if let Some(verdict) = frozen {
+        if matches!(decision, FastDecision::Provisional { .. }) {
+            return (apply_stored(&decision, verdict), None);
+        }
+        return (decision, None);
+    }
     let Some(k) = policy.submission_deadline_blocks else {
-        return decision;
+        return (decision, None);
     };
     let FastDecision::Provisional { record } = &decision else {
-        return decision;
+        return (decision, None);
     };
     let last = last_beacon_height(record);
+    // Fresh read: `tip_height` bypasses the mirror cache. A failed or stale
+    // source is `Err` and is not a tip. Several sources yield the highest.
     match (index.tip_height(), last) {
-        (Ok(tip), Some(last)) if tip < last && policy.held_on_not_read => FastDecision::Held {
+        (Ok(tip), Some(_)) => match deadline::judge(tip, last, k) {
+            Some(verdict) => (apply_stored(&decision, verdict), Some(verdict)),
+            None if policy.held_on_not_read => (
+                FastDecision::Held {
+                    record: record.clone(),
+                },
+                None,
+            ),
+            None => (decision, None),
+        },
+        _ if policy.held_on_not_read => (
+            FastDecision::Held {
+                record: record.clone(),
+            },
+            None,
+        ),
+        _ => (decision, None),
+    }
+}
+
+/// Apply a stored or just-read verdict. `K` is not consulted again: a policy
+/// bump must not turn a pass into a refuse, and a lower tip must not reopen
+/// a refuse.
+fn apply_stored(decision: &FastDecision, verdict: Verdict) -> FastDecision {
+    let FastDecision::Provisional { record } = decision else {
+        return decision.clone();
+    };
+    match verdict {
+        Verdict::Within { .. } => decision.clone(),
+        Verdict::Below { .. } => FastDecision::Held {
             record: record.clone(),
         },
-        (Ok(tip), Some(last)) if tip < last => decision,
-        (Ok(tip), Some(last)) if tip.saturating_sub(last) > k => refuse_now(
+        Verdict::Late { tip } => refuse_now(
             vec!["submission deadline".to_owned()],
             format!(
-                "Too late: tip {tip} is more than {k} blocks after last beacon {last}. placeholder, not ratified."
+                "Too late: tip {tip} is past the submission deadline. placeholder, not ratified."
             ),
             record.clone(),
             crate::wire::OUTCOME_REJECTED,
         ),
-        (Ok(_), Some(_)) => decision,
-        _ if policy.held_on_not_read => FastDecision::Held {
-            record: record.clone(),
-        },
-        _ => decision,
     }
 }
 
@@ -612,6 +688,63 @@ mod tests {
         assert!(matches!(below, FastDecision::Held { .. }));
         let unread = apply_deadline(provisional, &policy, &ClosedIndex);
         assert!(matches!(unread, FastDecision::Held { .. }));
+    }
+
+    /// A reader that fails the test if Rule B10 asks for a tip.
+    struct NoRead;
+
+    impl IndexRead for NoRead {
+        fn beacon(&self, _: u64) -> Result<hike::IndexBeacon, ()> {
+            Err(())
+        }
+        fn beacon_fresh(&self, _: u64) -> Result<hike::IndexBeacon, ()> {
+            Err(())
+        }
+        fn plant(&self, _: &hike::PathLocators) -> hike::ChainRead {
+            hike::ChainRead::NotRead
+        }
+        fn plant_fresh(&self, _: &hike::PathLocators) -> hike::ChainRead {
+            hike::ChainRead::NotRead
+        }
+        fn tip_height(&self) -> Result<u64, ()> {
+            panic!("a frozen deadline must not read the tip");
+        }
+    }
+
+    #[test]
+    fn a_frozen_deadline_is_reused_and_a_bump_does_not_revoke() {
+        let record = r#"{"headers":[{"stored_height":1000,"T":1},{"stored_height":1010,"T":2}]}"#;
+        let provisional = FastDecision::Provisional {
+            record: record.to_owned(),
+        };
+        let mut policy = policy();
+        policy.submission_deadline_blocks = Some(0);
+        let (kept, store) = apply_deadline_clock(
+            provisional.clone(),
+            &policy,
+            &NoRead,
+            Some(deadline::Verdict::Within { tip: 1013 }),
+        );
+        assert!(matches!(kept, FastDecision::Provisional { .. }));
+        assert!(store.is_none(), "a reuse is not a new decision");
+        let (still_late, _) = apply_deadline_clock(
+            provisional.clone(),
+            &policy,
+            &NoRead,
+            Some(deadline::Verdict::Late { tip: 1014 }),
+        );
+        match still_late {
+            FastDecision::Refuse { reasons, .. } => {
+                assert_eq!(reasons, vec!["submission deadline".to_owned()]);
+            }
+            other => panic!("a stored refuse stays refused, got {other:?}"),
+        }
+        let (below, stored_below) = apply_deadline_clock(provisional.clone(), &policy, &Tip(100), None);
+        assert!(matches!(below, FastDecision::Held { .. }));
+        assert_eq!(stored_below, Some(deadline::Verdict::Below { tip: 100 }));
+        let (unread, store) = apply_deadline_clock(provisional, &policy, &ClosedIndex, None);
+        assert!(matches!(unread, FastDecision::Held { .. }));
+        assert!(store.is_none(), "not read is not stored");
     }
 
     /// One anchored waypoint and a bookend rate of 0.05. Terrain stays 0.

@@ -67,7 +67,8 @@ impl Service {
             &cfg.index_url,
             cfg.index_timeout,
             cfg.served_origins.clone(),
-        )?;
+        )?
+        .with_extra_index_urls(cfg.index_urls.clone());
         let jobs = JobStore::new(cfg.clone());
         for job in door.unsettled() {
             spawn_thorough(door.clone(), jobs.clone(), job);

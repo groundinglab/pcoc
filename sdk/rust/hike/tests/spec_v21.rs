@@ -228,6 +228,7 @@ fn negatives_and_the_rate_floor_match_the_pack() {
             | "v2_0_fold"
             | "xor_accumulator"
             | "xor_accumulator_fold"
+            | "xor_w_fold"
             | "partial_slot_read"
             | "partial_slot_read_2047" => {
                 let sizes = sizes_of(16384, 16384);
@@ -248,6 +249,7 @@ fn negatives_and_the_rate_floor_match_the_pack() {
                     "xor_accumulator" | "xor_accumulator_fold" => {
                         hike::rejected::step_xor_acc(&terrain, state, sizes)
                     }
+                    "xor_w_fold" => hike::rejected::step_xor_w(&terrain, state, sizes),
                     "partial_slot_read" | "partial_slot_read_2047" => {
                         let keep = case["words_read"].as_u64().unwrap() as usize;
                         hike::rejected::step_partial_words(&terrain, state, sizes, keep)
@@ -434,7 +436,10 @@ fn negatives_and_the_rate_floor_match_the_pack() {
             .iter()
             .flat_map(|item| hex_u64(item.as_str().unwrap()).to_le_bytes())
             .collect();
-        let mut entropy = ScriptEntropy { bytes: script, pos: 0 };
+        let mut entropy = ScriptEntropy {
+            bytes: script.clone(),
+            pos: 0,
+        };
         let started = case["rounds_started"].as_u64().unwrap() as usize;
         let drawn = hike::draw_thorough(total, started * 6, &mut entropy).unwrap();
         let mut got = Vec::new();
@@ -455,7 +460,55 @@ fn negatives_and_the_rate_floor_match_the_pack() {
             })
             .collect();
         assert_eq!(got, expected, "{}", case["name"]);
+        if case.get("byte_source").and_then(|item| item.as_str()) == Some("exhausted") {
+            let mut full = ScriptEntropy { bytes: script, pos: 0 };
+            assert!(
+                hike::draw_thorough(total, 18, &mut full).is_err(),
+                "{} exhaustion is not read",
+                case["name"]
+            );
+        }
     }
+}
+
+#[test]
+fn constants_and_the_manifest_hash_match_the_pack() {
+    let doc = load("constants.json");
+    assert_eq!(doc["SLOT_BYTES"].as_u64().unwrap() as usize, hike::SLOT_BYTES);
+    assert_eq!(doc["WORDS_PER_SLOT"].as_u64().unwrap() as usize, hike::WORDS_PER_SLOT);
+    assert_eq!(doc["TERRAIN_BYTES"].as_u64().unwrap() as usize, hike::TERRAIN_BYTES);
+    assert_eq!(doc["N_SLOTS"].as_u64().unwrap() as usize, hike::N_SLOTS);
+    assert_eq!(doc["SAMPLE_BYTES"].as_u64().unwrap() as usize, hike::SAMPLE_BYTES);
+    assert_eq!(doc["OFFSET_MODULUS"].as_u64().unwrap(), hike::OFFSET_MODULUS);
+    assert_eq!(doc["STEPS_PER_LEG"].as_u64().unwrap(), hike::STEPS_PER_LEG);
+    assert_eq!(doc["STAGES"].as_u64().unwrap() as usize, hike::STAGES);
+    assert_eq!(doc["KIND"], hike::KIND);
+    assert_eq!(doc["FILL"], hike::FILL);
+    assert_eq!(doc["SEAL_DOMAIN"], encode(hike::SEAL_DOMAIN));
+    assert_eq!(doc["MIX_ADD"], format!("0x{:X}", hike::MIX_ADD));
+    assert_eq!(doc["MIX_MUL1"], format!("0x{:X}", hike::MIX_MUL1));
+    assert_eq!(doc["MIX_MUL2"], format!("0x{:X}", hike::MIX_MUL2));
+
+    let manifest = load("manifest.json");
+    let mut entries = Vec::new();
+    for item in manifest["files"].as_array().unwrap() {
+        let name = item.as_str().unwrap();
+        let bytes = std::fs::read(pack().join(name)).unwrap();
+        entries.push((format!("spec/conformance/v2.1/{name}"), Sha256::digest(bytes)));
+    }
+    entries.sort_by(|left, right| left.0.cmp(&right.0));
+    let mut hasher = Sha256::new();
+    for (rel, dig) in &entries {
+        hasher.update(rel.as_bytes());
+        hasher.update([0u8]);
+        hasher.update(dig);
+    }
+    let got = encode(hasher.finalize());
+    assert_eq!(got, manifest["vector_sha256"].as_str().unwrap());
+    assert_eq!(
+        got,
+        "e2451caf9df3cb70debb0d6d99dc11cab20bca3729f7996f8f6d4f521484d50b"
+    );
 }
 
 struct ScriptEntropy {

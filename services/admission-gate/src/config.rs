@@ -57,6 +57,10 @@ pub struct Config {
     pub rate_per_min: u32,
     pub client_ip_header: Option<String>,
     pub index_url: String,
+    /// Additional tip sources. The deadline uses the highest tip among
+    /// `index_url` and these. Empty on gl-admit-v6. Header and plant reads
+    /// stay on `index_url`.
+    pub index_urls: Vec<String>,
     /// Decision log directory. The process creates it. A v1.35 chain here is
     /// not loaded.
     pub log_dir: PathBuf,
@@ -74,6 +78,9 @@ pub struct Config {
 struct FileConfig {
     bind: String,
     index_url: String,
+    /// Further tip origins. Omitted means none. Not part of the policy bind.
+    #[serde(default)]
+    index_urls: Vec<String>,
     log_dir: String,
     max_object_bytes: usize,
     job_retention_secs: u64,
@@ -102,6 +109,7 @@ impl Default for FileConfig {
         Self {
             bind: DEFAULT_BIND.to_owned(),
             index_url: DEFAULT_INDEX_URL.to_owned(),
+            index_urls: Vec::new(),
             log_dir: DEFAULT_LOG_DIR.to_owned(),
             max_object_bytes: DEFAULT_MAX_OBJECT_BYTES,
             job_retention_secs: DEFAULT_JOB_RETENTION_SECS,
@@ -245,6 +253,13 @@ impl Config {
             .parse()
             .map_err(|err| format!("bind {:?}: {err}", file.bind))?;
         let index_url = parse_index_url(&file.index_url)?;
+        let mut index_urls = Vec::with_capacity(file.index_urls.len());
+        for raw in &file.index_urls {
+            let parsed = parse_index_url(raw)?;
+            if parsed != index_url && !index_urls.contains(&parsed) {
+                index_urls.push(parsed);
+            }
+        }
         let client_ip_header = file.client_ip_header.and_then(|raw| {
             let trimmed = raw.trim().to_ascii_lowercase();
             if trimmed.is_empty() {
@@ -268,6 +283,7 @@ impl Config {
             rate_per_min: file.rate_per_min,
             client_ip_header,
             index_url,
+            index_urls,
             log_dir: PathBuf::from(file.log_dir),
             policy,
             bind_threads: file.bind_threads,
@@ -292,6 +308,7 @@ impl Config {
         Self {
             rate_per_min: 0,
             index_url: index_url.to_owned(),
+            index_urls: Vec::new(),
             log_dir,
             index_timeout: Duration::from_secs(1),
             ..cfg

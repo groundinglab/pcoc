@@ -10,6 +10,7 @@
 //! no friendly list. A pure bookend `not read` writes no thorough line.
 
 use crate::canon::{self, hex32};
+use crate::deadline;
 use crate::fast::{self, FastDecision};
 use crate::log::{self, DecisionLog, DecisionWrite, LogError};
 use crate::policy::{self, AdmissionPolicy, Judgment};
@@ -29,7 +30,13 @@ pub struct Door {
     rows: Arc<SignInRows>,
     policy: AdmissionPolicy,
     index_url: String,
+    /// Additional deadline tip sources. Header and plant reads stay on
+    /// [`Self::index_url`].
+    extra_index_urls: Vec<String>,
     index_timeout: std::time::Duration,
+    /// Rule B10 decisions. Shared by every clone of this door. The first
+    /// successful tip for a submission is the one that stays.
+    deadline: Arc<Mutex<deadline::Book>>,
     /// Site origins this gate serves (config `served_origins`). Exact bytes.
     served_origins: Arc<Vec<String>>,
 }
@@ -118,6 +125,7 @@ impl Door {
             return Err("served_origins is empty; the gate serves no site origin".to_owned());
         }
         policy.bind(dir)?;
+        let deadline = deadline::Book::open(dir)?;
         let mut log = DecisionLog::open(dir).map_err(show_log)?;
         log.set_policy_hint(policy::public_document(&policy))
             .map_err(show_log)?;
@@ -134,9 +142,18 @@ impl Door {
             rows: Arc::new(SignInRows::new()),
             policy,
             index_url: index_url.to_owned(),
+            extra_index_urls: Vec::new(),
             index_timeout,
+            deadline: Arc::new(Mutex::new(deadline)),
             served_origins: Arc::new(served_origins),
         })
+    }
+
+    /// More tip sources for Rule B10. The primary `{index-url}` stays the
+    /// mirror. Call this before the door is shared.
+    pub fn with_extra_index_urls(mut self, urls: Vec<String>) -> Self {
+        self.extra_index_urls = urls;
+        self
     }
 
     /// The site origins this gate serves for sign-in.
@@ -984,12 +1001,13 @@ impl Door {
     /// The thorough phase keys its draw and its line on that seq. A
     /// provisional that was not written returns `Held` and no seq.
     pub fn settle_fast_seq(&self, job: &LockedThorough) -> (FastPhase, Option<u64>) {
-        if let Some(phase) = self.sticky_phase(job) {
-            return (phase, None);
-        }
-        let index = self.index_client();
-        let decision = fast::decide(&job.object, &self.policy, &index);
-        self.finish_fast_read(job, decision, &index)
+        self.settle_fast_kind(job, false, false)
+    }
+
+    /// Service-started re-verify. Reuses the stored deadline, including after
+    /// a policy-version bump. A bump never revokes on Rule B10.
+    pub fn reverify_fast(&self, job: &LockedThorough) -> FastPhase {
+        self.settle_fast_kind(job, false, true).0
     }
 
     /// [`settle_fast`] at `conformance-small` sizes.
@@ -1004,11 +1022,54 @@ impl Door {
 
     #[cfg(test)]
     pub fn settle_fast_small_seq(&self, job: &LockedThorough) -> (FastPhase, Option<u64>) {
+        self.settle_fast_kind(job, true, false)
+    }
+
+    /// [`reverify_fast`] at conformance-small sizes.
+    #[cfg(test)]
+    pub fn reverify_fast_small(&self, job: &LockedThorough) -> FastPhase {
+        self.settle_fast_kind(job, true, true).0
+    }
+
+    /// Fast phase. `reverify` selects the service-started lookup: the stored
+    /// decision for this object is reused, and a policy bump cannot revoke.
+    /// A client receipt (`reverify` false) reuses only this submission id.
+    /// A different submission id is a new receipt and reads again.
+    fn settle_fast_kind(
+        &self,
+        job: &LockedThorough,
+        small: bool,
+        reverify: bool,
+    ) -> (FastPhase, Option<u64>) {
         if let Some(phase) = self.sticky_phase(job) {
             return (phase, None);
         }
+        let frozen = {
+            let book = self.deadline.lock().expect("deadline book");
+            if reverify {
+                book.for_reverify(&job.submission, &job.public_key, &job.object_sha)
+            } else {
+                book.for_submission(&job.submission)
+            }
+        };
         let index = self.index_client();
-        let decision = fast::decide_small(&job.object, &self.policy, &index);
+        let (decision, store) = if small {
+            fast::decide_small_with(&job.object, &self.policy, &index, frozen)
+        } else {
+            fast::decide_with(&job.object, &self.policy, &index, frozen)
+        };
+        if let Some(verdict) = store {
+            let mut book = self.deadline.lock().expect("deadline book");
+            if let Err(error) = book.store(
+                job.submission,
+                job.public_key,
+                job.object_sha,
+                &self.policy.policy_id,
+                verdict,
+            ) {
+                eprintln!("admission-service deadline was not stored: {error}");
+            }
+        }
         self.finish_fast_read(job, decision, &index)
     }
 
@@ -1056,7 +1117,11 @@ impl Door {
     }
 
     fn index_client(&self) -> verifier::IndexClient {
-        verifier::IndexClient::open(&self.index_url, self.index_timeout)
+        verifier::IndexClient::open_sources(
+            &self.index_url,
+            &self.extra_index_urls,
+            self.index_timeout,
+        )
     }
 
     fn finish_fast(
@@ -2300,6 +2365,10 @@ mod tests {
     struct Hits {
         normal: AtomicU64,
         fresh: AtomicU64,
+        /// `GET /index` requests. Rule B10's fresh tip reads.
+        tips: AtomicU64,
+        /// Tip reads that sent `Cache-Control: no-cache`.
+        tip_fresh: AtomicU64,
     }
 
     #[derive(Clone, Copy)]
@@ -2397,6 +2466,137 @@ mod tests {
         }
     }
 
+    /// Rule B10. The tip is read fresh at receipt. The first success is kept.
+    /// A lower tip does not reopen a refuse. A policy bump does not revoke.
+    /// A client resubmission is a new receipt. The highest source wins.
+    #[test]
+    fn the_deadline_is_once_per_submission() {
+        let built = small_honest();
+        let mut policy = synthetic_policy();
+        policy.submission_deadline_blocks = Some(3);
+
+        let late = Arc::new(AtomicU64::new(1022));
+        let (url, hits) = serve_tip(&built.docs, Mirror::Honest, Some(Arc::clone(&late)));
+        let (door, dir) = open_with(&url, policy.clone());
+        let job = job_of(&built.bytes, 1);
+        assert_eq!(door.settle_fast_small(&job), FastPhase::Done);
+        let line = chain(&dir).last().unwrap().clone();
+        assert_eq!(line["reason_code"], "submission_deadline");
+        assert_ne!(line["reason"], "a recomputed leg result differs");
+        assert!(!dir.join("banned_keys.json").exists());
+        assert_eq!(hits.tips.load(Ordering::Relaxed), 1);
+        assert_eq!(hits.tip_fresh.load(Ordering::Relaxed), 1);
+        let stored = std::fs::read_to_string(dir.join("deadline.json")).unwrap();
+        assert!(stored.contains("\"verdict\":\"late\""), "{stored}");
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            std::fs::metadata(dir.join("deadline.json"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+
+        // A new policy does not sticky-match the refuse. The lower tip must
+        // still not reopen it, and must not be read.
+        late.store(1010, Ordering::Relaxed);
+        let mut other = policy.clone();
+        other.policy_id = "gl-admit-v9-deadline".to_owned();
+        let reopened = Door::open(
+            &dir,
+            other,
+            &url,
+            std::time::Duration::from_secs(1),
+            vec!["https://groundinglab.io".to_owned()],
+        )
+        .unwrap();
+        assert_eq!(reopened.settle_fast_small(&job), FastPhase::Done);
+        assert_eq!(hits.tips.load(Ordering::Relaxed), 1, "a lower tip is not read");
+        let again = chain(&dir);
+        assert_eq!(again.last().unwrap()["reason_code"], "submission_deadline");
+
+        // Not read stays held and is not the decision. The next success is.
+        let clock = Arc::new(AtomicU64::new(u64::MAX));
+        let (url_held, hits_held) =
+            serve_tip(&built.docs, Mirror::Honest, Some(Arc::clone(&clock)));
+        let (held_door, held_dir) = open_with(&url_held, policy.clone());
+        let held = job_of(&built.bytes, 2);
+        assert_eq!(held_door.settle_fast_small(&held), FastPhase::Held);
+        assert!(!held_dir.join("deadline.json").exists());
+        clock.store(1022, Ordering::Relaxed);
+        assert_eq!(held_door.settle_fast_small(&held), FastPhase::Done);
+        clock.store(1021, Ordering::Relaxed);
+        let mut later = policy.clone();
+        later.policy_id = "gl-admit-v9-held".to_owned();
+        let later_door = Door::open(
+            &held_dir,
+            later,
+            &url_held,
+            std::time::Duration::from_secs(1),
+            vec!["https://groundinglab.io".to_owned()],
+        )
+        .unwrap();
+        assert_eq!(later_door.settle_fast_small(&held), FastPhase::Done);
+        assert_eq!(
+            hits_held.tips.load(Ordering::Relaxed),
+            2,
+            "the first success is kept when the tip falls"
+        );
+
+        // Gap 3 is not a refuse. A bump to K = 0 does not revoke on re-verify.
+        let within = Arc::new(AtomicU64::new(1021));
+        let (url_ok, hits_ok) = serve_tip(&built.docs, Mirror::Honest, Some(Arc::clone(&within)));
+        let (ok_door, ok_dir) = open_with(&url_ok, policy.clone());
+        let ok = job_of(&built.bytes, 3);
+        assert_eq!(ok_door.settle_fast_small(&ok), FastPhase::Provisional);
+        let read_once = hits_ok.tips.load(Ordering::Relaxed);
+        assert_eq!(read_once, 1);
+        within.store(2000, Ordering::Relaxed);
+        // A client resubmission is a new receipt and reads the new tip.
+        // Do this before another door appends, so this door's seq stays current.
+        let resubmit = job_of(&built.bytes, 4);
+        assert_eq!(ok_door.settle_fast_small(&resubmit), FastPhase::Done);
+        assert!(hits_ok.tips.load(Ordering::Relaxed) > read_once);
+        assert_eq!(
+            chain(&ok_dir).last().unwrap()["reason_code"],
+            "submission_deadline"
+        );
+        let mut bump = policy.clone();
+        bump.policy_id = "gl-admit-v9-bump".to_owned();
+        bump.submission_deadline_blocks = Some(0);
+        let bumped = Door::open(
+            &ok_dir,
+            bump,
+            &url_ok,
+            std::time::Duration::from_secs(1),
+            vec!["https://groundinglab.io".to_owned()],
+        )
+        .unwrap();
+        let tips_before_reverify = hits_ok.tips.load(Ordering::Relaxed);
+        assert_eq!(bumped.reverify_fast_small(&ok), FastPhase::Provisional);
+        assert_eq!(
+            hits_ok.tips.load(Ordering::Relaxed),
+            tips_before_reverify,
+            "a re-verify reuses the pass"
+        );
+
+        // Two sources: the higher tip decides. The extra read is fresh.
+        let low = Arc::new(AtomicU64::new(1021));
+        let high = Arc::new(AtomicU64::new(2000));
+        let (url_low, _) = serve_tip(&built.docs, Mirror::Honest, Some(low));
+        let (url_high, high_hits) = serve_tip(&built.docs, Mirror::Honest, Some(high));
+        let (fan, _) = open_with(&url_low, policy);
+        let fan = fan.with_extra_index_urls(vec![url_high]);
+        let both = job_of(&built.bytes, 5);
+        assert_eq!(fan.settle_fast_small(&both), FastPhase::Done);
+        assert_eq!(high_hits.tip_fresh.load(Ordering::Relaxed), 1);
+
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&held_dir);
+        let _ = std::fs::remove_dir_all(&ok_dir);
+    }
+
     fn chain(dir: &Path) -> Vec<serde_json::Value> {
         // A section 14 record keeps its newline inside the decision object,
         // so a split on `\n` is not one decision.
@@ -2411,10 +2611,23 @@ mod tests {
     }
 
     fn serve(docs: &HashMap<u64, String>, mode: Mirror) -> (String, Arc<Hits>) {
+        serve_tip(docs, mode, None)
+    }
+
+    /// `tip` is the Rule B10 clock for `GET /index`. `u64::MAX` is a failed
+    /// read. Any other value is that height, and the body changes when the
+    /// atomic changes.
+    fn serve_tip(
+        docs: &HashMap<u64, String>,
+        mode: Mirror,
+        tip: Option<Arc<AtomicU64>>,
+    ) -> (String, Arc<Hits>) {
         let docs = Arc::new(docs.clone());
         let hits = Arc::new(Hits {
             normal: AtomicU64::new(0),
             fresh: AtomicU64::new(0),
+            tips: AtomicU64::new(0),
+            tip_fresh: AtomicU64::new(0),
         });
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -2425,7 +2638,7 @@ mod tests {
                     continue;
                 };
                 let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
-                let _ = answer(&mut stream, &docs, mode, &hits_task);
+                let _ = answer(&mut stream, &docs, mode, &hits_task, tip.as_ref());
             }
         });
         (format!("http://127.0.0.1:{port}"), hits)
@@ -2436,6 +2649,7 @@ mod tests {
         docs: &HashMap<u64, String>,
         mode: Mirror,
         hits: &Hits,
+        tip: Option<&Arc<AtomicU64>>,
     ) -> std::io::Result<()> {
         let mut got = Vec::new();
         let mut buf = [0u8; 2048];
@@ -2462,10 +2676,27 @@ mod tests {
             hits.normal.fetch_add(1, Ordering::Relaxed);
         }
         let path = text.lines().next().unwrap_or("");
-        let height = path
-            .split_whitespace()
-            .nth(1)
-            .unwrap_or("")
+        let path_only = path.split_whitespace().nth(1).unwrap_or("");
+        if path_only == "/index" {
+            hits.tips.fetch_add(1, Ordering::Relaxed);
+            if fresh {
+                hits.tip_fresh.fetch_add(1, Ordering::Relaxed);
+            }
+            let raw = match tip.map(|clock| clock.load(Ordering::Relaxed)) {
+                Some(height) if height != u64::MAX => {
+                    let body = tip_document(height);
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    )
+                }
+                _ => "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    .to_owned(),
+            };
+            stream.write_all(raw.as_bytes())?;
+            return stream.flush();
+        }
+        let height = path_only
             .trim_start_matches("/index/")
             .parse::<u64>()
             .unwrap_or(0);
@@ -2482,6 +2713,13 @@ mod tests {
         };
         stream.write_all(raw.as_bytes())?;
         stream.flush()
+    }
+
+    fn tip_document(height: u64) -> String {
+        let hash = "11".repeat(32);
+        format!(
+            r#"{{"version":2,"network":"synthetic","header":{{"hash":"{hash}","height":{height}}},"plant":null}}"#
+        )
     }
 
     fn mirror_body(honest: &str, height: u64, fresh: bool, mode: Mirror) -> String {

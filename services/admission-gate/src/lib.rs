@@ -12,6 +12,7 @@
 
 pub mod canon;
 pub mod config;
+pub mod deadline;
 pub mod door;
 pub mod fast;
 pub mod http;

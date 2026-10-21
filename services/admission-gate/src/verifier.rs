@@ -351,15 +351,28 @@ enum Cached {
 pub struct IndexClient {
     agent: ureq::Agent,
     url: String,
+    /// Further `{index-url}` origins. The deadline tip is the highest among
+    /// the primary and these. Header and plant reads stay on the primary.
+    extra_urls: Vec<String>,
     cache: Arc<std::sync::Mutex<std::collections::HashMap<String, Cached>>>,
     networks: Arc<std::sync::Mutex<std::collections::BTreeSet<String>>>,
 }
 
 impl IndexClient {
     pub fn open(url: &str, timeout: Duration) -> Self {
+        Self::open_sources(url, &[], timeout)
+    }
+
+    /// `extra` are additional tip sources. They are not a second mirror.
+    pub fn open_sources(url: &str, extra: &[String], timeout: Duration) -> Self {
         Self {
             agent: index_agent(timeout),
             url: url.to_owned(),
+            extra_urls: extra
+                .iter()
+                .filter(|item| item.as_str() != url)
+                .cloned()
+                .collect(),
             cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
             networks: Arc::new(std::sync::Mutex::new(std::collections::BTreeSet::new())),
         }
@@ -455,7 +468,20 @@ impl IndexRead for IndexClient {
     }
 
     fn tip_height(&self) -> Result<u64, ()> {
-        let body = self.read_body(&format!("{}/index", self.url), "tip", true)?;
+        // Each source is a fresh read: `Cache-Control: no-cache`, and the
+        // mirror cache is not consulted. A failed or unparseable body is a
+        // stale or missing read and is dropped. The deciding tip is the
+        // highest that was read.
+        let reads = std::iter::once(self.url.as_str())
+            .chain(self.extra_urls.iter().map(String::as_str))
+            .map(|url| self.one_fresh_tip(url));
+        crate::deadline::highest_tip(reads)
+    }
+}
+
+impl IndexClient {
+    fn one_fresh_tip(&self, url: &str) -> Result<u64, ()> {
+        let body = self.read_body(&format!("{url}/index"), "tip", true)?;
         hike::parse_index_document(&body)
             .map(|(_, height)| height)
             .map_err(|_| ())

@@ -32,7 +32,7 @@ pub fn step_sized(terrain: &[u8], state: u64, sizes: Sizes) -> u64 {
     let mut acc = 0u64;
     for w in 0..words {
         let word = u64::from_le_bytes(slot[w * 8..w * 8 + 8].try_into().unwrap());
-        acc = acc.wrapping_add(mix64(word ^ (w as u64) ^ state));
+        acc = acc.wrapping_add(mix64(word ^ state.wrapping_add(w as u64)));
     }
     seal(acc)
 }
@@ -113,14 +113,17 @@ mod tests {
         let state = 0x0123_4567_89ab_cdefu64;
         let mut acc = 0u64;
         let mut xor = 0u64;
+        let mut withdrawn = 0u64;
         for (w, word) in words.iter().enumerate() {
-            let mixed = mix64(word ^ (w as u64) ^ state);
+            let mixed = mix64(word ^ state.wrapping_add(w as u64));
             acc = acc.wrapping_add(mixed);
             xor ^= mixed;
+            withdrawn = withdrawn.wrapping_add(mix64(word ^ (w as u64) ^ state));
         }
-        assert_eq!(acc, 0x5ab2_5313_2ce7_67e2);
-        assert_eq!(xor, 0x2af1_8a27_e8cd_3106);
+        assert_eq!(acc, 0x2a6b_a108_225a_ab5c);
+        assert_eq!(withdrawn, 0x5ab2_5313_2ce7_67e2);
         assert_ne!(xor, acc);
+        assert_ne!(withdrawn, acc);
         let mut bare = 0u64;
         for (w, word) in words.iter().enumerate() {
             let x = word ^ (w as u64) ^ state;
