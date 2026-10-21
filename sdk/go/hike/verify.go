@@ -3,6 +3,7 @@ package hike
 import (
 	"bytes"
 	"encoding/json"
+	"math/bits"
 	"strconv"
 )
 
@@ -130,6 +131,8 @@ func undecodedV2(profile Profile) Record {
 		rec.Analysis.PerStage[i].CheckpointCount = jstr("not defined")
 	}
 	rec.Analysis.WholeHikeLegs = jstr("not defined")
+	rec.Analysis.HikeLegs = jstr("not defined")
+	rec.Analysis.HikeSpan = jstr("not read")
 	rec.SixLeg = jstr("not read")
 	rec.SixLegRuns = jstr("not read")
 	return rec
@@ -300,6 +303,8 @@ type Analysis struct {
 	WholeHikeSpan json.RawMessage `json:"whole_hike_span"`
 	PerStage      []StageSpan     `json:"per_stage"`
 	LegsOutside   json.RawMessage `json:"legs_outside"`
+	HikeLegs      json.RawMessage `json:"hike_legs"`
+	HikeSpan      json.RawMessage `json:"hike_span"`
 }
 
 type StageSpan struct {
@@ -557,6 +562,19 @@ func measure(item cborVal, profile Profile, index Index, pathChain func(PathLoca
 	if profile.Kind == Kind {
 		outside = book.outside
 	}
+	hikeLegsN := 0
+	hikeLegsOK := true
+	for g := 0; g < Stages; g++ {
+		if counts[g] < 0 {
+			hikeLegsOK = false
+			break
+		}
+		hikeLegsN += counts[g]
+	}
+	hikeLegs := jnum(int64(hikeLegsN))
+	if !hikeLegsOK {
+		hikeLegs = jstr("not defined")
+	}
 
 	rec := Record{
 		Profile:           profile.Name,
@@ -589,6 +607,8 @@ func measure(item cborVal, profile Profile, index Index, pathChain func(PathLoca
 			WholeHikeSpan: spanOf(times[18], times[1]),
 			PerStage:      per,
 			LegsOutside:   outside,
+			HikeLegs:      hikeLegs,
+			HikeSpan:      spanOf(times[18], times[0]),
 		},
 	}
 	if profile.Name == ConformanceSmallV2.Name {
@@ -834,7 +854,10 @@ func emptyBookends(profile Profile, shape string, items []string, headers []Head
 		A: nd, B: nd, N: nd, S: nd, DeltaH: nd, PB: nd, HeightPB: nd,
 		IndexComparisonPB: nd, TPB: nd, HeightIAMinus1: nd, TIAMinus1: nd,
 		FixedStart: FixedStart{N: nd, S: nd, DeltaH: nd},
-		Analysis:   Analysis{WholeHikeLegs: jnum(0), WholeHikeSpan: jstr("not read"), PerStage: per, LegsOutside: nd},
+		Analysis: Analysis{
+			WholeHikeLegs: jnum(0), WholeHikeSpan: jstr("not read"), PerStage: per, LegsOutside: nd,
+			HikeLegs: jstr("not defined"), HikeSpan: jstr("not read"),
+		},
 	}
 	if profile.Name == ConformanceSmallV2.Name {
 		s, sl, t, st := profile.SampleBytes, profile.SlotBytes, profile.TerrainBytes, profile.StepsPerLeg
@@ -1586,6 +1609,43 @@ func DG(plantMatch, headerMatch bool, heightPG, headerHeight int64) (int64, stri
 		return heightPG - headerHeight, ""
 	}
 	return 0, "not defined"
+}
+
+// LegRateMeets is Rule B2. The comparison is integer-only:
+// hike_span > 0 and q·hike_legs ≥ p·hike_span. It does not round.
+// A span that is not a positive integer does not meet the floor.
+// The bookend pair (N, S) is not an input.
+func LegRateMeets(hikeLegs, hikeSpan, p, q int64) bool {
+	if hikeSpan <= 0 || q <= 0 || p < 0 || hikeLegs < 0 {
+		return false
+	}
+	hiL, loL := bits.Mul64(uint64(q), uint64(hikeLegs))
+	hiR, loR := bits.Mul64(uint64(p), uint64(hikeSpan))
+	if hiL != hiR {
+		return hiL > hiR
+	}
+	return loL >= loR
+}
+
+// AnchorsMeet is Rule B4. anchored_total ≥ 6, anywhere among W_1 … W_16.
+// There is no first-planted rule and no last-planted rule.
+func AnchorsMeet(anchoredTotal int) bool {
+	return anchoredTotal >= MinAnchoredPaths
+}
+
+// AnchoredIndicesMeet counts distinct indices in 1 … 16 and applies Rule B4.
+// An index outside that range is not one of the sixteen waypoints.
+func AnchoredIndicesMeet(indices []int) bool {
+	seen := make([]bool, 17)
+	n := 0
+	for _, g := range indices {
+		if g < 1 || g > 16 || seen[g] {
+			continue
+		}
+		seen[g] = true
+		n++
+	}
+	return AnchorsMeet(n)
 }
 
 // Status204Appended is Rule A1.4. Status 204 means the waypoint was appended.

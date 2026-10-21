@@ -9,6 +9,7 @@ type Tip struct {
 }
 
 // Drive runs section 13.2 against an already-read tip sequence.
+// Terrain is the NL4 fill, once. Each leg is STEPS_PER_LEG full-slot steps.
 // Path asks that are not a canonical path body store empty bytes. This
 // tree does not invent a CanonicalPathBody layout; a body that cannot be
 // validated is a miss, and produce continues.

@@ -10,13 +10,13 @@ func TestPorts219Records(t *testing.T) {
 	hard := readProbe(t, "ports219-hard.record")
 	trailing := readProbe(t, "ports219-trailing.record")
 	stage0 := readProbe(t, "ports219-stage0.record")
-	if len(hard) != 7613 || hard[len(hard)-1] != '\n' {
+	if len(hard) != 7662 || hard[len(hard)-1] != '\n' {
 		t.Fatalf("hard golden %d", len(hard))
 	}
-	if len(trailing) != 7722 || trailing[len(trailing)-1] != '\n' {
+	if len(trailing) != 7759 || trailing[len(trailing)-1] != '\n' {
 		t.Fatalf("trailing golden %d", len(trailing))
 	}
-	if len(stage0) != 7748 || stage0[len(stage0)-1] != '\n' {
+	if len(stage0) != 7785 || stage0[len(stage0)-1] != '\n' {
 		t.Fatalf("stage0 golden %d", len(stage0))
 	}
 	quiet := append(QuietV2().Encode(), 0x00)

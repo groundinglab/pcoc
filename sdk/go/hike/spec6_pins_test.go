@@ -1,9 +1,13 @@
 package hike
 
-import "testing"
+import (
+	"bytes"
+	"encoding/hex"
+	"testing"
+)
 
-// SPEC v2.0 section 6, rules P6.1-P6.25, and the section 16.1
-// conformance-small sizes. Changing or removing any of these fails CI.
+// Section 6, rules P6.1–P6.25, and the §16.1 conformance-small sizes.
+// P6.14 is retired. There is no SEED_DOMAIN constant.
 func TestSpec6ConstantsArePinned(t *testing.T) {
 	type pin struct {
 		rule      string
@@ -38,8 +42,10 @@ func TestSpec6ConstantsArePinned(t *testing.T) {
 	if string(SealDomain) != "pcoc-walk-v1" || len(SealDomain) != 12 {
 		t.Errorf("P6.13 SEAL_DOMAIN %q", SealDomain)
 	}
-	if string(SeedDomain) != "PSEED64\x00" {
-		t.Errorf("P6.14 SEED_DOMAIN %q", SeedDomain)
+	// P6.14 is retired. The seed is SHA-256 of the 64-byte preimage, no label.
+	pre := append(bytes.Repeat([]byte{0x11}, 32), bytes.Repeat([]byte{0x22}, 32)...)
+	if hex.EncodeToString(SeedValue(pre[:32], pre[32:])) != "5189c77d29fe5d546a045ec46986852785fea5c13ac7da9c115ff5fb6edf817c" {
+		t.Error("P6.14 retired seed")
 	}
 	if Kind != "satoshi-hike-v2.0-object" {
 		t.Errorf("P6.15 KIND %q", Kind)
