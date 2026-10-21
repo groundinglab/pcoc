@@ -31,9 +31,9 @@ public final class Hike {
      * H+3, and H+4.
      */
     private static final int[] ANCHOR_OFFSETS_AFTER_POST = {2, 3, 4};
-    // No leg-rate floor here (rc.2): the spec defines measurements, a policy
-    // sets the values. The section 15.5 examples are test fixtures and
-    // spec/conformance/v2.0/constants.json.
+    // No ratified leg-rate floor (v2.1 Rule B2). The value is TBD.
+    // Admit holds the placeholder 1/5. It is not a section 6 constant.
+    // Bookend (N, S) is not the admission rate. Rule B4 is anchored_total >= 6.
 
     private Hike() {}
 

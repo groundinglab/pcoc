@@ -2,7 +2,6 @@ package pcoc.hike;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 import pcoc.json.Json;
 
 /**
@@ -16,7 +15,6 @@ public final class Measure {
         String body(long height);
     }
 
-    private static final ConcurrentHashMap<String, Terrain> TERRAIN = new ConcurrentHashMap<>();
     private static final String[] SHAPE_ORDER = {
         "field set",
         "stage-0 path key",
@@ -303,9 +301,9 @@ public final class Measure {
         return Json.num(total);
     }
 
+    /** One fill for this measurement. The terrain is not kept for a later call. */
     private static Terrain terrain(byte[] publicKey, byte[] seedBeacon, Profile profile) {
-        String key = profile.name + ":" + Bytes.hex(publicKey) + ":" + Bytes.hex(seedBeacon);
-        return TERRAIN.computeIfAbsent(key, ignored -> Terrain.fill(publicKey, seedBeacon, profile));
+        return Terrain.fill(publicKey, seedBeacon, profile);
     }
 
     private static boolean[] shape(Cbor.Val top, List<Cbor.Val> stages, Profile profile) {
