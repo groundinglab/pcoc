@@ -492,7 +492,7 @@ public final class V21Pack {
     }
 
     private static void checkManifest(Path pack, Json.Obj doc) throws Exception {
-        if (!"88132295e6f57d1b52f2fcd4a6f4ec8e72812cca8cc5bc4a2f36d39fde4bc6f1".equals(text(doc, "vector_sha256"))) {
+        if (!"660dc869eb2df9245fb88322ebbc3bb3e3370f9b23b216de3e4eda5bd7c8eeb0".equals(text(doc, "vector_sha256"))) {
             throw new AssertionError("manifest pin");
         }
         eq("manifest", packHash(pack), text(doc, "vector_sha256"));

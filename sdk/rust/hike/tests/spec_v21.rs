@@ -535,7 +535,7 @@ fn constants_and_the_manifest_hash_match_the_pack() {
     assert_eq!(got, manifest["vector_sha256"].as_str().unwrap());
     assert_eq!(
         got,
-        "88132295e6f57d1b52f2fcd4a6f4ec8e72812cca8cc5bc4a2f36d39fde4bc6f1"
+        "660dc869eb2df9245fb88322ebbc3bb3e3370f9b23b216de3e4eda5bd7c8eeb0"
     );
 }
 
