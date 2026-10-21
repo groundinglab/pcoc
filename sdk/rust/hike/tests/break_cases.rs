@@ -118,7 +118,7 @@ impl V {
 
 fn kat() -> Value {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../spec/conformance/v2.0/kat-small.json");
+        .join("tests/v21-pack/kat-small.json");
     serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
 }
 
@@ -312,7 +312,8 @@ fn no_stages_is_seed_mismatch() {
 /// bytes (sections 11.2 and 14.6). Seed 01*32 draws stage 3 leg 1.
 #[test]
 fn six_leg_previous_reads_the_first_eight_bytes_of_the_stored_checkpoint() {
-    let leg = hex8("0594e6d98cd90356");
+    // The stored leg is the honest C1 walk from the first 8 bytes of checkpoints[0].
+    let leg = honest_stage3_leg1();
     let edit = |width: usize, drop_waypoint: bool| {
         let mut v = object();
         let s = v.stage(3);
@@ -338,13 +339,15 @@ fn six_leg_previous_reads_the_first_eight_bytes_of_the_stored_checkpoint() {
     assert_eq!(edit(32, true), "match");
 }
 
-fn hex8(s: &str) -> [u8; 8] {
-    let mut out = [0u8; 8];
-    for (i, o) in out.iter_mut().enumerate() {
-        *o = u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap();
-    }
-    out
+fn honest_stage3_leg1() -> [u8; 8] {
+    let bytes = object_bytes();
+    let hike = hike::decoded_hike(&bytes).expect("kat-small");
+    let sizes = hike::Sizes::conformance_small();
+    let terrain = hike::fill_terrain_sized(&hike::seed(&hike.public_key, &hike.seed_beacon), sizes);
+    let previous = hike.stages[3].checkpoints[0];
+    hike::leg_result_sized(&terrain, &previous, sizes).to_le_bytes()
 }
+
 
 /// rc.2 (approved change 1): a top level that is not a map is the undecoded
 /// ["malformed cbor"] record, byte for byte the record of no bytes at all.

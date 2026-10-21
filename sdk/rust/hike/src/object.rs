@@ -994,7 +994,7 @@ pub fn structural_object() -> Hike {
     let mut seed_beacon = [0u8; 32];
     seed_beacon[0] = 1;
     let seed_value =
-        crate::sha::sha256(&crate::terrain::production_seed(&public_key, &seed_beacon));
+        crate::terrain::seed(&public_key, &seed_beacon);
     let mut stages = Vec::new();
     for g in 0..STAGES {
         let mut beacon = [0u8; 32];

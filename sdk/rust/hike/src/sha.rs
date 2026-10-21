@@ -25,4 +25,29 @@ mod tests {
             ]
         );
     }
+
+    /// The walk binary contains the hardware SHA op this host can execute.
+    /// x86_64: SHA-NI `sha256rnds2`. aarch64 (`sha2` feature `asm`): `sha256h`.
+    #[test]
+    fn walk_binary_contains_hardware_sha() {
+        let exe = std::fs::read("/proc/self/exe").expect("read own executable");
+        #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
+        {
+            let sha_ni = exe.windows(3).any(|window| window == [0x0f, 0x38, 0xcb]);
+            assert!(sha_ni, "SHA-NI sha256rnds2 is not linked into the walk");
+            assert!(
+                std::is_x86_feature_detected!("sha"),
+                "this host has no SHA-NI, so the hardware path would not run"
+            );
+        }
+        #[cfg(target_arch = "aarch64")]
+        {
+            let sha256h = exe.windows(4).any(|window| {
+                let insn = u32::from_le_bytes(window.try_into().unwrap());
+                // SHA256H Qd, Qn, Vm.4S. Register fields are masked off.
+                (insn & 0xFFE0_FC00) == 0x5E00_5800
+            });
+            assert!(sha256h, "sha256h is not linked into the walk");
+        }
+    }
 }

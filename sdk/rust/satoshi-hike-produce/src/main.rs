@@ -92,7 +92,13 @@ fn run() -> i32 {
                     }
                 }
             }
-            produce_anchored(book, bits, &clock, parsed.public_key)
+            match produce_anchored(book, bits, &clock, parsed.public_key) {
+                Ok(bytes) => {
+                    print_hike_summary(&bytes, &clock);
+                    Ok(bytes)
+                }
+                Err(err) => Err(err),
+            }
         }
     };
     let bytes = match produced {
@@ -184,6 +190,38 @@ fn produce_anchored(
             })
         },
     )
+}
+
+/// One line for the measurement runs: legs, the first and last beacon, and legs/s.
+fn print_hike_summary(bytes: &[u8], clock: &hike::HeaderClock) {
+    let Ok(hike) = hike::decoded_hike(bytes) else {
+        return;
+    };
+    let legs: u64 = hike.stages.iter().map(|stage| stage.leg_count).sum();
+    let (first_height, first_time) = match hike.stages.first() {
+        Some(stage) => (
+            Some(stage.beacon_height),
+            clock.n_time(&stage.beacon),
+        ),
+        None => (None, None),
+    };
+    let last_time = clock.n_time(&hike.last_interrupt);
+    let rate = match (first_time, last_time) {
+        (Some(first), Some(last)) if last > first => {
+            Some(legs as f64 / f64::from(last - first))
+        }
+        _ => None,
+    };
+    let show = |value: Option<u64>| value.map(|item| item.to_string()).unwrap_or_else(|| "not read".to_owned());
+    let show_u32 = |value: Option<u32>| value.map(|item| item.to_string()).unwrap_or_else(|| "not read".to_owned());
+    eprintln!(
+        "satoshi-hike-produce: hike_summary legs={legs} first_beacon_height={} first_beacon_time={} last_beacon_height={} last_beacon_time={} legs_per_s={}",
+        show(first_height),
+        show_u32(first_time),
+        hike.last_interrupt_height,
+        show_u32(last_time),
+        rate.map(|item| format!("{item:.6}")).unwrap_or_else(|| "not read".to_owned())
+    );
 }
 
 fn finish(status: i32, report: &hike::Report, report_path: Option<&str>) -> i32 {
