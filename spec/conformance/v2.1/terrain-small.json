@@ -13,7 +13,13 @@
       "slot_bytes": 64,
       "terrain_bytes": 1024,
       "sha256": "b30fa73f11634d09030c196997412b385743ce869eb5160821e15d47a42aabf5"
+    },
+    {
+      "slot_bytes": 16384,
+      "terrain_bytes": 65536,
+      "sha256": "7bb281f1f5d982f4778c4e866276e235a80f457f775b1aac8df73294eceac5e3",
+      "note": "Four 16384-byte slots. Parent rotation (j + k) mod 64 wraps."
     }
   ],
-  "note": "Full NL4 fill, parents and slot_mix included. 1024 bytes is 16 slots, so parents run."
+  "note": "Full NL4 fill, parents and slot_mix included. 1024 bytes is 16 slots of 64, so parents run. The 16384-byte case is four slots and exercises (j + k) mod 64."
 }

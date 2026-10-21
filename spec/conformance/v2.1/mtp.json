@@ -1,0 +1,315 @@
+{
+  "id": "mtp",
+  "rule": "A4.10",
+  "note": "hike_span is MTP(last beacon) minus MTP(first beacon). MTP is the BIP113 median: sort the nTime values of the n headers ending at that block, n = min(11, height + 1), and take index n // 2. The verifier reads those heights from the portable index. Bookend S still uses raw header.time. A raw-nTime span is not hike_span. This file is a numeric replay, not a live header corpus.",
+  "cases": [
+    {
+      "name": "replay-eleven",
+      "class": "positive",
+      "first": {
+        "height": 100,
+        "n": 11,
+        "reads": [
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100
+        ],
+        "times": [
+          1100,
+          1101,
+          1102,
+          1103,
+          1104,
+          1105,
+          1106,
+          1107,
+          1108,
+          1109,
+          5000
+        ],
+        "raw_ntime": 5000,
+        "mtp": 1105
+      },
+      "last": {
+        "height": 118,
+        "n": 11,
+        "reads": [
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118
+        ],
+        "times": [
+          2100,
+          2101,
+          2102,
+          2103,
+          2104,
+          2105,
+          2106,
+          2107,
+          2108,
+          2109,
+          2200
+        ],
+        "raw_ntime": 2200,
+        "mtp": 2105
+      },
+      "outcome": "read",
+      "raw_span": -2800,
+      "hike_span": 1000
+    },
+    {
+      "name": "span-zero",
+      "class": "negative",
+      "first": {
+        "height": 100,
+        "n": 11,
+        "reads": [
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100
+        ],
+        "times": [
+          1100,
+          1100,
+          1100,
+          1100,
+          1100,
+          1100,
+          1100,
+          1100,
+          1100,
+          1100,
+          9000
+        ],
+        "raw_ntime": 9000,
+        "mtp": 1100
+      },
+      "last": {
+        "height": 118,
+        "n": 11,
+        "reads": [
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118
+        ],
+        "times": [
+          1100,
+          1100,
+          1100,
+          1100,
+          1100,
+          1100,
+          1100,
+          1100,
+          1100,
+          1100,
+          1000
+        ],
+        "raw_ntime": 1000,
+        "mtp": 1100
+      },
+      "outcome": "refuse",
+      "raw_span": -8000,
+      "hike_span": 0,
+      "must_reject": true
+    },
+    {
+      "name": "span-negative",
+      "class": "negative",
+      "first": {
+        "height": 118,
+        "n": 11,
+        "reads": [
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118
+        ],
+        "times": [
+          2100,
+          2101,
+          2102,
+          2103,
+          2104,
+          2105,
+          2106,
+          2107,
+          2108,
+          2109,
+          2200
+        ],
+        "raw_ntime": 2200,
+        "mtp": 2105
+      },
+      "last": {
+        "height": 100,
+        "n": 11,
+        "reads": [
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100
+        ],
+        "times": [
+          1100,
+          1101,
+          1102,
+          1103,
+          1104,
+          1105,
+          1106,
+          1107,
+          1108,
+          1109,
+          5000
+        ],
+        "raw_ntime": 5000,
+        "mtp": 1105
+      },
+      "outcome": "refuse",
+      "raw_span": 2800,
+      "hike_span": -1000,
+      "must_reject": true
+    },
+    {
+      "name": "short-window",
+      "class": "positive",
+      "first": {
+        "height": 2,
+        "n": 3,
+        "reads": [
+          0,
+          1,
+          2
+        ],
+        "times": [
+          30,
+          10,
+          20
+        ],
+        "raw_ntime": 20,
+        "mtp": 20
+      },
+      "outcome": "read",
+      "note": "Height 2 uses n = 3. Sorted index 1 is the median."
+    },
+    {
+      "name": "window-incomplete",
+      "class": "negative",
+      "first": {
+        "height": 100,
+        "n": 11,
+        "reads": [
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100
+        ],
+        "times": [
+          1100,
+          1100,
+          1100,
+          1100,
+          1100,
+          1100,
+          1100,
+          1100,
+          1100,
+          1100,
+          null
+        ],
+        "raw_ntime": null,
+        "mtp": null
+      },
+      "last": {
+        "height": 118,
+        "n": 11,
+        "reads": [
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118
+        ],
+        "times": [
+          2100,
+          2101,
+          2102,
+          2103,
+          2104,
+          2105,
+          2106,
+          2107,
+          2108,
+          2109,
+          2200
+        ],
+        "raw_ntime": 2200,
+        "mtp": 2105
+      },
+      "outcome": "held",
+      "raw_span": "not read",
+      "hike_span": "not read"
+    }
+  ]
+}

@@ -5,7 +5,7 @@
     "q": 5,
     "mark": "placeholder, not ratified"
   },
-  "comparison": "meets when hike_span > 0 and q * hike_legs >= p * hike_span; hike_span <= 0 refuses",
+  "comparison": "meets when hike_span > 0 and q * hike_legs >= p * hike_span; hike_span <= 0 means the rate is undefined and refuses",
   "cases": [
     {
       "name": "above",

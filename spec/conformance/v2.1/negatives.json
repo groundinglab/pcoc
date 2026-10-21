@@ -37,7 +37,7 @@
       "conforming_S_folded_u64_hex": "a284caf306ff68a0"
     },
     {
-      "name": "fatslot_fold",
+      "name": "v2_0_fold",
       "must_reject": true,
       "words": 2048,
       "S_u64_hex": "0000000000000000",
@@ -52,6 +52,63 @@
       "S_u64_hex": "0000000000000000",
       "forbidden_S_folded_u64_hex": "0836dd6697660d54",
       "conforming_S_folded_u64_hex": "a284caf306ff68a0"
+    },
+    {
+      "name": "partial_slot_read_2047",
+      "must_reject": true,
+      "words": 2048,
+      "words_read": 2047,
+      "S_u64_hex": "0000000000000000",
+      "forbidden_S_folded_u64_hex": "39b2e713544884c3",
+      "conforming_S_folded_u64_hex": "a284caf306ff68a0"
+    },
+    {
+      "name": "one_lane_flip",
+      "must_reject": true,
+      "lane": 2,
+      "flip_u64_hex": "8000000000000001",
+      "slot_bytes": 64,
+      "terrain_bytes": 256,
+      "words": 32,
+      "nl4_changed": 32,
+      "ref_changed": 8,
+      "pair_changed": 16,
+      "conforming_sha256": "88c645f617547382474640c765a93d46b4369c064dc610511f76fccca8e2c81c",
+      "forbidden_sha256": "3b2f493b0587a12e7a7181384f9755535a77b41326b02d0f9f4769bbdb54d2d3",
+      "note": "Flip lane 2 by 0x8000000000000001. Counted on base words, before parents. NL4 changes every word. The one-lane word changes 25 percent. The first two NL4 steps change 50 percent."
+    },
+    {
+      "name": "all4_kernel",
+      "must_reject": true,
+      "lanes": [
+        0,
+        1
+      ],
+      "xor_u64_hex": "ffffffffffffffff",
+      "slot_bytes": 64,
+      "terrain_bytes": 256,
+      "words": 32,
+      "nl4_changed": 32,
+      "all4_sha256": "9712c1d7628fbf73760b7b83e50720530c3fee2354820c849c4d96d39a314dde",
+      "all4_sha256_flipped": "9712c1d7628fbf73760b7b83e50720530c3fee2354820c849c4d96d39a314dde",
+      "conforming_sha256": "88c645f617547382474640c765a93d46b4369c064dc610511f76fccca8e2c81c",
+      "forbidden_sha256": "1eb15aa48d101c0814b00ec5c076b86b7370f4ff9936ea15dfb7eaba0921663f",
+      "note": "XOR lanes 0 and 1 with all-ones. The linear four-lane word is unchanged, because each lane is mixed once and all-ones twice cancels. NL4 changes every base word."
+    },
+    {
+      "name": "forged_window",
+      "must_reject": true,
+      "fake_leg_ignore": false,
+      "reason": "A4.3 mismatch",
+      "slot_bytes": 64,
+      "terrain_bytes": 256,
+      "sample_bytes": 32,
+      "leg_u64_hex": "545dfe297dc78951",
+      "sample_offset": 189,
+      "forbidden_window": "shifted-one",
+      "conforming_hex": "ef3ca2a19fa9cc1a3623f8fef8927246788442f7642f5b7364965b77dccaaec2",
+      "forbidden_hex": "9419359aa6ad617dbb52f68dfdd44cef8210d456400572d8e6f4d0dedab31383",
+      "note": "Limb 3 is not the verifier terrain window. This is an A4.3 mismatch. It does not add the key to the fake-leg ignore record."
     },
     {
       "name": "f3_shared_terrain",

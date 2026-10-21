@@ -16,6 +16,7 @@ import argparse
 import hashlib
 import json
 import os
+import subprocess
 
 MASK = (1 << 64) - 1
 MIX_ADD = 0x9E3779B97F4A7C15
@@ -25,7 +26,8 @@ WORD_XOR = 0xC0FFEE
 PARENT_MUL = 0xD1B54A32D192ED03
 SLOT_MUL = 0xA24BAED4963EE407
 SEAL = b"pcoc-walk-v1"
-SEED_DOMAIN = b"PSEED64\x00"
+# Withdrawn v2.0 fill-pin label. The fill-pin negative is the only use.
+WITHDRAWN_V20_SEED_DOMAIN = b"PSEED64\x00"
 
 # Pinned by VECTORS.md (unlabelled seed, pk 0x11, beacon 0x22).
 SEED_HEX = "5189c77d29fe5d546a045ec46986852785fea5c13ac7da9c115ff5fb6edf817c"
@@ -132,8 +134,16 @@ def all4_word(P, i, j):
     return mix64(x & MASK)
 
 
+def pair_word(P, i, j):
+    """First two NL4 steps only. Not a terrain word."""
+    c = ((i << 32) ^ j ^ WORD_XOR) & MASK
+    t = mix64(P[j % 4] ^ c)
+    t = mix64(t ^ rotl(P[(j + 1) % 4], 17))
+    return t
+
+
 def fill_pin(preimage):
-    x = int.from_bytes(SEED_DOMAIN, "little")
+    x = int.from_bytes(WITHDRAWN_V20_SEED_DOMAIN, "little")
     for i in range(8):
         lane = int.from_bytes(preimage[8 * i : 8 * i + 8], "little")
         x = mix64(x ^ lane ^ ((i * MIX_ADD) & MASK))
@@ -191,7 +201,8 @@ def fold_c1(slot_bytes, S, mix):
     return acc
 
 
-def fold_fatslot(slot_bytes, S):
+def fold_v2_0(slot_bytes, S):
+    """Withdrawn v2.0 fold: S XOR (XOR of (word XOR w)). Not the §11.1 fold."""
     words = len(slot_bytes) // 8
     acc = 0
     for w in range(words):
@@ -245,7 +256,13 @@ def meets_floor(legs, span, p, q):
 
 
 def phase_indices(leg_total, draws, nrounds=3, per=6):
-    """§15.5 thorough draw. draws are the section 14.6 u64 values, in order."""
+    """§15.5 thorough draw. draws are the section 14.6 u64 values, in order.
+
+    When leg_total >= 18 this rejection sampler is one without-replacement
+    draw of 18 indices, and the three rounds are that sequence split into
+    sixes. When 6 <= leg_total < 18 an index stays unused until every index
+    has been chosen, and a later draw may then repeat.
+    """
     if leg_total < 6:
         return []
     modulus = 1 << 64
@@ -307,7 +324,7 @@ def mix64_inv(z):
 
 
 def pin_x4(pk):
-    x = int.from_bytes(SEED_DOMAIN, "little")
+    x = int.from_bytes(WITHDRAWN_V20_SEED_DOMAIN, "little")
     for i in range(4):
         lane = int.from_bytes(pk[8 * i : 8 * i + 8], "little")
         x = mix64(x ^ lane ^ ((i * MIX_ADD) & MASK))
@@ -318,7 +335,7 @@ def f3_mate(pk1):
     pk2 = bytearray(pk1)
     pk2[0] ^= 0x5A
     pk2[9] ^= 0x3C
-    x = int.from_bytes(SEED_DOMAIN, "little")
+    x = int.from_bytes(WITHDRAWN_V20_SEED_DOMAIN, "little")
     for i in range(3):
         lane = int.from_bytes(pk2[8 * i : 8 * i + 8], "little")
         x = mix64(x ^ lane ^ ((i * MIX_ADD) & MASK))
@@ -475,10 +492,103 @@ def hike_doc(name, spec, chain_opening):
     }
 
 
+WRAP16K_SHA = "7bb281f1f5d982f4778c4e866276e235a80f457f775b1aac8df73294eceac5e3"
+PROD_TERRAIN_SHA = "994f2d55e48396d12f8f3fbf23102ea79ea87e5a7f18089abc16c0411bb32d3b"
+PROD_LEG0 = "c8658b2b05a93205"
+PROD_CP0 = "e8bfeed49fb20d41090e9efada63e0ca170606957e4e112719387ac60aef12d1"
+PROD_OFFSET = 213205398
+
+
+def changed_words(fn, P, Q, nslots, words):
+    n = 0
+    for i in range(nslots):
+        for j in range(words):
+            if fn(P, i, j) != fn(Q, i, j):
+                n += 1
+    return n
+
+
+def mtp_of(times):
+    if any(t is None for t in times):
+        return None
+    ordered = sorted(times)
+    return ordered[len(ordered) // 2]
+
+
+def mtp_window(height, times):
+    n = min(11, height + 1)
+    if len(times) != n:
+        raise SystemExit("mtp window width")
+    raw = times[-1]
+    return {
+        "height": height,
+        "n": n,
+        "reads": list(range(height - n + 1, height + 1)),
+        "times": times,
+        "raw_ntime": raw,
+        "mtp": mtp_of(times),
+    }
+
+
+def production_from_c():
+    """Shell out to prod_v21.c. This generator does not walk a production leg in Python."""
+    src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prod_v21.c")
+    binary = "/tmp/prod_v21_helper"
+    need = (not os.path.exists(binary)) or os.path.getmtime(binary) < os.path.getmtime(src)
+    if need:
+        subprocess.check_call(["gcc", "-O2", "-Wall", "-Wextra", "-o", binary, src, "-lcrypto"])
+    text = subprocess.check_output([binary], text=True)
+    fields = {}
+    for line in text.splitlines():
+        key, value = line.split(None, 1)
+        fields[key] = value.strip()
+    return fields
+
+
+def build_prod(pk, beacon, d, P):
+    slot = 16384
+    terr_b = 256 * 1024 * 1024
+    sample = 1024
+    steps = 2_000_000
+    got = production_from_c()
+    if got["seed"] != d.hex():
+        raise SystemExit("prod seed " + got["seed"])
+    if got["wrap16k"] != WRAP16K_SHA:
+        raise SystemExit("prod wrap " + got["wrap16k"])
+    if got["terrain"] != PROD_TERRAIN_SHA:
+        raise SystemExit("prod terrain " + got["terrain"])
+    if got["leg0"] != PROD_LEG0:
+        raise SystemExit("prod leg " + got["leg0"])
+    if int(got["offset"]) != PROD_OFFSET:
+        raise SystemExit("prod offset " + got["offset"])
+    if got["cp0"] != PROD_CP0:
+        raise SystemExit("prod cp " + got["cp0"])
+    if P[0] != int.from_bytes(d[:8], "little"):
+        raise SystemExit("prod lane0")
+    return {
+        "id": "prod-leg0",
+        "class": "positive",
+        "profile": "production",
+        "public_key_hex": pk.hex(),
+        "seed_beacon_hex": beacon.hex(),
+        "slot_bytes": slot,
+        "terrain_bytes": terr_b,
+        "sample_bytes": sample,
+        "steps": steps,
+        "offset_modulus": terr_b - sample + 1,
+        "terrain_sha256": got["terrain"],
+        "leg0_u64_hex": got["leg0"],
+        "sample_offset": int(got["offset"]),
+        "checkpoint0_hex": got["cp0"],
+        "note": "Stage 0 leg 0 opens at the seed. S_0 = u64_le(D[0:8]) = P[0]. The checkpoint is SHA-256(seed || seed || terrain[offset:offset+sample] || le64(leg)). Produced by spec/conformance/tools/prod_v21.c. This generator does not walk a production leg in Python.",
+    }
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--self-check", default="")
     ap.add_argument("--out", default="spec/conformance/v2.1")
+    ap.add_argument("--skip-production", action="store_true")
     args = ap.parse_args()
     if args.self_check:
         self_check(args.self_check)
@@ -498,7 +608,7 @@ def main():
         "seed_hex": d.hex(),
         "lanes_u64_hex": [u64hex(x) for x in P],
         "waypoint_equals_seed": 1,
-        "note": "D = SHA-256(public_key || seed_beacon), no label. The seed equals stages[0].waypoint by design.",
+        "note": "D = SHA-256(public_key || seed_beacon), no label. The seed equals stages[0].waypoint by design. Informative: leg 0 of stage 0 starts at S_0 = u64_le(D[0:8]) = P[0], and the first terrain-sample offset is P[0] mod the offset modulus. Those same 64 bits are lane 0, the first walk state, and the first sample offset.",
     }
 
     nl4 = {
@@ -515,6 +625,10 @@ def main():
 
     t256 = fill_terrain(nl4_word, P, 64, 256)
     t1024 = fill_terrain(nl4_word, P, 64, 1024)
+    t16k = fill_terrain(nl4_word, P, 16384, 65536)
+    t16k_sha = hashlib.sha256(t16k).hexdigest()
+    if t16k_sha != WRAP16K_SHA:
+        raise SystemExit("16KiB wrap " + t16k_sha)
     terrain = {
         "id": "terrain-small",
         "class": "positive",
@@ -523,8 +637,14 @@ def main():
         "cases": [
             {"slot_bytes": 64, "terrain_bytes": 256, "sha256": hashlib.sha256(t256).hexdigest()},
             {"slot_bytes": 64, "terrain_bytes": 1024, "sha256": hashlib.sha256(t1024).hexdigest()},
+            {
+                "slot_bytes": 16384,
+                "terrain_bytes": 65536,
+                "sha256": t16k_sha,
+                "note": "Four 16384-byte slots. Parent rotation (j + k) mod 64 wraps.",
+            },
         ],
-        "note": "Full NL4 fill, parents and slot_mix included. 1024 bytes is 16 slots, so parents run.",
+        "note": "Full NL4 fill, parents and slot_mix included. 1024 bytes is 16 slots of 64, so parents run. The 16384-byte case is four slots and exercises (j + k) mod 64.",
     }
 
     slot0 = base_slot(nl4_word, P, 2048)
@@ -566,7 +686,7 @@ def main():
     rate = {
         "id": "rate",
         "floor": {"p": 1, "q": 5, "mark": "placeholder, not ratified"},
-        "comparison": "meets when hike_span > 0 and q * hike_legs >= p * hike_span; hike_span <= 0 refuses",
+        "comparison": "meets when hike_span > 0 and q * hike_legs >= p * hike_span; hike_span <= 0 means the rate is undefined and refuses",
         "cases": [
             {"name": "above", "class": "positive", "hike_legs": 2, "hike_span": 9, "meets": True},
             {"name": "below", "class": "negative", "must_reject": True, "hike_legs": 2, "hike_span": 11, "meets": False},
@@ -633,7 +753,7 @@ def main():
         "id": "rounds",
         "thorough_rounds": 3,
         "per_round": 6,
-        "note": "leg_total < 6 is draw not defined and refuses. Otherwise 3 rounds of 6 distinct indices. An index is not repeated while an unused index remains. A mismatch does not start the next round.",
+        "note": "The 18 indices are one draw without replacement, then split into 3 rounds of 6, when leg_total is at least 18. For 6 <= leg_total < 18 the indices stay distinct while an unused index remains, and a later draw may repeat only after those indices are exhausted. leg_total < 6 is draw not defined and refuses. Each round's 6 run in parallel. A mismatch does not start the next round.",
         "cases": [
             round_case("below-six", 5, [], "negative", must_reject=True),
             round_case("eighteen-distinct", 32, straight, "positive"),
@@ -661,7 +781,7 @@ def main():
     all_w = all4_word(P, 0, 0)
     bare = fold_c1(slot0, 0, bare64)
     good = fold_c1(slot0, 0, mix64)
-    fat = fold_fatslot(slot0, 0)
+    fat = fold_v2_0(slot0, 0)
     partial = fold_partial(slot0, 0, 1)
     f3_profile = (64, 1024)
     pin1 = fill_pin(pk + beacon)
@@ -674,6 +794,46 @@ def main():
     n2 = hashlib.sha256(fill_terrain(nl4_word, lanes_of(seed_digest(pk2, beacon)), *f3_profile)).hexdigest()
     if fp1 != fp2 or n1 == n2:
         raise SystemExit("F3 negative did not separate fill_pin from NL4")
+
+    flip = 0x8000000000000001
+    Qflip = list(P)
+    Qflip[2] ^= flip
+    nslots_s, words_s = 256 // 64, 64 // 8
+    total_w = nslots_s * words_s
+    nl4_c = changed_words(nl4_word, P, Qflip, nslots_s, words_s)
+    ref_c = changed_words(ref_word, P, Qflip, nslots_s, words_s)
+    pair_c = changed_words(pair_word, P, Qflip, nslots_s, words_s)
+    if (nl4_c, ref_c, pair_c) != (total_w, total_w // 4, total_w // 2):
+        raise SystemExit("one-lane flip counts %s %s %s" % (nl4_c, ref_c, pair_c))
+    base_nl4 = hashlib.sha256(t256).hexdigest()
+    flip_nl4 = hashlib.sha256(fill_terrain(nl4_word, Qflip, 64, 256)).hexdigest()
+    if flip_nl4 == base_nl4:
+        raise SystemExit("one-lane flip terrain did not change")
+
+    Qall = list(P)
+    Qall[0] ^= MASK
+    Qall[1] ^= MASK
+    all_a = hashlib.sha256(fill_terrain(all4_word, P, 64, 256)).hexdigest()
+    all_b = hashlib.sha256(fill_terrain(all4_word, Qall, 64, 256)).hexdigest()
+    if all_a != all_b:
+        raise SystemExit("ALL4 kernel terrains differ")
+    nl4_all = hashlib.sha256(fill_terrain(nl4_word, Qall, 64, 256)).hexdigest()
+    nl4_all_c = changed_words(nl4_word, P, Qall, nslots_s, words_s)
+    if nl4_all == base_nl4 or nl4_all_c != total_w:
+        raise SystemExit("ALL4 kernel NL4 did not change")
+
+    sample_b = 32
+    leg_u = P[0]
+    good_cp = checkpoint(t256, sample_b, d, d, leg_u)
+    offmod = len(t256) - sample_b + 1
+    forged_off = int.from_bytes(d[:8], "little") % offmod
+    if forged_off + 1 + sample_b > len(t256):
+        raise SystemExit("forged window has no shifted byte")
+    bad_window = t256[forged_off + 1 : forged_off + 1 + sample_b]
+    bad_cp = hashlib.sha256(d + d + bad_window + leg_u.to_bytes(8, "little")).digest()
+    if good_cp == bad_cp:
+        raise SystemExit("forged window did not differ")
+    partial2047 = fold_partial(slot0, 0, 2047)
 
     negative = {
         "id": "negatives",
@@ -714,7 +874,7 @@ def main():
                 "conforming_S_folded_u64_hex": u64hex(good),
             },
             {
-                "name": "fatslot_fold",
+                "name": "v2_0_fold",
                 "must_reject": True,
                 "words": 2048,
                 "S_u64_hex": "0000000000000000",
@@ -729,6 +889,60 @@ def main():
                 "S_u64_hex": "0000000000000000",
                 "forbidden_S_folded_u64_hex": u64hex(partial),
                 "conforming_S_folded_u64_hex": u64hex(good),
+            },
+            {
+                "name": "partial_slot_read_2047",
+                "must_reject": True,
+                "words": 2048,
+                "words_read": 2047,
+                "S_u64_hex": "0000000000000000",
+                "forbidden_S_folded_u64_hex": u64hex(partial2047),
+                "conforming_S_folded_u64_hex": u64hex(good),
+            },
+            {
+                "name": "one_lane_flip",
+                "must_reject": True,
+                "lane": 2,
+                "flip_u64_hex": u64hex(flip),
+                "slot_bytes": 64,
+                "terrain_bytes": 256,
+                "words": total_w,
+                "nl4_changed": nl4_c,
+                "ref_changed": ref_c,
+                "pair_changed": pair_c,
+                "conforming_sha256": base_nl4,
+                "forbidden_sha256": flip_nl4,
+                "note": "Flip lane 2 by 0x8000000000000001. Counted on base words, before parents. NL4 changes every word. The one-lane word changes 25 percent. The first two NL4 steps change 50 percent.",
+            },
+            {
+                "name": "all4_kernel",
+                "must_reject": True,
+                "lanes": [0, 1],
+                "xor_u64_hex": u64hex(MASK),
+                "slot_bytes": 64,
+                "terrain_bytes": 256,
+                "words": total_w,
+                "nl4_changed": nl4_all_c,
+                "all4_sha256": all_a,
+                "all4_sha256_flipped": all_b,
+                "conforming_sha256": base_nl4,
+                "forbidden_sha256": nl4_all,
+                "note": "XOR lanes 0 and 1 with all-ones. The linear four-lane word is unchanged, because each lane is mixed once and all-ones twice cancels. NL4 changes every base word.",
+            },
+            {
+                "name": "forged_window",
+                "must_reject": True,
+                "fake_leg_ignore": False,
+                "reason": "A4.3 mismatch",
+                "slot_bytes": 64,
+                "terrain_bytes": 256,
+                "sample_bytes": sample_b,
+                "leg_u64_hex": u64hex(leg_u),
+                "sample_offset": forged_off,
+                "forbidden_window": "shifted-one",
+                "conforming_hex": good_cp.hex(),
+                "forbidden_hex": bad_cp.hex(),
+                "note": "Limb 3 is not the verifier terrain window. This is an A4.3 mismatch. It does not add the key to the fake-leg ignore record.",
             },
             {
                 "name": "f3_shared_terrain",
@@ -751,6 +965,76 @@ def main():
             raise SystemExit(c["name"] + " word does not differ")
         if "forbidden_S_folded_u64_hex" in c and c["forbidden_S_folded_u64_hex"] == c["conforming_S_folded_u64_hex"]:
             raise SystemExit(c["name"] + " fold does not differ")
+        if "forbidden_hex" in c and c["forbidden_hex"] == c["conforming_hex"]:
+            raise SystemExit(c["name"] + " checkpoint does not differ")
+
+    def span_case(name, first, last, cls, outcome, must_reject=False):
+        case = {
+            "name": name,
+            "class": cls,
+            "first": first,
+            "last": last,
+            "outcome": outcome,
+        }
+        if first["raw_ntime"] is None or last["raw_ntime"] is None:
+            case["raw_span"] = "not read"
+        else:
+            case["raw_span"] = last["raw_ntime"] - first["raw_ntime"]
+        if first["mtp"] is None or last["mtp"] is None:
+            case["hike_span"] = "not read"
+        else:
+            case["hike_span"] = last["mtp"] - first["mtp"]
+        if must_reject:
+            case["must_reject"] = True
+        return case
+
+    replay_first = mtp_window(100, list(range(1100, 1110)) + [5000])
+    replay_last = mtp_window(118, list(range(2100, 2110)) + [2200])
+    zero_first = mtp_window(100, [1100] * 10 + [9000])
+    zero_last = mtp_window(118, [1100] * 10 + [1000])
+    short = mtp_window(2, [30, 10, 20])
+    if short["mtp"] != 20:
+        raise SystemExit("short-window mtp")
+    if replay_last["mtp"] - replay_first["mtp"] != 1000:
+        raise SystemExit("replay mtp span")
+    if replay_last["raw_ntime"] - replay_first["raw_ntime"] != -2800:
+        raise SystemExit("replay raw span")
+    mtp = {
+        "id": "mtp",
+        "rule": "A4.10",
+        "note": "hike_span is MTP(last beacon) minus MTP(first beacon). MTP is the BIP113 median: sort the nTime values of the n headers ending at that block, n = min(11, height + 1), and take index n // 2. The verifier reads those heights from the portable index. Bookend S still uses raw header.time. A raw-nTime span is not hike_span. This file is a numeric replay, not a live header corpus.",
+        "cases": [
+            span_case("replay-eleven", replay_first, replay_last, "positive", "read"),
+            span_case("span-zero", zero_first, zero_last, "negative", "refuse", True),
+            span_case("span-negative", replay_last, replay_first, "negative", "refuse", True),
+            {
+                "name": "short-window",
+                "class": "positive",
+                "first": short,
+                "outcome": "read",
+                "note": "Height 2 uses n = 3. Sorted index 1 is the median.",
+            },
+            span_case(
+                "window-incomplete",
+                mtp_window(100, [1100] * 10 + [None]),
+                replay_last,
+                "negative",
+                "held",
+            ),
+        ],
+    }
+
+    kind = {
+        "id": "kind",
+        "class": "positive",
+        "kind": "satoshi-hike-v2.1-object",
+        "kind_bytes": 24,
+        "earlier": ["satoshi-hike-v2.0-object", "satoshi-hike-v1.35-object"],
+        "earlier_reason": "earlier_version",
+        "note": "A v2.0 object is earlier_version. That refuse is not a fake leg. SDKs and the gate move together with this kind.",
+    }
+    if len(kind["kind"].encode()) != 24 or len(kind["earlier"][0].encode()) != 24:
+        raise SystemExit("kind length")
 
     files = {
         "seed.json": seed,
@@ -763,16 +1047,29 @@ def main():
         "rounds.json": rounds,
         "anchors.json": anchors,
         "negatives.json": negative,
+        "mtp.json": mtp,
+        "kind.json": kind,
     }
+    if not args.skip_production:
+        files["prod-leg0.json"] = build_prod(pk, beacon, d, P)
+    prod_line = ""
+    if "prod-leg0.json" in files:
+        prod_line = "\n`prod-leg0.json` is one production leg: slot 16384, terrain 256 MiB, 2,000,000 steps, sample 1024. Stage 0 opens at the seed.\n"
     readme = """# Conformance pack, Satoshi Hike v2.1
 
-Generated by `spec/conformance/tools/gen_v21.py`. These files are the v2.1 target for the corrected seed, the NL4 word, the §11.1 fold, the small hikes, and the rate and anchor comparisons. They are not a full hike-object encoding. The pack under `../v2.0/` is historical.
+Generated by `spec/conformance/tools/gen_v21.py`. These files are the v2.1 target for the corrected seed, the NL4 word, the §11.1 fold, the small hikes, and the rate and anchor comparisons. They are not a full hike-object encoding. The pack under `../v2.0/` is historical. The withdrawn fold in `negatives.json` is the v2.0 fold.
 
-`rate.json` uses floor `1/5`. That value is placeholder, not ratified. The floor in the specification is TBD. `hike_span` of 0 or below does not meet the floor and the outcome is `refuse`.
+`legs_le_hex` in a hike file is the hexadecimal spelling of the little-endian wire bytes `le64(leg_result)`. It is not the `%016llx` spelling of the integer.
 
-`rounds.json` pins the default thorough draw. `leg_total` < 6 is `not defined` and refuses. Otherwise the phase draws 3 rounds of 6 distinct indices and does not repeat an index while an unused index remains. A mismatch does not start the next round.
+`rate.json` uses floor `1/5`. That value is placeholder, not ratified. The floor in the specification is TBD. `hike_span` of 0 or below means the rate is undefined and the outcome is `refuse`. `mtp.json` pins median-time-past for that span. Bookend `S` still uses raw `header.time`.
 
+`rounds.json` pins the default thorough draw. When at least 18 legs exist, the 18 indices are one draw without replacement, split into 3 rounds of 6. For 6 <= leg_total < 18 the indices stay distinct while an unused index remains. `leg_total` < 6 is `not defined` and refuses. A mismatch does not start the next round.
+
+`kind.json` pins `satoshi-hike-v2.1-object`. The two earlier kinds refuse as `earlier_version`, and that refuse is not a fake leg.
+""" + prod_line + """
 A negative case publishes the withdrawn result and the conforming result. An implementation that emits the withdrawn result does not conform.
+
+No git tag is cut, and no deployment cuts over, until every port passes this pack and the production-size vectors. The intended tag name is `spec-v2.1.0`. CoS cuts that tag on the merge commit.
 """
     for name, obj in files.items():
         path = os.path.join(args.out, name)

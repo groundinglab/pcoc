@@ -1,6 +1,6 @@
 # Satoshi Hike v2.1
 
-The PCOC specification and its conformance vectors. Together they are the core deliverable of this project. The construction file is still `spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md`. v2.1 is the 22 Oct 2026 correction of that file. The wire `KIND` stays `satoshi-hike-v2.0-object`.
+The PCOC specification and its conformance vectors. Together they are the core deliverable of this project. The construction file stays at `spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md`. The text at that path is v2.1, the 22 Oct 2026 correction. The wire `KIND` is `satoshi-hike-v2.1-object`. Kind `satoshi-hike-v2.0-object` is an earlier object.
 
 The point is interoperability. A PCOC made by one implementation must check the same way in every other. Everything else in this repository serves that. The SDKs, the services, and the apps are built from this folder, not the other way round.
 

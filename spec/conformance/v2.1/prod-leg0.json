@@ -1,0 +1,17 @@
+{
+  "id": "prod-leg0",
+  "class": "positive",
+  "profile": "production",
+  "public_key_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+  "seed_beacon_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+  "slot_bytes": 16384,
+  "terrain_bytes": 268435456,
+  "sample_bytes": 1024,
+  "steps": 2000000,
+  "offset_modulus": 268434433,
+  "terrain_sha256": "994f2d55e48396d12f8f3fbf23102ea79ea87e5a7f18089abc16c0411bb32d3b",
+  "leg0_u64_hex": "c8658b2b05a93205",
+  "sample_offset": 213205398,
+  "checkpoint0_hex": "e8bfeed49fb20d41090e9efada63e0ca170606957e4e112719387ac60aef12d1",
+  "note": "Stage 0 leg 0 opens at the seed. S_0 = u64_le(D[0:8]) = P[0]. The checkpoint is SHA-256(seed || seed || terrain[offset:offset+sample] || le64(leg)). Produced by spec/conformance/tools/prod_v21.c. This generator does not walk a production leg in Python."
+}

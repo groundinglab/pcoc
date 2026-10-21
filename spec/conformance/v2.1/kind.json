@@ -1,0 +1,12 @@
+{
+  "id": "kind",
+  "class": "positive",
+  "kind": "satoshi-hike-v2.1-object",
+  "kind_bytes": 24,
+  "earlier": [
+    "satoshi-hike-v2.0-object",
+    "satoshi-hike-v1.35-object"
+  ],
+  "earlier_reason": "earlier_version",
+  "note": "A v2.0 object is earlier_version. That refuse is not a fake leg. SDKs and the gate move together with this kind."
+}

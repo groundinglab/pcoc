@@ -5,8 +5,8 @@
  *   §11.1 fold and seal, §11.2–§11.4 checkpoint, §12.2 waypoint,
  *   Rule B2 integer floor, including hike_span <= 0,
  *   §15.5 thorough rounds, Rule B4 anchored_total >= 6.
- * The withdrawn maps (one-lane, linear four-lane, fill pin, FatSlot,
- * mix64 without MIX_ADD, a one-word slot read) are the §10.4 / §11.1
+ * The withdrawn maps (one-lane, linear four-lane, fill pin, the v2.0 fold,
+ * mix64 without MIX_ADD, a short slot read) are the §10.4 / §11.1
  * rejects. This file does not include the generator.
  *
  *   gcc -O2 -o check_v21 check_v21.c -lcrypto
@@ -28,7 +28,8 @@
 #define SLOT_MUL   0xA24BAED4963EE407ULL
 
 static const uint8_t SEAL[12] = {'p','c','o','c','-','w','a','l','k','-','v','1'};
-static const uint8_t SEED_DOMAIN[8] = {'P','S','E','E','D','6','4',0};
+/* Withdrawn v2.0 fill-pin label. The fill-pin negative is the only use. */
+static const uint8_t WITHDRAWN_V20_SEED_DOMAIN[8] = {'P','S','E','E','D','6','4',0};
 
 static int g_fail;
 
@@ -106,8 +107,15 @@ static uint64_t all4_word(const uint64_t P[4], uint64_t i, uint64_t j) {
     return mix64(x);
 }
 
+/* First two NL4 steps only. Not a terrain word. */
+static uint64_t pair_word(const uint64_t P[4], uint64_t i, uint64_t j) {
+    uint64_t c = (i << 32) ^ j ^ WORD_XOR;
+    uint64_t t = mix64(P[j % 4] ^ c);
+    return mix64(t ^ rotl(P[(j + 1) % 4], 17));
+}
+
 static uint64_t fill_pin(const uint8_t pre[64]) {
-    uint64_t x = load_le(SEED_DOMAIN);
+    uint64_t x = load_le(WITHDRAWN_V20_SEED_DOMAIN);
     for (uint64_t i = 0; i < 8; i++)
         x = mix64(x ^ load_le(pre + 8 * i) ^ (i * MIX_ADD));
     return x;
@@ -124,6 +132,9 @@ static uint64_t word_nl4(const void *ctx, uint64_t i, uint64_t j) {
 }
 static uint64_t word_pin(const void *ctx, uint64_t i, uint64_t j) {
     return pin_word(*(const uint64_t *)ctx, i, j);
+}
+static uint64_t word_all4(const void *ctx, uint64_t i, uint64_t j) {
+    return all4_word((const uint64_t *)ctx, i, j);
 }
 
 static uint8_t *fill_terrain(wordfn fn, const void *ctx, uint64_t slot_bytes, uint64_t terrain_bytes) {
@@ -181,7 +192,8 @@ static uint64_t fold_mix(const uint8_t *slot, uint64_t words, uint64_t S, int ba
     return acc;
 }
 
-static uint64_t fold_fat(const uint8_t *slot, uint64_t words, uint64_t S) {
+/* Withdrawn v2.0 fold: S XOR (XOR of (word XOR w)). Not the §11.1 fold. */
+static uint64_t fold_v2_0(const uint8_t *slot, uint64_t words, uint64_t S) {
     uint64_t acc = 0;
     for (uint64_t w = 0; w < words; w++) acc ^= load_le(slot + 8 * w) ^ w;
     return S ^ acc;
@@ -573,6 +585,48 @@ static int draw_rounds(long long leg_total, const uint64_t *draws, int ndraws,
     return 0;
 }
 
+/* BIP113: sort n times, take index n/2. Returns 0, or -1 when a time is missing. */
+static int mtp_value(const JVal *times, long long *out) {
+    int n = times->an;
+    if (n <= 0 || n > 11) return -1;
+    long long s[11];
+    for (int i = 0; i < n; i++) {
+        if (times->a[i]->k != JNUM) return -1;
+        s[i] = times->a[i]->n;
+    }
+    for (int i = 1; i < n; i++) {
+        long long v = s[i];
+        int j = i;
+        while (j > 0 && s[j - 1] > v) { s[j] = s[j - 1]; j--; }
+        s[j] = v;
+    }
+    *out = s[n / 2];
+    return 0;
+}
+
+/* 0 = read, 1 = a time is missing, -1 = the window does not match the rule. */
+static int check_window(const JVal *w, long long *mtp, long long *raw) {
+    long long height = jnum(w, "height");
+    long long n = jnum(w, "n");
+    long long expect_n = height + 1 < 11 ? height + 1 : 11;
+    if (n != expect_n) return -1;
+    JVal *reads = jget(w, "reads");
+    JVal *times = jget(w, "times");
+    JVal *stated = jget(w, "mtp");
+    if (!reads || !times || !stated || reads->an != n || times->an != n) return -1;
+    for (int i = 0; i < (int)n; i++) {
+        if (reads->a[i]->k != JNUM || reads->a[i]->n != height - n + 1 + i) return -1;
+    }
+    for (int i = 0; i < (int)n; i++) if (times->a[i]->k != JNUM) {
+        if (stated->k != JNULL) return -1;
+        return 1;
+    }
+    if (mtp_value(times, mtp) != 0 || stated->k != JNUM || stated->n != *mtp) return -1;
+    *raw = times->a[n - 1]->n;
+    if (jget(w, "raw_ntime")->k != JNUM || jget(w, "raw_ntime")->n != *raw) return -1;
+    return 0;
+}
+
 static int before;
 
 static void section(const char *id) {
@@ -882,27 +936,113 @@ int main(int argc, char **argv) {
                 snprintf(got, sizeof got, "%016llx", (unsigned long long)good);
                 expect_str("c1", got, jstr(c, "conforming_S_folded_u64_hex"));
                 if (bad == good) g_fail++; else reject(name);
-            } else if (strcmp(name, "fatslot_fold") == 0) {
+            } else if (strcmp(name, "v2_0_fold") == 0) {
                 uint64_t S = strtoull(jstr(c, "S_u64_hex"), NULL, 16);
-                uint64_t bad = fold_fat(slot, 2048, S);
+                uint64_t bad = fold_v2_0(slot, 2048, S);
                 uint64_t good = fold_mix(slot, 2048, S, 0, 2048);
                 char got[17];
                 snprintf(got, sizeof got, "%016llx", (unsigned long long)bad);
-                expect_str("fat", got, jstr(c, "forbidden_S_folded_u64_hex"));
+                expect_str("v2_0", got, jstr(c, "forbidden_S_folded_u64_hex"));
                 snprintf(got, sizeof got, "%016llx", (unsigned long long)good);
-                expect_str("c1-fat", got, jstr(c, "conforming_S_folded_u64_hex"));
+                expect_str("c1-v2_0", got, jstr(c, "conforming_S_folded_u64_hex"));
                 if (bad == good) g_fail++; else reject(name);
-            } else if (strcmp(name, "partial_slot_read") == 0) {
+            } else if (strcmp(name, "partial_slot_read") == 0 || strcmp(name, "partial_slot_read_2047") == 0) {
                 uint64_t S = strtoull(jstr(c, "S_u64_hex"), NULL, 16);
+                uint64_t nwords = (uint64_t)jnum(c, "words");
                 uint64_t nread = (uint64_t)jnum(c, "words_read");
-                uint64_t bad = fold_mix(slot, 2048, S, 0, nread);
-                uint64_t good = fold_mix(slot, 2048, S, 0, 2048);
+                uint64_t bad = fold_mix(slot, nwords, S, 0, nread);
+                uint64_t good = fold_mix(slot, nwords, S, 0, nwords);
                 char got[17];
                 snprintf(got, sizeof got, "%016llx", (unsigned long long)bad);
                 expect_str("partial", got, jstr(c, "forbidden_S_folded_u64_hex"));
                 snprintf(got, sizeof got, "%016llx", (unsigned long long)good);
                 expect_str("full", got, jstr(c, "conforming_S_folded_u64_hex"));
-                if (bad == good || nread >= 2048) g_fail++; else reject(name);
+                if (bad == good || nread >= nwords) g_fail++; else reject(name);
+            } else if (strcmp(name, "one_lane_flip") == 0) {
+                uint64_t Q[4];
+                memcpy(Q, P, sizeof Q);
+                Q[jnum(c, "lane")] ^= strtoull(jstr(c, "flip_u64_hex"), NULL, 16);
+                uint64_t sb = (uint64_t)jnum(c, "slot_bytes"), tb = (uint64_t)jnum(c, "terrain_bytes");
+                uint64_t words = sb / 8, nslots = tb / sb;
+                long long nl4c = 0, refc = 0, pairc = 0, total = 0;
+                for (uint64_t si = 0; si < nslots; si++) {
+                    for (uint64_t j = 0; j < words; j++) {
+                        total++;
+                        if (nl4_word(P, si, j) != nl4_word(Q, si, j)) nl4c++;
+                        if (ref_word(P, si, j) != ref_word(Q, si, j)) refc++;
+                        if (pair_word(P, si, j) != pair_word(Q, si, j)) pairc++;
+                    }
+                }
+                if (total != jnum(c, "words") || nl4c != jnum(c, "nl4_changed")
+                    || refc != jnum(c, "ref_changed") || pairc != jnum(c, "pair_changed")) {
+                    fprintf(stderr, "FAIL %s counts %lld %lld %lld\n", name, nl4c, refc, pairc);
+                    g_fail++;
+                }
+                uint8_t *a = fill_terrain(word_nl4, P, sb, tb);
+                uint8_t *b = fill_terrain(word_nl4, Q, sb, tb);
+                uint8_t da[32], db[32];
+                sha256(a, tb, da); sha256(b, tb, db);
+                hex_of(da, 32, hx); expect_str("flip-base", hx, jstr(c, "conforming_sha256"));
+                hex_of(db, 32, hx); expect_str("flip-nl4", hx, jstr(c, "forbidden_sha256"));
+                if (memcmp(da, db, 32) == 0 || nl4c != total) g_fail++;
+                else reject(name);
+                free(a); free(b);
+            } else if (strcmp(name, "all4_kernel") == 0) {
+                uint64_t Q[4];
+                memcpy(Q, P, sizeof Q);
+                uint64_t flip = strtoull(jstr(c, "xor_u64_hex"), NULL, 16);
+                JVal *lanes = jget(c, "lanes");
+                for (int k = 0; k < lanes->an; k++) Q[lanes->a[k]->n] ^= flip;
+                uint64_t sb = (uint64_t)jnum(c, "slot_bytes"), tb = (uint64_t)jnum(c, "terrain_bytes");
+                uint64_t words = sb / 8, nslots = tb / sb;
+                long long nl4c = 0, total = 0;
+                for (uint64_t si = 0; si < nslots; si++)
+                    for (uint64_t j = 0; j < words; j++) {
+                        total++;
+                        if (nl4_word(P, si, j) != nl4_word(Q, si, j)) nl4c++;
+                    }
+                if (nl4c != jnum(c, "nl4_changed") || total != jnum(c, "words")) {
+                    fprintf(stderr, "FAIL %s nl4 count\n", name); g_fail++;
+                }
+                uint8_t *aa = fill_terrain(word_all4, P, sb, tb);
+                uint8_t *ab = fill_terrain(word_all4, Q, sb, tb);
+                uint8_t *nb = fill_terrain(word_nl4, Q, sb, tb);
+                uint8_t *na = fill_terrain(word_nl4, P, sb, tb);
+                uint8_t da[32], db[32], dn[32], dbase[32];
+                sha256(aa, tb, da); sha256(ab, tb, db); sha256(nb, tb, dn); sha256(na, tb, dbase);
+                hex_of(da, 32, hx); expect_str("all4", hx, jstr(c, "all4_sha256"));
+                hex_of(db, 32, hx); expect_str("all4-flip", hx, jstr(c, "all4_sha256_flipped"));
+                hex_of(dbase, 32, hx); expect_str("all4-base", hx, jstr(c, "conforming_sha256"));
+                hex_of(dn, 32, hx); expect_str("all4-nl4", hx, jstr(c, "forbidden_sha256"));
+                if (memcmp(da, db, 32) != 0 || memcmp(dbase, dn, 32) == 0) g_fail++;
+                else reject(name);
+                free(aa); free(ab); free(na); free(nb);
+            } else if (strcmp(name, "forged_window") == 0) {
+                if (jbool(c, "fake_leg_ignore")) { fprintf(stderr, "FAIL forged window is a ban\n"); g_fail++; }
+                if (strcmp(jstr(c, "reason"), "A4.3 mismatch") != 0) { fprintf(stderr, "FAIL forged reason\n"); g_fail++; }
+                if (strcmp(jstr(c, "forbidden_window"), "shifted-one") != 0) die("forged window rule");
+                uint64_t sb = (uint64_t)jnum(c, "slot_bytes"), tb = (uint64_t)jnum(c, "terrain_bytes");
+                uint64_t sample = (uint64_t)jnum(c, "sample_bytes");
+                uint64_t leg = strtoull(jstr(c, "leg_u64_hex"), NULL, 16);
+                uint8_t *terrain = fill_terrain(word_nl4, P, sb, tb);
+                uint8_t *good = checkpoint(terrain, tb, sample, d, d, leg);
+                uint64_t offset = load_le(d) % (tb - sample + 1);
+                if ((uint64_t)jnum(c, "sample_offset") != offset) {
+                    fprintf(stderr, "FAIL forged offset\n"); g_fail++;
+                }
+                if (offset + 1 + sample > tb) die("forged shift");
+                size_t npre = 64 + sample + 8;
+                uint8_t *pre = malloc(npre);
+                memcpy(pre, d, 32);
+                memcpy(pre + 32, d, 32);
+                memcpy(pre + 64, terrain + offset + 1, sample);
+                store_le(pre + 64 + sample, leg);
+                uint8_t bad[32];
+                sha256(pre, npre, bad);
+                hex_of(good, 32, hx); expect_str("forged-good", hx, jstr(c, "conforming_hex"));
+                hex_of(bad, 32, hx); expect_str("forged-bad", hx, jstr(c, "forbidden_hex"));
+                if (memcmp(good, bad, 32) == 0) g_fail++; else reject(name);
+                free(pre); free(good); free(terrain);
             } else if (strcmp(name, "f3_shared_terrain") == 0) {
                 size_t n2;
                 uint8_t *pk2 = unhex(jstr(c, "pk2_hex"), &n2);
@@ -935,6 +1075,117 @@ int main(int argc, char **argv) {
         }
         free(slot); free(pk); free(be); free(path);
         section("negatives");
+    }
+
+    /* kind text */
+    {
+        char *path = path_join(dir, "kind.json");
+        JVal *o = load_json(path);
+        before = g_fail;
+        const char *k = jstr(o, "kind");
+        if (strcmp(k, "satoshi-hike-v2.1-object") != 0 || strlen(k) != (size_t)jnum(o, "kind_bytes") || strlen(k) != 24) {
+            fprintf(stderr, "FAIL kind text\n"); g_fail++;
+        }
+        JVal *earlier = jget(o, "earlier");
+        if (!earlier || earlier->an != 2
+            || strcmp(earlier->a[0]->s, "satoshi-hike-v2.0-object") != 0
+            || strcmp(earlier->a[1]->s, "satoshi-hike-v1.35-object") != 0
+            || strcmp(jstr(o, "earlier_reason"), "earlier_version") != 0) {
+            fprintf(stderr, "FAIL earlier kind\n"); g_fail++;
+        }
+        free(path);
+        section("kind");
+    }
+
+    /* median-time-past, Rule A4.10 */
+    {
+        char *path = path_join(dir, "mtp.json");
+        JVal *o = load_json(path);
+        before = g_fail;
+        JVal *cases = jget(o, "cases");
+        for (int i = 0; i < cases->an; i++) {
+            JVal *c = cases->a[i];
+            const char *name = jstr(c, "name");
+            const char *outcome = jstr(c, "outcome");
+            long long m0 = 0, r0 = 0, m1 = 0, r1 = 0;
+            int a = check_window(jget(c, "first"), &m0, &r0);
+            if (a < 0) { fprintf(stderr, "FAIL %s first window\n", name); g_fail++; continue; }
+            JVal *last = jget(c, "last");
+            if (!last) {
+                if (a != 0 || strcmp(outcome, "read") != 0) {
+                    fprintf(stderr, "FAIL %s short window\n", name); g_fail++;
+                } else pass(name);
+                continue;
+            }
+            int b = check_window(last, &m1, &r1);
+            if (b < 0) { fprintf(stderr, "FAIL %s last window\n", name); g_fail++; continue; }
+            if (a == 1 || b == 1) {
+                int hs_null = 0, raw_null = 0;
+                const char *hs = jstr_or_null(c, "hike_span", &hs_null);
+                const char *raws = jstr_or_null(c, "raw_span", &raw_null);
+                if (hs_null || raw_null || !hs || !raws
+                    || strcmp(hs, "not read") != 0 || strcmp(raws, "not read") != 0
+                    || strcmp(outcome, "held") != 0) {
+                    fprintf(stderr, "FAIL %s held\n", name); g_fail++;
+                } else pass(name);
+                continue;
+            }
+            long long span = m1 - m0;
+            long long raw = r1 - r0;
+            if (jnum(c, "hike_span") != span || jnum(c, "raw_span") != raw) {
+                fprintf(stderr, "FAIL %s span\n", name); g_fail++; continue;
+            }
+            if (strcmp(outcome, "refuse") == 0) {
+                if (span > 0 || !jbool(c, "must_reject")) {
+                    fprintf(stderr, "FAIL %s refuse\n", name); g_fail++;
+                } else reject(name);
+            } else if (strcmp(outcome, "read") == 0) {
+                if (span <= 0 || raw == span) {
+                    fprintf(stderr, "FAIL %s read\n", name); g_fail++;
+                } else pass(name);
+            } else {
+                fprintf(stderr, "FAIL %s outcome\n", name); g_fail++;
+            }
+        }
+        free(path);
+        section("mtp");
+    }
+
+    /* production leg: 256 MiB terrain, one 2,000,000-step leg, one checkpoint */
+    {
+        char *path = path_join(dir, "prod-leg0.json");
+        JVal *o = load_json(path);
+        before = g_fail;
+        size_t np, nb;
+        uint8_t *pk = unhex(jstr(o, "public_key_hex"), &np);
+        uint8_t *be = unhex(jstr(o, "seed_beacon_hex"), &nb);
+        uint8_t d[32]; uint64_t P[4];
+        seed_of(pk, be, d, P);
+        uint64_t slot = (uint64_t)jnum(o, "slot_bytes");
+        uint64_t tb = (uint64_t)jnum(o, "terrain_bytes");
+        uint64_t sample = (uint64_t)jnum(o, "sample_bytes");
+        uint64_t steps = (uint64_t)jnum(o, "steps");
+        if (slot != 16384 || tb != 256ull * 1024ull * 1024ull || sample != 1024 || steps != 2000000ull) {
+            fprintf(stderr, "FAIL prod profile\n"); g_fail++;
+        }
+        uint8_t *terrain = fill_terrain(word_nl4, P, slot, tb);
+        uint8_t dig[32];
+        sha256(terrain, tb, dig);
+        hex_of(dig, 32, hx);
+        expect_str("prod-terrain", hx, jstr(o, "terrain_sha256"));
+        uint64_t S = do_leg(terrain, tb, slot, steps, P[0]);
+        char got[17];
+        snprintf(got, sizeof got, "%016llx", (unsigned long long)S);
+        expect_str("prod-leg0", got, jstr(o, "leg0_u64_hex"));
+        uint64_t offset = load_le(d) % (tb - sample + 1);
+        if ((uint64_t)jnum(o, "sample_offset") != offset || (uint64_t)jnum(o, "offset_modulus") != tb - sample + 1) {
+            fprintf(stderr, "FAIL prod offset\n"); g_fail++;
+        }
+        uint8_t *cp = checkpoint(terrain, tb, sample, d, d, S);
+        hex_of(cp, 32, hx);
+        expect_str("prod-cp0", hx, jstr(o, "checkpoint0_hex"));
+        free(cp); free(terrain); free(pk); free(be); free(path);
+        section("prod-leg0");
     }
 
     if (g_fail) {

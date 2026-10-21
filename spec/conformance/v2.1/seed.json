@@ -12,5 +12,5 @@
     "7c81df6efbf55f11"
   ],
   "waypoint_equals_seed": 1,
-  "note": "D = SHA-256(public_key || seed_beacon), no label. The seed equals stages[0].waypoint by design."
+  "note": "D = SHA-256(public_key || seed_beacon), no label. The seed equals stages[0].waypoint by design. Informative: leg 0 of stage 0 starts at S_0 = u64_le(D[0:8]) = P[0], and the first terrain-sample offset is P[0] mod the offset modulus. Those same 64 bits are lane 0, the first walk state, and the first sample offset."
 }

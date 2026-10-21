@@ -4,8 +4,11 @@
   "files": [
     "anchors.json",
     "kat-small.json",
+    "kind.json",
+    "mtp.json",
     "negatives.json",
     "nl4-words.json",
+    "prod-leg0.json",
     "rate.json",
     "rounds.json",
     "seed.json",
@@ -17,8 +20,11 @@
   "ids": [
     "anchors",
     "kat-small",
+    "kind",
+    "mtp",
     "negatives",
     "nl4-words",
+    "prod-leg0",
     "rate",
     "rounds",
     "seed",
@@ -26,7 +32,7 @@
     "terrain-small",
     "test-3leg"
   ],
-  "vector_sha256": "b3f2dde64a0e3c577226336d1c7c7c3254176ede42ac021b79f122417157d9a8",
+  "vector_sha256": "86d89a1465a1afddd411e55d8c4343f8e15df5b6f9aa7c904557e41b4c198e1c",
   "vector_sha256_note": "SHA-256 over spec/conformance/v2.1 except manifest.json, each file as path, NUL, sha256(bytes), sorted by path. The sdk/SPEC_PIN hash covers the whole spec/conformance tree except tools/.",
   "floor_mark": "placeholder, not ratified"
 }

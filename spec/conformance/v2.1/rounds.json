@@ -2,7 +2,7 @@
   "id": "rounds",
   "thorough_rounds": 3,
   "per_round": 6,
-  "note": "leg_total < 6 is draw not defined and refuses. Otherwise 3 rounds of 6 distinct indices. An index is not repeated while an unused index remains. A mismatch does not start the next round.",
+  "note": "The 18 indices are one draw without replacement, then split into 3 rounds of 6, when leg_total is at least 18. For 6 <= leg_total < 18 the indices stay distinct while an unused index remains, and a later draw may repeat only after those indices are exhausted. leg_total < 6 is draw not defined and refuses. Each round's 6 run in parallel. A mismatch does not start the next round.",
   "cases": [
     {
       "name": "below-six",
