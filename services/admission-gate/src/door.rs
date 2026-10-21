@@ -2507,7 +2507,7 @@ mod tests {
         let seed = hike::production_seed(&public_key, &seed_beacon);
         let mut seed_value = [0u8; 32];
         seed_value.copy_from_slice(&Sha256::digest(seed));
-        let terrain = hike::fill_terrain_sized(hike::fill_pin(&seed), sizes);
+        let terrain = hike::fill_terrain_sized(&hike::seed_from_preimage(&seed), sizes);
         let mut limb = seed_value;
         let mut stages = Vec::with_capacity(18);
         for g in 0..18 {

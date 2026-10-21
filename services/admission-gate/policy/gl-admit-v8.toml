@@ -1,0 +1,34 @@
+# groundinglab admission policy gl-admit-v8. A DRAFT, not deployed.
+# Do not point deploy/gate.toml here. The floor below is a test placeholder.
+# It is not a ratified SPEC value. Measuring a beacon-paced hike on the new
+# reference sets the floor later, a little below the low-end host.
+#
+# Rate basis (code, every policy id): total legs across ALL stages divided by
+# Bitcoin header time from the first beacon to the last beacon, via the
+# portable index. Compared as q·legs ≥ p·span. No first/last planted waypoint.
+# No per-stage or whole-hike leg-count minimum. Anchored waypoints: any 6.
+
+policy_id = "gl-admit-v8"
+
+# PLACEHOLDER, NOT RATIFIED. 1/5 = 0.2 legs/s. Testing only.
+leg_rate_floor = { p = 1, q = 5 }
+floor_status = "placeholder, not ratified"
+leg_rate_basis = "all_legs / (T(last beacon) - T(first beacon))"
+
+# Any 6 anchored waypoints. No specific index is required.
+min_anchored_paths = 6
+
+# Three rounds of 6. Each round's 6 legs are evaluated in parallel.
+thorough_six_leg_runs = 3
+thorough_legs_per_run = 6
+thorough_early_stop = true
+draw_commitment = "sha256(draw || salt), revealed with the result"
+
+provisional = "on"
+held_on_not_read = true
+
+# A fake leg refuses and this gate ignores later submits for that public key.
+ban_key_on_fake_leg = true
+
+[index]
+expected_network = "main"

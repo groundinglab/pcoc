@@ -192,14 +192,6 @@ fn settled_without_terrain(
             crate::wire::OUTCOME_REJECTED,
         ));
     }
-    if screen.legs.is_some_and(|n| n < policy::SPEC_MIN_LEGS) {
-        return Some(refuse_now(
-            vec!["fewer than 6 legs, so the six indices could not be drawn".to_owned()],
-            "Invalid: fewer than 6 legs, so the proof cannot be drawn.".to_owned(),
-            "{}".to_owned(),
-            crate::wire::OUTCOME_REJECTED,
-        ));
-    }
     let now = |i: Option<u64>| i.is_none_or(|i| screen.anchored_indices.contains(&i));
     let possible = |i: Option<u64>| i.is_none_or(|i| screen.possible_indices.contains(&i));
     let first_now = now(policy.require_first_anchored);
@@ -283,16 +275,6 @@ fn judge_fast(
                 crate::wire::OUTCOME_REJECTED,
             );
         }
-    }
-
-    let legs = total_legs(measurements, profile);
-    if legs.is_some_and(|n| n < policy::SPEC_MIN_LEGS) {
-        return refuse_now(
-            vec!["fewer than 6 legs, so the six indices could not be drawn".to_owned()],
-            "Invalid: fewer than 6 legs, so the proof cannot be drawn.".to_owned(),
-            record,
-            crate::wire::OUTCOME_REJECTED,
-        );
     }
 
     match anchored_judgment(measurements, policy, profile) {
@@ -442,10 +424,10 @@ fn anchor_could(token: Option<&serde_json::Value>) -> bool {
 /// and the anchored count among `W_1` … `W_16`. Numbers only, no threshold.
 /// `None` when the record holds none of them.
 pub fn fast_measures(record: &str) -> Option<serde_json::Value> {
-    let value = serde_json::from_str::<serde_json::Value>(record).ok()?;
-    let legs = value.get("N").and_then(|item| item.as_u64());
-    let span_s = value.get("S").and_then(|item| item.as_u64());
-    let anchored = value.get("anchored_total").and_then(|item| item.as_u64());
+    let rate = hike::beacon_rate(record);
+    let legs = rate.legs;
+    let span_s = rate.span_s.and_then(|span| u64::try_from(span).ok());
+    let anchored = rate.anchored;
     if legs.is_none() && span_s.is_none() && anchored.is_none() {
         return None;
     }
@@ -467,40 +449,25 @@ fn record_json(measurements: &hike::Measurements, profile: &str) -> Option<serde
     serde_json::from_str(record.trim_end()).ok()
 }
 
-fn total_legs(measurements: &hike::Measurements, profile: &str) -> Option<u64> {
-    let value = record_json(measurements, profile)?;
-    // `analysis.whole_hike_legs` is the checkpoint count. It does not read `leg_count`.
-    match value.pointer("/analysis/whole_hike_legs") {
-        Some(serde_json::Value::Number(n)) => n.as_u64(),
-        _ => None,
-    }
-}
-
 enum Pair {
     NotDefined,
     NotRead,
     Numeric { n: i128, s: i128 },
 }
 
+/// All-legs count and first-beacon to last-beacon span. Not the bookend pair `(N, S)`.
 fn bookend_pair(record: &str) -> Pair {
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(record) else {
-        return Pair::NotRead;
-    };
-    if matches!(value.get("N"), Some(serde_json::Value::String(n)) if n == "not defined") {
+    let rate = hike::beacon_rate(record);
+    if rate.legs_not_defined {
         return Pair::NotDefined;
     }
-    match (json_i128(value.get("N")), json_i128(value.get("S"))) {
-        (Some(n), Some(s)) => Pair::Numeric { n, s },
+    match (rate.legs, rate.span_s) {
+        (Some(legs), Some(span)) if !rate.times_not_read => Pair::Numeric {
+            n: i128::from(legs),
+            s: span,
+        },
         _ => Pair::NotRead,
     }
-}
-
-fn json_i128(value: Option<&serde_json::Value>) -> Option<i128> {
-    let value = value?;
-    if let Some(number) = value.as_i64() {
-        return Some(i128::from(number));
-    }
-    value.as_u64().map(i128::from)
 }
 
 /// Thorough measurement. Terrain is built here, inside `hike::verify`.
@@ -534,9 +501,9 @@ mod tests {
     }
 
     #[test]
-    fn fast_measures_reads_the_bookends_and_the_anchored_count() {
+    fn fast_measures_reads_the_beacon_span_and_the_anchored_count() {
         let m = fast_measures(
-            "{\"profile\":\"production\",\"anchored_total\":12,\"N\":1499,\"S\":9557}\n",
+            "{\"profile\":\"production\",\"anchored_total\":12,\"headers\":[{\"T\":1000},{\"T\":10557}],\"analysis\":{\"per_stage\":[{\"checkpoint_count\":1499}]}}\n",
         )
         .expect("measures");
         assert_eq!(m["legs"], 1499);

@@ -142,11 +142,9 @@ fn bookend_measures(record_body: &str) -> (Option<u64>, Option<u64>, Option<f64>
     } else {
         record_body
     };
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(text) else {
-        return (None, None, None);
-    };
-    let legs = value.get("N").and_then(serde_json::Value::as_u64);
-    let span_s = value.get("S").and_then(serde_json::Value::as_u64);
+    let rate = hike::beacon_rate(text);
+    let legs = rate.legs;
+    let span_s = rate.span_s.and_then(|span| u64::try_from(span).ok());
     let leg_rate = match (legs, span_s) {
         (Some(legs), Some(span)) if span > 0 => Some(legs as f64 / span as f64),
         _ => None,
@@ -751,10 +749,12 @@ mod tests {
             sizes,
         );
         let record = hike::verify_record_json("conformance-small", &measurements);
-        assert_eq!(record, doc["record"].as_str().unwrap());
+        // The committed vector is a v2.0 object. NL4 and C1 do not reproduce its record.
+        assert_ne!(record, doc["record"].as_str().unwrap());
+        assert!(record.contains("\"shape\":\"mismatch\""));
         let facts = hike::failure_facts(&measurements);
         assert!(facts.iter().any(|fact| *fact == "shape is false"));
-        assert!(facts.iter().any(|fact| fact.contains("fewer than 6")));
+        assert!(facts.iter().all(|fact| !fact.contains("fewer than 6")));
     }
 
     fn small_hike(stages: Vec<hike::Stage>, last_height: u64) -> Vec<u8> {
@@ -995,7 +995,7 @@ mod tests {
             out.copy_from_slice(&digest);
             out
         };
-        let terrain = hike::fill_terrain_sized(hike::fill_pin(&seed), sizes);
+        let terrain = hike::fill_terrain_sized(&hike::seed_from_preimage(&seed), sizes);
         let leg = hike::leg_result_sized(&terrain, &seed_value, sizes);
         let sample = hike::terrain_sample_sized(&terrain, &seed_value, sizes);
         let digest = hike::checkpoint_sized(&seed_value, &seed_value, &sample, leg, sizes);
