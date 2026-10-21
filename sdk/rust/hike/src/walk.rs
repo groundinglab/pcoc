@@ -24,15 +24,15 @@ pub fn step_sized(terrain: &[u8], state: u64, sizes: Sizes) -> u64 {
     let i = (state % n_slots) as usize;
     let start = i * sizes.slot_bytes;
     let slot = &terrain[start..start + sizes.slot_bytes];
-    // §11.1: acc starts at 0. Every word of the slot is mixed with w and S.
-    // mix64 includes MIX_ADD. The accumulator is wrapping add. The seal
-    // digest of that acc is E.
+    // §11.1: acc starts at 0. Every word is mixed as word XOR S. There is
+    // no w term. mix64 includes MIX_ADD. The accumulator is wrapping add.
+    // The seal digest of that acc is E.
     let words = sizes.words_per_slot();
     debug_assert_eq!(slot.len(), words * 8);
     let mut acc = 0u64;
     for w in 0..words {
         let word = u64::from_le_bytes(slot[w * 8..w * 8 + 8].try_into().unwrap());
-        acc = acc.wrapping_add(mix64(word ^ state.wrapping_add(w as u64)));
+        acc = acc.wrapping_add(mix64(word ^ state));
     }
     seal(acc)
 }
@@ -113,20 +113,24 @@ mod tests {
         let state = 0x0123_4567_89ab_cdefu64;
         let mut acc = 0u64;
         let mut xor = 0u64;
-        let mut withdrawn = 0u64;
+        let mut xor_w = 0u64;
+        let mut s_plus_w = 0u64;
         for (w, word) in words.iter().enumerate() {
-            let mixed = mix64(word ^ state.wrapping_add(w as u64));
+            let mixed = mix64(word ^ state);
             acc = acc.wrapping_add(mixed);
             xor ^= mixed;
-            withdrawn = withdrawn.wrapping_add(mix64(word ^ (w as u64) ^ state));
+            xor_w = xor_w.wrapping_add(mix64(word ^ (w as u64) ^ state));
+            s_plus_w = s_plus_w.wrapping_add(mix64(word ^ state.wrapping_add(w as u64)));
         }
-        assert_eq!(acc, 0x2a6b_a108_225a_ab5c);
-        assert_eq!(withdrawn, 0x5ab2_5313_2ce7_67e2);
+        assert_eq!(acc, 0x660a_b598_d582_982f);
+        assert_eq!(s_plus_w, 0x2a6b_a108_225a_ab5c);
+        assert_eq!(xor_w, 0x5ab2_5313_2ce7_67e2);
         assert_ne!(xor, acc);
-        assert_ne!(withdrawn, acc);
+        assert_ne!(xor_w, acc);
+        assert_ne!(s_plus_w, acc);
         let mut bare = 0u64;
-        for (w, word) in words.iter().enumerate() {
-            let x = word ^ (w as u64) ^ state;
+        for word in words {
+            let x = word ^ state;
             let mut y = x;
             y = (y ^ (y >> 30)).wrapping_mul(crate::consts::MIX_MUL1);
             y = (y ^ (y >> 27)).wrapping_mul(crate::consts::MIX_MUL2);

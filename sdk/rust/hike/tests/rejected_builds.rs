@@ -3,7 +3,8 @@
 
 use hike::rejected::{
     fill_all4, fill_pin_terrain, fill_ref, honest_terrain, leg_result_cached, leg_result_with,
-    step_bare_finalizer, step_partial, step_v2_0_fold, step_xor_acc,
+    step_bare_finalizer, step_partial, step_s_plus_w, step_v2_0_fold, step_xor_acc, step_xor_w,
+    terrain_word_xor_w,
 };
 use hike::{leg_result_sized, seed_preimage, Sizes};
 
@@ -30,11 +31,17 @@ fn each_rejected_build_differs_from_the_honest_leg() {
     let xor = leg_result_with(&terrain, &previous, sizes, step_xor_acc);
     let v20 = leg_result_with(&terrain, &previous, sizes, step_v2_0_fold);
     let partial = leg_result_with(&terrain, &previous, sizes, step_partial);
+    let xor_w = leg_result_with(&terrain, &previous, sizes, step_xor_w);
+    let s_plus_w = leg_result_with(&terrain, &previous, sizes, step_s_plus_w);
+    let hoisted = terrain_word_xor_w(&terrain, sizes);
     let cached = leg_result_cached(&terrain, &previous, sizes);
     assert_ne!(bare, honest, "mix64 without MIX_ADD");
     assert_ne!(xor, honest, "XOR accumulator");
     assert_ne!(v20, honest, "v2.0 fold");
     assert_ne!(partial, honest, "partial slot read");
+    assert_ne!(xor_w, honest, "xor_w_fold");
+    assert_ne!(s_plus_w, honest, "s_plus_w_fold");
+    assert_ne!(leg_result_sized(&hoisted, &previous, sizes), honest, "prefold_hoist");
     assert_ne!(cached, honest, "cached leg");
 
     let preimage = seed_preimage(&pk, &beacon);

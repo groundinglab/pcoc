@@ -55,8 +55,8 @@ pub fn fill_all4(seed: &[u8; 32], sizes: Sizes) -> Vec<u8> {
 /// Fold that uses the bare splitmix finalizer. `MIX_ADD` is missing. That is wrong.
 /// The accumulator is still wrapping addition. Only the mixer is bare.
 pub fn step_bare_finalizer(terrain: &[u8], state: u64, sizes: Sizes) -> u64 {
-    fold_add(terrain, state, sizes, |word, w, state| {
-        bare_mix(word ^ state.wrapping_add(w))
+    fold_add(terrain, state, sizes, |word, _w, state| {
+        bare_mix(word ^ state)
     })
 }
 
@@ -66,6 +66,31 @@ pub fn step_xor_w(terrain: &[u8], state: u64, sizes: Sizes) -> u64 {
     fold_add(terrain, state, sizes, |word, w, state| {
         mix64(word ^ w ^ state)
     })
+}
+
+/// Withdrawn c886ef2 fold: `mix64(word XOR (S + w))` with wrapping addition.
+/// Vector key `s_plus_w_fold`. There is no such `w` term in §11.1.
+pub fn step_s_plus_w(terrain: &[u8], state: u64, sizes: Sizes) -> u64 {
+    fold_add(terrain, state, sizes, |word, w, state| {
+        mix64(word ^ state.wrapping_add(w))
+    })
+}
+
+/// Replaces each stored word with `word XOR w`. That array is not the §10.4
+/// terrain. The honest §11.1 step on it does not match the real slot.
+/// Vector key `prefold_hoist`.
+pub fn terrain_word_xor_w(terrain: &[u8], sizes: Sizes) -> Vec<u8> {
+    let mut out = terrain.to_vec();
+    let words = sizes.words_per_slot();
+    for slot in 0..sizes.n_slots() {
+        let start = slot * sizes.slot_bytes;
+        for w in 0..words {
+            let off = start + w * 8;
+            let word = u64::from_le_bytes(out[off..off + 8].try_into().unwrap());
+            out[off..off + 8].copy_from_slice(&(word ^ (w as u64)).to_le_bytes());
+        }
+    }
+    out
 }
 
 /// Withdrawn XOR accumulator: `acc ^= mix64(word(w) ^ w ^ S)`. The v2.1 fold adds.
@@ -95,8 +120,8 @@ pub fn step_partial(terrain: &[u8], state: u64, sizes: Sizes) -> u64 {
 pub fn step_partial_words(terrain: &[u8], state: u64, sizes: Sizes, keep: usize) -> u64 {
     let slot = slot_of(terrain, state, sizes);
     let mut acc = 0u64;
-    for (w, word) in slot.iter().take(keep).enumerate() {
-        acc = acc.wrapping_add(mix64(*word ^ state.wrapping_add(w as u64)));
+    for word in slot.iter().take(keep) {
+        acc = acc.wrapping_add(mix64(*word ^ state));
     }
     seal(acc)
 }

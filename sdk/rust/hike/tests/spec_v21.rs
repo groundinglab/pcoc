@@ -229,6 +229,7 @@ fn negatives_and_the_rate_floor_match_the_pack() {
             | "xor_accumulator"
             | "xor_accumulator_fold"
             | "xor_w_fold"
+            | "s_plus_w_fold"
             | "partial_slot_read"
             | "partial_slot_read_2047" => {
                 let sizes = sizes_of(16384, 16384);
@@ -250,6 +251,7 @@ fn negatives_and_the_rate_floor_match_the_pack() {
                         hike::rejected::step_xor_acc(&terrain, state, sizes)
                     }
                     "xor_w_fold" => hike::rejected::step_xor_w(&terrain, state, sizes),
+                    "s_plus_w_fold" => hike::rejected::step_s_plus_w(&terrain, state, sizes),
                     "partial_slot_read" | "partial_slot_read_2047" => {
                         let keep = case["words_read"].as_u64().unwrap() as usize;
                         hike::rejected::step_partial_words(&terrain, state, sizes, keep)
@@ -258,6 +260,32 @@ fn negatives_and_the_rate_floor_match_the_pack() {
                 };
                 assert_eq!(rejected, hike::seal(forbidden), "{name}");
                 assert_ne!(rejected, step_sized(&terrain, state, sizes));
+            }
+            "prefold_hoist" => {
+                let sizes = sizes_of(16384, 16384);
+                let terrain = fill_terrain_sized(&digest, sizes);
+                let state = hex_u64(case["S_u64_hex"].as_str().unwrap());
+                assert_eq!(case["transform"].as_str(), Some("word XOR w"));
+                let hoist = hike::rejected::terrain_word_xor_w(&terrain, sizes);
+                let bad = step_sized(&hoist, state, sizes);
+                let good = step_sized(&terrain, state, sizes);
+                let forbidden = hex_u64(case["forbidden_S_folded_u64_hex"].as_str().unwrap());
+                let conforming = hex_u64(case["conforming_S_folded_u64_hex"].as_str().unwrap());
+                assert_eq!(bad, hike::seal(forbidden));
+                assert_eq!(good, hike::seal(conforming));
+                assert_eq!(format!("{bad:016x}"), case["forbidden_S_prime_u64_hex"].as_str().unwrap());
+                assert_eq!(format!("{good:016x}"), case["conforming_S_prime_u64_hex"].as_str().unwrap());
+                let steps = case["steps"].as_u64().unwrap();
+                let mut bad_leg = state;
+                let mut good_leg = state;
+                for _ in 0..steps {
+                    bad_leg = step_sized(&hoist, bad_leg, sizes);
+                    good_leg = step_sized(&terrain, good_leg, sizes);
+                }
+                assert_eq!(format!("{bad_leg:016x}"), case["forbidden_leg_u64_hex"].as_str().unwrap());
+                assert_eq!(format!("{good_leg:016x}"), case["conforming_leg_u64_hex"].as_str().unwrap());
+                assert_ne!(bad, good);
+                assert_ne!(bad_leg, good_leg);
             }
             "one_lane_flip" => {
                 let sizes = sizes_of(
@@ -507,7 +535,7 @@ fn constants_and_the_manifest_hash_match_the_pack() {
     assert_eq!(got, manifest["vector_sha256"].as_str().unwrap());
     assert_eq!(
         got,
-        "e2451caf9df3cb70debb0d6d99dc11cab20bca3729f7996f8f6d4f521484d50b"
+        "b43153edd61efbb433181ff445d3a3867627118c70c221436ee28fe866797ee5"
     );
 }
 
