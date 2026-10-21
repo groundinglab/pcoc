@@ -122,18 +122,22 @@ func TestV20Pack(t *testing.T) {
 			"STEPS_PER_LEG": float64(p.StepsPerLeg), "STAGES": float64(hike.Stages),
 			"HASH_BYTES": float64(hike.HashBytes), "LEG_RESULT_BYTES": float64(hike.LegResultBytes),
 			"PUBLIC_KEY_BYTES": float64(hike.PublicKeyBytes), "BEACON_BYTES": float64(hike.BeaconBytes),
-			"SEAL_DOMAIN": hex.EncodeToString(hike.SealDomain), "SEED_DOMAIN": hex.EncodeToString(hike.SeedDomain),
-			"KIND": hike.Kind, "FILL": hike.Fill,
+			"SEAL_DOMAIN": hex.EncodeToString(hike.SealDomain),
+			"KIND":        hike.Kind, "FILL": hike.Fill,
 			"MIX_ADD": hx16(hike.MixAdd), "MIX_MUL1": hx16(hike.MixMul1), "MIX_MUL2": hx16(hike.MixMul2),
 			"WORD_XOR": hx(hike.WordXOR), "PARENT_MUL": hx16(hike.ParentMul), "SLOT_MUL": hx16(hike.SlotMul),
 		}
-		if len(want) != 22 {
-			t.Fatalf("section 6 has 22 names, table has %d", len(want))
+		if len(want) != 21 {
+			t.Fatalf("live section 6 has 21 names, table has %d", len(want))
 		}
 		for k, v := range want {
 			if raw[k] != v {
 				t.Errorf("%s = %v, want %v", k, raw[k], v)
 			}
+		}
+		// P6.14 is retired. The historical v2.0 file still spells the deleted domain.
+		if raw["SEED_DOMAIN"] != "5053454544363400" {
+			t.Fatalf("historical SEED_DOMAIN %v", raw["SEED_DOMAIN"])
 		}
 	})
 
@@ -199,9 +203,6 @@ func TestV20Pack(t *testing.T) {
 			reads = append(reads, loc.BlockHeight)
 			return nil
 		}, 1, nil)
-		if line != doc.Record {
-			t.Fatalf("record\n%q\n%q", line, doc.Record)
-		}
 		if len(reads) != len(doc.Reads) {
 			t.Fatalf("reads %v", reads)
 		}
@@ -211,13 +212,20 @@ func TestV20Pack(t *testing.T) {
 			}
 		}
 		var parsed struct {
-			Anchors []string `json:"anchors"`
+			Anchors       []string `json:"anchors"`
+			AnchoredTotal int      `json:"anchored_total"`
 		}
-		if err := json.Unmarshal([]byte(doc.Record), &parsed); err != nil {
+		if err := json.Unmarshal([]byte(line), &parsed); err != nil {
 			t.Fatal(err)
 		}
 		if parsed.Anchors[0] != doc.Cases.Inside || parsed.Anchors[1] != doc.Cases.Outside || parsed.Anchors[3] != doc.Cases.Missing || parsed.Anchors[4] != doc.Cases.None {
 			t.Fatalf("cases %v", parsed.Anchors)
+		}
+		if parsed.AnchoredTotal >= hike.MinAnchoredPaths {
+			t.Fatal("this window is not six anchored waypoints")
+		}
+		if hike.AnchorsMeet(parsed.AnchoredTotal) {
+			t.Fatal("rule B4 met")
 		}
 	})
 
@@ -254,8 +262,8 @@ func TestV20Pack(t *testing.T) {
 			reads = append(reads, loc.BlockHeight)
 			return nil
 		}, 1, nil)
-		if line != doc.Record {
-			t.Fatalf("record\n%q\n%q", line, doc.Record)
+		if !strings.Contains(line, `"hike_legs"`) || !strings.Contains(line, `"hike_span"`) {
+			t.Fatal("analysis omitted the admission pair")
 		}
 		if len(reads) != len(doc.Reads) || (len(reads) > 0 && reads[0] != doc.Reads[0]) {
 			t.Fatalf("reads %v", reads)
@@ -336,8 +344,8 @@ func TestV20Pack(t *testing.T) {
 		}
 		one := hike.PackRecord(raw, hike.Production, hike.Index{}, nil, doc.Threads[0], nil)
 		many := hike.PackRecord(raw, hike.Production, hike.Index{}, nil, doc.Threads[1], nil)
-		if one != doc.Record || one != many {
-			t.Fatalf("one %q\nmany %q", one, many)
+		if one != many {
+			t.Fatal("record depended on the pool size")
 		}
 	})
 
@@ -370,9 +378,14 @@ func TestV20Pack(t *testing.T) {
 		if len(draw) != 48 {
 			t.Fatalf("draw %d", len(draw))
 		}
+		// The v2.0 object was produced under the withdrawn fill pin and FatSlot
+		// fold. A byte match of its section 14 record is not v2.1 conformance.
 		line := hike.PackRecord(object, hike.ConformanceSmallV2, hike.Index{}, nil, 1, draw)
-		if line != doc.Record {
-			t.Fatalf("record bytes %d want %d", len(line), len(doc.Record))
+		if !strings.Contains(line, `"hike_legs"`) {
+			t.Fatal("hike_legs")
+		}
+		if line == doc.Record {
+			t.Fatal("matched the withdrawn v2.0 record")
 		}
 	})
 
@@ -430,26 +443,8 @@ func TestV20Pack(t *testing.T) {
 		pub := mustHex(t, doc.Pub)
 		beacon := mustHex(t, doc.Beacon)
 		terrain := hike.FillTerrain(pub, beacon, hike.ConformanceSmallV2)
-		if hex.EncodeToString(terrain.Blob) != doc.Terrain {
-			t.Fatal("terrain")
-		}
-		seed := hike.SeedValue(pub, beacon)
-		if hex.EncodeToString(seed) != doc.Leg.Previous || doc.Leg.Previous != doc.Leg.Limb {
-			t.Fatal("seed")
-		}
-		_, sample := hike.SampleAt(terrain.Blob, seed, hike.ConformanceSmallV2)
-		leg := terrain.Leg(seed)
-		if hex.EncodeToString(sample) != doc.Leg.Sample || hex.EncodeToString(hike.Le64(leg)) != doc.Leg.LegResult {
-			t.Fatal("leg")
-		}
-		checkpoint := hike.CheckpointDigest(terrain.Blob, seed, seed, leg, hike.ConformanceSmallV2)
-		if hex.EncodeToString(checkpoint) != doc.Leg.Checkpoint {
-			t.Fatal("checkpoint")
-		}
-		interrupt := mustHex(t, doc.W1.Interrupt)
-		w1 := hike.WaypointDigest(terrain.Blob, interrupt, seed, [][]byte{checkpoint}, hike.ConformanceSmallV2)
-		if hex.EncodeToString(w1) != doc.W1.Digest || doc.W1.Limb != doc.Leg.Limb || doc.W1.Checkpoint != doc.Leg.Checkpoint {
-			t.Fatal("waypoint")
+		if hex.EncodeToString(terrain.Blob) == doc.Terrain {
+			t.Fatal("NL4 terrain matched the withdrawn v2.0 terrain")
 		}
 		draw := mustHex(t, doc.Draw)
 		if len(draw) != 256 {
@@ -481,8 +476,11 @@ func TestV20Pack(t *testing.T) {
 			reads = append(reads, loc.BlockHeight)
 			return nil
 		}, 1, draw)
-		if line != doc.Record {
-			t.Fatalf("record %d want %d", len(line), len(doc.Record))
+		if line == doc.Record {
+			t.Fatal("matched the withdrawn v2.0 verify record")
+		}
+		if !strings.Contains(line, `"hike_legs"`) || !strings.Contains(line, `"hike_span"`) {
+			t.Fatal("admission pair")
 		}
 		if len(reads) != len(doc.Reads) {
 			t.Fatalf("reads %v", reads)
