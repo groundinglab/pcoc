@@ -91,7 +91,8 @@ uint64_t hike_base_word(const uint64_t lane[4], uint32_t slot_index, uint32_t wo
 int hike_terrain_fill(const uint8_t seed[32], uint32_t slot_bytes,
                       uint32_t terrain_bytes, uint8_t *terrain);
 
-/* Wrapping-add accumulator of one slot. Reads every word. SPEC §11.1. */
+/* Wrapping-add accumulator of one slot. Reads every word.
+ * Per word: mix64(word XOR ((S + w) mod 2^64)). SPEC §11.1. */
 uint64_t hike_fold_slot(const uint8_t *slot, uint32_t words, uint64_t state);
 
 #define HIKE_KIND "satoshi-hike-v2.1-object"
@@ -109,9 +110,11 @@ int hike_mtp_n(int64_t height);
 int hike_mtp(const int64_t *times, const int *missing, int n, int *not_read, int64_t *out);
 
 /*
- * Gate receipt rule. tip_present == 0 is a missing tip (held).
+ * Rule B10 comparison only. tip_present == 0 is a failed or stale tip read (held).
  * *reason is submission_deadline only on refuse.
- * Returns "accept", "refuse", or "held". Does not touch terrain.
+ * A gap that is not greater than K returns "not refused by this rule".
+ * Does not read an index and does not touch terrain. The gate decides this
+ * once per client submission, at the first successful tip read (D1, D2).
  */
 const char *hike_deadline(int tip_present, int64_t tip_height, int64_t last_beacon_height,
                           int64_t k, const char **reason);

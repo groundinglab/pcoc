@@ -248,10 +248,11 @@ uint64_t hike_fold_slot(const uint8_t *slot, uint32_t words, uint64_t state)
 {
     uint64_t acc = 0;
     uint32_t w;
-    /* Every word. acc starts at 0. Wrapping addition, not XOR. SPEC §11.1. */
+    /* Every word. acc starts at 0. Wrapping addition. SPEC §11.1.
+     * The per-word input is word XOR ((S + w) mod 2^64). word XOR w is not stored. */
     for (w = 0; w < words; w++) {
         uint64_t word = hike_load_le64(slot + (size_t)w * 8);
-        acc += mix64(word ^ (uint64_t)w ^ state);
+        acc += mix64(word ^ (state + (uint64_t)w));
     }
     return acc;
 }
@@ -774,7 +775,8 @@ const char *hike_deadline(int tip_present, int64_t tip_height, int64_t last_beac
         }
         return "refuse";
     }
-    return "accept";
+    /* Rule B10. A gap that is not greater than K is not refused by this rule. */
+    return "not refused by this rule";
 }
 
 int hike_thorough_rounds(uint64_t leg_total, const uint64_t *draws, size_t n_draws,

@@ -9,6 +9,8 @@
 static int g_fail = 0;
 static int g_rows = 0;
 
+static uint64_t parse_u64_hex(const char *text);
+
 static void row(const char *status, const char *name)
 {
     printf("%-8s %s\n", status, name);
@@ -876,16 +878,18 @@ static int check_negatives(const char *dir)
                 goto done;
             }
         } else if (strcmp(name, "mix64_without_mix_add") == 0 || strcmp(name, "v2_0_fold") == 0 ||
-                   strcmp(name, "xor_accumulator_fold") == 0 || strcmp(name, "partial_slot_read") == 0 ||
+                   strcmp(name, "xor_accumulator_fold") == 0 || strcmp(name, "xor_w_fold") == 0 ||
+                   strcmp(name, "partial_slot_read") == 0 ||
                    strcmp(name, "partial_slot_read_2047") == 0) {
             uint8_t *slot = (uint8_t *)malloc(16384);
             uint64_t folded;
+            uint64_t state = parse_u64_hex(json_as_string(json_object_get(c, "S_u64_hex")));
             if (slot == NULL || hike_terrain_fill(seed, 16384, 16384, slot) != HIKE_OK) {
                 free(slot);
                 fail_msg(name, "slot");
                 goto done;
             }
-            folded = hike_fold_slot(slot, 2048, 0);
+            folded = hike_fold_slot(slot, 2048, state);
             free(slot);
             if (reject_u64(name, folded, json_as_string(json_object_get(c, "conforming_S_folded_u64_hex")),
                            json_as_string(json_object_get(c, "forbidden_S_folded_u64_hex"))) != 0) {
@@ -970,6 +974,36 @@ static int check_negatives(const char *dir)
                 fail_msg(name, "nl4_changed");
                 goto done;
             }
+            {
+                uint8_t flipped_seed[32];
+                uint8_t *buf;
+                uint8_t dig2[32];
+                char hex[65];
+                unsigned k;
+                const char *forb = json_as_string(json_object_get(c, "forbidden_sha256"));
+                buf = (uint8_t *)malloc((size_t)bytes);
+                if (buf == NULL) {
+                    fail_msg(name, "memory");
+                    goto done;
+                }
+                for (k = 0; k < 4; k++) {
+                    hike_store_le64(flipped_seed + 8 * k, flipped[k]);
+                }
+                if (hike_terrain_fill(flipped_seed, (uint32_t)slot, (uint32_t)bytes, buf) !=
+                    HIKE_OK) {
+                    free(buf);
+                    fail_msg(name, "flipped fill");
+                    goto done;
+                }
+                hike_sha256(buf, (size_t)bytes, dig2);
+                free(buf);
+                hike_hex_encode(dig2, 32, hex);
+                if (forb == NULL || strcmp(hex, forb) != 0) {
+                    fprintf(stderr, "  one_lane_flip flipped %s\n", hex);
+                    fail_msg(name, "forbidden terrain");
+                    goto done;
+                }
+            }
         } else if (strcmp(name, "all4_kernel") == 0) {
             uint64_t lane[4], flipped[4];
             long long slot, bytes, words;
@@ -1030,6 +1064,11 @@ static int check_negatives(const char *dir)
             free(buf);
             hike_hex_encode(dig2, 32, hex);
             stuck = json_as_string(json_object_get(c, "all4_sha256"));
+            if (strcmp(hex, json_as_string(json_object_get(c, "forbidden_sha256"))) != 0) {
+                fprintf(stderr, "  all4_kernel flipped %s\n", hex);
+                fail_msg(name, "forbidden terrain");
+                goto done;
+            }
             if (strcmp(hex, stuck) == 0 ||
                 strcmp(hex, json_as_string(json_object_get(c, "all4_sha256_flipped"))) == 0 ||
                 strcmp(hex, json_as_string(json_object_get(c, "conforming_sha256"))) == 0) {
@@ -1467,6 +1506,38 @@ static int check_rounds(const char *dir)
             }
             row("REJECT", name);
             continue;
+        }
+        {
+            const char *outcome = json_as_string(json_object_get(c, "outcome"));
+            if (outcome != NULL && strcmp(outcome, "not read") == 0) {
+                uint32_t finished = n_idx / 6u;
+                const char *src = json_as_string(json_object_get(c, "byte_source"));
+                if (!defined || !not_read || n_idx >= 18 || finished != (uint32_t)started ||
+                    rounds->count != (int)started ||
+                    (src != NULL && strcmp(src, "exhausted") != 0)) {
+                    fprintf(stderr, "  %s n_idx %u started %lld not_read %d\n", name, n_idx,
+                            started, not_read);
+                    fail_msg(name, "not read");
+                    goto done;
+                }
+                for (r = 0; r < rounds->count; r++) {
+                    const Json *group = rounds->child[r];
+                    if (group->count != 6) {
+                        fail_msg(name, "group");
+                        goto done;
+                    }
+                    for (k = 0; k < 6; k++) {
+                        long long q;
+                        if (json_as_i64(group->child[k], &q) != 0 ||
+                            (uint32_t)q != indices[r * 6 + k]) {
+                            fail_msg(name, "index");
+                            goto done;
+                        }
+                    }
+                }
+                row("REJECT", name);
+                continue;
+            }
         }
         if (!defined || not_read || n_idx != 18 || rounds->count != (int)started) {
             fprintf(stderr, "  %s n_idx %u rounds %d started %lld not_read %d\n", name, n_idx,
