@@ -15,6 +15,8 @@ public final class Adversarial {
         NO_ADD,
         V2_0,
         XOR_ACC,
+        /** Wrapping add of {@code mix64(word XOR w XOR S)}. The withdrawn §11.1 input. */
+        XOR_W,
         PARTIAL
     }
 
@@ -57,6 +59,9 @@ public final class Adversarial {
     /**
      * The withdrawn fold on a stored slot. {@code wordsRead} is used only for a partial read.
      * A missing {@code words_read} in the vector is zero and is ignored except for {@link Kind#PARTIAL}.
+     * Except {@link Kind#V2_0}, the per-word input is {@code word XOR w XOR S}.
+     * {@link Kind#XOR_W} adds {@code mix64} of that input over the whole slot.
+     * The producer uses {@code word XOR ((S + w) mod 2^64)} instead.
      */
     static long withdrawnFold(Terrain terrain, long state, Kind kind, int wordsRead) {
         int words = terrain.profile.wordsPerSlot;

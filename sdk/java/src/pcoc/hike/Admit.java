@@ -114,10 +114,18 @@ public final class Admit {
     }
 
     /**
-     * Submission deadline at receipt. A missing tip is {@code held}. A tip below
-     * the last beacon is {@code held}. A gap greater than {@code k} refuses
-     * {@code submission_deadline}. That refuse is not a fake leg. This method
-     * does not fill terrain.
+     * Rule B10, parameter {@code submission_deadline_blocks}. {@code tipHeight}
+     * is the Gate index-url tip, read fresh at receipt and not from the local
+     * mirror. A failed or stale read is null here and the state is {@code held}.
+     * Several sources pass the highest tip among those read. The caller decides
+     * once per client submission, at the first successful tip read. Held retries
+     * and a service-started re-verify reuse that decision. A policy-version bump
+     * never revokes on this rule. A client resubmission is a new receipt. A
+     * lower tip after a reorg does not reopen a refuse. A missing tip is
+     * {@code held}. A tip below the last beacon is {@code held}. A gap greater
+     * than {@code k} refuses {@code submission_deadline}. That refuse is not a
+     * fake leg. A gap at or below {@code k} is not refused by this rule. This
+     * method does not fill terrain and does not write the section 14 record.
      */
     public static Gate submissionDeadline(Long tipHeight, long lastBeaconHeight, int k) {
         if (tipHeight == null || Long.compare(tipHeight, lastBeaconHeight) < 0) {
@@ -127,7 +135,7 @@ public final class Admit {
         if (gap > k) {
             return new Gate("refuse", SUBMISSION_DEADLINE, false);
         }
-        return new Gate("accept", null, false);
+        return new Gate("not refused by this rule", null, false);
     }
 
     /**
@@ -162,6 +170,9 @@ public final class Admit {
      * {@code leg_total} below 6 is {@code not defined} and refuses. A mismatch
      * on a 1-based round does not start the next round. {@code draws} are the
      * raw {@code u64} values, in order, including values the limit discards.
+     * The draw stops at 18 indices or when the byte source ends before 18.
+     * Exhaustion is {@code not read}. An unfinished group is not a round.
+     * Rounds already filled stay recorded. That stop is not a mismatch refuse.
      */
     public static Thorough thoroughRounds(long legTotal, long[] draws, Integer mismatchOnRound) {
         if (legTotal < 6) {
@@ -175,7 +186,7 @@ public final class Admit {
         int cursor = 0;
         while (phase.size() < THOROUGH_LEGS) {
             if (cursor >= draws.length) {
-                throw new IllegalArgumentException("short draw");
+                return exhausted(phase);
             }
             Long index = unbiasedIndex(draws[cursor], legTotal);
             cursor++;
@@ -215,6 +226,21 @@ public final class Admit {
             }
         }
         return new Thorough("recorded", started, kept.toArray(int[][]::new), null);
+    }
+
+    /** Byte source ended before 18 indices. Complete groups of 6 stay. The tail does not. */
+    private static Thorough exhausted(List<Long> phase) {
+        int complete = phase.size() / PER_ROUND;
+        int started = Math.min(complete, THOROUGH_ROUNDS);
+        int[][] rounds = new int[started][];
+        for (int round = 0; round < started; round++) {
+            int[] group = new int[PER_ROUND];
+            for (int j = 0; j < PER_ROUND; j++) {
+                group[j] = phase.get(round * PER_ROUND + j).intValue();
+            }
+            rounds[round] = group;
+        }
+        return new Thorough("not read", started, rounds, null);
     }
 
     /** A section 15 outcome. The section 14 record does not carry it. */

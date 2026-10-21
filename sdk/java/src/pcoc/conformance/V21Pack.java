@@ -15,6 +15,7 @@ import pcoc.hike.Cbor;
 import pcoc.hike.Hike;
 import pcoc.hike.Measure;
 import pcoc.hike.Profile;
+import pcoc.hike.Spec6Pins;
 import pcoc.hike.Terrain;
 import pcoc.json.Json;
 
@@ -30,6 +31,7 @@ public final class V21Pack {
     public static void main(String[] args) throws Exception {
         Path pack = repoRoot().resolve("spec/conformance/v2.1");
         checkManifest(pack, load(pack.resolve("manifest.json")));
+        checkConstants(load(pack.resolve("constants.json")));
         checkSeed(load(pack.resolve("seed.json")));
         checkWords(load(pack.resolve("nl4-words.json")));
         checkTerrain(load(pack.resolve("terrain-small.json")));
@@ -270,6 +272,7 @@ public final class V21Pack {
                 case "mix64_without_mix_add" -> rejectFold(name, publicKey, beacon, row, Adversarial.Kind.NO_ADD);
                 case "v2_0_fold" -> rejectFold(name, publicKey, beacon, row, Adversarial.Kind.V2_0);
                 case "xor_accumulator_fold" -> rejectFold(name, publicKey, beacon, row, Adversarial.Kind.XOR_ACC);
+                case "xor_w_fold" -> rejectFold(name, publicKey, beacon, row, Adversarial.Kind.XOR_W);
                 case "partial_slot_read", "partial_slot_read_2047" -> rejectFold(name, publicKey, beacon, row, Adversarial.Kind.PARTIAL);
                 case "one_lane_flip" -> rejectLaneFlip(name, publicKey, beacon, row);
                 case "all4_kernel" -> rejectAll4(name, publicKey, beacon, row);
@@ -440,11 +443,37 @@ public final class V21Pack {
     }
 
     private static void checkManifest(Path pack, Json.Obj doc) throws Exception {
-        if (!"12f619ce234a7e1de60b99adb3e9b0040d94880628a8abc8f413f8d52359f4f1".equals(text(doc, "vector_sha256"))) {
+        if (!"e2451caf9df3cb70debb0d6d99dc11cab20bca3729f7996f8f6d4f521484d50b".equals(text(doc, "vector_sha256"))) {
             throw new AssertionError("manifest pin");
         }
         eq("manifest", packHash(pack), text(doc, "vector_sha256"));
         pass("manifest");
+    }
+
+    /** Section 6 names in {@code constants.json}, including the strings {@code Spec6Pins} already formats. */
+    private static void checkConstants(Json.Obj doc) {
+        if (!"constants".equals(text(doc, "id"))) {
+            throw new AssertionError("constants id");
+        }
+        java.util.Map<String, Object> want = Spec6Pins.section6();
+        if (doc.fields().size() != want.size() + 1) {
+            throw new AssertionError("constants keys");
+        }
+        for (java.util.Map.Entry<String, Object> entry : want.entrySet()) {
+            Json value = doc.fields().get(entry.getKey());
+            if (value == null) {
+                throw new AssertionError("constants missing " + entry.getKey());
+            }
+            Object expected = entry.getValue();
+            if (expected instanceof String text) {
+                if (!text.equals(Json.asString(value))) {
+                    throw new AssertionError("constants " + entry.getKey());
+                }
+            } else if (Long.parseLong(Json.asNumber(value)) != (Long) expected) {
+                throw new AssertionError("constants " + entry.getKey());
+            }
+        }
+        pass("constants");
     }
 
     /** SHA-256 over the pack except manifest.json: repo-relative path, NUL, sha256(bytes), sorted by path. */
@@ -520,7 +549,7 @@ public final class V21Pack {
             if (bool(row, "must_reject") && !"refuse".equals(gate.outcome)) {
                 throw new AssertionError(text(row, "name") + " was not rejected");
             }
-            if (!"accept".equals(gate.outcome)) {
+            if ("refuse".equals(gate.outcome) || "held".equals(gate.outcome)) {
                 System.out.println("REJECT deadline " + text(row, "name"));
             }
         }
@@ -668,7 +697,7 @@ public final class V21Pack {
             if (bool(row, "must_reject") && !"refuse".equals(got.outcome)) {
                 throw new AssertionError(name + " was not rejected");
             }
-            if ("refuse".equals(got.outcome)) {
+            if ("refuse".equals(got.outcome) || "not read".equals(got.outcome)) {
                 System.out.println("REJECT rounds " + name);
             }
         }
