@@ -1,8 +1,8 @@
 # Conformance pack, Satoshi Hike v2.0
 
-This pack is regenerated from the Rust reference. It is the byte record that every implementation is checked against, including the three references and the Gate's pinned copies.
+Historical. This pack was regenerated from the Rust reference under the withdrawn fill pin and the withdrawn FatSlot fold. It is not the v2.1 conformance target. The v2.1 target is `spec/conformance/v2.1/`. The bytes below stay so the old release can still be read.
 
-What conforms is Part A only. See [Conformance vectors](../README.md). The leg-rate figures in `constants.json` are informative §15.5 examples. They are not a conformance target. `sign-in.json` is the locked §15.1 wire. Matching it is not Part A conformance.
+What conformed at v2.0 is Part A only. See [Conformance vectors](../README.md). The leg-rate figures in `constants.json` (`7/20`, `1/4`, `1/8`) are withdrawn. They are not the v2.1 floor. `sign-in.json` is the locked §15.1 wire. Matching it is not Part A conformance.
 
 ## What the files are
 

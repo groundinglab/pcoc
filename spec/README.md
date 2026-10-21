@@ -1,12 +1,12 @@
-# Satoshi Hike v2.0
+# Satoshi Hike v2.1
 
-The PCOC specification and its conformance vectors. Together they are the core deliverable of this project.
+The PCOC specification and its conformance vectors. Together they are the core deliverable of this project. The construction file is still `spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md`. v2.1 is the 22 Oct 2026 correction of that file. The wire `KIND` stays `satoshi-hike-v2.0-object`.
 
 The point is interoperability. A PCOC made by one implementation must check the same way in every other. Everything else in this repository serves that. The SDKs, the services, and the apps are built from this folder, not the other way round.
 
 Anyone, or their AI agents, can build a producer, a verifier, a service, or an app from the specification and the vectors alone, with no groundinglab code, service, or account.
 
-`sdk/SPEC_PIN` names `spec-v2.0.5`, the current release (2026-10-17: conformance `constants.json` labels the §15.5 leg-rate figures as informative examples; no normative change). `spec-v2.0.4` is the previous release (policy boundary: the specification sets no threshold value). `spec-v2.0.3` is the release before that (section 15.1 origin amendment and `sign-in-origins.json`). `spec-v2.0.2` is the release on the merge commit that moved the vectors under `spec/conformance/`. `spec-v2.0.1` is the previous release and still resolves at the old vector paths.
+`sdk/SPEC_PIN` records the working-tree hash of `spec/conformance` after the v2.1 correction. The `tag=` line is still `spec-v2.0.5`. That tag does not contain the v2.1 files, so the tag half of `sdk/tools/check_spec_pin.py` cannot pass until a v2.1 tag exists. `spec-v2.0.5` is the previous release (2026-10-17: conformance `constants.json` labels the §15.5 leg-rate figures as informative examples; no normative change). `spec-v2.0.4` is the release before that (policy boundary: the specification sets no threshold value). `spec-v2.0.3` is the release before that (section 15.1 origin amendment and `sign-in-origins.json`). `spec-v2.0.2` is the release on the merge commit that moved the vectors under `spec/conformance/`. `spec-v2.0.1` is the previous release and still resolves at the old vector paths.
 
 ## What "conforms" means
 
@@ -14,7 +14,7 @@ Conformance is Part A only (§1–§14 and §16). A producer or a verifier confo
 
 Part A is the construction: the hike object, terrain, legs and leg results, stages, checkpoints, waypoints, the Bitcoin clock, how to produce (§13), and the verify record (§14). Part A has no pass, fail, accept, refuse, or revoke.
 
-Part B (§15) is the admission service: its inputs, states, two-phase async, and the named policy parameters and comparisons. The specification may discuss thresholds but never sets a threshold value; it defers values to a policy. §15.5 figures (including leg-rate floors `7/20`, `1/4`, `1/8`) are informative examples. groundinglab's recommended default policy is a companion document beside the gate service, `services/admission-gate/POLICY.md`, and is not part of the specification. Other relying parties choose their own policy on the same Part A measurements. Part B is not a conformance target. `spec/conformance/v2.0/sign-in.json` is the locked sign-in wire. It is not a section 14 record, and matching it is not Part A conformance.
+Part B (§15) is the admission service: its inputs, states, two-phase async, and the named policy parameters and comparisons. The leg-rate floor is TBD. A test placeholder of `1/5` is marked placeholder, not ratified. The old examples `7/20`, `1/4`, and `1/8` are withdrawn. The anchored-waypoint comparison is `anchored_total ≥ 6`. The v2.1 conformance target for the corrected algorithms is `spec/conformance/v2.1/`. The pack `spec/conformance/v2.0/` is historical. groundinglab's recommended default policy is a companion document beside the gate service, `services/admission-gate/POLICY.md`, and is not part of the specification. Other relying parties choose their own policy on the same Part A measurements. Part B is not a conformance target. `spec/conformance/v2.0/sign-in.json` is the locked sign-in wire. It is not a section 14 record, and matching it is not Part A conformance.
 
 The vectors are worked inputs and exact outputs. A text/vector disagreement is a defect in the specification (§16). Open an issue. Do not pick a side.
 
@@ -42,7 +42,7 @@ Only hash-bound values are evidence. The portable index stands in for Bitcoin an
 | 12 | Stage and waypoint | Checkpoints, fold, waypoint |
 | 13 | Produce | Producer procedure. Anchor offsets 2, 3, 4 |
 | 14 | Verify | The verify record: keys, tokens, encoding |
-| 15 | Admission service policy | **Part B.** Policy parameters (no values set) and `earlier_version`. Not a conformance target |
+| 15 | Admission service policy | **Part B.** Floor TBD; `anchored_total ≥ 6`; `earlier_version`. Not a conformance target |
 | 16 | Conformance | What "conforms" means, and the vectors |
 | 17 | Closed | Settled items |
 | 18 | Wording notes | Informative, except item 9 (verify CLI), which is locked |
@@ -52,8 +52,8 @@ This page is the map. It does not add a second construction. The file is [Satosh
 ## How to build from it
 
 1. Read Part A in order (§3 through §12, then §13 for a producer or §14 for a verifier).
-2. Implement, then run every file in [spec/conformance/v2.0](conformance/v2.0/).
-3. Compare verify records. `kat-small.json` is the producer byte-equality target. The `record` field is the §14 record.
+2. Implement, then run the v2.1 pack in [spec/conformance/v2.1](conformance/v2.1/). `spec/conformance/tools/check_v21.c` recomputes it. The pack in [spec/conformance/v2.0](conformance/v2.0/) is historical.
+3. Compare the v2.1 outputs. `v2.1/kat-small.json` is the small-hike target for the corrected seed, NL4 word, and §11.1 fold. The historical `v2.0/kat-small.json` `record` field is a §14 record of the withdrawn construction.
 4. Optionally compare with an SDK: [sdk/](../sdk/). The SDKs are not required.
 5. The specification and the vectors change together, in one pull request. Implementations pin one spec tag through `sdk/SPEC_PIN`. Part A changes need new vectors and a full CI run.
 
