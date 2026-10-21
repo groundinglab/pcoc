@@ -121,9 +121,6 @@ pub const ANCHORED_SPAN: u64 = 16;
 /// Stage count on the object. Not the anchored count.
 pub const WAYPOINTS_TOTAL: u64 = 18;
 
-/// Spec rule: at least this many legs. Labelled as spec, not policy.
-pub const SPEC_MIN_LEGS: u64 = 6;
-
 /// Spec name published with the policy.
 pub const POLICY_SPEC: &str = crate::verifier::SPEC_NAME;
 
@@ -231,6 +228,16 @@ pub struct AdmissionPolicy {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub require_last_anchored: Option<u64>,
     pub thorough_six_leg_runs: u64,
+    /// Legs evaluated together in one round. `None` is 6, and is not serialized,
+    /// so a v6 or v7 bind hash stays the hash of that table.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thorough_legs_per_run: Option<u64>,
+    /// v8 documents the rate basis. Absent on v6 and v7.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub leg_rate_basis: Option<String>,
+    /// v8: `placeholder, not ratified` on the test floor. Absent on v6 and v7.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub floor_status: Option<String>,
     pub thorough_early_stop: bool,
     /// `on` or `off`. `on` means the fast phase issues `provisional`.
     pub provisional: String,
@@ -263,6 +270,9 @@ impl Default for AdmissionPolicy {
             require_first_anchored: None,
             require_last_anchored: None,
             thorough_six_leg_runs: 3,
+            thorough_legs_per_run: None,
+            leg_rate_basis: None,
+            floor_status: None,
             thorough_early_stop: true,
             provisional: "on".to_owned(),
             held_on_not_read: true,
@@ -333,6 +343,11 @@ impl AdmissionPolicy {
         self.index
             .as_ref()
             .map(|index| index.expected_network.as_str())
+    }
+
+    /// Width of one thorough round. The file omits the key to mean 6.
+    pub fn legs_per_run(&self) -> usize {
+        self.thorough_legs_per_run.unwrap_or(6) as usize
     }
 }
 
@@ -442,34 +457,21 @@ enum Bookend {
     NotRead,
 }
 
-/// Read `N` and `S` from the record text. The text is not rewritten.
+/// Legs over every stage, and `T(last beacon) − T(first beacon)`.
+///
+/// `N` and `S` on the record stay the bookend measurement. Admission does not read them.
 fn bookend_pair(record: &str) -> Bookend {
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(record) else {
-        return Bookend::NotRead;
-    };
-    if matches!(
-        value.get("N"),
-        Some(serde_json::Value::String(n)) if n == "not defined"
-    ) {
+    let rate = hike::beacon_rate(record);
+    if rate.legs_not_defined {
         return Bookend::NotDefined;
     }
-    match (value.get("N"), value.get("S")) {
-        (Some(n), Some(s)) => match (json_i128(n), json_i128(s)) {
-            (Some(n), Some(s)) => Bookend::Numeric { n, s },
-            _ => Bookend::NotRead,
+    match (rate.legs, rate.span_s) {
+        (Some(legs), Some(span)) if !rate.times_not_read => Bookend::Numeric {
+            n: i128::from(legs),
+            s: span,
         },
         _ => Bookend::NotRead,
     }
-}
-
-fn json_i128(value: &Value) -> Option<i128> {
-    if let Some(number) = value.as_i64() {
-        return Some(i128::from(number));
-    }
-    if let Some(number) = value.as_u64() {
-        return Some(i128::from(number));
-    }
-    None
 }
 
 pub fn judge(report: &Report, floor_p: u64, floor_q: u64) -> Judgment {
@@ -586,8 +588,17 @@ mod tests {
     }
 
     /// Key order is the caller's. The judgment returns those bytes.
+    /// `n` and `s` are JSON tokens. Numbers are the all-legs count and the beacon span.
     fn pair_record(n: &str, s: &str) -> String {
-        format!("{{\"profile\":\"production\",\"shape\":\"match\",\"N\":{n},\"S\":{s}}}\n")
+        let (t0, t1) = if s.starts_with('"') {
+            (s.to_owned(), s.to_owned())
+        } else {
+            let span: u64 = s.parse().unwrap_or(0);
+            ("1000".to_owned(), (1000 + span).to_string())
+        };
+        format!(
+            "{{\"profile\":\"production\",\"shape\":\"match\",\"N\":{n},\"S\":{s},\"anchored_total\":6,\"headers\":[{{\"stored_height\":1,\"T\":{t0}}},{{\"stored_height\":2,\"T\":{t1}}}],\"analysis\":{{\"per_stage\":[{{\"g\":0,\"checkpoint_count\":{n}}}]}}}}\n"
+        )
     }
 
     #[test]
