@@ -7,6 +7,7 @@
     "negatives.json",
     "nl4-words.json",
     "rate.json",
+    "rounds.json",
     "seed.json",
     "step-c1.json",
     "terrain-small.json",
@@ -19,12 +20,13 @@
     "negatives",
     "nl4-words",
     "rate",
+    "rounds",
     "seed",
     "step-c1",
     "terrain-small",
     "test-3leg"
   ],
-  "vector_sha256": "365e908c42f7918a066d5bf92a572dea41725c14ea9013055bd3b359cff4b51a",
+  "vector_sha256": "b3f2dde64a0e3c577226336d1c7c7c3254176ede42ac021b79f122417157d9a8",
   "vector_sha256_note": "SHA-256 over spec/conformance/v2.1 except manifest.json, each file as path, NUL, sha256(bytes), sorted by path. The sdk/SPEC_PIN hash covers the whole spec/conformance tree except tools/.",
   "floor_mark": "placeholder, not ratified"
 }

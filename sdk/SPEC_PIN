@@ -1,5 +1,5 @@
-# v2.1 correction, 22 Oct 2026. tag spec-v2.0.5 does not contain these bytes.
+# v2.1 correction, fix round 1. tag spec-v2.0.5 does not contain these bytes.
 # sdk/tools/check_spec_pin.py matches the working tree and then the tag.
 # The tag half cannot pass until a v2.1 tag exists. Do not invent that tag here.
 tag=spec-v2.0.5
-vector-sha256=5adcd394324f0bbcd78dc97e295ac0acf2f6354a1d2b2f170a88f57842c51081
+vector-sha256=1a2dd553e32257eaa1dcdfd9a33ab3d90cadc59600cebe462a5c08bf184ab20b

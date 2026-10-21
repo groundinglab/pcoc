@@ -5,7 +5,7 @@
     "q": 5,
     "mark": "placeholder, not ratified"
   },
-  "comparison": "q * hike_legs >= p * hike_span and hike_span > 0",
+  "comparison": "meets when hike_span > 0 and q * hike_legs >= p * hike_span; hike_span <= 0 refuses",
   "cases": [
     {
       "name": "above",
@@ -36,6 +36,24 @@
       "hike_legs": 1,
       "hike_span": 6,
       "meets": false
+    },
+    {
+      "name": "span-zero",
+      "class": "negative",
+      "must_reject": true,
+      "hike_legs": 2,
+      "hike_span": 0,
+      "meets": false,
+      "outcome": "refuse"
+    },
+    {
+      "name": "span-negative",
+      "class": "negative",
+      "must_reject": true,
+      "hike_legs": 2,
+      "hike_span": -1,
+      "meets": false,
+      "outcome": "refuse"
     }
   ]
 }

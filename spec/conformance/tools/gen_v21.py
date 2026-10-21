@@ -244,6 +244,41 @@ def meets_floor(legs, span, p, q):
     return span > 0 and q * legs >= p * span
 
 
+def phase_indices(leg_total, draws, nrounds=3, per=6):
+    """§15.5 thorough draw. draws are the section 14.6 u64 values, in order."""
+    if leg_total < 6:
+        return []
+    modulus = 1 << 64
+    rem = modulus % leg_total
+    limit = modulus if rem == 0 else modulus - rem
+    phase = []
+    rounds = []
+    i = 0
+    for _ in range(nrounds):
+        chosen = []
+        guard = 0
+        while len(chosen) < per:
+            if i >= len(draws):
+                raise SystemExit("rounds: byte source ended")
+            u = draws[i]
+            i += 1
+            guard += 1
+            if guard > 10000:
+                raise SystemExit("rounds: did not fill")
+            if u >= limit:
+                continue
+            q = u % leg_total
+            if q in chosen:
+                continue
+            unused = any(x not in phase for x in range(leg_total))
+            if q in phase and unused:
+                continue
+            chosen.append(q)
+            phase.append(q)
+        rounds.append(chosen)
+    return rounds
+
+
 def unxs(y, s):
     x = y & MASK
     y &= MASK
@@ -531,17 +566,83 @@ def main():
     rate = {
         "id": "rate",
         "floor": {"p": 1, "q": 5, "mark": "placeholder, not ratified"},
-        "comparison": "q * hike_legs >= p * hike_span and hike_span > 0",
+        "comparison": "meets when hike_span > 0 and q * hike_legs >= p * hike_span; hike_span <= 0 refuses",
         "cases": [
             {"name": "above", "class": "positive", "hike_legs": 2, "hike_span": 9, "meets": True},
             {"name": "below", "class": "negative", "must_reject": True, "hike_legs": 2, "hike_span": 11, "meets": False},
             {"name": "boundary-meet", "class": "positive", "hike_legs": 1, "hike_span": 5, "meets": True},
             {"name": "boundary-fail", "class": "negative", "must_reject": True, "hike_legs": 1, "hike_span": 6, "meets": False},
+            {"name": "span-zero", "class": "negative", "must_reject": True, "hike_legs": 2, "hike_span": 0, "meets": False, "outcome": "refuse"},
+            {"name": "span-negative", "class": "negative", "must_reject": True, "hike_legs": 2, "hike_span": -1, "meets": False, "outcome": "refuse"},
         ],
     }
     for c in rate["cases"]:
         if meets_floor(c["hike_legs"], c["hike_span"], 1, 5) != c["meets"]:
             raise SystemExit(f"rate case {c['name']}")
+
+    def round_case(name, leg_total, draws, cls, must_reject=False, mismatch_on_round=None):
+        got = phase_indices(leg_total, draws)
+        if mismatch_on_round is not None:
+            published = got[:mismatch_on_round]
+            outcome = "refuse"
+            started = mismatch_on_round
+        elif leg_total < 6:
+            published = []
+            outcome = "refuse"
+            started = 0
+        else:
+            published = got
+            outcome = "recorded"
+            started = 3
+        case = {
+            "name": name,
+            "class": cls,
+            "leg_total": leg_total,
+            "outcome": outcome,
+            "rounds_started": started,
+            "rounds": published,
+        }
+        if must_reject:
+            case["must_reject"] = True
+        if leg_total < 6:
+            case["draw"] = "not defined"
+        else:
+            case["draws_u64_hex"] = [u64hex(u) for u in draws]
+        if mismatch_on_round is not None:
+            case["mismatch_on_round"] = mismatch_on_round
+        return case
+
+    straight = list(range(18))
+    with_dup = [0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+    with_limit = [(1 << 64) - 1] + straight
+    expect_straight = [list(range(i, i + 6)) for i in (0, 6, 12)]
+    if phase_indices(32, straight) != expect_straight:
+        raise SystemExit("rounds: 18 distinct")
+    if phase_indices(32, with_dup)[0] != [0, 1, 2, 3, 4, 5]:
+        raise SystemExit("rounds: duplicate in the round was kept")
+    short = phase_indices(8, straight)
+    if short[0] != [0, 1, 2, 3, 4, 5] or short[1] != [6, 7, 0, 1, 2, 3] or short[2] != [4, 5, 6, 7, 0, 1]:
+        raise SystemExit("rounds: short hike %s" % short)
+    flat = [q for rnd in short for q in rnd]
+    if flat[:8] != list(range(8)):
+        raise SystemExit("rounds: repeated before unused indices were exhausted")
+    if phase_indices(6, with_limit)[0] != [0, 1, 2, 3, 4, 5]:
+        raise SystemExit("rounds: limit skip")
+
+    rounds = {
+        "id": "rounds",
+        "thorough_rounds": 3,
+        "per_round": 6,
+        "note": "leg_total < 6 is draw not defined and refuses. Otherwise 3 rounds of 6 distinct indices. An index is not repeated while an unused index remains. A mismatch does not start the next round.",
+        "cases": [
+            round_case("below-six", 5, [], "negative", must_reject=True),
+            round_case("eighteen-distinct", 32, straight, "positive"),
+            round_case("discard-duplicate", 32, with_dup, "positive"),
+            round_case("short-then-repeat", 8, straight, "positive"),
+            round_case("skip-above-limit", 6, with_limit, "positive"),
+            round_case("mismatch-stops", 32, straight, "negative", must_reject=True, mismatch_on_round=1),
+        ],
+    }
 
     anchors = {
         "id": "anchors",
@@ -659,6 +760,7 @@ def main():
         "kat-small.json": kat,
         "test-3leg.json": t3,
         "rate.json": rate,
+        "rounds.json": rounds,
         "anchors.json": anchors,
         "negatives.json": negative,
     }
@@ -666,7 +768,9 @@ def main():
 
 Generated by `spec/conformance/tools/gen_v21.py`. These files are the v2.1 target for the corrected seed, the NL4 word, the §11.1 fold, the small hikes, and the rate and anchor comparisons. They are not a full hike-object encoding. The pack under `../v2.0/` is historical.
 
-`rate.json` uses floor `1/5`. That value is placeholder, not ratified. The floor in the specification is TBD.
+`rate.json` uses floor `1/5`. That value is placeholder, not ratified. The floor in the specification is TBD. `hike_span` of 0 or below does not meet the floor and the outcome is `refuse`.
+
+`rounds.json` pins the default thorough draw. `leg_total` < 6 is `not defined` and refuses. Otherwise the phase draws 3 rounds of 6 distinct indices and does not repeat an index while an unused index remains. A mismatch does not start the next round.
 
 A negative case publishes the withdrawn result and the conforming result. An implementation that emits the withdrawn result does not conform.
 """

@@ -3,7 +3,8 @@
  * Written from Satoshi Hike v2.1 (spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md):
  *   §10 seed and NL4, §10.1 mix64, §10.3 parents, §10.4 dag2 fill,
  *   §11.1 fold and seal, §11.2–§11.4 checkpoint, §12.2 waypoint,
- *   Rule B2 integer floor, Rule B4 anchored_total >= 6.
+ *   Rule B2 integer floor, including hike_span <= 0,
+ *   §15.5 thorough rounds, Rule B4 anchored_total >= 6.
  * The withdrawn maps (one-lane, linear four-lane, fill pin, FatSlot,
  * mix64 without MIX_ADD, a one-word slot read) are the §10.4 / §11.1
  * rejects. This file does not include the generator.
@@ -530,6 +531,48 @@ static void check_hike(const char *dir, const char *file) {
     free(terrain); free(pk); free(be); free(path);
 }
 
+/* §15.5. Returns 0, or -1 when the byte source ends early.
+ * out holds up to want rounds of 6. *nrounds is how many rounds filled. */
+static int draw_rounds(long long leg_total, const uint64_t *draws, int ndraws,
+                       int want, int out[][6], int *nrounds) {
+    *nrounds = 0;
+    if (leg_total < 6 || want <= 0) return 0;
+    unsigned __int128 rem = ((unsigned __int128)1 << 64) % (unsigned __int128)leg_total;
+    uint64_t limit_lo = rem == 0 ? 0 : (uint64_t)(0 - (uint64_t)rem);
+    int phase[64];
+    int np = 0;
+    int ui = 0;
+    for (int r = 0; r < want; r++) {
+        int nr = 0;
+        int guard = 0;
+        while (nr < 6) {
+            if (ui >= ndraws || guard++ > 10000) return -1;
+            uint64_t u = draws[ui++];
+            if (rem != 0 && u >= limit_lo) continue;
+            int q = (int)(u % (uint64_t)leg_total);
+            int in_round = 0;
+            for (int k = 0; k < nr; k++) if (out[r][k] == q) in_round = 1;
+            if (in_round) continue;
+            int in_phase = 0;
+            for (int k = 0; k < np; k++) if (phase[k] == q) in_phase = 1;
+            int unused = 0;
+            if (in_phase) {
+                for (long long x = 0; x < leg_total; x++) {
+                    int seen = 0;
+                    for (int k = 0; k < np; k++) if (phase[k] == (int)x) seen = 1;
+                    if (!seen) { unused = 1; break; }
+                }
+            }
+            if (in_phase && unused) continue;
+            if (np >= 64) return -1;
+            out[r][nr++] = q;
+            phase[np++] = q;
+        }
+        *nrounds = r + 1;
+    }
+    return 0;
+}
+
 static int before;
 
 static void section(const char *id) {
@@ -681,6 +724,13 @@ int main(int argc, char **argv) {
             long long legs = jnum(c, "hike_legs");
             long long span = jnum(c, "hike_span");
             int meets = span > 0 && q * legs >= p * span;
+            if (span <= 0) {
+                if (meets || strcmp(jstr(c, "outcome"), "refuse") != 0) {
+                    fprintf(stderr, "FAIL rate %s span<=0\n", jstr(c, "name")); g_fail++;
+                }
+                reject(jstr(c, "name"));
+                continue;
+            }
             if (meets != jbool(c, "meets")) { fprintf(stderr, "FAIL rate %s\n", jstr(c, "name")); g_fail++; }
             if (jget(c, "must_reject") && jbool(c, "must_reject")) {
                 if (meets) { fprintf(stderr, "FAIL rate negative met the floor\n"); g_fail++; }
@@ -693,6 +743,64 @@ int main(int argc, char **argv) {
         }
         free(path);
         section("rate");
+    }
+
+    /* thorough rounds, §15.5 */
+    {
+        char *path = path_join(dir, "rounds.json");
+        JVal *o = load_json(path);
+        before = g_fail;
+        if (jnum(o, "thorough_rounds") != 3 || jnum(o, "per_round") != 6) {
+            fprintf(stderr, "FAIL rounds shape\n"); g_fail++;
+        }
+        JVal *cases = jget(o, "cases");
+        for (int i = 0; i < cases->an; i++) {
+            JVal *c = cases->a[i];
+            const char *name = jstr(c, "name");
+            long long leg_total = jnum(c, "leg_total");
+            int started = (int)jnum(c, "rounds_started");
+            JVal *published = jget(c, "rounds");
+            if (strcmp(jstr(c, "outcome"), leg_total < 6 || jget(c, "mismatch_on_round") ? "refuse" : "recorded") != 0) {
+                fprintf(stderr, "FAIL %s outcome\n", name); g_fail++;
+            }
+            if (leg_total < 6) {
+                if (strcmp(jstr(c, "draw"), "not defined") != 0 || started != 0 || published->an != 0) {
+                    fprintf(stderr, "FAIL %s below six\n", name); g_fail++;
+                } else reject(name);
+                continue;
+            }
+            JVal *hexes = jget(c, "draws_u64_hex");
+            uint64_t draws[64];
+            if (!hexes || hexes->an > 64) { fprintf(stderr, "FAIL %s draws\n", name); g_fail++; continue; }
+            for (int k = 0; k < hexes->an; k++) draws[k] = strtoull(hexes->a[k]->s, NULL, 16);
+            int want = jget(c, "mismatch_on_round") ? (int)jnum(c, "mismatch_on_round") : 3;
+            int got[3][6];
+            int nrounds = 0;
+            if (draw_rounds(leg_total, draws, hexes->an, want, got, &nrounds) != 0 || nrounds != want || started != want) {
+                fprintf(stderr, "FAIL %s draw\n", name); g_fail++; continue;
+            }
+            if (published->an != want) { fprintf(stderr, "FAIL %s round count\n", name); g_fail++; continue; }
+            int distinct_ok = 1;
+            int seen[64];
+            int nseen = 0;
+            for (int r = 0; r < want; r++) {
+                JVal *row = published->a[r];
+                if (row->an != 6) { distinct_ok = 0; break; }
+                for (int k = 0; k < 6; k++) {
+                    if (row->a[k]->k != JNUM || row->a[k]->n != got[r][k]) distinct_ok = 0;
+                    for (int t = 0; t < k; t++) if (got[r][t] == got[r][k]) distinct_ok = 0;
+                    if (leg_total >= 18 && !jget(c, "mismatch_on_round")) {
+                        for (int t = 0; t < nseen; t++) if (seen[t] == got[r][k]) distinct_ok = 0;
+                        if (nseen < 64) seen[nseen++] = got[r][k];
+                    }
+                }
+            }
+            if (!distinct_ok) { fprintf(stderr, "FAIL %s indices\n", name); g_fail++; continue; }
+            if (jget(c, "must_reject") && jbool(c, "must_reject")) reject(name);
+            else pass(name);
+        }
+        free(path);
+        section("rounds");
     }
 
     /* anchors */
