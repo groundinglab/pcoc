@@ -10,7 +10,7 @@ use crate::clock::IndexBeacon;
 use crate::consts::{bind_threads_from, height_in_anchor_window, Sizes, STAGES};
 use crate::object::{earlier_object_kind, read_measured_object_sized, Hike, Stage, StageAbsent};
 use crate::pathbody::{path_locators, validate_path};
-use crate::terrain::{fill_pin, fill_terrain_sized, production_seed};
+use crate::terrain::{fill_terrain_sized, seed};
 use crate::walk::leg_result_sized;
 use rayon::prelude::*;
 use sha2::{Digest, Sha256};
@@ -269,10 +269,7 @@ fn locate(lens: &[u64], q: u64) -> (usize, usize) {
 }
 
 fn terrain_of(hike: &Hike, sizes: Sizes) -> Vec<u8> {
-    fill_terrain_sized(
-        fill_pin(&production_seed(&hike.public_key, &hike.seed_beacon)),
-        sizes,
-    )
+    fill_terrain_sized(&seed(&hike.public_key, &hike.seed_beacon), sizes)
 }
 
 /// Absence flags for stage `g`. A hike built in code (no wire) has none.
@@ -414,7 +411,7 @@ fn configured_bind_threads() -> usize {
 /// `SHA-256(public_key ‖ seed_beacon)`. Stage 0’s checkpoint limb and its
 /// `j = 0` previous. Not the stored `stages[0].waypoint`.
 fn computed_seed(hike: &Hike) -> [u8; 32] {
-    crate::sha::sha256(&production_seed(&hike.public_key, &hike.seed_beacon))
+    seed(&hike.public_key, &hike.seed_beacon)
 }
 
 /// Rule A4.3. `j = 0` on stage 0 is the computed seed. `j = 0` on stage
@@ -2260,7 +2257,7 @@ mod tests {
         let waypoint = [0x22u8; 32];
         let public_key = [0x33u8; 32];
         let seed_beacon = [0x44u8; 32];
-        let seed = sha256(&production_seed(&public_key, &seed_beacon));
+        let seed = crate::seed(&public_key, &seed_beacon);
         assert_ne!(seed, waypoint);
         // Stage 0 uses the computed seed as `j = 0` previous and as the limb.
         // Stage `g ≥ 1` uses the stored waypoint for both.

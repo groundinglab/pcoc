@@ -9,7 +9,7 @@ use hike::{
     AuditDraw, ChainRead, PathLocators, ANCHOR_WINDOW_OFFSETS, BEACON_BYTES,
     CHECKPOINT_PREIMAGE_LEN, DEFAULT_BIND_THREADS, EARLIER_KINDS, FILL, HASH_BYTES, KIND,
     LEG_RESULT_BYTES, MIX_ADD, MIX_MUL1, MIX_MUL2, N_SLOTS, OFFSET_MODULUS, PARENT_MUL, PUBLIC_KEY_BYTES,
-    SAMPLE_BYTES, SEAL_DOMAIN, SEED_DOMAIN, SLOT_BYTES, SLOT_MUL, STAGES, STEPS_PER_LEG,
+    SAMPLE_BYTES, SEAL_DOMAIN, SLOT_BYTES, SLOT_MUL, STAGES, STEPS_PER_LEG,
     TERRAIN_BYTES, WORDS_PER_SLOT, WORD_XOR,
 };
 use serde_json::{json, Value};
@@ -19,6 +19,12 @@ use std::path::PathBuf;
 
 fn pack_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../spec/conformance/v2.0")
+}
+
+/// v2.1 golden for the files the NL4 fill and C1 fold change.
+/// The published v2.0 pack stays the previous specification.
+fn v21_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/v21-pack")
 }
 
 fn repo_file(rel: &str) -> PathBuf {
@@ -231,7 +237,7 @@ fn test_3leg() -> Value {
     let seed_digest = Sha256::digest(seed);
     let mut seed_value = [0u8; 32];
     seed_value.copy_from_slice(&seed_digest);
-    let terrain = hike::fill_terrain_sized(hike::fill_pin(&seed), sizes);
+    let terrain = hike::fill_terrain_sized(&hike::seed_from_preimage(&seed), sizes);
 
     let leg_of = |previous: &[u8; 32], limb: &[u8; 32]| {
         let leg = hike::leg_result_sized(&terrain, previous, sizes);
@@ -406,8 +412,9 @@ fn pack() -> Vec<(&'static str, Value)> {
                 "PUBLIC_KEY_BYTES": PUBLIC_KEY_BYTES,
                 "BEACON_BYTES": BEACON_BYTES,
                 "SEAL_DOMAIN": hex_bytes(SEAL_DOMAIN),
-                "SEED_DOMAIN": hex_bytes(SEED_DOMAIN),
                 "FILL": FILL,
+                "SEED": "SHA-256(public_key || seed_beacon), no label",
+                "waypoint_equals_seed": 1,
                 "MIX_ADD": format!("0x{MIX_ADD:016X}"),
                 "MIX_MUL1": format!("0x{MIX_MUL1:016X}"),
                 "MIX_MUL2": format!("0x{MIX_MUL2:016X}"),
@@ -562,7 +569,7 @@ fn kat_small() -> Value {
     let seed_digest = sha2::Sha256::digest(seed);
     let mut seed_value = [0u8; 32];
     seed_value.copy_from_slice(&seed_digest);
-    let terrain = hike::fill_terrain_sized(hike::fill_pin(&seed), sizes);
+    let terrain = hike::fill_terrain_sized(&hike::seed_from_preimage(&seed), sizes);
 
     let mut limb = seed_value;
     let mut stages = Vec::with_capacity(18);
@@ -736,35 +743,33 @@ fn kat_small() -> Value {
     })
 }
 
-fn write_pack(files: &[(&str, Value)]) {
-    let root = pack_root();
+fn write_v21(files: &[(&str, Value)]) {
+    let root = v21_root();
     fs::create_dir_all(&root).unwrap();
-    let mut ids = Vec::new();
     for (name, value) in files {
-        ids.push(value["id"].as_str().unwrap());
         let text = serde_json::to_string_pretty(value).unwrap() + "\n";
         fs::write(root.join(name), text).unwrap();
     }
-    let manifest = json!({
-        "pack": "satoshi-hike-v2.0",
-        "generator": "cargo test -p hike --test conformance_v2",
-        "files": files.iter().map(|(name, _)| name).collect::<Vec<_>>(),
-        "ids": ids,
-    });
-    fs::write(
-        root.join("manifest.json"),
-        serde_json::to_string_pretty(&manifest).unwrap() + "\n",
-    )
-    .unwrap();
 }
 
 #[test]
 fn conformance_v2_pack() {
     let files = pack();
-    if std::env::var("PCOC_REGEN_V2").ok().as_deref() == Some("1") {
-        write_pack(&files);
+    if std::env::var("PCOC_REGEN_V21").ok().as_deref() == Some("1") {
+        write_v21(&files);
     }
-    let root = pack_root();
+    // These two files do not depend on the terrain fill or the fold.
+    for name in ["checkpoint-preimage.json", "earlier-run-b.json"] {
+        let value = files
+            .iter()
+            .find(|(file, _)| *file == name)
+            .map(|(_, value)| value)
+            .expect(name);
+        let text = fs::read_to_string(pack_root().join(name)).unwrap();
+        let got: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(&got, value, "{name} still matches the v2.0 pack");
+    }
+    let root = v21_root();
     for (name, value) in &files {
         let path = root.join(name);
         let text = fs::read_to_string(&path)
@@ -780,16 +785,6 @@ fn conformance_v2_pack() {
             );
         }
     }
-    let manifest: Value =
-        serde_json::from_str(&fs::read_to_string(root.join("manifest.json")).unwrap()).unwrap();
-    let names: Vec<&str> = files.iter().map(|(name, _)| *name).collect();
-    let listed: Vec<&str> = manifest["files"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|item| item.as_str().unwrap())
-        .collect();
-    assert_eq!(listed, names);
 }
 
 fn hex_bytes(bytes: &[u8]) -> String {

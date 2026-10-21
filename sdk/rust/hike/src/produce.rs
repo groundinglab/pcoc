@@ -31,7 +31,7 @@ use crate::bind::{
 use crate::consts::{Sizes, STAGES};
 use crate::object::{encode_hike, encode_hike_sized, Hike, Stage};
 use crate::sha::sha256;
-use crate::terrain::{fill_pin, fill_terrain, fill_terrain_sized, production_seed};
+use crate::terrain::{fill_terrain, fill_terrain_sized, seed, seed_preimage};
 use crate::walk::{leg_result, leg_result_sized};
 
 /// One stage record from [`produce_stage`]. The 18-stage driver stores these fields.
@@ -127,14 +127,14 @@ where
     S: FnMut(&mut [Stage], u64) -> Result<(), ProduceFailure>,
 {
     let (seed_beacon, height_0) = observe()?;
-    let seed = production_seed(&public_key, &seed_beacon);
-    let pin = fill_pin(&seed);
+    let preimage = seed_preimage(&public_key, &seed_beacon);
+    let seed_value = seed(&public_key, &seed_beacon);
+    debug_assert_eq!(seed_value, sha256(&preimage));
     let terrain = if sizes.is_production() {
-        fill_terrain(pin)
+        fill_terrain(&seed_value)
     } else {
-        fill_terrain_sized(pin, sizes)
+        fill_terrain_sized(&seed_value, sizes)
     };
-    let seed_value = sha256(&seed);
 
     let mut tip = seed_beacon;
     let mut tip_height = height_0;
@@ -415,7 +415,7 @@ mod tests {
             terrain_bytes: 256,
             steps_per_leg: 32,
         };
-        let terrain = crate::fill_terrain_sized(crate::fill_pin(&[0x11; 64]), sizes);
+        let terrain = crate::fill_terrain_sized(&crate::seed_from_preimage(&[0x11; 64]), sizes);
         let incoming = ([0x20u8; 32], 100u64);
         let newer = ([0x21u8; 32], 101u64);
         let mut opened = 0;
@@ -512,10 +512,8 @@ mod tests {
         assert_eq!(heights, vec![10]);
         let public_key = [0x11; 32];
         let seed_beacon = [0x22; 32];
-        let terrain = crate::terrain::fill_terrain(crate::terrain::fill_pin(
-            &crate::terrain::production_seed(&public_key, &seed_beacon),
-        ));
-        let seed_value = sha256(&crate::terrain::production_seed(&public_key, &seed_beacon));
+        let seed_value = crate::terrain::seed(&public_key, &seed_beacon);
+        let terrain = crate::terrain::fill_terrain(&seed_value);
         assert_ne!(posted, seed_value);
         let result = crate::walk::leg_result(&terrain, &seed_value);
         let sample = crate::bind::terrain_sample(&terrain, &seed_value);

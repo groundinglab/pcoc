@@ -183,6 +183,13 @@ impl HeaderClock {
         Self { shared }
     }
 
+    /// Bitcoin header `nTime` for a natural-order hash this clock has applied.
+    pub fn n_time(&self, hash: &[u8; 32]) -> Option<u32> {
+        let (lock, _) = &*self.shared;
+        let guard = lock.lock().unwrap_or_else(|err| err.into_inner());
+        guard.chain.nodes.get(hash).map(|node| node.n_time)
+    }
+
     /// Latest synced tip as `(natural hash, height)`.
     ///
     /// Blocks while the peer is down (Class T is the background thread).

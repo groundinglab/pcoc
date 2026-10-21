@@ -16,7 +16,6 @@ pub const PUBLIC_KEY_BYTES: usize = 32;
 pub const BEACON_BYTES: usize = 32;
 
 pub const SEAL_DOMAIN: &[u8; 12] = b"pcoc-walk-v1";
-pub const SEED_DOMAIN: &[u8; 8] = b"PSEED64\0";
 pub const KIND: &str = "satoshi-hike-v2.0-object";
 /// Rule A5. The only earlier kind this verifier names.
 pub const EARLIER_KINDS: &[&str] = &["satoshi-hike-v1.35-object"];
@@ -207,14 +206,11 @@ mod tests {
         assert!(higher(FLOOR_EXAMPLES[1], FLOOR_EXAMPLES[2]));
     }
 
-    /// Section 6 domains. The seal preimage starts with these 12 bytes. The seed fold starts with these 8.
+    /// The seal preimage starts with these 12 bytes. The seed has no domain label.
     #[test]
-    fn p6_13_seal_domain_and_p6_14_seed_domain() {
+    fn p6_13_seal_domain_and_seed_has_no_label() {
         assert_eq!(SEAL_DOMAIN, b"pcoc-walk-v1");
         assert_eq!(SEAL_DOMAIN.len(), 12);
-        assert_eq!(SEED_DOMAIN, b"PSEED64\0");
-        assert_eq!(SEED_DOMAIN.len(), 8);
-        assert_eq!(SEED_DOMAIN[7], 0);
     }
 
     /// SPEC §16.1. The small set keeps the section 6 formulas and stays inside the bounds.
@@ -295,7 +291,6 @@ mod spec6_pins {
         assert_eq!(STAGES, 18, "P6.8");
         assert_eq!(HASH_BYTES, 32, "P6.9");
         assert_eq!(SEAL_DOMAIN, b"pcoc-walk-v1", "P6.13");
-        assert_eq!(SEED_DOMAIN, b"PSEED64\0", "P6.14");
         assert_eq!(KIND, "satoshi-hike-v2.0-object", "P6.15");
         assert_eq!(FILL, "dag2", "P6.16");
         assert_eq!(MIX_ADD, 0x9E3779B97F4A7C15, "P6.17");
