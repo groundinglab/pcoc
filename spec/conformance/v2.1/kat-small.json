@@ -18,200 +18,200 @@
       "leg_count": 1,
       "next_beacon_hex": "0200000000000000000000000000000000000000000000000000000000000000",
       "legs_le_hex": [
-        "fe824e60b189983f"
+        "8a4d08cd985d9792"
       ],
       "checkpoints_hex": [
-        "ec8d27ef999914a3f6674bf8ce831de0102a88278a371516e0fc0995ed666eb6"
+        "441425e954c4abe90e82096b93df9a8a8d0deeae4858e25e0067c28dd7014d2f"
       ],
-      "next_waypoint_hex": "9a70e0eccef5e276786028f3661c939bdb5729bac1a730f1b7f9788e990ded14"
+      "next_waypoint_hex": "3f029cac40efd5e364afa8320be95ba05f3c5fa2522bad6dc1113e68db009864"
     },
     {
       "leg_count": 1,
       "next_beacon_hex": "0300000000000000000000000000000000000000000000000000000000000000",
       "legs_le_hex": [
-        "bd9088d60c3c3bc7"
+        "8ce8b7af3f8991fd"
       ],
       "checkpoints_hex": [
-        "4c66a36889bb487eeb376b74bab93d20380d9597a4182d8d4d3b2cacf9cbe22c"
+        "1af8d53a82564ae32b7c361ed5f1b7ee709baf26cb55a62bed44edab006d7036"
       ],
-      "next_waypoint_hex": "ebd89501c2e95eabd862aebc2566cc5cd80f8cd378e922fefb4cbc6750083ac8"
+      "next_waypoint_hex": "7f1e7b81380b7fa774661bee1343b2153f1c361f15eda042e79617736e42a82d"
     },
     {
       "leg_count": 1,
       "next_beacon_hex": "0400000000000000000000000000000000000000000000000000000000000000",
       "legs_le_hex": [
-        "3520c8145065246b"
+        "8822223f1fa3295d"
       ],
       "checkpoints_hex": [
-        "e8587016906f1b924b3bdd05c4d298a7307abd46e1989c1b65c4c85829c6cf78"
+        "b625ae6f56c6d8eeae708a6a75696e74fa7111c02c4e882eacf24964ac9c7914"
       ],
-      "next_waypoint_hex": "96bd96449e615a4e2194f13ace5b52925009cec87fbf9a592b8f23318278aa5c"
+      "next_waypoint_hex": "89c4a4f396658dc6a3af7f5d039d1977a55573dd1c0a6aa63ada0ceb332b8a36"
     },
     {
       "leg_count": 1,
       "next_beacon_hex": "5555555555555555555555555555555555555555555555555555555555555555",
       "legs_le_hex": [
-        "c3a11bb9b21a2371"
+        "f1b8029e2753ae12"
       ],
       "checkpoints_hex": [
-        "9ba9230a299f0e780ccfe58f1da80e3e5c270be703c63c4a46beb3372868b356"
+        "4a29a3d3f924faad13d936f73d7383f0c38fb34f6899565b9559f849cd90bce6"
       ],
-      "next_waypoint_hex": "4d7d5bfa121b3a484f1b8ac0061404e55460929925398d881a799d5410e89547"
+      "next_waypoint_hex": "98be8c50013ed66ea7a455052512ccb58738080f4160f0c7a7afd5594b6abe15"
     },
     {
       "leg_count": 1,
       "next_beacon_hex": "0600000000000000000000000000000000000000000000000000000000000000",
       "legs_le_hex": [
-        "d66578ce639e3d2e"
+        "ad4d9e92c889998f"
       ],
       "checkpoints_hex": [
-        "2ed730708c5cfc65a73909befb19a858ec9b445071855f08e8f79249b42cc026"
+        "9c9a45b10013349a985b49c151e03534e5118094db21e76daa6f19684992531b"
       ],
-      "next_waypoint_hex": "ce0fe6e20e4ab626e6963fc9943d81dab27f33213552386ab55c46e0a5e5b74f"
+      "next_waypoint_hex": "ba32f86100e437f6e694dd7f2c594bbbd8cf9a05db793f243afffa55054313ad"
     },
     {
       "leg_count": 1,
       "next_beacon_hex": "0700000000000000000000000000000000000000000000000000000000000000",
       "legs_le_hex": [
-        "60c70530f1821983"
+        "b556869db549fe05"
       ],
       "checkpoints_hex": [
-        "5c3d7b6bb9fa9958371f4240ed5cc1e6ef562e6bd7901e69a00a71bdf5030e00"
+        "ede4558c155ca74cfb3a1462090a56da4502a07fd0f9b85e2cd04ec3ae5e37d5"
       ],
-      "next_waypoint_hex": "a07e683167cb3e83c6cb739ac9279c85a7c79daf3f46ca2e5fd17d2e589d15dc"
+      "next_waypoint_hex": "0d6f9b40d37f574bf819eafa06cdc4fee3e9d73f1e73f76941cba18b872360e5"
     },
     {
       "leg_count": 1,
       "next_beacon_hex": "0800000000000000000000000000000000000000000000000000000000000000",
       "legs_le_hex": [
-        "0dc4314b65df3e25"
+        "0847cffe7767a039"
       ],
       "checkpoints_hex": [
-        "e6b87f9023ae282f7df37ae8da066e6c0792b46dcdac9933c64e385e07df976a"
+        "029f99eab61ab642e29e2c8c3003db2701bc2ac556511f5c4dfeae72578eee78"
       ],
-      "next_waypoint_hex": "0cf9297b9238560c1e338fac6fac112b152009c0ad79bddabd26312220bb4dde"
+      "next_waypoint_hex": "746c5543a561d5e06d9e96e0c386c6c88f849866e7557ff8585304e5ac0be7b6"
     },
     {
       "leg_count": 1,
       "next_beacon_hex": "0900000000000000000000000000000000000000000000000000000000000000",
       "legs_le_hex": [
-        "f85a8633fdf5f6f0"
+        "2012f6c5ac1dc989"
       ],
       "checkpoints_hex": [
-        "4a5cf62798e8d525b6c7d4d0507be914107338eee0bb7ecca695c0dcedf4169b"
+        "8d62fd33d1495e0e7d6301b0be38b614fccb7170ed165316c052f8a503600527"
       ],
-      "next_waypoint_hex": "998ac97afc858320ff14b71e0683d01db4ae2bdb066d79060e28c5bcbac5c304"
+      "next_waypoint_hex": "4ecfcc5e2f35f8afa141bf8cf72c8fd9bd0909d4e538bc522fce8a30a6470e77"
     },
     {
       "leg_count": 1,
       "next_beacon_hex": "0a00000000000000000000000000000000000000000000000000000000000000",
       "legs_le_hex": [
-        "b2ee207b9f8ac370"
+        "b9c2cb5c5974aa34"
       ],
       "checkpoints_hex": [
-        "13fdcd65374c731da8b7f9c787b0f57d5c9a4af4da2fe85860e0c28be4233da0"
+        "21b0690c45c7d906c9429c93b7676bafbc4a21770074126181067fdaa93a2ef6"
       ],
-      "next_waypoint_hex": "a032ad3da44709d9e7f114e96c59f20b861b37ec91236b58009786380873007d"
+      "next_waypoint_hex": "638b09a0270e954c6ceb1ada498c514c2c408dc3b9449685e05c8a6a269df538"
     },
     {
       "leg_count": 1,
       "next_beacon_hex": "0b00000000000000000000000000000000000000000000000000000000000000",
       "legs_le_hex": [
-        "9131bbf448c4aca9"
+        "8422da5759f6f4b9"
       ],
       "checkpoints_hex": [
-        "ae44670eea1f09f2eaab3eb2558705f1bebd47732a6d007ddf3cc42fc798c0b7"
+        "92415ea1cdaf05b6ab905f101634753b0fe10ec1398a217e9e8480deab9ed902"
       ],
-      "next_waypoint_hex": "c44392554b57d233bd33a324e4368d3df45dc4696c2dbc5d4724bf246b63a356"
+      "next_waypoint_hex": "2f4e9a3017eaa8a25823a961df8367f0181ad0cc0250ae0b760788cdb4356bbb"
     },
     {
       "leg_count": 1,
       "next_beacon_hex": "0c00000000000000000000000000000000000000000000000000000000000000",
       "legs_le_hex": [
-        "a7d7c988b95e6bd8"
+        "7cf1132afedac3ac"
       ],
       "checkpoints_hex": [
-        "040c91373baf7932ad4a8522ec84b4318116ddf09c0781251c50ec4c17a123cb"
+        "a03a7e1fe256d9577a17d13369dbfb7e109aa99a32afbfb7d87f28ef0aed6d1e"
       ],
-      "next_waypoint_hex": "d385f3abf06a09ead07aadf3a351a28016856662f659f39a7b33aedc49577ca9"
+      "next_waypoint_hex": "6b1c561ac7a2740c10355b1b287ccf21a6eec114f5e2fe94af381b412f2ead8c"
     },
     {
       "leg_count": 1,
       "next_beacon_hex": "0d00000000000000000000000000000000000000000000000000000000000000",
       "legs_le_hex": [
-        "9acd925aa4e68259"
+        "b61f5f6370c9454b"
       ],
       "checkpoints_hex": [
-        "908ac84042bcafa7281aaa784ea5406d1229e2a68af33bc44eebcfb76a136914"
+        "069e720b55fddd03b2d84c436d29a432b5d129516e424021eba09bf971ef9922"
       ],
-      "next_waypoint_hex": "0d44175be0f6ca97f626a896221040eb6590a5cc45e462a555dd77dd60831207"
+      "next_waypoint_hex": "427b6639a61e8228abc98af4c6eec7a1af6aded84eb618b03e32afa5ad6195dd"
     },
     {
       "leg_count": 1,
       "next_beacon_hex": "0e00000000000000000000000000000000000000000000000000000000000000",
       "legs_le_hex": [
-        "cdad34e0ac058109"
+        "e57007259a12dc5f"
       ],
       "checkpoints_hex": [
-        "cb24013de0b35090f04c418f453f4696cb8df3429a6f7d69b8a3dada9d65d76a"
+        "6e3e8fb20564412d16859008cdfd01c3413e4994262c79c204342135f4a2cee9"
       ],
-      "next_waypoint_hex": "a72b6e8b4a75e7bddf9fae81c588923c2a6d48082795faa3d0021cf2f2b2fdc2"
+      "next_waypoint_hex": "2f3ba15929d131654813ca358c83d248d7aa0adcf054bbc13a4469273d4a4569"
     },
     {
       "leg_count": 1,
       "next_beacon_hex": "0f00000000000000000000000000000000000000000000000000000000000000",
       "legs_le_hex": [
-        "1c64a926e21fa95f"
+        "3f2894fc042ea9f0"
       ],
       "checkpoints_hex": [
-        "e982971f5ffc21be2fee12676f950d102b897f2f5e3395065f89da3125745d3a"
+        "ea5c3f5aa419d02e613bd1139a336d148929e8249cb4979d7ea1a2b025ca52c3"
       ],
-      "next_waypoint_hex": "1408ecc5d2b4a1dc9cad6a673ff25b88c2ab7f7c126f9bd672db5e2cb0f9b77a"
+      "next_waypoint_hex": "d64bad198c923d69f9d8e21e3fdd8de5703a5808d4037e42a5ec18e2771ddcd3"
     },
     {
       "leg_count": 1,
       "next_beacon_hex": "1000000000000000000000000000000000000000000000000000000000000000",
       "legs_le_hex": [
-        "ccea5da1badd2e00"
+        "d71a4f49922df056"
       ],
       "checkpoints_hex": [
-        "9e5442f234bbde7fd1138e558eeb32f9406718cdbc1da1d617718a13d86f00e4"
+        "a1f4a6f3f92cf4bc1b5775d3fc51299266910a4c687b76bb488e4fc603c7afc3"
       ],
-      "next_waypoint_hex": "1a048733a5fa8fcb67e53fc94158d2ba0a3f5df6f4b4198fa321f2edd23856c7"
+      "next_waypoint_hex": "d045f61a194f3b3f062178f1cac9cee3d8c2a1aa6267b76cc73ebf2ab0405cc2"
     },
     {
       "leg_count": 1,
       "next_beacon_hex": "1100000000000000000000000000000000000000000000000000000000000000",
       "legs_le_hex": [
-        "c247dfa8b00a652d"
+        "db8205a6299e4f1f"
       ],
       "checkpoints_hex": [
-        "d2cc2f8b55063d2fc933f2a2ef3cf9035f86aa73c7ab2ee07c05d3ddb829d9e6"
+        "d2e00c38d642cf388890c910b5f4623d81a861892b4ff45b61e2aacba7c21e13"
       ],
-      "next_waypoint_hex": "8ffb280f7815ed428d5415e9764c088b514692d7f54c23111d0d3ae32a18a284"
+      "next_waypoint_hex": "a63019dfd187a6f4619cd596dbb02932fb8ec2ae6868097e04b7bf862f872f47"
     },
     {
       "leg_count": 1,
       "next_beacon_hex": "1200000000000000000000000000000000000000000000000000000000000000",
       "legs_le_hex": [
-        "3a88b10ee6c96bd7"
+        "e004866968682707"
       ],
       "checkpoints_hex": [
-        "7c55b9fae25ed718001854dc148017361deb47d71f3e32748645439798e22ead"
+        "cc45f1860ed53696fdea23bf395791283607959d4da28edfd53e6f66f9a626b7"
       ],
-      "next_waypoint_hex": "a9f1b220a5371c782caff8afcfa0f499fafabf28aa0c7f8cb4a1e455ddda7930"
+      "next_waypoint_hex": "38ba69bcf966c09306ecd3e2d2b637154e023418ee12545e19337614984d8ad0"
     },
     {
       "leg_count": 1,
       "next_beacon_hex": null,
       "legs_le_hex": [
-        "39175b1f7409d5e0"
+        "4cf1952f60252805"
       ],
       "checkpoints_hex": [
-        "27b832c8fe58946244fd0a888ae8f49f92d53e26045511602b3d7a92b51f208d"
+        "a997a57392e43b27b2d992337e7707949df1d929bbda47dd2199b6baa84dbdde"
       ],
       "next_waypoint_hex": null
     }
   ],
-  "note": "NL4 terrain and the §11.1 fold. Stage 0 opens at the seed. Each later stage opens at the previous waypoint."
+  "note": "NL4 terrain and the §11.1 wrapping-add fold. Stage 0 opens at the seed. Each later stage opens at the previous waypoint."
 }

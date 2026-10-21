@@ -12,7 +12,7 @@
 2. **`SEED_DOMAIN` / fill pin (P6.14, §6, §10.2).** Old: `SEED_DOMAIN` is `PSEED64` and a NUL, and `fill_pin` squeezes the preimage to one `u64`. New: both are deleted. P6.14 is `RETIRED` and is not reused. No terrain word is a function of a 64-bit pin.
 3. **Base word (§10.4).** Old: `w[j] = mix64(fill_pin XOR (i << 32) XOR j XOR WORD_XOR)`. New: the NL4 chain in §10.4. Parent mixing and `slot_mix` are unchanged. Normative: every terrain word depends on all 256 bits of the seed. The fill runs once per terrain (once per PCOC, once per gate check), not once per leg.
 4. **Seed and stage 0 (A2.2).** Old: `stages[0].waypoint` was called the seed, defined as `SHA-256` of the 64-byte seed, with no sentence that the reuse is intended. New: that field **is** the seed. The seed equals `stages[0].waypoint` by design. The bytes of `stages[0].waypoint` do not change. The old name of those bytes was seed value. The 64-byte `production_seed` is the seed preimage, not this field.
-5. **Step fold (§11.1, P11.1).** Old: `S_folded = S XOR (XOR over w of (word(w) XOR w))`, the v2.0 fold. New: `acc = 0`; for each word, `acc = acc XOR mix64(word(w) XOR w XOR S)`; `S_folded = acc`; then the same seal. `mix64` is §10.1, including `+ MIX_ADD`. `mix64` without `MIX_ADD` is not `mix64`.
+5. **Step fold (§11.1, P11.1).** Old: `S_folded = S XOR (XOR over w of (word(w) XOR w))`, the v2.0 fold. New: `acc = 0`; for each word, `acc = (acc + mix64(word(w) XOR w XOR S)) mod 2^64`; `S_folded = acc`; then the same seal. The accumulator is wrapping addition. `mix64` is §10.1, including `+ MIX_ADD`. `mix64` without `MIX_ADD` is not `mix64`. An XOR accumulator is not this fold.
 6. **Full-slot principle (§11.1).** Old: the step text did not forbid a per-slot summary. New: Christian's requirement, quoted in §11.1, is normative. No efficiency, caching, table, or partial read is permitted in the hike, the fold, or the terrain. A producer speed-up is a suspected break.
 7. **Hardware SHA (§11.1).** Old: the file said nothing about the host. New: informative baseline is commodity hardware with SHA-256 instructions (x86 SHA-NI or Armv8 SHA2), VivoBook class. Where the host provides those instructions, an implementation uses them for every SHA-256 in this construction. A software SHA-256 is permitted only where the host has none. A vector match does not excuse a software SHA-256 on a host that has the instructions.
 8. **Admission rate (B0, B2, A4.9).** Old: the admission service reads the bookend pair `(N, S)`. New: `leg_rate = hike_legs / hike_span`, where `hike_legs` is the checkpoint count over stages 0–17 and `hike_span = MTP(last beacon) − MTP(first beacon)`. MTP is the median-time-past of that beacon block, the BIP113 median of the `nTime` values of the headers ending at that block, read from the portable index as Rule A4.10 states. The comparison is `≥ leg_rate_floor` and requires `hike_span > 0`. `hike_span` ≤ 0 means the rate is undefined. The outcome is `refuse`, not `held`. Bookend `(N, S)` stays a section 14 measurement and is not the admission rate. Bookend `S` still uses the raw endpoint `header.time` values.
@@ -26,6 +26,8 @@
 
 16. **Kind (P6.15, Rule A5, §15.1).** Old: `KIND` is `satoshi-hike-v2.0-object`. New: `KIND` is `satoshi-hike-v2.1-object`. Kind `satoshi-hike-v2.0-object` is an earlier object, recorded like kind `satoshi-hike-v1.35-object`. Section 15 refuses it with reason `earlier_version` before any terrain fill. That refuse is not a fake leg. SDKs and the gate move together with this kind. A deployment does not cut this kind over while an SDK or the gate still emits the earlier kind.
 17. **Seal digest (§7.4, §11.1).** Old: the seal digest was also named `D`. New: the seal digest is `E`. `E = SHA-256(SEAL_DOMAIN ‖ le64(S_folded))` and `S' = u64_le(E[0:8])`. `D` names only the seed.
+18. **Fold accumulator (WH-M1, §11.1, 22 Oct 2026 00:01 ACDT).** The last stage of `mix64` is linear over GF(2). An XOR of `mix64` outputs lets a producer apply that stage once. New: the §11.1 accumulator is wrapping addition, `(acc + mix64(word(w) XOR w XOR S)) mod 2^64`. That hoist does not compute this fold. `mix64` itself is unchanged. The XOR accumulator is a conformance negative, `xor_accumulator_fold`. It is not the v2.0 fold.
+19. **Submission deadline (WH-M2, §15, 22 Oct 2026 00:01 ACDT).** Old: a hike could be submitted any number of blocks after the last beacon. New: the gate refuses when `tip_height − last_beacon_height > K` at receipt. `tip_height` is the tip the gate observes at receipt. `K` is policy. A placeholder of 3 is placeholder, not ratified. A gap of 3 does not refuse. A gap of 4 refuses when `K` is 3. When `tip_height` is below `last_beacon_height`, the state is `held`. The reason token for the refuse is `submission_deadline`. That refuse is not a fake leg.
 
 **Changes from v1.35.**
 
@@ -189,7 +191,7 @@ This subsection is the normative classification of Part A. It does not add a sec
 | P10.1 | INVARIANT | The seed preimage is `public_key ‖ seed_beacon`, 64 bytes. The seed is `SHA-256` of that preimage, 32 bytes, no label, read as four little-endian lanes. | §10 |
 | P10.2 | INVARIANT | `mix64`, the NL4 base word, the parent indices, and the dag2 fill are the section 10 construction. Every terrain word depends on all 256 bits of the seed. Terrain is filled once per terrain. The step does not write it. | §10 |
 | P10.3 | INVARIANT | The seed equals `stages[0].waypoint` by design. | §10, §12.1 |
-| P11.1 | INVARIANT | A step folds every word of the selected slot by §11.1 (`acc` starts at 0; `mix64` includes `MIX_ADD`) and sets the next state from `SHA-256(SEAL_DOMAIN ‖ le64(S_folded))`. | §11.1 |
+| P11.1 | INVARIANT | A step folds every word of the selected slot by §11.1 (`acc` starts at 0 and grows by wrapping addition; `mix64` includes `MIX_ADD`) and sets the next state from `SHA-256(SEAL_DOMAIN ‖ le64(S_folded))`. | §11.1 |
 | P11.2 | INVARIANT | The leg result is `STEPS_PER_LEG` steps from the first eight bytes of the previous checkpoint, stored as `le64`. | §11.2 |
 | P11.3 | INVARIANT | The terrain sample is `SAMPLE_BYTES` at the offset taken from the previous checkpoint. It is not the waypoint slot sample. | §11.3 |
 | A2.1 | CONSTANT | `seed_beacon` plus the 18 interrupts gives stages numbered 0–17. | §12.1 Rule A2.1 |
@@ -822,15 +824,17 @@ slot = terrain[i × SLOT_BYTES : (i+1) × SLOT_BYTES]
 ```text
 acc = 0
 for w = 0 … WORDS_PER_SLOT − 1:
-    acc = acc XOR mix64(word(w) XOR w XOR S)
+    acc = (acc + mix64(word(w) XOR w XOR S)) mod 2^64
 S_folded = acc
 E = SHA-256(SEAL_DOMAIN ‖ le64(S_folded))
 S' = u64_le(E[0:8])
 ```
 
-`mix64` is exactly §10.1, including the initial `+ MIX_ADD`. A function that omits `MIX_ADD` is not `mix64`. A port that used that shorter function produced a different step. `acc` starts at 0, not at `S`. `w` is XORed as a `u64`. The loop is every word in the slot. Under section 6, `WORDS_PER_SLOT` is 2048, so the production bound is `w = 0 … 2047`. Profile `conformance-small` (section 16.1) uses that profile’s `WORDS_PER_SLOT` in this same sentence. It does not change the production constant.
+`mix64` is exactly §10.1, including the initial `+ MIX_ADD`. A function that omits `MIX_ADD` is not `mix64`. A port that used that shorter function produced a different step. `acc` starts at 0, not at `S`. Each step of the loop adds the `mix64` output with wrapping addition in `mod 2^64`. An XOR of those outputs is not this fold. `w` is XORed as a `u64`. The loop is every word in the slot. Under section 6, `WORDS_PER_SLOT` is 2048, so the production bound is `w = 0 … 2047`. Profile `conformance-small` (section 16.1) uses that profile’s `WORDS_PER_SLOT` in this same sentence. It does not change the production constant.
 
-The v2.0 fold `S_folded = S XOR (XOR over w of (word(w) XOR w))` is withdrawn. The parenthesised XOR does not depend on `S`, so one 8-byte value per slot can stand in for the slot. That fold is not conforming.
+**Informative.** The last stage of `mix64` is `y XOR (y >> 31)`, which is linear over GF(2). An accumulator that XORs `mix64` outputs lets a producer apply that stage once to the XOR of the pre-final values. Wrapping addition is not that linear map, so that hoist does not compute this fold. `mix64` itself is unchanged.
+
+The v2.0 fold `S_folded = S XOR (XOR over w of (word(w) XOR w))` is withdrawn. The parenthesised XOR does not depend on `S`, so one 8-byte value per slot can stand in for the slot. That fold is not conforming. The XOR accumulator `acc = acc XOR mix64(word(w) XOR w XOR S)` is also not conforming. It is the negative `xor_accumulator_fold`. It is not the v2.0 fold.
 
 **Normative.** Christian's requirement, in his words:
 
@@ -1956,6 +1960,10 @@ A policy profile names parameters and lists its fast checks and its thorough che
 #### Rule B2. Leg-rate floor
 
 **Normative comparison. The value is TBD.** `leg_rate_floor` is a profile parameter `p/q` in checkpoints per second, `hike_legs` over `hike_span`, with `hike_span` in Unix seconds. One checkpoint is one leg. This file sets no ratified value for `p/q`. Section 15.5 states the measuring method. A test placeholder of `1/5` is placeholder, not ratified. The comparison is integer-only: a ratio `p/q` meets the floor when `hike_span` is an integer greater than 0 and `q · hike_legs ≥ p · hike_span`. `hike_span` ≤ 0 means the rate is undefined. The outcome is `refuse`. It is not `held`. `held` is only `hike_span` `not read`. The profile supplies `p` and `q`. The comparison does not round. Rule B3 does not change `hike_span`. There is no comparison when `hike_span` is `not read`. The fast phase does not issue `provisional` on that gap. The state is `held`. A short or missing network read stays `not read` and the state is `held`. A numeric rate that falls short of the floor is `refuse`. The bookend pair is not an input to this comparison.
+
+#### Submission deadline
+
+**Normative. The bound is placeholder, not ratified.** At receipt the gate reads `tip_height`, the height of the chain tip that gate observes at that receipt. It is not a height stored on the object. `last_beacon_height` is `last_interrupt_height`, the height of the last beacon. When `tip_height` is below `last_beacon_height`, the receipt is not yet at the last beacon. The state is `held`. That hold is not a `refuse`. When `tip_height` is an integer greater than or equal to `last_beacon_height` and `tip_height − last_beacon_height > K`, the gate `refuse`s. The reason token is `submission_deadline`. That refuse is not a fake leg and does not add the key to the ignore record. `K` is policy, in blocks. This file sets no ratified value for `K`. A test placeholder of `K = 3` is placeholder, not ratified. With that placeholder, a gap of 3 does not refuse and a gap of 4 refuses. A missing tip read is `not read` and the state is `held`. It is not this refuse.
 
 #### Rule B3. Span sanity
 

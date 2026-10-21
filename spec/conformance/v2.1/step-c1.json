@@ -11,15 +11,15 @@
   "steps": [
     {
       "S_u64_hex": "0000000000000000",
-      "S_folded_u64_hex": "a284caf306ff68a0",
-      "digest_hex": "33ffcf613379f35c97bcbb1b90ddf8a3509d12a193a9cc9bc37d7dd67ab392cb",
-      "S_prime_u64_hex": "5cf3793361cfff33"
+      "S_folded_u64_hex": "76e07e211682940a",
+      "digest_hex": "4398a05b7d015bb6adc7dec8f702081e88174522b9f88291143a8594d784487f",
+      "S_prime_u64_hex": "b65b017d5ba09843"
     },
     {
       "S_u64_hex": "545dfe297dc78951",
-      "S_folded_u64_hex": "735b117567b30cf0",
-      "digest_hex": "29c8f49f9e537782cf184b12aca437a40cc3ed3b99a0b47109fadcf363cb6533",
-      "S_prime_u64_hex": "8277539e9ff4c829"
+      "S_folded_u64_hex": "dbd7165acc936fc6",
+      "digest_hex": "f4bec5e789648ee8fe5a5be9cbf72e8bd798cd6341d1c0dd77f32e8f14c7088a",
+      "S_prime_u64_hex": "e88e6489e7c5bef4"
     }
   ],
   "note": "One §11.1 step on the 2048-word NL4 base slot. seal(0) is the §7.4 check."

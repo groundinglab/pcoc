@@ -1,6 +1,6 @@
-# v2.1 correction, fix round 2. tag spec-v2.1.0 is cut by CoS on the merge commit. Do not invent that tag here.
+# v2.1 correction, fix round 3. tag spec-v2.1.0 is cut by CoS on the merge commit. Do not invent that tag here.
 # sdk/tools/check_spec_pin.py matches the working tree and then the tag.
 # RH-M5: no cutover until every port passes this pack and the production-size vectors.
 # The tag half cannot pass until spec-v2.1.0 exists.
 tag=spec-v2.1.0
-vector-sha256=4520d7f6c73dffe80159434f8bf6f83a77be5c4faa70da79543ce88c26d541d7
+vector-sha256=695029dd5555909e3a56b0049b63b0b2e4876e03921783e1e0c1a5f73966da1d

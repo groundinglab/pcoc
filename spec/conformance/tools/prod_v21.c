@@ -1,5 +1,5 @@
 /* prod_v21.c — production-size NL4 + §11.1 values for the generator.
-
+ * The §11.1 accumulator is wrapping addition of mix64(word XOR w XOR S).
  * gen_v21.py shells out to this binary. It does not walk a production leg
  * in Python. check_v21.c recomputes the same pack file on its own.
  * gcc -O2 -o /tmp/prod_v21_helper prod_v21.c -lcrypto
@@ -108,7 +108,7 @@ static uint64_t fold_c1(const uint8_t *slot, uint64_t words, uint64_t S) {
     uint64_t acc = 0;
     for (uint64_t w = 0; w < words; w++) {
         uint64_t word = load_le(slot + 8 * w);
-        acc ^= mix64(word ^ w ^ S);
+        acc += mix64(word ^ w ^ S);
     }
     return acc;
 }

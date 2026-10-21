@@ -4,8 +4,11 @@
  *   §10 seed and NL4, §10.1 mix64, §10.3 parents, §10.4 dag2 fill,
  *   §11.1 fold and seal, §11.2–§11.4 checkpoint, §12.2 waypoint,
  *   Rule B2 integer floor, including hike_span <= 0,
- *   §15.5 thorough rounds, Rule B4 anchored_total >= 6.
- * The withdrawn maps (one-lane, linear four-lane, fill pin, the v2.0 fold,
+ *   the submission deadline (tip_height - last_beacon_height > K),
+ *   §15.5 thorough rounds, Rule B4 anchored_total >= 6,
+ *   Rule A4.10 median-time-past.
+ * The §11.1 accumulator is wrapping addition. The withdrawn maps (one-lane,
+ * linear four-lane, fill pin, the v2.0 fold, the XOR accumulator,
  * mix64 without MIX_ADD, a short slot read) are the §10.4 / §11.1
  * rejects. This file does not include the generator.
  *
@@ -181,13 +184,24 @@ static uint64_t seal(uint64_t folded) {
     return load_le(d);
 }
 
+/* §11.1: acc = (acc + mix64(word XOR w XOR S)) mod 2^64. bare=1 omits MIX_ADD. */
 static uint64_t fold_mix(const uint8_t *slot, uint64_t words, uint64_t S, int bare, uint64_t nread) {
     uint64_t acc = 0;
     uint64_t lim = nread < words ? nread : words;
     for (uint64_t w = 0; w < lim; w++) {
         uint64_t word = load_le(slot + 8 * w);
         uint64_t x = word ^ w ^ S;
-        acc ^= bare ? bare64(x) : mix64(x);
+        acc += bare ? bare64(x) : mix64(x);
+    }
+    return acc;
+}
+
+/* Withdrawn XOR accumulator of mix64 outputs. Not §11.1 and not the v2.0 fold. */
+static uint64_t fold_xor_acc(const uint8_t *slot, uint64_t words, uint64_t S) {
+    uint64_t acc = 0;
+    for (uint64_t w = 0; w < words; w++) {
+        uint64_t word = load_le(slot + 8 * w);
+        acc ^= mix64(word ^ w ^ S);
     }
     return acc;
 }
@@ -946,6 +960,16 @@ int main(int argc, char **argv) {
                 snprintf(got, sizeof got, "%016llx", (unsigned long long)good);
                 expect_str("c1-v2_0", got, jstr(c, "conforming_S_folded_u64_hex"));
                 if (bad == good) g_fail++; else reject(name);
+            } else if (strcmp(name, "xor_accumulator_fold") == 0) {
+                uint64_t S = strtoull(jstr(c, "S_u64_hex"), NULL, 16);
+                uint64_t bad = fold_xor_acc(slot, 2048, S);
+                uint64_t good = fold_mix(slot, 2048, S, 0, 2048);
+                char got[17];
+                snprintf(got, sizeof got, "%016llx", (unsigned long long)bad);
+                expect_str("xor-acc", got, jstr(c, "forbidden_S_folded_u64_hex"));
+                snprintf(got, sizeof got, "%016llx", (unsigned long long)good);
+                expect_str("add-acc", got, jstr(c, "conforming_S_folded_u64_hex"));
+                if (bad == good) g_fail++; else reject(name);
             } else if (strcmp(name, "partial_slot_read") == 0 || strcmp(name, "partial_slot_read_2047") == 0) {
                 uint64_t S = strtoull(jstr(c, "S_u64_hex"), NULL, 16);
                 uint64_t nwords = (uint64_t)jnum(c, "words");
@@ -1149,6 +1173,53 @@ int main(int argc, char **argv) {
         }
         free(path);
         section("mtp");
+    }
+
+    /* submission deadline: tip_height - last_beacon_height > K refuses */
+    {
+        char *path = path_join(dir, "deadline.json");
+        JVal *o = load_json(path);
+        before = g_fail;
+        if (jnum(o, "K") != 3 || strcmp(jstr(o, "K_mark"), "placeholder, not ratified") != 0
+            || strcmp(jstr(o, "reason"), "submission_deadline") != 0) {
+            fprintf(stderr, "FAIL deadline policy\n"); g_fail++;
+        }
+        JVal *cases = jget(o, "cases");
+        for (int i = 0; i < cases->an; i++) {
+            JVal *c = cases->a[i];
+            const char *name = jstr(c, "name");
+            long long K = jnum(c, "K");
+            long long last = jnum(c, "last_beacon_height");
+            const char *outcome = jstr(c, "outcome");
+            if (jbool(c, "fake_leg_ignore")) { fprintf(stderr, "FAIL %s ban\n", name); g_fail++; }
+            JVal *tipv = jget(c, "tip_height");
+            if (!tipv) { fprintf(stderr, "FAIL %s tip\n", name); g_fail++; continue; }
+            if (tipv->k == JNULL) {
+                JVal *gapv = jget(c, "gap");
+                if (!gapv || gapv->k != JSTR || strcmp(gapv->s, "not read") != 0
+                    || strcmp(outcome, "held") != 0) {
+                    fprintf(stderr, "FAIL %s not read\n", name); g_fail++;
+                } else pass(name);
+                continue;
+            }
+            if (tipv->k != JNUM) { fprintf(stderr, "FAIL %s tip type\n", name); g_fail++; continue; }
+            long long tip = tipv->n;
+            long long gap = tip - last;
+            if (jnum(c, "gap") != gap) { fprintf(stderr, "FAIL %s gap\n", name); g_fail++; continue; }
+            const char *expect = "accept";
+            if (tip < last) expect = "held";
+            else if (gap > K) expect = "refuse";
+            if (strcmp(outcome, expect) != 0) {
+                fprintf(stderr, "FAIL %s outcome\n", name); g_fail++; continue;
+            }
+            if (strcmp(expect, "refuse") == 0) {
+                if (!jbool(c, "must_reject") || strcmp(jstr(c, "reason"), "submission_deadline") != 0) {
+                    fprintf(stderr, "FAIL %s refuse\n", name); g_fail++;
+                } else reject(name);
+            } else pass(name);
+        }
+        free(path);
+        section("deadline");
     }
 
     /* production leg: 256 MiB terrain, one 2,000,000-step leg, one checkpoint */

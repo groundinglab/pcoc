@@ -1,0 +1,51 @@
+{
+  "id": "deadline",
+  "K": 3,
+  "K_mark": "placeholder, not ratified",
+  "reason": "submission_deadline",
+  "note": "At receipt the gate reads tip_height, the tip it observes. last_beacon_height is last_interrupt_height. tip_height minus last_beacon_height greater than K refuses. K is policy. A placeholder of 3 is placeholder, not ratified. A gap of 3 accepts. A gap of 4 refuses as submission_deadline and is not a fake leg. When tip_height is below last_beacon_height the state is held. A missing tip is not read and the state is held.",
+  "cases": [
+    {
+      "name": "gap-3",
+      "class": "positive",
+      "K": 3,
+      "last_beacon_height": 100,
+      "tip_height": 103,
+      "gap": 3,
+      "outcome": "accept",
+      "fake_leg_ignore": false
+    },
+    {
+      "name": "gap-4",
+      "class": "negative",
+      "K": 3,
+      "last_beacon_height": 100,
+      "tip_height": 104,
+      "gap": 4,
+      "outcome": "refuse",
+      "fake_leg_ignore": false,
+      "must_reject": true,
+      "reason": "submission_deadline"
+    },
+    {
+      "name": "tip-below",
+      "class": "negative",
+      "K": 3,
+      "last_beacon_height": 100,
+      "tip_height": 99,
+      "gap": -1,
+      "outcome": "held",
+      "fake_leg_ignore": false
+    },
+    {
+      "name": "tip-not-read",
+      "class": "negative",
+      "K": 3,
+      "last_beacon_height": 100,
+      "tip_height": null,
+      "gap": "not read",
+      "outcome": "held",
+      "fake_leg_ignore": false
+    }
+  ]
+}

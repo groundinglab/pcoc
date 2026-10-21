@@ -191,13 +191,24 @@ def seal(folded):
     return int.from_bytes(seal_digest(folded)[:8], "little")
 
 
-def fold_c1(slot_bytes, S, mix):
+def fold_xor_acc(slot_bytes, S, mix):
+    """Withdrawn XOR accumulator: acc XOR= mix(word XOR w XOR S). Not §11.1."""
     words = len(slot_bytes) // 8
     acc = 0
     for w in range(words):
         word = int.from_bytes(slot_bytes[8 * w : 8 * w + 8], "little")
         acc ^= mix((word ^ w ^ S) & MASK)
         acc &= MASK
+    return acc
+
+
+def fold_c1(slot_bytes, S, mix):
+    """§11.1: acc = (acc + mix(word XOR w XOR S)) mod 2^64."""
+    words = len(slot_bytes) // 8
+    acc = 0
+    for w in range(words):
+        word = int.from_bytes(slot_bytes[8 * w : 8 * w + 8], "little")
+        acc = (acc + mix((word ^ w ^ S) & MASK)) & MASK
     return acc
 
 
@@ -212,11 +223,11 @@ def fold_v2_0(slot_bytes, S):
 
 
 def fold_partial(slot_bytes, S, nread):
+    """Short read of the §11.1 wrapping-add fold."""
     acc = 0
     for w in range(nread):
         word = int.from_bytes(slot_bytes[8 * w : 8 * w + 8], "little")
-        acc ^= mix64((word ^ w ^ S) & MASK)
-        acc &= MASK
+        acc = (acc + mix64((word ^ w ^ S) & MASK)) & MASK
     return acc
 
 
@@ -377,10 +388,14 @@ def parse_vec(path):
     }
 
 
-def walk(terrain, prof, opening, stages, chain):
+def walk(terrain, prof, opening, stages, chain, fold=None):
     """chain True: stage 0 opens at `opening` and each later stage opens at the
     previous waypoint. chain False: each stage opens at its stored waypoint.
+    fold defaults to the §11.1 wrapping-add fold. The historical C1 pin uses
+    the withdrawn XOR accumulator.
     """
+    if fold is None:
+        fold = lambda sl, S: fold_c1(sl, S, mix64)
     slot_b = prof["slot_bytes"]
     sample_b = prof["sample_bytes"]
     steps = prof["steps"]
@@ -393,7 +408,7 @@ def walk(terrain, prof, opening, stages, chain):
         cps = []
         for _ in range(st["nlegs"]):
             S0 = int.from_bytes(prev[:8], "little")
-            r = leg_result(terrain, slot_b, steps, S0, lambda sl, S: fold_c1(sl, S, mix64))
+            r = leg_result(terrain, slot_b, steps, S0, fold)
             c = checkpoint(terrain, sample_b, prev, limb, r)
             legs.append(r.to_bytes(8, "little").hex())
             cps.append(c.hex())
@@ -428,7 +443,15 @@ def self_check(inputs):
         pin = fill_pin(pre)
         terrain = fill_terrain(pin_word, pin, spec["slot_bytes"], spec["terrain_bytes"])
         got_sha = hashlib.sha256(terrain).hexdigest()
-        got = walk(terrain, spec, spec["stages"][0]["stored_w"], spec["stages"], chain=False)
+        # C1-pinned files are the withdrawn XOR accumulator, not §11.1.
+        got = walk(
+            terrain,
+            spec,
+            spec["stages"][0]["stored_w"],
+            spec["stages"],
+            chain=False,
+            fold=lambda sl, S: fold_xor_acc(sl, S, mix64),
+        )
         exp = json.load(open(pinned[name]))
         if exp["terrain_sha256"] != got_sha:
             raise SystemExit(f"self-check {name} terrain {got_sha} != {exp['terrain_sha256']}")
@@ -488,15 +511,16 @@ def hike_doc(name, spec, chain_opening):
         "waypoint_equals_seed": 1 if opening == d else 0,
         "terrain_sha256": hashlib.sha256(terrain).hexdigest(),
         "stages": stages,
-        "note": "NL4 terrain and the §11.1 fold. Stage 0 opens at the seed. Each later stage opens at the previous waypoint.",
+        "note": "NL4 terrain and the §11.1 wrapping-add fold. Stage 0 opens at the seed. Each later stage opens at the previous waypoint.",
     }
 
 
 WRAP16K_SHA = "7bb281f1f5d982f4778c4e866276e235a80f457f775b1aac8df73294eceac5e3"
 PROD_TERRAIN_SHA = "994f2d55e48396d12f8f3fbf23102ea79ea87e5a7f18089abc16c0411bb32d3b"
-PROD_LEG0 = "c8658b2b05a93205"
-PROD_CP0 = "e8bfeed49fb20d41090e9efada63e0ca170606957e4e112719387ac60aef12d1"
 PROD_OFFSET = 213205398
+# Round-2 XOR-accumulator pins. A helper that still XORs fails these.
+XOR_LEG0 = "c8658b2b05a93205"
+XOR_CP0 = "e8bfeed49fb20d41090e9efada63e0ca170606957e4e112719387ac60aef12d1"
 
 
 def changed_words(fn, P, Q, nslots, words):
@@ -557,12 +581,10 @@ def build_prod(pk, beacon, d, P):
         raise SystemExit("prod wrap " + got["wrap16k"])
     if got["terrain"] != PROD_TERRAIN_SHA:
         raise SystemExit("prod terrain " + got["terrain"])
-    if got["leg0"] != PROD_LEG0:
-        raise SystemExit("prod leg " + got["leg0"])
+    if got["leg0"] == XOR_LEG0 or got["cp0"] == XOR_CP0:
+        raise SystemExit("prod value is the withdrawn XOR accumulator")
     if int(got["offset"]) != PROD_OFFSET:
         raise SystemExit("prod offset " + got["offset"])
-    if got["cp0"] != PROD_CP0:
-        raise SystemExit("prod cp " + got["cp0"])
     if P[0] != int.from_bytes(d[:8], "little"):
         raise SystemExit("prod lane0")
     return {
@@ -580,7 +602,7 @@ def build_prod(pk, beacon, d, P):
         "leg0_u64_hex": got["leg0"],
         "sample_offset": int(got["offset"]),
         "checkpoint0_hex": got["cp0"],
-        "note": "Stage 0 leg 0 opens at the seed. S_0 = u64_le(D[0:8]) = P[0]. The checkpoint is SHA-256(seed || seed || terrain[offset:offset+sample] || le64(leg)). Produced by spec/conformance/tools/prod_v21.c. This generator does not walk a production leg in Python.",
+        "note": "Stage 0 leg 0 opens at the seed. S_0 = u64_le(D[0:8]) = P[0]. The §11.1 accumulator is wrapping addition. The checkpoint is SHA-256(seed || seed || terrain[offset:offset+sample] || le64(leg)). Produced by spec/conformance/tools/prod_v21.c. This generator does not walk a production leg in Python.",
     }
 
 
@@ -782,6 +804,7 @@ def main():
     bare = fold_c1(slot0, 0, bare64)
     good = fold_c1(slot0, 0, mix64)
     fat = fold_v2_0(slot0, 0)
+    xor_acc = fold_xor_acc(slot0, 0, mix64)
     partial = fold_partial(slot0, 0, 1)
     f3_profile = (64, 1024)
     pin1 = fill_pin(pk + beacon)
@@ -880,6 +903,15 @@ def main():
                 "S_u64_hex": "0000000000000000",
                 "forbidden_S_folded_u64_hex": u64hex(fat),
                 "conforming_S_folded_u64_hex": u64hex(good),
+            },
+            {
+                "name": "xor_accumulator_fold",
+                "must_reject": True,
+                "words": 2048,
+                "S_u64_hex": "0000000000000000",
+                "forbidden_S_folded_u64_hex": u64hex(xor_acc),
+                "conforming_S_folded_u64_hex": u64hex(good),
+                "note": "acc XOR= mix64(word XOR w XOR S) is not §11.1. The conforming accumulator is wrapping addition. This is not the v2.0 fold.",
             },
             {
                 "name": "partial_slot_read",
@@ -1036,6 +1068,49 @@ def main():
     if len(kind["kind"].encode()) != 24 or len(kind["earlier"][0].encode()) != 24:
         raise SystemExit("kind length")
 
+    def deadline_outcome(last_h, tip, K):
+        if tip is None:
+            return "held", "not read"
+        gap = tip - last_h
+        if tip < last_h:
+            return "held", gap
+        if gap > K:
+            return "refuse", gap
+        return "accept", gap
+
+    deadline_cases = []
+    for name, last_h, tip, cls in (
+        ("gap-3", 100, 103, "positive"),
+        ("gap-4", 100, 104, "negative"),
+        ("tip-below", 100, 99, "negative"),
+        ("tip-not-read", 100, None, "negative"),
+    ):
+        outcome, gap = deadline_outcome(last_h, tip, 3)
+        case = {
+            "name": name,
+            "class": cls,
+            "K": 3,
+            "last_beacon_height": last_h,
+            "tip_height": tip,
+            "gap": gap,
+            "outcome": outcome,
+            "fake_leg_ignore": False,
+        }
+        if outcome == "refuse":
+            case["must_reject"] = True
+            case["reason"] = "submission_deadline"
+        deadline_cases.append(case)
+    if [c["outcome"] for c in deadline_cases] != ["accept", "refuse", "held", "held"]:
+        raise SystemExit("deadline outcomes")
+    deadline = {
+        "id": "deadline",
+        "K": 3,
+        "K_mark": "placeholder, not ratified",
+        "reason": "submission_deadline",
+        "note": "At receipt the gate reads tip_height, the tip it observes. last_beacon_height is last_interrupt_height. tip_height minus last_beacon_height greater than K refuses. K is policy. A placeholder of 3 is placeholder, not ratified. A gap of 3 accepts. A gap of 4 refuses as submission_deadline and is not a fake leg. When tip_height is below last_beacon_height the state is held. A missing tip is not read and the state is held.",
+        "cases": deadline_cases,
+    }
+
     files = {
         "seed.json": seed,
         "nl4-words.json": nl4,
@@ -1048,6 +1123,7 @@ def main():
         "anchors.json": anchors,
         "negatives.json": negative,
         "mtp.json": mtp,
+        "deadline.json": deadline,
         "kind.json": kind,
     }
     if not args.skip_production:
@@ -1057,7 +1133,7 @@ def main():
         prod_line = "\n`prod-leg0.json` is one production leg: slot 16384, terrain 256 MiB, 2,000,000 steps, sample 1024. Stage 0 opens at the seed.\n"
     readme = """# Conformance pack, Satoshi Hike v2.1
 
-Generated by `spec/conformance/tools/gen_v21.py`. These files are the v2.1 target for the corrected seed, the NL4 word, the §11.1 fold, the small hikes, and the rate and anchor comparisons. They are not a full hike-object encoding. The pack under `../v2.0/` is historical. The withdrawn fold in `negatives.json` is the v2.0 fold.
+Generated by `spec/conformance/tools/gen_v21.py`. These files are the v2.1 target for the corrected seed, the NL4 word, the §11.1 wrapping-add fold, the small hikes, and the rate and anchor comparisons. They are not a full hike-object encoding. The pack under `../v2.0/` is historical. The withdrawn folds in `negatives.json` are the v2.0 fold and the XOR accumulator `xor_accumulator_fold`.
 
 `legs_le_hex` in a hike file is the hexadecimal spelling of the little-endian wire bytes `le64(leg_result)`. It is not the `%016llx` spelling of the integer.
 
@@ -1066,6 +1142,8 @@ Generated by `spec/conformance/tools/gen_v21.py`. These files are the v2.1 targe
 `rounds.json` pins the default thorough draw. When at least 18 legs exist, the 18 indices are one draw without replacement, split into 3 rounds of 6. For 6 <= leg_total < 18 the indices stay distinct while an unused index remains. `leg_total` < 6 is `not defined` and refuses. A mismatch does not start the next round.
 
 `kind.json` pins `satoshi-hike-v2.1-object`. The two earlier kinds refuse as `earlier_version`, and that refuse is not a fake leg.
+
+`deadline.json` pins the submission deadline. `K = 3` is placeholder, not ratified. A gap of 3 accepts. A gap of 4 refuses as `submission_deadline`. A tip below the last beacon, and a tip that was not read, are `held`. That refuse is not a fake leg.
 """ + prod_line + """
 A negative case publishes the withdrawn result and the conforming result. An implementation that emits the withdrawn result does not conform.
 
