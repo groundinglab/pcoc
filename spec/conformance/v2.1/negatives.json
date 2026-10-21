@@ -33,8 +33,8 @@
       "must_reject": true,
       "words": 2048,
       "S_u64_hex": "0000000000000000",
-      "forbidden_S_folded_u64_hex": "6b98972f2e622525",
-      "conforming_S_folded_u64_hex": "76e07e211682940a"
+      "forbidden_S_folded_u64_hex": "db9092c34f12d6d9",
+      "conforming_S_folded_u64_hex": "59d67dd117a745a6"
     },
     {
       "name": "v2_0_fold",
@@ -42,7 +42,7 @@
       "words": 2048,
       "S_u64_hex": "0000000000000000",
       "forbidden_S_folded_u64_hex": "4d57a0275efaf0c0",
-      "conforming_S_folded_u64_hex": "76e07e211682940a"
+      "conforming_S_folded_u64_hex": "59d67dd117a745a6"
     },
     {
       "name": "xor_accumulator_fold",
@@ -50,17 +50,41 @@
       "words": 2048,
       "S_u64_hex": "0000000000000000",
       "forbidden_S_folded_u64_hex": "a284caf306ff68a0",
-      "conforming_S_folded_u64_hex": "76e07e211682940a",
-      "note": "acc XOR= mix64(word XOR w XOR S) is not §11.1. The conforming accumulator is wrapping addition of mix64(word XOR ((S + w) mod 2^64)). This is not the v2.0 fold."
+      "conforming_S_folded_u64_hex": "59d67dd117a745a6",
+      "note": "acc XOR= mix64(word XOR w XOR S) is not §11.1. The conforming accumulator is wrapping addition of mix64(word XOR S). There is no w term. This is not the v2.0 fold. S is 0. At S = 0 the withdrawn per-word input is word XOR w and §11.1 is mix64(word)."
     },
     {
       "name": "xor_w_fold",
       "must_reject": true,
       "words": 2048,
+      "S_u64_hex": "0000000000000000",
+      "forbidden_S_folded_u64_hex": "76e07e211682940a",
+      "conforming_S_folded_u64_hex": "59d67dd117a745a6",
+      "note": "acc += mix64(word XOR w XOR S) is withdrawn. word XOR w does not depend on S. It is not §11.1. S is 0. At S = 0, §11.1 mixes word and this fold mixes word XOR w, so they differ. At S = 0 this fold matches s_plus_w_fold, because (S + w) equals w."
+    },
+    {
+      "name": "s_plus_w_fold",
+      "must_reject": true,
+      "words": 2048,
       "S_u64_hex": "0000000000000001",
-      "forbidden_S_folded_u64_hex": "8d9839f10c72f3fb",
-      "conforming_S_folded_u64_hex": "bd0b175b96598842",
-      "note": "acc += mix64(word XOR w XOR S) is the withdrawn fold. word XOR w does not depend on S, so that term can be stored in place of the terrain word. It is not §11.1. S is 1. At S = 0 the two per-word inputs match, because (S + w) equals w."
+      "forbidden_S_folded_u64_hex": "bd0b175b96598842",
+      "conforming_S_folded_u64_hex": "e12a537bf32d2d32",
+      "note": "acc += mix64(word XOR ((S + w) mod 2^64)) is withdrawn. It is not §11.1. S is 1, where (S + w) is not S and not w. At S = 0 this fold matches xor_w_fold and still differs from §11.1, because §11.1 mixes word XOR S and this fold mixes word XOR w."
+    },
+    {
+      "name": "prefold_hoist",
+      "must_reject": true,
+      "words": 2048,
+      "steps": 2,
+      "S_u64_hex": "0000000000000000",
+      "transform": "word XOR w",
+      "forbidden_S_folded_u64_hex": "76e07e211682940a",
+      "conforming_S_folded_u64_hex": "59d67dd117a745a6",
+      "forbidden_S_prime_u64_hex": "b65b017d5ba09843",
+      "conforming_S_prime_u64_hex": "7df99cdac3252dff",
+      "forbidden_leg_u64_hex": "548edf0ad6e648ea",
+      "conforming_leg_u64_hex": "5d4c9813d5726192",
+      "note": "Each stored word is replaced by word XOR w before the §11.1 fold. S is 0. The §11.1 step (S_folded and S') and a 2-step leg on that one-slot terrain do not match the same step and leg on the real slot. A transformed terrain array is not the §10.4 terrain."
     },
     {
       "name": "partial_slot_read",
@@ -69,7 +93,7 @@
       "words_read": 1,
       "S_u64_hex": "0000000000000000",
       "forbidden_S_folded_u64_hex": "0836dd6697660d54",
-      "conforming_S_folded_u64_hex": "76e07e211682940a"
+      "conforming_S_folded_u64_hex": "59d67dd117a745a6"
     },
     {
       "name": "partial_slot_read_2047",
@@ -77,8 +101,8 @@
       "words": 2048,
       "words_read": 2047,
       "S_u64_hex": "0000000000000000",
-      "forbidden_S_folded_u64_hex": "dbaa5040c3caa7a7",
-      "conforming_S_folded_u64_hex": "76e07e211682940a"
+      "forbidden_S_folded_u64_hex": "4bd2768cc6857525",
+      "conforming_S_folded_u64_hex": "59d67dd117a745a6"
     },
     {
       "name": "one_lane_flip",

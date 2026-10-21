@@ -184,24 +184,34 @@ static uint64_t seal(uint64_t folded) {
     return load_le(d);
 }
 
-/* §11.1: acc += mix64(word XOR ((S + w) mod 2^64)). bare=1 omits MIX_ADD. */
+/* §11.1: acc += mix64(word XOR S). No w term. bare=1 omits MIX_ADD. */
 static uint64_t fold_mix(const uint8_t *slot, uint64_t words, uint64_t S, int bare, uint64_t nread) {
     uint64_t acc = 0;
     uint64_t lim = nread < words ? nread : words;
     for (uint64_t w = 0; w < lim; w++) {
         uint64_t word = load_le(slot + 8 * w);
-        uint64_t x = word ^ (S + w);
+        uint64_t x = word ^ S;
         acc += bare ? bare64(x) : mix64(x);
     }
     return acc;
 }
 
-/* Withdrawn f0c5b63 fold: acc += mix64(word XOR w XOR S). Negative xor_w_fold. */
+/* Withdrawn fold: acc += mix64(word XOR w XOR S). Negative xor_w_fold. */
 static uint64_t fold_xor_w(const uint8_t *slot, uint64_t words, uint64_t S) {
     uint64_t acc = 0;
     for (uint64_t w = 0; w < words; w++) {
         uint64_t word = load_le(slot + 8 * w);
         acc += mix64(word ^ w ^ S);
+    }
+    return acc;
+}
+
+/* Withdrawn c886ef2 fold: acc += mix64(word XOR (S + w)). Negative s_plus_w_fold. */
+static uint64_t fold_s_plus_w(const uint8_t *slot, uint64_t words, uint64_t S) {
+    uint64_t acc = 0;
+    for (uint64_t w = 0; w < words; w++) {
+        uint64_t word = load_le(slot + 8 * w);
+        acc += mix64(word ^ (S + w));
     }
     return acc;
 }
@@ -1018,8 +1028,53 @@ int main(int argc, char **argv) {
                 snprintf(got, sizeof got, "%016llx", (unsigned long long)bad);
                 expect_str("xor-w", got, jstr(c, "forbidden_S_folded_u64_hex"));
                 snprintf(got, sizeof got, "%016llx", (unsigned long long)good);
-                expect_str("s-plus-w", got, jstr(c, "conforming_S_folded_u64_hex"));
+                expect_str("word-xor-s", got, jstr(c, "conforming_S_folded_u64_hex"));
                 if (bad == good) g_fail++; else reject(name);
+            } else if (strcmp(name, "s_plus_w_fold") == 0) {
+                uint64_t S = strtoull(jstr(c, "S_u64_hex"), NULL, 16);
+                uint64_t bad = fold_s_plus_w(slot, 2048, S);
+                uint64_t good = fold_mix(slot, 2048, S, 0, 2048);
+                char got[17];
+                snprintf(got, sizeof got, "%016llx", (unsigned long long)bad);
+                expect_str("s-plus-w", got, jstr(c, "forbidden_S_folded_u64_hex"));
+                snprintf(got, sizeof got, "%016llx", (unsigned long long)good);
+                expect_str("word-xor-s", got, jstr(c, "conforming_S_folded_u64_hex"));
+                if (bad == good) g_fail++; else reject(name);
+            } else if (strcmp(name, "prefold_hoist") == 0) {
+                uint64_t S = strtoull(jstr(c, "S_u64_hex"), NULL, 16);
+                uint64_t words = (uint64_t)jnum(c, "words");
+                uint64_t steps = (uint64_t)jnum(c, "steps");
+                if (words != 2048 || steps == 0 || strcmp(jstr(c, "transform"), "word XOR w") != 0) {
+                    fprintf(stderr, "FAIL %s shape\n", name); g_fail++; continue;
+                }
+                uint8_t *hoist = malloc(words * 8);
+                if (!hoist) { fprintf(stderr, "FAIL %s alloc\n", name); g_fail++; continue; }
+                memcpy(hoist, slot, words * 8);
+                for (uint64_t w = 0; w < words; w++) store_le(hoist + 8 * w, load_le(hoist + 8 * w) ^ w);
+                uint64_t bad_f = fold_mix(hoist, words, S, 0, words);
+                uint64_t good_f = fold_mix(slot, words, S, 0, words);
+                uint64_t bad_p = seal(bad_f), good_p = seal(good_f);
+                uint64_t bad_leg = S, good_leg = S;
+                for (uint64_t t = 0; t < steps; t++) {
+                    bad_leg = seal(fold_mix(hoist, words, bad_leg, 0, words));
+                    good_leg = seal(fold_mix(slot, words, good_leg, 0, words));
+                }
+                char got[17];
+                snprintf(got, sizeof got, "%016llx", (unsigned long long)bad_f);
+                expect_str("hoist-fold", got, jstr(c, "forbidden_S_folded_u64_hex"));
+                snprintf(got, sizeof got, "%016llx", (unsigned long long)good_f);
+                expect_str("real-fold", got, jstr(c, "conforming_S_folded_u64_hex"));
+                snprintf(got, sizeof got, "%016llx", (unsigned long long)bad_p);
+                expect_str("hoist-step", got, jstr(c, "forbidden_S_prime_u64_hex"));
+                snprintf(got, sizeof got, "%016llx", (unsigned long long)good_p);
+                expect_str("real-step", got, jstr(c, "conforming_S_prime_u64_hex"));
+                snprintf(got, sizeof got, "%016llx", (unsigned long long)bad_leg);
+                expect_str("hoist-leg", got, jstr(c, "forbidden_leg_u64_hex"));
+                snprintf(got, sizeof got, "%016llx", (unsigned long long)good_leg);
+                expect_str("real-leg", got, jstr(c, "conforming_leg_u64_hex"));
+                if (bad_f == good_f || bad_p == good_p || bad_leg == good_leg) g_fail++;
+                else reject(name);
+                free(hoist);
             } else if (strcmp(name, "partial_slot_read") == 0 || strcmp(name, "partial_slot_read_2047") == 0) {
                 uint64_t S = strtoull(jstr(c, "S_u64_hex"), NULL, 16);
                 uint64_t nwords = (uint64_t)jnum(c, "words");

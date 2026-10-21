@@ -203,7 +203,7 @@ def fold_xor_acc(slot_bytes, S, mix):
 
 
 def fold_xor_w(slot_bytes, S, mix):
-    """Withdrawn f0c5b63 fold: acc += mix(word XOR w XOR S). Negative xor_w_fold."""
+    """Withdrawn fold: acc += mix(word XOR w XOR S). Negative xor_w_fold."""
     words = len(slot_bytes) // 8
     acc = 0
     for w in range(words):
@@ -212,14 +212,23 @@ def fold_xor_w(slot_bytes, S, mix):
     return acc
 
 
-def fold_c1(slot_bytes, S, mix):
-    """§11.1: acc = (acc + mix(word XOR ((S + w) mod 2^64))) mod 2^64."""
+def fold_s_plus_w(slot_bytes, S, mix):
+    """Withdrawn c886ef2 fold: acc += mix(word XOR (S + w)). Negative s_plus_w_fold."""
     words = len(slot_bytes) // 8
     acc = 0
     for w in range(words):
         word = int.from_bytes(slot_bytes[8 * w : 8 * w + 8], "little")
-        mixed = (word ^ ((S + w) & MASK)) & MASK
-        acc = (acc + mix(mixed)) & MASK
+        acc = (acc + mix((word ^ ((S + w) & MASK)) & MASK)) & MASK
+    return acc
+
+
+def fold_c1(slot_bytes, S, mix):
+    """§11.1: acc = (acc + mix(word XOR S)) mod 2^64. No w term."""
+    words = len(slot_bytes) // 8
+    acc = 0
+    for w in range(words):
+        word = int.from_bytes(slot_bytes[8 * w : 8 * w + 8], "little")
+        acc = (acc + mix((word ^ S) & MASK)) & MASK
     return acc
 
 
@@ -238,7 +247,7 @@ def fold_partial(slot_bytes, S, nread):
     acc = 0
     for w in range(nread):
         word = int.from_bytes(slot_bytes[8 * w : 8 * w + 8], "little")
-        acc = (acc + mix64((word ^ ((S + w) & MASK)) & MASK)) & MASK
+        acc = (acc + mix64((word ^ S) & MASK)) & MASK
     return acc
 
 
@@ -536,6 +545,9 @@ XOR_LEG0 = "c8658b2b05a93205"
 XOR_CP0 = "e8bfeed49fb20d41090e9efada63e0ca170606957e4e112719387ac60aef12d1"
 OLD_ADD_LEG0 = "112a630861105796"
 OLD_ADD_CP0 = "4f4e190bf1b0d16a8eb9c71c6c9f1b1dcb1537cb48fbbb33e0bd5edc178b7955"
+# c886ef2 pins: wrapping add of mix64(word XOR (S + w)).
+II_LEG0 = "63853de89acaff61"
+II_CP0 = "51f2c97eb7c61b6cfa74167c41ff930d927e7bcf7979e303c5a2d88e2ee5c605"
 
 
 def changed_words(fn, P, Q, nslots, words):
@@ -596,7 +608,7 @@ def build_prod(pk, beacon, d, P):
         raise SystemExit("prod wrap " + got["wrap16k"])
     if got["terrain"] != PROD_TERRAIN_SHA:
         raise SystemExit("prod terrain " + got["terrain"])
-    if got["leg0"] in (XOR_LEG0, OLD_ADD_LEG0) or got["cp0"] in (XOR_CP0, OLD_ADD_CP0):
+    if got["leg0"] in (XOR_LEG0, OLD_ADD_LEG0, II_LEG0) or got["cp0"] in (XOR_CP0, OLD_ADD_CP0, II_CP0):
         raise SystemExit("prod value is a withdrawn fold")
     if int(got["offset"]) != PROD_OFFSET:
         raise SystemExit("prod offset " + got["offset"])
@@ -827,11 +839,34 @@ def main():
     good = fold_c1(slot0, 0, mix64)
     fat = fold_v2_0(slot0, 0)
     xor_acc = fold_xor_acc(slot0, 0, mix64)
-    # At S = 0, (S + w) equals w, so the withdrawn per-word XOR matches §11.1.
-    # The negative uses S = 1, where those inputs differ.
-    xor_w_S = 1
+    # At S = 0, §11.1 is mix64(word). xor_w and s_plus_w are both mix64(word XOR w),
+    # so they match each other and both differ from §11.1. s_plus_w is pinned at
+    # S = 1, where (S + w) is not w and not S.
+    xor_w_S = 0
     xor_w = fold_xor_w(slot0, xor_w_S, mix64)
     xor_w_good = fold_c1(slot0, xor_w_S, mix64)
+    spw_S = 1
+    spw = fold_s_plus_w(slot0, spw_S, mix64)
+    spw_good = fold_c1(slot0, spw_S, mix64)
+    if fold_xor_w(slot0, 0, mix64) != fold_s_plus_w(slot0, 0, mix64):
+        raise SystemExit("S=0 xor_w and s_plus_w should match")
+    if fold_c1(slot0, 0, mix64) == fold_xor_w(slot0, 0, mix64):
+        raise SystemExit("S=0 §11.1 matched xor_w")
+    hoist = bytearray(slot0)
+    for w in range(len(slot0) // 8):
+        word = int.from_bytes(slot0[8 * w : 8 * w + 8], "little")
+        hoist[8 * w : 8 * w + 8] = ((word ^ w) & MASK).to_bytes(8, "little")
+    hoist = bytes(hoist)
+    hoist_S = 0
+    hoist_bad = fold_c1(hoist, hoist_S, mix64)
+    hoist_good = fold_c1(slot0, hoist_S, mix64)
+    hoist_bad_p = seal(hoist_bad)
+    hoist_good_p = seal(hoist_good)
+    hoist_steps = 2
+    hoist_bad_leg = leg_result(hoist, len(hoist), hoist_steps, hoist_S, lambda sl, S: fold_c1(sl, S, mix64))
+    hoist_good_leg = leg_result(slot0, len(slot0), hoist_steps, hoist_S, lambda sl, S: fold_c1(sl, S, mix64))
+    if hoist_bad == hoist_good or hoist_bad_p == hoist_good_p or hoist_bad_leg == hoist_good_leg:
+        raise SystemExit("prefold hoist reproduced §11.1")
     partial = fold_partial(slot0, 0, 1)
     f3_profile = (64, 1024)
     pin1 = fill_pin(pk + beacon)
@@ -938,7 +973,7 @@ def main():
                 "S_u64_hex": "0000000000000000",
                 "forbidden_S_folded_u64_hex": u64hex(xor_acc),
                 "conforming_S_folded_u64_hex": u64hex(good),
-                "note": "acc XOR= mix64(word XOR w XOR S) is not §11.1. The conforming accumulator is wrapping addition of mix64(word XOR ((S + w) mod 2^64)). This is not the v2.0 fold.",
+                "note": "acc XOR= mix64(word XOR w XOR S) is not §11.1. The conforming accumulator is wrapping addition of mix64(word XOR S). There is no w term. This is not the v2.0 fold. S is 0. At S = 0 the withdrawn per-word input is word XOR w and §11.1 is mix64(word).",
             },
             {
                 "name": "xor_w_fold",
@@ -947,7 +982,31 @@ def main():
                 "S_u64_hex": u64hex(xor_w_S),
                 "forbidden_S_folded_u64_hex": u64hex(xor_w),
                 "conforming_S_folded_u64_hex": u64hex(xor_w_good),
-                "note": "acc += mix64(word XOR w XOR S) is the withdrawn fold. word XOR w does not depend on S, so that term can be stored in place of the terrain word. It is not §11.1. S is 1. At S = 0 the two per-word inputs match, because (S + w) equals w.",
+                "note": "acc += mix64(word XOR w XOR S) is withdrawn. word XOR w does not depend on S. It is not §11.1. S is 0. At S = 0, §11.1 mixes word and this fold mixes word XOR w, so they differ. At S = 0 this fold matches s_plus_w_fold, because (S + w) equals w.",
+            },
+            {
+                "name": "s_plus_w_fold",
+                "must_reject": True,
+                "words": 2048,
+                "S_u64_hex": u64hex(spw_S),
+                "forbidden_S_folded_u64_hex": u64hex(spw),
+                "conforming_S_folded_u64_hex": u64hex(spw_good),
+                "note": "acc += mix64(word XOR ((S + w) mod 2^64)) is withdrawn. It is not §11.1. S is 1, where (S + w) is not S and not w. At S = 0 this fold matches xor_w_fold and still differs from §11.1, because §11.1 mixes word XOR S and this fold mixes word XOR w.",
+            },
+            {
+                "name": "prefold_hoist",
+                "must_reject": True,
+                "words": 2048,
+                "steps": hoist_steps,
+                "S_u64_hex": u64hex(hoist_S),
+                "transform": "word XOR w",
+                "forbidden_S_folded_u64_hex": u64hex(hoist_bad),
+                "conforming_S_folded_u64_hex": u64hex(hoist_good),
+                "forbidden_S_prime_u64_hex": u64hex(hoist_bad_p),
+                "conforming_S_prime_u64_hex": u64hex(hoist_good_p),
+                "forbidden_leg_u64_hex": u64hex(hoist_bad_leg),
+                "conforming_leg_u64_hex": u64hex(hoist_good_leg),
+                "note": "Each stored word is replaced by word XOR w before the §11.1 fold. S is 0. The §11.1 step (S_folded and S') and a 2-step leg on that one-slot terrain do not match the same step and leg on the real slot. A transformed terrain array is not the §10.4 terrain.",
             },
             {
                 "name": "partial_slot_read",
@@ -1194,7 +1253,7 @@ def main():
         prod_line = "\n`prod-leg0.json` is one production leg: slot 16384, terrain 256 MiB, 2,000,000 steps, sample 1024. Stage 0 opens at the seed.\n"
     readme = """# Conformance pack, Satoshi Hike v2.1
 
-Generated by `spec/conformance/tools/gen_v21.py`. These files are the v2.1 target for the corrected seed, the NL4 word, the §11.1 wrapping-add fold, the small hikes, and the rate and anchor comparisons. They are not a full hike-object encoding. The pack under `../v2.0/` is historical. The withdrawn folds in `negatives.json` are the v2.0 fold, the XOR accumulator `xor_accumulator_fold`, and `xor_w_fold` (`mix64(word XOR w XOR S)` with a wrapping-add accumulator).
+Generated by `spec/conformance/tools/gen_v21.py`. These files are the v2.1 target for the corrected seed, the NL4 word, the §11.1 wrapping-add fold, the small hikes, and the rate and anchor comparisons. They are not a full hike-object encoding. The pack under `../v2.0/` is historical. The §11.1 fold adds `mix64(word XOR S)`. There is no `w` term. Equal words do not cancel under addition. The withdrawn folds in `negatives.json` are the v2.0 fold, the XOR accumulator `xor_accumulator_fold`, `xor_w_fold` (`mix64(word XOR w XOR S)`), and `s_plus_w_fold` (`mix64(word XOR (S + w))`). `prefold_hoist` stores `word XOR w` in place of the terrain word. The §11.1 step and the short leg on that array do not match the real slot. At `S = 0`, `xor_w_fold` and `s_plus_w_fold` match each other and both differ from §11.1.
 
 `legs_le_hex` in a hike file is the hexadecimal spelling of the little-endian wire bytes `le64(leg_result)`. It is not the `%016llx` spelling of the integer.
 
