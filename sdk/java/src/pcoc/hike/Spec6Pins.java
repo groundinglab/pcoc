@@ -4,8 +4,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 /**
- * SPEC v2.0 section 6, rules P6.1-P6.25, and the section 16.1
- * conformance-small sizes. v2.sh runs this; a changed constant exits 1.
+ * SPEC v2.1 section 6, rules P6.1-P6.25. P6.14 is retired.
+ * v2.sh runs this; a changed constant exits 1.
  */
 public final class Spec6Pins {
     private static int failures = 0;
@@ -24,7 +24,7 @@ public final class Spec6Pins {
         }
     }
 
-    /** The 22 SPEC section 6 names with this port's values, as constants.json writes them. */
+    /** Section 6 names this port still has. P6.14 {@code SEED_DOMAIN} is retired and is not a key. */
     public static java.util.Map<String, Object> section6() {
         Profile p = Profile.PRODUCTION;
         java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
@@ -41,7 +41,6 @@ public final class Spec6Pins {
         m.put("PUBLIC_KEY_BYTES", (long) Hike.PUBLIC_KEY_BYTES);
         m.put("BEACON_BYTES", (long) Hike.BEACON_BYTES);
         m.put("SEAL_DOMAIN", Bytes.hex(Terrain.SEAL_DOMAIN));
-        m.put("SEED_DOMAIN", Bytes.hex(Terrain.SEED_DOMAIN));
         m.put("KIND", Hike.KIND);
         m.put("FILL", Hike.FILL);
         m.put("MIX_ADD", String.format("0x%016X", Terrain.MIX_ADD));
@@ -68,8 +67,8 @@ public final class Spec6Pins {
         pin("P6.11 PUBLIC_KEY_BYTES", Hike.PUBLIC_KEY_BYTES, 32);
         pin("P6.12 BEACON_BYTES", Hike.BEACON_BYTES, 32);
         pin("P6.13 SEAL_DOMAIN", Arrays.equals(Terrain.SEAL_DOMAIN, "pcoc-walk-v1".getBytes(StandardCharsets.US_ASCII)));
-        pin("P6.14 SEED_DOMAIN", Arrays.equals(Terrain.SEED_DOMAIN, "PSEED64\0".getBytes(StandardCharsets.US_ASCII)));
-        pin("P6.15 KIND", "satoshi-hike-v2.0-object".equals(Hike.KIND));
+        pin("P6.14 RETIRED", retiredSeedDomain());
+        pin("P6.15 KIND", "satoshi-hike-v2.1-object".equals(Hike.KIND));
         pin("P6.16 FILL", "dag2".equals(Hike.FILL));
         pin("P6.17 MIX_ADD", Terrain.MIX_ADD, 0x9E3779B97F4A7C15L);
         pin("P6.18 MIX_MUL1", Terrain.MIX_MUL1, 0xBF58476D1CE4E5B9L);
@@ -90,5 +89,15 @@ public final class Spec6Pins {
             System.exit(1);
         }
         System.out.println("spec6 pins ok");
+    }
+
+    /** P6.14 is retired. The class must not bring {@code SEED_DOMAIN} back. */
+    private static boolean retiredSeedDomain() {
+        for (java.lang.reflect.Field field : Terrain.class.getDeclaredFields()) {
+            if ("SEED_DOMAIN".equals(field.getName())) {
+                return false;
+            }
+        }
+        return true;
     }
 }

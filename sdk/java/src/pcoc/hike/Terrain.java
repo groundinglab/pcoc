@@ -1,88 +1,119 @@
 package pcoc.hike;
 
+import java.security.DigestException;
 import java.security.MessageDigest;
-import java.util.Arrays;
 
-/** Sections 10 and 11. Terrain is filled once and then only read. */
+/**
+ * Section 10 terrain and section 11 step.
+ *
+ * <p>The seed is {@code SHA-256(public_key ‖ seed_beacon)}, 32 bytes, no label.
+ * Every word is the NL4 chain over all four lanes. A step folds every word of
+ * the selected slot as {@code word XOR S}, then wrapping addition of
+ * {@code mix64}, which includes {@code MIX_ADD}. There is no {@code w} term.
+ * The seal digest is {@code E}. The stored terrain is the raw word. The
+ * working word array exists only while a slot is being stored. Nothing in
+ * this class keeps a slot summary, a word table, a pre-folded term, or a leg result.
+ */
 public final class Terrain {
-    static final long MIX_ADD = 0x9E3779B97F4A7C15L;
-    static final long MIX_MUL1 = 0xBF58476D1CE4E5B9L;
-    static final long MIX_MUL2 = 0x94D049BB133111EBL;
-    static final long WORD_XOR = 0xC0FFEEL;
-    static final long PARENT_MUL = 0xD1B54A32D192ED03L;
-    static final long SLOT_MUL = 0xA24BAED4963EE407L;
-    static final byte[] SEAL_DOMAIN = "pcoc-walk-v1".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
-    static final byte[] SEED_DOMAIN = new byte[] {0x50, 0x53, 0x45, 0x45, 0x44, 0x36, 0x34, 0x00};
+    public static final long MIX_ADD = 0x9E3779B97F4A7C15L;
+    public static final long MIX_MUL1 = 0xBF58476D1CE4E5B9L;
+    public static final long MIX_MUL2 = 0x94D049BB133111EBL;
+    public static final long WORD_XOR = 0xC0FFEEL;
+    public static final long PARENT_MUL = 0xD1B54A32D192ED03L;
+    public static final long SLOT_MUL = 0xA24BAED4963EE407L;
+    public static final byte[] SEAL_DOMAIN = "pcoc-walk-v1".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
 
     public final Profile profile;
     public final byte[] blob;
-    private final long[] slotXor;
-    private byte[] cachedPrevious8;
-    private long cachedLeg;
 
-    private Terrain(Profile profile, byte[] blob, long[] slotXor) {
+    private Terrain(Profile profile, byte[] blob) {
         this.profile = profile;
         this.blob = blob;
-        this.slotXor = slotXor;
     }
 
-    public static long fillPin(byte[] seed) {
-        if (seed.length != 64) {
-            throw new IllegalArgumentException("production_seed");
+    /** Section 10. {@code D = SHA-256(public_key ‖ seed_beacon)}. */
+    public static byte[] seed(byte[] publicKey, byte[] seedBeacon) {
+        if (publicKey == null || seedBeacon == null || publicKey.length != 32 || seedBeacon.length != 32) {
+            throw new IllegalArgumentException("seed preimage");
         }
-        long state = Bytes.u64le(SEED_DOMAIN);
-        for (int i = 0; i < 8; i++) {
-            long lane = Bytes.u64le(seed, 8 * i);
-            state = mix64(state ^ lane ^ (i * MIX_ADD));
-        }
-        return state;
+        return Bytes.sha256(publicKey, seedBeacon);
     }
 
+    /** Four little-endian lanes of the 32-byte seed. */
+    public static long[] lanes(byte[] seed) {
+        if (seed == null || seed.length != 32) {
+            throw new IllegalArgumentException("seed");
+        }
+        long[] lane = new long[4];
+        for (int k = 0; k < 4; k++) {
+            lane[k] = Bytes.u64le(seed, k * 8);
+        }
+        return lane;
+    }
+
+    /**
+     * Section 10.4. Fills the terrain once from the seed. The step does not write it.
+     */
     public static Terrain fill(byte[] publicKey, byte[] seedBeacon, Profile profile) {
-        byte[] seed = Bytes.concat(publicKey, seedBeacon);
-        long pin = fillPin(seed);
+        return fillLanes(lanes(seed(publicKey, seedBeacon)), profile);
+    }
+
+    /**
+     * Section 10.4 fill from the four little-endian lanes of one seed.
+     * The same full slot write as {@link #fill}. Not a stored summary.
+     */
+    public static Terrain fillLanes(long[] lane, Profile profile) {
+        if (lane == null || lane.length != 4) {
+            throw new IllegalArgumentException("lanes");
+        }
         int slots = profile.nSlots;
         int words = profile.wordsPerSlot;
+        int slotBytes = profile.slotBytes;
         byte[] blob = new byte[profile.terrainBytes];
-        long[] slotXor = new long[slots];
-        long[] stored = new long[slots * words];
+        long[] word = new long[words];
         for (int i = 0; i < slots; i++) {
-            int base = i * words;
-            long mixed = pin ^ (((long) i) << 32) ^ WORD_XOR;
             for (int j = 0; j < words; j++) {
-                stored[base + j] = mix64(mixed ^ (long) j);
+                word[j] = baseWord(lane, i, j);
             }
             if (i > 0) {
-                int[] parents = {i - 1, bitrevParent(i), mulParent(i)};
+                int[] parents = new int[] {i - 1, bitrevParent(i), mulParent(i)};
                 for (int k = 1; k <= 3; k++) {
-                    int parent = parents[k - 1] * words;
-                    long mix = k * PARENT_MUL;
+                    int parent = parents[k - 1];
+                    int parentBase = parent * slotBytes;
+                    long parentMix = (long) k * PARENT_MUL;
                     for (int j = 0; j < words; j++) {
-                        int rot = (j + k) & 63;
-                        long word = stored[parent + j];
-                        if (rot != 0) {
-                            word = (word << rot) | (word >>> (64 - rot));
-                        }
-                        stored[base + j] = mix64((stored[base + j] ^ word) ^ mix);
+                        long stored = Bytes.u64le(blob, parentBase + j * 8);
+                        int rot = (j + k) % 64;
+                        word[j] = mix64((word[j] ^ rotl(stored, rot)) ^ parentMix);
                     }
                 }
                 long slotMix = (long) i * SLOT_MUL;
                 for (int j = 0; j < words; j++) {
-                    stored[base + j] = mix64(stored[base + j] ^ slotMix);
+                    word[j] = mix64(word[j] ^ slotMix);
                 }
             }
-            long folded = 0;
-            int at = i * profile.slotBytes;
+            int base = i * slotBytes;
             for (int j = 0; j < words; j++) {
-                long word = stored[base + j];
-                folded ^= word ^ (long) j;
-                Bytes.putLe64(blob, at + 8 * j, word);
+                Bytes.putLe64(blob, base + j * 8, word[j]);
             }
-            slotXor[i] = folded;
         }
-        return new Terrain(profile, blob, slotXor);
+        return new Terrain(profile, blob);
     }
 
+    /**
+     * NL4 base word, section 10.4. Parent mixing is not part of this word.
+     * {@code i} is the slot index and {@code j} is the word index.
+     */
+    public static long baseWord(long[] lane, int i, int j) {
+        long c = ((long) i << 32) ^ (j & 0xffffffffL) ^ WORD_XOR;
+        long t = mix64(lane[Math.floorMod(j, 4)] ^ c);
+        t = mix64(t ^ rotl(lane[Math.floorMod(j + 1, 4)], 17));
+        t = mix64(t ^ rotl(lane[Math.floorMod(j + 2, 4)], 31));
+        t = mix64(t ^ rotl(lane[Math.floorMod(j + 3, 4)], 47));
+        return t;
+    }
+
+    /** Section 10.1. The first step is {@code + MIX_ADD}. */
     public static long mix64(long x) {
         long y = x + MIX_ADD;
         y = (y ^ (y >>> 30)) * MIX_MUL1;
@@ -90,69 +121,117 @@ public final class Terrain {
         return y ^ (y >>> 31);
     }
 
-    public long leg(byte[] previous) {
-        byte[] key = Arrays.copyOf(previous, 8);
-        synchronized (this) {
-            if (cachedPrevious8 != null && Arrays.equals(key, cachedPrevious8)) {
-                return cachedLeg;
-            }
+    /**
+     * Section 11.1 fold. {@code acc} starts at 0. For each word,
+     * {@code acc = (acc + mix64(word XOR S)) mod 2^64}. There is no {@code w} term.
+     * {@code mix64} includes {@code MIX_ADD}. Equal words do not cancel under addition.
+     * {@code word XOR w XOR S} and {@code word XOR (S + w)} are not this fold.
+     * The stored word is read as filled. This method does not write the slot.
+     */
+    public long foldSlot(long state) {
+        int slot = (int) Long.remainderUnsigned(state, profile.nSlots);
+        int words = profile.wordsPerSlot;
+        int base = slot * profile.slotBytes;
+        long acc = 0;
+        for (int w = 0; w < words; w++) {
+            long stored = Bytes.u64le(blob, base + w * 8);
+            acc += mix64(stored ^ state);
         }
-        long state = Bytes.u64le(previous);
-        byte[] buf = new byte[20];
-        System.arraycopy(SEAL_DOMAIN, 0, buf, 0, 12);
-        MessageDigest md = Bytes.digest();
-        byte[] out = new byte[32];
+        return acc;
+    }
+
+    /** Section 11.1. {@code E = SHA-256(SEAL_DOMAIN ‖ le64(S_folded))}. {@code D} is the seed, not this digest. */
+    public static byte[] sealDigest(long folded) {
+        byte[] block = sealBlock(folded);
+        return Bytes.sha256(block);
+    }
+
+    /** {@code S' = u64_le(E[0:8])}. Section 7.4. */
+    public static long sealState(long folded) {
+        return Bytes.u64le(sealDigest(folded), 0);
+    }
+
+    /** One step. Reads the slot from the stored terrain and does not write it. */
+    public long step(long state) {
+        return sealState(foldSlot(state));
+    }
+
+    /**
+     * Section 11.2. {@code STEPS_PER_LEG} steps from the first eight bytes of the previous checkpoint.
+     * The result is not stored.
+     */
+    public long leg(byte[] previous) {
+        if (previous == null || previous.length < 8) {
+            throw new IllegalArgumentException("previous");
+        }
+        long state = Bytes.u64le(previous, 0);
+        MessageDigest sha = Bytes.digest();
+        byte[] block = new byte[20];
+        System.arraycopy(SEAL_DOMAIN, 0, block, 0, SEAL_DOMAIN.length);
+        byte[] digest = new byte[32];
         int steps = profile.stepsPerLeg;
-        int slots = profile.nSlots;
         for (int t = 0; t < steps; t++) {
-            int slot = (int) Long.remainderUnsigned(state, slots);
-            long folded = state ^ slotXor[slot];
-            Bytes.putLe64(buf, 12, folded);
-            md.update(buf);
+            Bytes.putLe64(block, 12, foldSlot(state));
+            sha.update(block);
             try {
-                md.digest(out, 0, 32);
-            } catch (Exception ex) {
+                sha.digest(digest, 0, digest.length);
+            } catch (DigestException ex) {
                 throw new IllegalStateException(ex);
             }
-            state = Bytes.u64le(out);
-        }
-        synchronized (this) {
-            cachedPrevious8 = key;
-            cachedLeg = state;
+            state = Bytes.u64le(digest, 0);
         }
         return state;
     }
 
+    /** Section 11.3. Offset is {@code u64_le(previous[0:8]) mod OFFSET_MODULUS}. */
     public int sampleOffset(byte[] previous) {
-        return (int) Long.remainderUnsigned(Bytes.u64le(previous), profile.offsetModulus);
+        return (int) Long.remainderUnsigned(Bytes.u64le(previous, 0), profile.offsetModulus);
     }
 
     public byte[] sample(byte[] previous) {
         int offset = sampleOffset(previous);
-        return Arrays.copyOfRange(blob, offset, offset + profile.sampleBytes);
+        byte[] out = new byte[profile.sampleBytes];
+        System.arraycopy(blob, offset, out, 0, out.length);
+        return out;
     }
 
+    /** Section 12.2. {@code u64_le(interrupt[0:8]) mod N_SLOTS}. */
     public int slotIndex(byte[] interrupt) {
-        return (int) Long.remainderUnsigned(Bytes.u64le(interrupt), profile.nSlots);
+        return (int) Long.remainderUnsigned(Bytes.u64le(interrupt, 0), profile.nSlots);
     }
 
+    /** The full slot. The caller receives {@code SLOT_BYTES} bytes. */
     public byte[] slot(byte[] interrupt) {
         int index = slotIndex(interrupt);
-        int start = index * profile.slotBytes;
-        return Arrays.copyOfRange(blob, start, start + profile.slotBytes);
+        byte[] out = new byte[profile.slotBytes];
+        System.arraycopy(blob, index * profile.slotBytes, out, 0, out.length);
+        return out;
     }
 
-    static int bitrevParent(int index) {
-        int bits = 31 - Integer.numberOfLeadingZeros(index);
-        if (bits < 1) {
-            bits = 1;
-        }
-        int shifted = Integer.reverse(index) >>> (32 - bits);
-        return shifted % index;
+    /** Section 10.3. Parent index in {@code 0 … i − 1}. */
+    public static int bitrevParent(int index) {
+        int bits = Math.max(31 - Integer.numberOfLeadingZeros(index), 1);
+        int reversed = Integer.reverse(index) >>> (32 - bits);
+        return reversed % index;
     }
 
-    static int mulParent(int index) {
+    /** Section 10.3. Parent index in {@code 0 … i − 1}. */
+    public static int mulParent(int index) {
         long mixed = (long) index * MIX_ADD;
         return (int) ((mixed >>> 32) % index);
+    }
+
+    private static long rotl(long value, int bits) {
+        if (bits == 0) {
+            return value;
+        }
+        return (value << bits) | (value >>> (64 - bits));
+    }
+
+    private static byte[] sealBlock(long folded) {
+        byte[] block = new byte[20];
+        System.arraycopy(SEAL_DOMAIN, 0, block, 0, SEAL_DOMAIN.length);
+        Bytes.putLe64(block, 12, folded);
+        return block;
     }
 }

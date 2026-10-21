@@ -29,6 +29,8 @@ type V2Object struct {
 	Stages     []V2Stage
 	Last       []byte
 	LastHeight *uint64
+	// Kind overrides the wire kind. Empty uses the profile kind.
+	Kind string
 }
 
 // QuietV2 is the reference structural object after its paths, checkpoints,
@@ -116,9 +118,13 @@ func (o V2Object) encode(profile Profile) []byte {
 	if o.LastHeight != nil {
 		lastHeight = *o.LastHeight
 	}
+	kind := o.Kind
+	if kind == "" {
+		kind = Kind
+	}
 	pairs := [][2][]byte{
 		textPair("fill", encodeText(Fill)),
-		textPair("kind", encodeText(Kind)),
+		textPair("kind", encodeText(kind)),
 		textPair("stages", encodeArray(encoded)),
 		textPair("n_slots", encodeUint(uint64(profile.NSlots))),
 		textPair("public_key", encodeBytes(o.PublicKey[:])),

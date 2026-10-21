@@ -31,13 +31,21 @@ func TestV20ProfileNumbers(t *testing.T) {
 	if ConformanceSmallV2.SampleBytes != 32 || ConformanceSmallV2.StepsPerLeg != 32 {
 		t.Fatal("small sizes")
 	}
-	// Section 15.5 example floors (strict, default, lenient) as test fixtures:
-	// policy values, not SDK constants (rc.2).
-	type floor struct{ p, q uint64 }
-	strict, def, lenient := floor{7, 20}, floor{1, 4}, floor{1, 8}
-	higher := func(left, right floor) bool { return left.p*right.q > right.p*left.q }
-	if !higher(strict, def) || !higher(def, lenient) {
-		t.Fatal("floors do not scale with the leg")
+	// Rule B2. The ratified floor is TBD. The test placeholder is 1/5.
+	// q*hike_legs >= p*hike_span and hike_span > 0. The withdrawn
+	// examples 7/20, 1/4, and 1/8 are not this comparison.
+	if !LegRateMeets(2, 9, PlaceholderLegRateP, PlaceholderLegRateQ) || LegRateMeets(2, 11, PlaceholderLegRateP, PlaceholderLegRateQ) {
+		t.Fatal("placeholder floor")
+	}
+	if !LegRateMeets(1, 5, 1, 5) || LegRateMeets(1, 6, 1, 5) || LegRateMeets(1, 0, 1, 5) {
+		t.Fatal("boundary")
+	}
+	// Rule B4. Six anywhere. Five does not meet. No first or last rule.
+	if !AnchoredIndicesMeet([]int{2, 4, 6, 8, 10, 12}) || AnchoredIndicesMeet([]int{2, 4, 6, 8, 10}) {
+		t.Fatal("anchors")
+	}
+	if !AnchoredIndicesMeet([]int{11, 12, 13, 14, 15, 16}) || AnchorsMeet(5) || !AnchorsMeet(6) {
+		t.Fatal("anchor positions")
 	}
 	if AnchorWindowOrigin(17) != 17 {
 		t.Fatal("anchor origin")
@@ -138,6 +146,15 @@ func TestEarlierVersionOnCurrentProfile(t *testing.T) {
 	rec, ok := Verify(raw, Production, Index{}, nil, true)
 	if !ok || rec.EarlierKind != KindV135 || strings.TrimSpace(string(rec.Marshal())) != want {
 		t.Fatalf("production %q", rec.Marshal())
+	}
+	v20 := encodeMap([][2][]byte{textPair("kind", encodeText(KindV20))})
+	want20 := `{"version":"earlier version","kind":"satoshi-hike-v2.0-object"}`
+	got20, ok := Verify(v20, Production, Index{Fetch: func(uint64) (string, bool) {
+		t.Fatal("earlier kind filled or read")
+		return "", false
+	}}, nil, true)
+	if !ok || strings.TrimSpace(string(got20.Marshal())) != want20 {
+		t.Fatalf("v2.0 earlier %q", got20.Marshal())
 	}
 	small, ok := Verify(raw, ConformanceSmallV2, Index{}, nil, true)
 	if !ok || strings.TrimSpace(string(small.Marshal())) != want {

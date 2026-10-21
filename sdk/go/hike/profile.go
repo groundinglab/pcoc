@@ -1,6 +1,9 @@
 // Package hike is a clean-room Satoshi Hike produce and verify.
-// The current profile is Satoshi Hike v2.0. An earlier kind string is
-// recognized and is not measured. This package does not apply section 15.
+// The construction is Satoshi Hike v2.1: the 32-byte seed, the NL4 word,
+// and the §11.1 wrapping-add fold. The wire kind is satoshi-hike-v2.1-object.
+// An earlier kind string is recognized and is not measured.
+// Section 14 records measurements. LegRateMeets and AnchorsMeet are the
+// Rule B2 and Rule B4 comparisons. They are not section 14 tokens.
 package hike
 
 import (
@@ -9,21 +12,26 @@ import (
 	"strings"
 )
 
-// Section 6 sizes, the version tokens, and the locked v2.0 policy numbers.
+// Section 6 sizes and the version tokens.
 // conformance-small may change only the four free sizes; the three derived
 // integers stay the section 6 formulas. KIND and the anchor offsets are
-// SPEC v2.0 P6.15 and P13.2.
+// P6.15 and P13.2. P6.14 SEED_DOMAIN is retired and is not a constant here.
 const (
 	Stages         = 18
 	HashBytes      = 32
 	LegResultBytes = 8
 	PublicKeyBytes = 32
 	BeaconBytes    = 32
-	// KindV135 is the earlier kind string Rule A5 names. It is not a profile.
+	// KindV135 and KindV20 are the earlier kind strings Rule A5 names.
+	// They are not a profile. Section 14 records them and does not fill terrain.
 	KindV135 = "satoshi-hike-v1.35-object"
-	// Kind is SPEC v2.0 P6.15.
-	Kind = "satoshi-hike-v2.0-object"
-	Fill = "dag2"
+	KindV20  = "satoshi-hike-v2.0-object"
+	// Kind is P6.15.
+	Kind = "satoshi-hike-v2.1-object"
+	// PlaceholderDeadlineK is the §15 submission-deadline placeholder, in
+	// blocks. It is not ratified. A gap of 3 does not refuse. A gap of 4 does.
+	PlaceholderDeadlineK int64 = 3
+	Fill                       = "dag2"
 	// EarlierVersionToken is Rule A5. The record key is version.
 	// Gate reason earlier_version is section 15 and is not written here.
 	EarlierVersionToken = "earlier version"
@@ -33,16 +41,19 @@ const (
 	DefaultBindThreads = 6
 	JSONIntMax         = (1 << 53) - 1
 	HeaderTimeMax      = uint64(1<<32 - 1)
-	// No leg-rate floor here (rc.2): the spec defines measurements, a policy
-	// sets the values. The section 15.5 example pairs are test fixtures and
-	// spec/conformance/v2.0/constants.json; q·N ≥ p·S_eff is gate policy.
-	// AnchorWindow is the locked count of blocks in the path-ask window.
+	// AnchorWindow is the count of blocks in the path-ask window.
 	AnchorWindow = 3
+	// MinAnchoredPaths is Rule B4. The waypoints sit anywhere among W_1 … W_16.
+	MinAnchoredPaths = 6
+	// PlaceholderLegRateP and PlaceholderLegRateQ are the §15.5 test
+	// placeholder 1/5. The floor is TBD. The placeholder is not ratified
+	// and is not applied inside a section 14 record.
+	PlaceholderLegRateP int64 = 1
+	PlaceholderLegRateQ int64 = 5
 )
 
 var (
 	SealDomain = []byte("pcoc-walk-v1")
-	SeedDomain = []byte{'P', 'S', 'E', 'E', 'D', '6', '4', 0}
 )
 
 const (
@@ -54,7 +65,7 @@ const (
 	SlotMul   uint64 = 0xA24BAED4963EE407
 )
 
-// anchorOffsetsAfterPost is SPEC v2.0 P13.2, written once. Producer and
+// anchorOffsetsAfterPost is P13.2, written once. Producer and
 // verifier both use this list. A plant posted at H is asked at H+2, H+3,
 // and H+4.
 var anchorOffsetsAfterPost = []int{2, 3, 4}
@@ -71,10 +82,11 @@ func AnchorWindowOrigin(stageBeaconHeight uint64) uint64 {
 	return stageBeaconHeight
 }
 
-// IsEarlierKind reports the Rule A5 kind. A kind that is neither Kind nor
-// this text stays a section 14.1 shape measurement.
+// IsEarlierKind reports a Rule A5 kind. A kind that is neither Kind nor one
+// of these two texts stays a section 14.1 shape measurement. An earlier
+// object is recorded before any terrain fill.
 func IsEarlierKind(kind string) bool {
-	return kind == KindV135
+	return kind == KindV135 || kind == KindV20
 }
 
 // BindThreadsFrom reads PCOC_BIND_THREADS. Blank, unset, and non-positive
@@ -109,12 +121,11 @@ type Profile struct {
 	OffsetModulus uint64
 }
 
-// Production is the current section 6 evaluation: v2.0 sample and steps.
-// Slot and terrain sizes are unchanged; #206 does not retune them.
+// Production is the section 6 evaluation.
 var Production = mustProfile("production", Kind, 1024, 16384, 268435456, 2000000)
 
-// ConformanceSmallV2 is SPEC §16.1 on the v2.0 kind. The four integers are
-// sample 32, slot 64, terrain 256, and steps 32. KIND stays the v2.0 kind.
+// ConformanceSmallV2 is §16.1. The four integers are sample 32, slot 64,
+// terrain 256, and steps 32. KIND stays the v2.1 kind string.
 var ConformanceSmallV2 = mustProfile("conformance-small", Kind, 32, 64, 256, 32)
 
 func mustProfile(name, kind string, sample, slot, terrain, steps int) Profile {
@@ -160,8 +171,7 @@ func (profileError) Error() string { return "profile integers do not divide" }
 var errProfile = profileError{}
 
 // MeasureName selects section 6 unless the verifier names conformance-small.
-// That name is the v2.0 §16.1 profile. test, live, and production measure
-// with the section 6 constants.
+// test, live, and production measure with the section 6 constants.
 func MeasureName(profile string) Profile {
 	if profile == ConformanceSmallV2.Name {
 		return ConformanceSmallV2

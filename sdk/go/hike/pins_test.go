@@ -7,9 +7,6 @@ import (
 )
 
 func TestInformativePins(t *testing.T) {
-	if U64LE(SeedDomain) != 0x0034364445455350 {
-		t.Fatalf("seed domain")
-	}
 	sealed := SHA256(append(append([]byte{}, SealDomain...), Le64(0)...))
 	if hex.EncodeToString(sealed) != "4816bdaf23240476ca57e168301eceee8eb8170ec5446863855e4ceebb55b533" {
 		t.Fatalf("seal %x", sealed)
@@ -17,9 +14,21 @@ func TestInformativePins(t *testing.T) {
 	if U64LE(sealed) != 0x76042423AFBD1648 {
 		t.Fatalf("step")
 	}
-	pin := FillPin(append(bytes.Repeat([]byte{0x11}, 32), bytes.Repeat([]byte{0x22}, 32)...))
-	if pin != 0x7DF0AFF879FB1171 {
-		t.Fatalf("pin %x", pin)
+	// §7.4. 32 bytes of 0x11, then 32 bytes of 0x22. No domain label.
+	preimage := append(bytes.Repeat([]byte{0x11}, 32), bytes.Repeat([]byte{0x22}, 32)...)
+	digest, lanes := SeedLanes(preimage[:32], preimage[32:])
+	if hex.EncodeToString(digest) != "5189c77d29fe5d546a045ec46986852785fea5c13ac7da9c115ff5fb6edf817c" {
+		t.Fatalf("seed %x", digest)
+	}
+	wantLanes := []uint64{0x545dfe297dc78951, 0x27858669c45e046a, 0x9cdac73ac1a5fe85, 0x7c81df6efbf55f11}
+	for i, want := range wantLanes {
+		if lanes[i] != want {
+			t.Fatalf("lane %d %x", i, lanes[i])
+		}
+	}
+	word := NL4BaseWord(preimage[:32], preimage[32:], 0, 0)
+	if word != 0xc7582082a632c2c8 {
+		t.Fatalf("nl4 %x", word)
 	}
 }
 

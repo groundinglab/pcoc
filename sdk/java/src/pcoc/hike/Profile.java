@@ -3,15 +3,14 @@ package pcoc.hike;
 /**
  * Section 6 sizes. conformance-small may shrink only the four free integers
  * named in section 16.1. The other three integers are the section 6 formulas.
- * The current production profile uses the locked v2.0 sample and step count.
+ * v2.1 does not change these production sizes.
  */
 public final class Profile {
     public static final Profile PRODUCTION = new Profile(
             "production", Hike.KIND, 1024, 16_384, 268_435_456, 2_000_000);
     /**
-     * SPEC section 16.1 on the v2.0 kind. The four integers are sample 32,
-     * slot 64, terrain 256, and steps 32. The kind stays
-     * {@code satoshi-hike-v2.0-object}.
+     * SPEC section 16.1. The four integers are sample 32, slot 64, terrain 256,
+     * and steps 32. The kind stays {@code satoshi-hike-v2.1-object}.
      */
     public static final Profile CONFORMANCE_SMALL_V2 = new Profile(
             "conformance-small", Hike.KIND, 32, 64, 256, 32);
