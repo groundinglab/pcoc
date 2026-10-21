@@ -147,6 +147,15 @@ func TestEarlierVersionOnCurrentProfile(t *testing.T) {
 	if !ok || rec.EarlierKind != KindV135 || strings.TrimSpace(string(rec.Marshal())) != want {
 		t.Fatalf("production %q", rec.Marshal())
 	}
+	v20 := encodeMap([][2][]byte{textPair("kind", encodeText(KindV20))})
+	want20 := `{"version":"earlier version","kind":"satoshi-hike-v2.0-object"}`
+	got20, ok := Verify(v20, Production, Index{Fetch: func(uint64) (string, bool) {
+		t.Fatal("earlier kind filled or read")
+		return "", false
+	}}, nil, true)
+	if !ok || strings.TrimSpace(string(got20.Marshal())) != want20 {
+		t.Fatalf("v2.0 earlier %q", got20.Marshal())
+	}
 	small, ok := Verify(raw, ConformanceSmallV2, Index{}, nil, true)
 	if !ok || strings.TrimSpace(string(small.Marshal())) != want {
 		t.Fatal("small earlier record grew a field")

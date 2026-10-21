@@ -1,6 +1,7 @@
 package hike
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -71,6 +72,32 @@ func bookendIndex(object V2Object) Index {
 	}
 	if object.LastHeight != nil {
 		add(object.Last, *object.LastHeight)
+	}
+	// Rule A4.10 reads the eleven headers ending at each beacon. These
+	// fillers are not stored interrupts. Their time equals the beacon time,
+	// so the median stays that time and hike_span stays the raw difference.
+	fill := func(height, time uint64) {
+		if _, ok := docs[height]; ok {
+			return
+		}
+		// Same natural bytes as the beacon at this height when one is stored,
+		// so the beacon read stays match. A height with no stored beacon is
+		// only an MTP window read.
+		natural := bytes.Repeat([]byte{0xee}, 32)
+		for _, stage := range object.Stages {
+			if stage.BeaconHeight == height {
+				natural = append([]byte(nil), stage.Beacon[:]...)
+			}
+		}
+		if object.LastHeight != nil && *object.LastHeight == height {
+			natural = append([]byte(nil), object.Last...)
+		}
+		docs[height] = indexDocument(natural, height, time)
+	}
+	// Heights the stored headers do not name are the rest of each MTP window.
+	// Their time is height*1000, the same rule as a stored header.
+	for h := uint64(0); h <= 20; h++ {
+		fill(h, h*1000)
 	}
 	return Index{Documents: docs}
 }
