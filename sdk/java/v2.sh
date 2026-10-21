@@ -14,5 +14,6 @@ mkdir -p "$out/classes"
 find src -name '*.java' | sort > "$out/sources.txt"
 javac --release 21 -Xlint:all -Werror -d "$out/classes" @"$out/sources.txt"
 java -Xmx128m -cp "$out/classes" pcoc.hike.F10Reserve
-java -cp "$out/classes" pcoc.conformance.V21Pack
+# The production leg reads every word of every step. nice keeps that off the fast cores' priority.
+nice -n 10 java -cp "$out/classes" pcoc.conformance.V21Pack
 java -cp "$out/classes" pcoc.hike.Spec6Pins

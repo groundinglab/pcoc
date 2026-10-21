@@ -8,8 +8,9 @@ import java.security.MessageDigest;
  *
  * <p>The seed is {@code SHA-256(public_key ‖ seed_beacon)}, 32 bytes, no label.
  * Every word is the NL4 chain over all four lanes. A step folds every word of
- * the selected slot with {@code mix64}, which includes {@code MIX_ADD}, then
- * seals. The working word array exists only while a slot is being stored.
+ * the selected slot with {@code mix64}, which includes {@code MIX_ADD}. The
+ * accumulator is wrapping addition. The seal digest is {@code E}. The working
+ * word array exists only while a slot is being stored.
  * Nothing in this class keeps a slot summary, a word table, or a leg result.
  */
 public final class Terrain {
@@ -53,7 +54,17 @@ public final class Terrain {
      * Section 10.4. Fills the terrain once from the seed. The step does not write it.
      */
     public static Terrain fill(byte[] publicKey, byte[] seedBeacon, Profile profile) {
-        long[] lane = lanes(seed(publicKey, seedBeacon));
+        return fillLanes(lanes(seed(publicKey, seedBeacon)), profile);
+    }
+
+    /**
+     * Section 10.4 fill from the four little-endian lanes of one seed.
+     * The same full slot write as {@link #fill}. Not a stored summary.
+     */
+    public static Terrain fillLanes(long[] lane, Profile profile) {
+        if (lane == null || lane.length != 4) {
+            throw new IllegalArgumentException("lanes");
+        }
         int slots = profile.nSlots;
         int words = profile.wordsPerSlot;
         int slotBytes = profile.slotBytes;
@@ -110,7 +121,8 @@ public final class Terrain {
     }
 
     /**
-     * Section 11.1 fold. {@code acc} starts at 0. Every word of the slot is mixed with the state.
+     * Section 11.1 fold. {@code acc} starts at 0 and grows by wrapping addition.
+     * Every word of the slot is mixed with the state. An XOR of those outputs is not this fold.
      */
     public long foldSlot(long state) {
         int slot = (int) Long.remainderUnsigned(state, profile.nSlots);
@@ -119,18 +131,18 @@ public final class Terrain {
         long acc = 0;
         for (int w = 0; w < words; w++) {
             long stored = Bytes.u64le(blob, base + w * 8);
-            acc ^= mix64(stored ^ (w & 0xffffffffL) ^ state);
+            acc += mix64(stored ^ (w & 0xffffffffL) ^ state);
         }
         return acc;
     }
 
-    /** Section 11.1. {@code SHA-256(SEAL_DOMAIN ‖ le64(folded))}. */
+    /** Section 11.1. {@code E = SHA-256(SEAL_DOMAIN ‖ le64(S_folded))}. {@code D} is the seed, not this digest. */
     public static byte[] sealDigest(long folded) {
         byte[] block = sealBlock(folded);
         return Bytes.sha256(block);
     }
 
-    /** First eight digest bytes as a little-endian integer. Section 7.4. */
+    /** {@code S' = u64_le(E[0:8])}. Section 7.4. */
     public static long sealState(long folded) {
         return Bytes.u64le(sealDigest(folded), 0);
     }
@@ -192,13 +204,15 @@ public final class Terrain {
         return out;
     }
 
-    static int bitrevParent(int index) {
+    /** Section 10.3. Parent index in {@code 0 … i − 1}. */
+    public static int bitrevParent(int index) {
         int bits = Math.max(31 - Integer.numberOfLeadingZeros(index), 1);
         int reversed = Integer.reverse(index) >>> (32 - bits);
         return reversed % index;
     }
 
-    static int mulParent(int index) {
+    /** Section 10.3. Parent index in {@code 0 … i − 1}. */
+    public static int mulParent(int index) {
         long mixed = (long) index * MIX_ADD;
         return (int) ((mixed >>> 32) % index);
     }

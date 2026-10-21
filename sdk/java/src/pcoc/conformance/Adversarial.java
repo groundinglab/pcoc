@@ -1,6 +1,7 @@
 package pcoc.conformance;
 
 import java.lang.reflect.Field;
+import java.util.Arrays;
 import pcoc.hike.Bytes;
 import pcoc.hike.Profile;
 import pcoc.hike.Terrain;
@@ -12,7 +13,8 @@ import pcoc.hike.Terrain;
 public final class Adversarial {
     enum Kind {
         NO_ADD,
-        FATSLOT,
+        V2_0,
+        XOR_ACC,
         PARTIAL
     }
 
@@ -62,7 +64,7 @@ public final class Adversarial {
         if (limit < 1 || limit > words) {
             throw new AssertionError("partial bound");
         }
-        if (kind == Kind.FATSLOT) {
+        if (kind == Kind.V2_0) {
             long folded = state;
             for (int w = 0; w < words; w++) {
                 folded ^= word(terrain, state, w) ^ (w & 0xffffffffL);
@@ -72,7 +74,12 @@ public final class Adversarial {
         long acc = 0;
         for (int w = 0; w < limit; w++) {
             long mixed = word(terrain, state, w) ^ (w & 0xffffffffL) ^ state;
-            acc ^= kind == Kind.NO_ADD ? mix64WithoutAdd(mixed) : Terrain.mix64(mixed);
+            long term = kind == Kind.NO_ADD ? mix64WithoutAdd(mixed) : Terrain.mix64(mixed);
+            if (kind == Kind.XOR_ACC) {
+                acc ^= term;
+            } else {
+                acc += term;
+            }
         }
         return acc;
     }
@@ -113,6 +120,67 @@ public final class Adversarial {
             return value;
         }
         return (value << bits) | (value >>> (64 - bits));
+    }
+
+    /**
+     * The first two NL4 steps. Not the full chain. Complementing one lane moves
+     * half of these words on the small slot.
+     */
+    static long pairWord(long[] lane, int i, int j) {
+        long c = ((long) i << 32) ^ (j & 0xffffffffL) ^ Terrain.WORD_XOR;
+        long t = Terrain.mix64(lane[Math.floorMod(j, 4)] ^ c);
+        return Terrain.mix64(t ^ rotl(lane[Math.floorMod(j + 1, 4)], 17));
+    }
+
+    /**
+     * Terrain whose base word is the linear four-lane mix. Parents and
+     * {@code slot_mix} stay the section 10.4 steps. This is not the producer.
+     */
+    static byte[] linearTerrain(long[] lane, Profile profile) {
+        int slots = profile.nSlots;
+        int words = profile.wordsPerSlot;
+        int slotBytes = profile.slotBytes;
+        byte[] blob = new byte[profile.terrainBytes];
+        long[] word = new long[words];
+        for (int i = 0; i < slots; i++) {
+            for (int j = 0; j < words; j++) {
+                word[j] = all4Word(lane, i, j);
+            }
+            if (i > 0) {
+                int[] parents = new int[] {i - 1, Terrain.bitrevParent(i), Terrain.mulParent(i)};
+                for (int k = 1; k <= 3; k++) {
+                    int parent = parents[k - 1];
+                    int parentBase = parent * slotBytes;
+                    long parentMix = (long) k * Terrain.PARENT_MUL;
+                    for (int j = 0; j < words; j++) {
+                        long stored = wordAt(blob, parentBase + j * 8);
+                        int rot = (j + k) % 64;
+                        word[j] = Terrain.mix64((word[j] ^ rotl(stored, rot)) ^ parentMix);
+                    }
+                }
+                long slotMix = (long) i * Terrain.SLOT_MUL;
+                for (int j = 0; j < words; j++) {
+                    word[j] = Terrain.mix64(word[j] ^ slotMix);
+                }
+            }
+            int base = i * slotBytes;
+            for (int j = 0; j < words; j++) {
+                Bytes.putLe64(blob, base + j * 8, word[j]);
+            }
+        }
+        return blob;
+    }
+
+    /** Checkpoint preimage with limb 3 taken at {@code offset}, not at {@code offset + 1}. */
+    static byte[] checkpointAt(byte[] previous, byte[] limb, byte[] blob, int offset, int sample, long leg) {
+        byte[] window = Arrays.copyOfRange(blob, offset, offset + sample);
+        return Bytes.sha256(previous, limb, window, Bytes.le64(leg));
+    }
+
+    private static long wordAt(byte[] blob, int offset) {
+        byte[] eight = new byte[8];
+        System.arraycopy(blob, offset, eight, 0, 8);
+        return Bytes.u64le(eight);
     }
 
     /** Section 10.1 with the initial {@code + MIX_ADD} omitted. Not {@code mix64}. */

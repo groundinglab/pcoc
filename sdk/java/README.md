@@ -1,6 +1,6 @@
 # Java SDK
 
-The Java SDK for Satoshi Hike v2.1, the PCOC specification. v2.1 keeps the wire kind `satoshi-hike-v2.0-object` and corrects the seed, the terrain word, the step fold, and the admission comparisons. The seed is `SHA-256(public_key ‖ seed_beacon)`, 32 bytes, no label. Terrain words are the NL4 chain over all four lanes. A step folds every word of the selected slot with `mix64` (including `MIX_ADD`) and seals. There is no fill pin, no `SEED_DOMAIN`, no per-slot summary, and no leg-result cache. It has three packages:
+The Java SDK for Satoshi Hike v2.1, the PCOC specification. The wire kind is `satoshi-hike-v2.1-object`. Kind `satoshi-hike-v2.0-object` and kind `satoshi-hike-v1.35-object` are earlier objects: section 14 records `version` `earlier version` and section 15 refuses `earlier_version` before any terrain fill. That refuse is not a fake leg. The seed is `SHA-256(public_key ‖ seed_beacon)`, 32 bytes, no label. Terrain words are the NL4 chain over all four lanes. A step folds every word of the selected slot by wrapping addition of `mix64` (including `MIX_ADD`). The seal digest is `E`. An XOR accumulator is not this fold. `hike_span` is the median-time-past of the last beacon minus the median-time-past of the first beacon. There is no fill pin, no `SEED_DOMAIN`, no per-slot summary, and no leg-result cache. It has three packages:
 
 | Package | What it holds |
 |---|---|
@@ -30,7 +30,7 @@ Then compile and run against the jar: `javac --release 21 -cp lib/pcoc-sdk-2.0.0
 
 ## Quickstart (historical v2.0 pack)
 
-The program below reads `spec/conformance/v2.0/`. That pack was generated with the withdrawn fill pin and the withdrawn FatSlot fold. It is not the v2.1 target. `bash sdk/java/v2.sh` is the v2.1 check.
+The program below reads `spec/conformance/v2.0/`. That pack was generated with the withdrawn fill pin and the withdrawn v2.0 fold. It is not the v2.1 target. `bash sdk/java/v2.sh` is the v2.1 check.
 
 [`sdk/examples/java/Quickstart.java`](../examples/java/Quickstart.java) verifies the `kat-small` conformance object against the index replies recorded in the vector, and reproduces the vector's stored record byte for byte:
 
@@ -215,7 +215,7 @@ public static String issue(byte[] data)                          // "" for one w
 - **Helpers.** `Json.asObj`, `asArr`, `asString`, `asNumber` and `deepEqual`. `compact()` writes compact JSON.
 
 **Building blocks.**
-- `Terrain.fill`, `Terrain.mix64`, `Terrain.baseWord`, `Terrain.foldSlot`, and `Measure.drawSix`. `Admit` applies Rule B2 (`hike_legs / hike_span`, placeholder floor `1/5`, not ratified) and Rule B4 (`anchored_total ≥ 6` anywhere among `W_1` … `W_16`). The section 14 record does not carry that judgment, and the verify CLI does not print it.
+- `Terrain.fill`, `Terrain.mix64`, `Terrain.baseWord`, `Terrain.foldSlot`, and `Measure.drawSix`. The fold accumulator is wrapping addition. `Admit` applies Rule B2 (`hike_legs / hike_span`, placeholder floor `1/5`, not ratified), Rule B4 (`anchored_total ≥ 6` anywhere among `W_1` … `W_16`), the submission deadline (placeholder `K = 3`, not ratified), and the section 15.5 thorough draw. Section 14 records `hike_span` as the median-time-past difference and does not carry the judgment. The verify CLI does not print it.
 - `Bytes`: `sha256`, `hex`, `unhex`, `le64`, `u64le` and `displayHex`.
 - The constants in `Hike`. (The §15.5 leg-rate floor examples are no longer SDK constants as of rc.2: a policy sets the value.)
 
@@ -270,7 +270,7 @@ The programs exit 1 only when no top-level CBOR map decodes: the file cannot be 
 
 ## Conformance vectors
 
-`spec/conformance/v2.1/` is the v2.1 target ([what each file is](../../spec/conformance/v2.1/README.md)). This SDK does not generate the vectors. `pcoc.conformance.V21Pack` recomputes the seed, the NL4 words, the terrain digests, the §11.1 fold, the small hikes, and the rate and anchor comparisons. `pcoc.conformance.Adversarial` rejects a fill-pin terrain, a one-lane word, a linear four-lane word, `mix64` without `MIX_ADD`, the FatSlot fold, a one-word slot read, a shared terrain, and a cached leg. `pcoc.hike.Spec6Pins` checks the section 6 constants. P6.14 is retired. The pack under `spec/conformance/v2.0/` is historical. [../SPEC_PIN](../SPEC_PIN) holds the spec tag and the vector hash.
+`spec/conformance/v2.1/` is the v2.1 target ([what each file is](../../spec/conformance/v2.1/README.md)). This SDK does not generate the vectors. `pcoc.conformance.V21Pack` recomputes every file in that pack, including the production leg. `pcoc.conformance.Adversarial` rejects a fill-pin terrain, a one-lane word, a linear four-lane word, `mix64` without `MIX_ADD`, the v2.0 fold, the XOR accumulator, a partial slot read, a shared terrain, and a cached leg. `pcoc.hike.Spec6Pins` checks the section 6 constants. P6.14 is retired. The pack under `spec/conformance/v2.0/` is historical. [../SPEC_PIN](../SPEC_PIN) names tag `spec-v2.1.0`. CoS cuts that tag. The tag half cannot pass until the tag exists.
 
 ## Test
 

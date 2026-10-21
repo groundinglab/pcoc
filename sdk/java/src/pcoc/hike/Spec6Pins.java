@@ -68,7 +68,7 @@ public final class Spec6Pins {
         pin("P6.12 BEACON_BYTES", Hike.BEACON_BYTES, 32);
         pin("P6.13 SEAL_DOMAIN", Arrays.equals(Terrain.SEAL_DOMAIN, "pcoc-walk-v1".getBytes(StandardCharsets.US_ASCII)));
         pin("P6.14 RETIRED", retiredSeedDomain());
-        pin("P6.15 KIND", "satoshi-hike-v2.0-object".equals(Hike.KIND));
+        pin("P6.15 KIND", "satoshi-hike-v2.1-object".equals(Hike.KIND));
         pin("P6.16 FILL", "dag2".equals(Hike.FILL));
         pin("P6.17 MIX_ADD", Terrain.MIX_ADD, 0x9E3779B97F4A7C15L);
         pin("P6.18 MIX_MUL1", Terrain.MIX_MUL1, 0xBF58476D1CE4E5B9L);
