@@ -33,10 +33,10 @@ func TestVerifyRejectsWithdrawnFolds(t *testing.T) {
 	slot := NL4BaseSlot(pub, beacon, 0, 2048)
 	state := uint64(0)
 	got := FoldSlot(slot, state)
-	if got != 0x76e07e211682940a {
+	if got != 0x59d67dd117a745a6 {
 		t.Fatalf("conforming fold %x", got)
 	}
-	if foldWithoutMixAdd(slot, state) == got || foldWithoutMixAdd(slot, state) != 0x6b98972f2e622525 {
+	if foldWithoutMixAdd(slot, state) == got || foldWithoutMixAdd(slot, state) != 0xdb9092c34f12d6d9 {
 		t.Fatalf("mix64 without MIX_ADD %x", foldWithoutMixAdd(slot, state))
 	}
 	if fatSlotFold(slot, state) == got || fatSlotFold(slot, state) != 0x4d57a0275efaf0c0 {
@@ -45,14 +45,34 @@ func TestVerifyRejectsWithdrawnFolds(t *testing.T) {
 	if xorAccFold(slot, state) == got || xorAccFold(slot, state) != 0xa284caf306ff68a0 {
 		t.Fatalf("xor accumulator %x", xorAccFold(slot, state))
 	}
-	// At S = 0, (S + w) equals w, so xor_w_fold matches. S = 1 separates them.
+	if xorWFold(slot, state) == got || xorWFold(slot, state) != 0x76e07e211682940a {
+		t.Fatalf("xor_w %x", xorWFold(slot, state))
+	}
 	const s1 = uint64(1)
-	if FoldSlot(slot, s1) == xorWFold(slot, s1) || hexU64Fold(xorWFold(slot, s1)) != "8d9839f10c72f3fb" || hexU64Fold(FoldSlot(slot, s1)) != "bd0b175b96598842" {
-		t.Fatalf("xor_w S1 conforming %x withdrawn %x", FoldSlot(slot, s1), xorWFold(slot, s1))
+	if FoldSlot(slot, s1) == sPlusWFold(slot, s1) || sPlusWFold(slot, s1) != 0xbd0b175b96598842 || FoldSlot(slot, s1) != 0xe12a537bf32d2d32 {
+		t.Fatalf("s_plus_w conforming %x withdrawn %x", FoldSlot(slot, s1), sPlusWFold(slot, s1))
 	}
 	partial := foldFirstWords(slot, state, 1)
 	if partial == got || partial != 0x0836dd6697660d54 {
 		t.Fatalf("partial %x", partial)
+	}
+	if foldFirstWords(slot, state, 2047) == got || foldFirstWords(slot, state, 2047) != 0x4bd2768cc6857525 {
+		t.Fatalf("partial 2047 %x", foldFirstWords(slot, state, 2047))
+	}
+	hoisted := prefoldHoist(slot)
+	hoistedFold := FoldSlot(hoisted, state)
+	if hoistedFold == got || hoistedFold != 0x76e07e211682940a {
+		t.Fatalf("prefold hoist %x", hoistedFold)
+	}
+	_, prime := SealState(got)
+	_, hoistedPrime := SealState(hoistedFold)
+	if prime != 0x7df99cdac3252dff || hoistedPrime != 0xb65b017d5ba09843 {
+		t.Fatalf("prefold S' %x %x", prime, hoistedPrime)
+	}
+	leg := sealSteps(slot, state, 2)
+	hoistedLeg := sealSteps(hoisted, state, 2)
+	if leg != 0x5d4c9813d5726192 || hoistedLeg != 0x548edf0ad6e648ea || leg == hoistedLeg {
+		t.Fatalf("prefold leg %x %x", leg, hoistedLeg)
 	}
 	word := NL4BaseWord(pub, beacon, 0, 0)
 	if word == 0x6bd6efcd910ce11d || word == 0x880a81da1f152536 {
@@ -209,11 +229,24 @@ func xorWFold(slot []byte, state uint64) uint64 {
 	return acc
 }
 
-func hexU64Fold(v uint64) string {
-	return hex.EncodeToString([]byte{
-		byte(v >> 56), byte(v >> 48), byte(v >> 40), byte(v >> 32),
-		byte(v >> 24), byte(v >> 16), byte(v >> 8), byte(v),
-	})
+func sPlusWFold(slot []byte, state uint64) uint64 {
+	var acc uint64
+	n := len(slot) / 8
+	for w := 0; w < n; w++ {
+		word := binary.LittleEndian.Uint64(slot[w*8 : w*8+8])
+		acc += mix64(word ^ (state + uint64(w)))
+	}
+	return acc
+}
+
+func prefoldHoist(slot []byte) []byte {
+	out := append([]byte(nil), slot...)
+	n := len(out) / 8
+	for w := 0; w < n; w++ {
+		word := binary.LittleEndian.Uint64(out[w*8:w*8+8]) ^ uint64(w)
+		binary.LittleEndian.PutUint64(out[w*8:w*8+8], word)
+	}
+	return out
 }
 
 func xorAccFold(slot []byte, state uint64) uint64 {
@@ -231,7 +264,7 @@ func foldWithoutMixAdd(slot []byte, state uint64) uint64 {
 	n := len(slot) / 8
 	for w := 0; w < n; w++ {
 		word := binary.LittleEndian.Uint64(slot[w*8 : w*8+8])
-		acc += mix64WithoutAdd(word ^ uint64(w) ^ state)
+		acc += mix64WithoutAdd(word ^ state)
 	}
 	return acc
 }
@@ -240,9 +273,16 @@ func foldFirstWords(slot []byte, state uint64, n int) uint64 {
 	var acc uint64
 	for w := 0; w < n; w++ {
 		word := binary.LittleEndian.Uint64(slot[w*8 : w*8+8])
-		acc ^= mix64(word ^ uint64(w) ^ state)
+		acc += mix64(word ^ state)
 	}
 	return acc
+}
+
+func sealSteps(slot []byte, state uint64, steps int) uint64 {
+	for i := 0; i < steps; i++ {
+		_, state = SealState(FoldSlot(slot, state))
+	}
+	return state
 }
 
 func fatSlotFold(slot []byte, state uint64) uint64 {

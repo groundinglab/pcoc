@@ -162,15 +162,15 @@ func writeSlot(blob []byte, profile Profile, index int, words []uint64) {
 }
 
 // FoldSlot is the §11.1 accumulator. acc starts at 0. Every little-endian
-// word is mixed as word XOR ((S + w) mod 2^64), then mix64, then wrapping
-// addition. word XOR w does not depend on S and is not this input. A shorter
-// read is not this function. Nothing here is stored back into the terrain.
+// word is mixed as word XOR S, then mix64, then wrapping addition. There is
+// no w term. A shorter read is not this function. Nothing is written back
+// into the terrain.
 func FoldSlot(slot []byte, state uint64) uint64 {
 	var acc uint64
 	n := len(slot) / 8
 	for w := 0; w < n; w++ {
 		word := binary.LittleEndian.Uint64(slot[w*8 : w*8+8])
-		acc += mix64(word ^ (state + uint64(w)))
+		acc += mix64(word ^ state)
 	}
 	return acc
 }

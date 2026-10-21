@@ -395,6 +395,11 @@ func checkNegatives(t *testing.T, path string) {
 			S          string `json:"S_u64_hex"`
 			BadFold    string `json:"forbidden_S_folded_u64_hex"`
 			GoodFold   string `json:"conforming_S_folded_u64_hex"`
+			Steps      int    `json:"steps"`
+			BadPrime   string `json:"forbidden_S_prime_u64_hex"`
+			GoodPrime  string `json:"conforming_S_prime_u64_hex"`
+			BadLeg     string `json:"forbidden_leg_u64_hex"`
+			GoodLeg    string `json:"conforming_leg_u64_hex"`
 			Slot       int    `json:"slot_bytes"`
 			Terrain    int    `json:"terrain_bytes"`
 			BadSHA     string `json:"forbidden_sha256"`
@@ -415,7 +420,8 @@ func checkNegatives(t *testing.T, path string) {
 	}
 	want := []string{
 		"fill_pin_terrain", "ref_word", "all4_word", "mix64_without_mix_add",
-		"v2_0_fold", "xor_accumulator_fold", "xor_w_fold", "partial_slot_read", "partial_slot_read_2047",
+		"v2_0_fold", "xor_accumulator_fold", "xor_w_fold", "s_plus_w_fold", "prefold_hoist",
+		"partial_slot_read", "partial_slot_read_2047",
 		"one_lane_flip", "all4_kernel", "forged_window", "f3_shared_terrain",
 	}
 	if len(doc.Cases) != len(want) || doc.Public == "" {
@@ -434,10 +440,41 @@ func checkNegatives(t *testing.T, path string) {
 			if got != item.Conforming || got == item.Forbidden {
 				t.Fatalf("%s %s", name, got)
 			}
-		case "mix64_without_mix_add", "v2_0_fold", "xor_accumulator_fold", "xor_w_fold", "partial_slot_read", "partial_slot_read_2047":
-			got := hexU64(hike.FoldSlot(slot[:item.Words*8], mustU64(t, item.S)))
+		case "mix64_without_mix_add", "v2_0_fold", "xor_accumulator_fold", "xor_w_fold", "s_plus_w_fold", "partial_slot_read", "partial_slot_read_2047":
+			state := mustU64(t, item.S)
+			got := hexU64(hike.FoldSlot(slot[:item.Words*8], state))
 			if got != item.GoodFold || got == item.BadFold {
 				t.Fatalf("%s %s", name, got)
+			}
+			if item.WordsRead > 0 {
+				short := hexU64(hike.FoldSlot(slot[:item.WordsRead*8], state))
+				if short != item.BadFold {
+					t.Fatalf("%s short %s", name, short)
+				}
+			}
+		case "prefold_hoist":
+			state := mustU64(t, item.S)
+			real := hike.FoldSlot(slot[:item.Words*8], state)
+			if hexU64(real) != item.GoodFold || hexU64(real) == item.BadFold {
+				t.Fatalf("%s fold %s", name, hexU64(real))
+			}
+			_, realPrime := hike.SealState(real)
+			if hexU64(realPrime) != item.GoodPrime {
+				t.Fatalf("%s prime %s", name, hexU64(realPrime))
+			}
+			hoisted := hoistWordXorW(slot[:item.Words*8])
+			bad := hike.FoldSlot(hoisted, state)
+			if hexU64(bad) != item.BadFold || bad == real {
+				t.Fatalf("%s hoist %s", name, hexU64(bad))
+			}
+			_, badPrime := hike.SealState(bad)
+			if hexU64(badPrime) != item.BadPrime || badPrime == realPrime {
+				t.Fatalf("%s hoist prime %s", name, hexU64(badPrime))
+			}
+			realLeg := legOnSlot(slot[:item.Words*8], state, item.Steps)
+			badLeg := legOnSlot(hoisted, state, item.Steps)
+			if hexU64(realLeg) != item.GoodLeg || hexU64(badLeg) != item.BadLeg || realLeg == badLeg {
+				t.Fatalf("%s leg %s %s", name, hexU64(realLeg), hexU64(badLeg))
 			}
 		case "fill_pin_terrain", "one_lane_flip", "all4_kernel":
 			profile, err := hike.NewProfile("conformance-small", hike.Kind, 32, item.Slot, item.Terrain, 1)
@@ -700,6 +737,23 @@ func checkProdLeg(t *testing.T, path string) {
 	if hex.EncodeToString(digest) != doc.Check {
 		t.Fatalf("checkpoint %x", digest)
 	}
+}
+
+func hoistWordXorW(slot []byte) []byte {
+	out := append([]byte(nil), slot...)
+	n := len(out) / 8
+	for w := 0; w < n; w++ {
+		word := binary.LittleEndian.Uint64(out[w*8:w*8+8]) ^ uint64(w)
+		binary.LittleEndian.PutUint64(out[w*8:w*8+8], word)
+	}
+	return out
+}
+
+func legOnSlot(slot []byte, state uint64, steps int) uint64 {
+	for i := 0; i < steps; i++ {
+		_, state = hike.SealState(hike.FoldSlot(slot, state))
+	}
+	return state
 }
 
 func hexU64(v uint64) string {
