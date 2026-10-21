@@ -273,6 +273,8 @@ public final class V21Pack {
                 case "v2_0_fold" -> rejectFold(name, publicKey, beacon, row, Adversarial.Kind.V2_0);
                 case "xor_accumulator_fold" -> rejectFold(name, publicKey, beacon, row, Adversarial.Kind.XOR_ACC);
                 case "xor_w_fold" -> rejectFold(name, publicKey, beacon, row, Adversarial.Kind.XOR_W);
+                case "s_plus_w_fold" -> rejectFold(name, publicKey, beacon, row, Adversarial.Kind.S_PLUS_W);
+                case "prefold_hoist" -> rejectPrefold(name, publicKey, beacon, row);
                 case "partial_slot_read", "partial_slot_read_2047" -> rejectFold(name, publicKey, beacon, row, Adversarial.Kind.PARTIAL);
                 case "one_lane_flip" -> rejectLaneFlip(name, publicKey, beacon, row);
                 case "all4_kernel" -> rejectAll4(name, publicKey, beacon, row);
@@ -324,6 +326,53 @@ public final class V21Pack {
         }
         if (withdrawn.equals(got)) {
             throw new AssertionError(name + " verifier matched the withdrawn fold");
+        }
+    }
+
+    /**
+     * {@code word XOR w} stored in place of the terrain word. The §11.1 step and
+     * a short leg on that array do not match the real slot.
+     */
+    private static void rejectPrefold(String name, byte[] publicKey, byte[] beacon, Json.Obj row) {
+        if (!"word XOR w".equals(text(row, "transform"))) {
+            throw new AssertionError(name + " transform");
+        }
+        int steps = (int) longNum(row, "steps");
+        Profile one = Profile.conformanceSmall(1, 16384, 16384, steps);
+        Terrain terrain = Terrain.fill(publicKey, beacon, one);
+        long state = Long.parseUnsignedLong(text(row, "S_u64_hex"), 16);
+        if (longNum(row, "words") != terrain.profile.wordsPerSlot || terrain.profile.nSlots != 1) {
+            throw new AssertionError(name + " words");
+        }
+        byte[] previous = new byte[32];
+        Bytes.putLe64(previous, 0, state);
+        String got = Bytes.pin(terrain.foldSlot(state));
+        reject(name, got, text(row, "conforming_S_folded_u64_hex"), text(row, "forbidden_S_folded_u64_hex"));
+        String prime = Bytes.pin(Terrain.sealState(terrain.foldSlot(state)));
+        if (!prime.equals(text(row, "conforming_S_prime_u64_hex"))) {
+            throw new AssertionError(name + " S' " + prime);
+        }
+        String leg = Bytes.pin(terrain.leg(previous));
+        if (!leg.equals(text(row, "conforming_leg_u64_hex"))) {
+            throw new AssertionError(name + " leg " + leg);
+        }
+        byte[] raw = terrain.blob.clone();
+        Adversarial.xorWordIndex(terrain);
+        try {
+            String bad = Bytes.pin(terrain.foldSlot(state));
+            if (!bad.equals(text(row, "forbidden_S_folded_u64_hex")) || bad.equals(got)) {
+                throw new AssertionError(name + " hoisted fold " + bad);
+            }
+            String badPrime = Bytes.pin(Terrain.sealState(terrain.foldSlot(state)));
+            if (!badPrime.equals(text(row, "forbidden_S_prime_u64_hex")) || badPrime.equals(prime)) {
+                throw new AssertionError(name + " hoisted S' " + badPrime);
+            }
+            String badLeg = Bytes.pin(terrain.leg(previous));
+            if (!badLeg.equals(text(row, "forbidden_leg_u64_hex")) || badLeg.equals(leg)) {
+                throw new AssertionError(name + " hoisted leg " + badLeg);
+            }
+        } finally {
+            System.arraycopy(raw, 0, terrain.blob, 0, raw.length);
         }
     }
 
@@ -443,7 +492,7 @@ public final class V21Pack {
     }
 
     private static void checkManifest(Path pack, Json.Obj doc) throws Exception {
-        if (!"e2451caf9df3cb70debb0d6d99dc11cab20bca3729f7996f8f6d4f521484d50b".equals(text(doc, "vector_sha256"))) {
+        if (!"b43153edd61efbb433181ff445d3a3867627118c70c221436ee28fe866797ee5".equals(text(doc, "vector_sha256"))) {
             throw new AssertionError("manifest pin");
         }
         eq("manifest", packHash(pack), text(doc, "vector_sha256"));

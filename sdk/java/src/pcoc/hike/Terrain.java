@@ -8,11 +8,11 @@ import java.security.MessageDigest;
  *
  * <p>The seed is {@code SHA-256(public_key ‖ seed_beacon)}, 32 bytes, no label.
  * Every word is the NL4 chain over all four lanes. A step folds every word of
- * the selected slot as {@code word XOR ((S + w) mod 2^64)}, then wrapping
- * addition of {@code mix64}, which includes {@code MIX_ADD}. The seal digest
- * is {@code E}. The stored terrain is the raw word. The working word array
- * exists only while a slot is being stored. Nothing in this class keeps a
- * slot summary, a word table, a pre-folded term, or a leg result.
+ * the selected slot as {@code word XOR S}, then wrapping addition of
+ * {@code mix64}, which includes {@code MIX_ADD}. There is no {@code w} term.
+ * The seal digest is {@code E}. The stored terrain is the raw word. The
+ * working word array exists only while a slot is being stored. Nothing in
+ * this class keeps a slot summary, a word table, a pre-folded term, or a leg result.
  */
 public final class Terrain {
     public static final long MIX_ADD = 0x9E3779B97F4A7C15L;
@@ -123,9 +123,9 @@ public final class Terrain {
 
     /**
      * Section 11.1 fold. {@code acc} starts at 0. For each word,
-     * {@code acc = (acc + mix64(word XOR ((S + w) mod 2^64))) mod 2^64}.
-     * {@code S + w} is wrapping addition of the state and the word index.
-     * {@code mix64} includes {@code MIX_ADD}. {@code word XOR w XOR S} is not this fold.
+     * {@code acc = (acc + mix64(word XOR S)) mod 2^64}. There is no {@code w} term.
+     * {@code mix64} includes {@code MIX_ADD}. Equal words do not cancel under addition.
+     * {@code word XOR w XOR S} and {@code word XOR (S + w)} are not this fold.
      * The stored word is read as filled. This method does not write the slot.
      */
     public long foldSlot(long state) {
@@ -135,7 +135,7 @@ public final class Terrain {
         long acc = 0;
         for (int w = 0; w < words; w++) {
             long stored = Bytes.u64le(blob, base + w * 8);
-            acc += mix64(stored ^ (state + (long) w));
+            acc += mix64(stored ^ state);
         }
         return acc;
     }

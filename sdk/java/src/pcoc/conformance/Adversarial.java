@@ -15,8 +15,10 @@ public final class Adversarial {
         NO_ADD,
         V2_0,
         XOR_ACC,
-        /** Wrapping add of {@code mix64(word XOR w XOR S)}. The withdrawn §11.1 input. */
+        /** Wrapping add of {@code mix64(word XOR w XOR S)}. */
         XOR_W,
+        /** Wrapping add of {@code mix64(word XOR (S + w))}. */
+        S_PLUS_W,
         PARTIAL
     }
 
@@ -59,9 +61,11 @@ public final class Adversarial {
     /**
      * The withdrawn fold on a stored slot. {@code wordsRead} is used only for a partial read.
      * A missing {@code words_read} in the vector is zero and is ignored except for {@link Kind#PARTIAL}.
-     * Except {@link Kind#V2_0}, the per-word input is {@code word XOR w XOR S}.
-     * {@link Kind#XOR_W} adds {@code mix64} of that input over the whole slot.
-     * The producer uses {@code word XOR ((S + w) mod 2^64)} instead.
+     * {@link Kind#XOR_W} and {@link Kind#XOR_ACC} use {@code word XOR w XOR S}.
+     * {@link Kind#S_PLUS_W} uses {@code word XOR (S + w)}.
+     * {@link Kind#NO_ADD} and {@link Kind#PARTIAL} use {@code word XOR S}, the §11.1 input,
+     * with {@code MIX_ADD} omitted or with the read stopped early.
+     * The producer adds {@code mix64(word XOR S)} over every word. There is no {@code w} term.
      */
     static long withdrawnFold(Terrain terrain, long state, Kind kind, int wordsRead) {
         int words = terrain.profile.wordsPerSlot;
@@ -78,7 +82,13 @@ public final class Adversarial {
         }
         long acc = 0;
         for (int w = 0; w < limit; w++) {
-            long mixed = word(terrain, state, w) ^ (w & 0xffffffffL) ^ state;
+            long stored = word(terrain, state, w);
+            long mixed = switch (kind) {
+                case XOR_W, XOR_ACC -> stored ^ (w & 0xffffffffL) ^ state;
+                case S_PLUS_W -> stored ^ (state + (long) w);
+                case NO_ADD, PARTIAL -> stored ^ state;
+                default -> throw new AssertionError("fold kind");
+            };
             long term = kind == Kind.NO_ADD ? mix64WithoutAdd(mixed) : Terrain.mix64(mixed);
             if (kind == Kind.XOR_ACC) {
                 acc ^= term;
@@ -87,6 +97,24 @@ public final class Adversarial {
             }
         }
         return acc;
+    }
+
+    /**
+     * Replace each stored word with {@code word XOR w}. The caller restores the
+     * raw slot. This is the {@code prefold_hoist} terrain, not the producer.
+     */
+    static void xorWordIndex(Terrain terrain) {
+        int words = terrain.profile.wordsPerSlot;
+        for (int slot = 0; slot < terrain.profile.nSlots; slot++) {
+            int base = slot * terrain.profile.slotBytes;
+            for (int w = 0; w < words; w++) {
+                int off = base + w * 8;
+                byte[] eight = new byte[8];
+                System.arraycopy(terrain.blob, off, eight, 0, 8);
+                Bytes.putLe64(eight, 0, Bytes.u64le(eight) ^ (long) w);
+                System.arraycopy(eight, 0, terrain.blob, off, 8);
+            }
+        }
     }
 
     private static long word(Terrain terrain, long state, int index) {
