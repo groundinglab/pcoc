@@ -1784,10 +1784,10 @@ mod tests {
         assert!(trailing.contains("\"shape_item\":[\"malformed cbor\"]"));
         assert!(!trailing.contains("field set"));
         assert!(trailing.contains("\"seed_value\":\"not defined\""));
-        assert_eq!(trailing.len(), 7613);
+        assert_eq!(trailing.len(), 7662);
         assert_eq!(
             crate::hex::encode_hex32(&crate::sha::sha256(trailing.as_bytes())),
-            "c9bea178ac50f3dcf786f5aa944953682b7d4ffa673a9bfddfe9757a9c29925e"
+            "8395b683d2763b301eaa86907293ff0c0f679f910837690a6e92bba29c486a58"
         );
     }
 
@@ -1817,10 +1817,10 @@ mod tests {
         assert!(raw.ends_with('\n'));
         assert!(raw.contains("\"shape_item\":[\"malformed cbor\"]"));
         assert!(!raw.contains("field set"));
-        assert_eq!(raw.len(), 7722);
+        assert_eq!(raw.len(), 7759);
         assert_eq!(
             crate::hex::encode_hex32(&crate::sha::sha256(raw.as_bytes())),
-            "fe46e35a55d2c43f82e86c062cab25026103ffa8e206e3028d752674aad3fa03"
+            "a5eddf2175501a9e49d33d19bfe73ea48e6727102912eacc74b5da6c674a43ed"
         );
     }
 
@@ -1884,10 +1884,10 @@ mod tests {
             serde_json::json!(["field set", "stage-0 path key", "leg_count"])
         );
         assert_eq!(record["seed_value"], "match");
-        assert_eq!(raw.len(), 7748);
+        assert_eq!(raw.len(), 7785);
         assert_eq!(
             crate::hex::encode_hex32(&crate::sha::sha256(raw.as_bytes())),
-            "d8f75d27a34a9309ac6a862aa7e775f975092531b58431fe83a8c2b35b939ec3"
+            "e101183e6bd5c2e8253c330ea6fc68db1cef900ed3ff8581ed9f14083fba79f5"
         );
     }
 

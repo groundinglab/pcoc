@@ -726,6 +726,16 @@ fn fixed_tokens(n: &str, s: &str, delta: &str) -> String {
 fn analysis_json(input: &RecordInput<'_>, book: &Book) -> String {
     let legs =
         count_range(input.checkpoint_counts, 1, 18).unwrap_or_else(|| "\"not defined\"".to_owned());
+    let hike_legs =
+        count_range(input.checkpoint_counts, 0, 18).unwrap_or_else(|| "\"not defined\"".to_owned());
+    let hike_span = match (input.headers.get(18), input.headers.get(0)) {
+        (Some(end), Some(start)) => {
+            let (_, t_end) = endpoint(end);
+            let (_, t_start) = endpoint(start);
+            subtract_times(&t_end, &t_start)
+        }
+        _ => "\"not read\"".to_owned(),
+    };
     let span = match (input.headers.get(18), input.headers.get(1)) {
         (Some(end), Some(start)) => {
             let (_, t_end) = endpoint(end);
@@ -758,6 +768,8 @@ fn analysis_json(input: &RecordInput<'_>, book: &Book) -> String {
         ("whole_hike_span", &span),
         ("per_stage", &format!("[{}]", rows.join(","))),
         ("legs_outside", &outside),
+        ("hike_legs", &hike_legs),
+        ("hike_span", &hike_span),
     ])
 }
 
