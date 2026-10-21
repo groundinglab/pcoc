@@ -2,7 +2,7 @@
   "id": "rounds",
   "thorough_rounds": 3,
   "per_round": 6,
-  "note": "The 18 indices are one draw without replacement, then split into 3 rounds of 6, when leg_total is at least 18. For 6 <= leg_total < 18 the indices stay distinct while an unused index remains, and a later draw may repeat only after those indices are exhausted. leg_total < 6 is draw not defined and refuses. Each round's 6 run in parallel. A mismatch does not start the next round.",
+  "note": "The 18 indices are one draw without replacement, then split into 3 rounds of 6, when leg_total is at least 18. For 6 <= leg_total < 18 the indices stay distinct while an unused index remains, and a later draw may repeat only after those indices are exhausted. leg_total < 6 is draw not defined and refuses. Each round's 6 run in parallel. A mismatch does not start the next round. The current group of 6 is the indices appended since the last multiple of 6. The draw stops when 18 indices are in hand, or when the byte source is exhausted before 18. Exhaustion is not read. An unfinished group is not a round.",
   "cases": [
     {
       "name": "below-six",
@@ -266,6 +266,34 @@
         "0000000000000011"
       ],
       "mismatch_on_round": 1
+    },
+    {
+      "name": "byte-source-ends",
+      "class": "negative",
+      "leg_total": 8,
+      "outcome": "not read",
+      "rounds_started": 1,
+      "rounds": [
+        [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      ],
+      "draws_u64_hex": [
+        "0000000000000000",
+        "0000000000000001",
+        "0000000000000002",
+        "0000000000000003",
+        "0000000000000004",
+        "0000000000000005",
+        "0000000000000006",
+        "0000000000000007"
+      ],
+      "byte_source": "exhausted"
     }
   ]
 }

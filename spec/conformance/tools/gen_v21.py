@@ -202,13 +202,24 @@ def fold_xor_acc(slot_bytes, S, mix):
     return acc
 
 
-def fold_c1(slot_bytes, S, mix):
-    """§11.1: acc = (acc + mix(word XOR w XOR S)) mod 2^64."""
+def fold_xor_w(slot_bytes, S, mix):
+    """Withdrawn f0c5b63 fold: acc += mix(word XOR w XOR S). Negative xor_w_fold."""
     words = len(slot_bytes) // 8
     acc = 0
     for w in range(words):
         word = int.from_bytes(slot_bytes[8 * w : 8 * w + 8], "little")
         acc = (acc + mix((word ^ w ^ S) & MASK)) & MASK
+    return acc
+
+
+def fold_c1(slot_bytes, S, mix):
+    """§11.1: acc = (acc + mix(word XOR ((S + w) mod 2^64))) mod 2^64."""
+    words = len(slot_bytes) // 8
+    acc = 0
+    for w in range(words):
+        word = int.from_bytes(slot_bytes[8 * w : 8 * w + 8], "little")
+        mixed = (word ^ ((S + w) & MASK)) & MASK
+        acc = (acc + mix(mixed)) & MASK
     return acc
 
 
@@ -227,7 +238,7 @@ def fold_partial(slot_bytes, S, nread):
     acc = 0
     for w in range(nread):
         word = int.from_bytes(slot_bytes[8 * w : 8 * w + 8], "little")
-        acc = (acc + mix64((word ^ w ^ S) & MASK)) & MASK
+        acc = (acc + mix64((word ^ ((S + w) & MASK)) & MASK)) & MASK
     return acc
 
 
@@ -266,7 +277,7 @@ def meets_floor(legs, span, p, q):
     return span > 0 and q * legs >= p * span
 
 
-def phase_indices(leg_total, draws, nrounds=3, per=6):
+def phase_indices(leg_total, draws, nrounds=3, per=6, stop_on_end=False):
     """§15.5 thorough draw. draws are the section 14.6 u64 values, in order.
 
     When leg_total >= 18 this rejection sampler is one without-replacement
@@ -287,6 +298,8 @@ def phase_indices(leg_total, draws, nrounds=3, per=6):
         guard = 0
         while len(chosen) < per:
             if i >= len(draws):
+                if stop_on_end:
+                    return rounds
                 raise SystemExit("rounds: byte source ended")
             u = draws[i]
             i += 1
@@ -521,6 +534,8 @@ PROD_OFFSET = 213205398
 # Round-2 XOR-accumulator pins. A helper that still XORs fails these.
 XOR_LEG0 = "c8658b2b05a93205"
 XOR_CP0 = "e8bfeed49fb20d41090e9efada63e0ca170606957e4e112719387ac60aef12d1"
+OLD_ADD_LEG0 = "112a630861105796"
+OLD_ADD_CP0 = "4f4e190bf1b0d16a8eb9c71c6c9f1b1dcb1537cb48fbbb33e0bd5edc178b7955"
 
 
 def changed_words(fn, P, Q, nslots, words):
@@ -581,8 +596,8 @@ def build_prod(pk, beacon, d, P):
         raise SystemExit("prod wrap " + got["wrap16k"])
     if got["terrain"] != PROD_TERRAIN_SHA:
         raise SystemExit("prod terrain " + got["terrain"])
-    if got["leg0"] == XOR_LEG0 or got["cp0"] == XOR_CP0:
-        raise SystemExit("prod value is the withdrawn XOR accumulator")
+    if got["leg0"] in (XOR_LEG0, OLD_ADD_LEG0) or got["cp0"] in (XOR_CP0, OLD_ADD_CP0):
+        raise SystemExit("prod value is a withdrawn fold")
     if int(got["offset"]) != PROD_OFFSET:
         raise SystemExit("prod offset " + got["offset"])
     if P[0] != int.from_bytes(d[:8], "little"):
@@ -722,9 +737,13 @@ def main():
         if meets_floor(c["hike_legs"], c["hike_span"], 1, 5) != c["meets"]:
             raise SystemExit(f"rate case {c['name']}")
 
-    def round_case(name, leg_total, draws, cls, must_reject=False, mismatch_on_round=None):
-        got = phase_indices(leg_total, draws)
-        if mismatch_on_round is not None:
+    def round_case(name, leg_total, draws, cls, must_reject=False, mismatch_on_round=None, byte_source_ends=False):
+        got = phase_indices(leg_total, draws, stop_on_end=byte_source_ends)
+        if byte_source_ends:
+            published = got
+            outcome = "not read"
+            started = len(got)
+        elif mismatch_on_round is not None:
             published = got[:mismatch_on_round]
             outcome = "refuse"
             started = mismatch_on_round
@@ -752,6 +771,8 @@ def main():
             case["draws_u64_hex"] = [u64hex(u) for u in draws]
         if mismatch_on_round is not None:
             case["mismatch_on_round"] = mismatch_on_round
+        if byte_source_ends:
+            case["byte_source"] = "exhausted"
         return case
 
     straight = list(range(18))
@@ -775,7 +796,7 @@ def main():
         "id": "rounds",
         "thorough_rounds": 3,
         "per_round": 6,
-        "note": "The 18 indices are one draw without replacement, then split into 3 rounds of 6, when leg_total is at least 18. For 6 <= leg_total < 18 the indices stay distinct while an unused index remains, and a later draw may repeat only after those indices are exhausted. leg_total < 6 is draw not defined and refuses. Each round's 6 run in parallel. A mismatch does not start the next round.",
+        "note": "The 18 indices are one draw without replacement, then split into 3 rounds of 6, when leg_total is at least 18. For 6 <= leg_total < 18 the indices stay distinct while an unused index remains, and a later draw may repeat only after those indices are exhausted. leg_total < 6 is draw not defined and refuses. Each round's 6 run in parallel. A mismatch does not start the next round. The current group of 6 is the indices appended since the last multiple of 6. The draw stops when 18 indices are in hand, or when the byte source is exhausted before 18. Exhaustion is not read. An unfinished group is not a round.",
         "cases": [
             round_case("below-six", 5, [], "negative", must_reject=True),
             round_case("eighteen-distinct", 32, straight, "positive"),
@@ -783,6 +804,7 @@ def main():
             round_case("short-then-repeat", 8, straight, "positive"),
             round_case("skip-above-limit", 6, with_limit, "positive"),
             round_case("mismatch-stops", 32, straight, "negative", must_reject=True, mismatch_on_round=1),
+            round_case("byte-source-ends", 8, list(range(8)), "negative", byte_source_ends=True),
         ],
     }
 
@@ -805,6 +827,11 @@ def main():
     good = fold_c1(slot0, 0, mix64)
     fat = fold_v2_0(slot0, 0)
     xor_acc = fold_xor_acc(slot0, 0, mix64)
+    # At S = 0, (S + w) equals w, so the withdrawn per-word XOR matches §11.1.
+    # The negative uses S = 1, where those inputs differ.
+    xor_w_S = 1
+    xor_w = fold_xor_w(slot0, xor_w_S, mix64)
+    xor_w_good = fold_c1(slot0, xor_w_S, mix64)
     partial = fold_partial(slot0, 0, 1)
     f3_profile = (64, 1024)
     pin1 = fill_pin(pk + beacon)
@@ -911,7 +938,16 @@ def main():
                 "S_u64_hex": "0000000000000000",
                 "forbidden_S_folded_u64_hex": u64hex(xor_acc),
                 "conforming_S_folded_u64_hex": u64hex(good),
-                "note": "acc XOR= mix64(word XOR w XOR S) is not §11.1. The conforming accumulator is wrapping addition. This is not the v2.0 fold.",
+                "note": "acc XOR= mix64(word XOR w XOR S) is not §11.1. The conforming accumulator is wrapping addition of mix64(word XOR ((S + w) mod 2^64)). This is not the v2.0 fold.",
+            },
+            {
+                "name": "xor_w_fold",
+                "must_reject": True,
+                "words": 2048,
+                "S_u64_hex": u64hex(xor_w_S),
+                "forbidden_S_folded_u64_hex": u64hex(xor_w),
+                "conforming_S_folded_u64_hex": u64hex(xor_w_good),
+                "note": "acc += mix64(word XOR w XOR S) is the withdrawn fold. word XOR w does not depend on S, so that term can be stored in place of the terrain word. It is not §11.1. S is 1. At S = 0 the two per-word inputs match, because (S + w) equals w.",
             },
             {
                 "name": "partial_slot_read",
@@ -944,7 +980,7 @@ def main():
                 "pair_changed": pair_c,
                 "conforming_sha256": base_nl4,
                 "forbidden_sha256": flip_nl4,
-                "note": "Flip lane 2 by 0x8000000000000001. Counted on base words, before parents. NL4 changes every word. The one-lane word changes 25 percent. The first two NL4 steps change 50 percent.",
+                "note": "Flip lane 2 by 0x8000000000000001. Counted on base words, before parents. NL4 changes every word. The one-lane word changes 25 percent. The first two NL4 steps change 50 percent. forbidden_sha256 is the SHA-256 of the NL4 terrain after that lane flip. conforming_sha256 is the SHA-256 of the unflipped NL4 terrain.",
             },
             {
                 "name": "all4_kernel",
@@ -959,7 +995,7 @@ def main():
                 "all4_sha256_flipped": all_b,
                 "conforming_sha256": base_nl4,
                 "forbidden_sha256": nl4_all,
-                "note": "XOR lanes 0 and 1 with all-ones. The linear four-lane word is unchanged, because each lane is mixed once and all-ones twice cancels. NL4 changes every base word.",
+                "note": "XOR lanes 0 and 1 with all-ones. The linear four-lane word is unchanged, because each lane is mixed once and all-ones twice cancels. NL4 changes every base word. forbidden_sha256 is the SHA-256 of the NL4 terrain after that lane change. conforming_sha256 is the SHA-256 of the unflipped NL4 terrain. all4_sha256 and all4_sha256_flipped are the linear four-lane terrains, and they match.",
             },
             {
                 "name": "forged_window",
@@ -1076,7 +1112,7 @@ def main():
             return "held", gap
         if gap > K:
             return "refuse", gap
-        return "accept", gap
+        return "not refused by this rule", gap
 
     deadline_cases = []
     for name, last_h, tip, cls in (
@@ -1100,14 +1136,14 @@ def main():
             case["must_reject"] = True
             case["reason"] = "submission_deadline"
         deadline_cases.append(case)
-    if [c["outcome"] for c in deadline_cases] != ["accept", "refuse", "held", "held"]:
+    if [c["outcome"] for c in deadline_cases] != ["not refused by this rule", "refuse", "held", "held"]:
         raise SystemExit("deadline outcomes")
     deadline = {
         "id": "deadline",
         "K": 3,
         "K_mark": "placeholder, not ratified",
         "reason": "submission_deadline",
-        "note": "At receipt the gate reads tip_height, the tip it observes. last_beacon_height is last_interrupt_height. tip_height minus last_beacon_height greater than K refuses. K is policy. A placeholder of 3 is placeholder, not ratified. A gap of 3 accepts. A gap of 4 refuses as submission_deadline and is not a fake leg. When tip_height is below last_beacon_height the state is held. A missing tip is not read and the state is held.",
+        "note": "tip_height is the Gate index-url tip clock, read fresh at receipt, bypassing the local mirror. A failed or stale read is not read and the state is held. Several index sources use the highest tip among those read. The check is decided once per client submission, at the first successful tip read. Held retries and service-started re-verifies reuse it. A policy-version bump never revokes on it. A client resubmission is a new receipt. A lower tip after a reorg does not reopen a refuse. last_beacon_height is last_interrupt_height. tip_height minus last_beacon_height greater than K refuses. K is policy. A placeholder of 3 is placeholder, not ratified. A gap of 3 is not refused by this rule. A gap of 4 refuses as submission_deadline and is not a fake leg. When tip_height is below last_beacon_height the state is held.",
         "cases": deadline_cases,
     }
 
@@ -1158,17 +1194,19 @@ def main():
         prod_line = "\n`prod-leg0.json` is one production leg: slot 16384, terrain 256 MiB, 2,000,000 steps, sample 1024. Stage 0 opens at the seed.\n"
     readme = """# Conformance pack, Satoshi Hike v2.1
 
-Generated by `spec/conformance/tools/gen_v21.py`. These files are the v2.1 target for the corrected seed, the NL4 word, the §11.1 wrapping-add fold, the small hikes, and the rate and anchor comparisons. They are not a full hike-object encoding. The pack under `../v2.0/` is historical. The withdrawn folds in `negatives.json` are the v2.0 fold and the XOR accumulator `xor_accumulator_fold`.
+Generated by `spec/conformance/tools/gen_v21.py`. These files are the v2.1 target for the corrected seed, the NL4 word, the §11.1 wrapping-add fold, the small hikes, and the rate and anchor comparisons. They are not a full hike-object encoding. The pack under `../v2.0/` is historical. The withdrawn folds in `negatives.json` are the v2.0 fold, the XOR accumulator `xor_accumulator_fold`, and `xor_w_fold` (`mix64(word XOR w XOR S)` with a wrapping-add accumulator).
 
 `legs_le_hex` in a hike file is the hexadecimal spelling of the little-endian wire bytes `le64(leg_result)`. It is not the `%016llx` spelling of the integer.
 
 `rate.json` uses floor `1/5`. That value is placeholder, not ratified. The floor in the specification is TBD. `hike_span` of 0 or below means the rate is undefined and the outcome is `refuse`. `mtp.json` pins median-time-past for that span. Bookend `S` still uses raw `header.time`.
 
-`rounds.json` pins the default thorough draw. When at least 18 legs exist, the 18 indices are one draw without replacement, split into 3 rounds of 6. For 6 <= leg_total < 18 the indices stay distinct while an unused index remains. `leg_total` < 6 is `not defined` and refuses. A mismatch does not start the next round.
+`rounds.json` pins the default thorough draw. When at least 18 legs exist, the 18 indices are one draw without replacement, split into 3 rounds of 6. For 6 <= leg_total < 18 the indices stay distinct while an unused index remains. `leg_total` < 6 is `not defined` and refuses. A mismatch does not start the next round. The current group of 6 is the indices appended since the last multiple of 6. When the byte source runs out before 18 indices, the outcome is `not read` and an unfinished group is not a round.
+
+`one_lane_flip.forbidden_sha256` is the NL4 terrain after the named lane flip. `all4_kernel.forbidden_sha256` is the NL4 terrain after the named lanes change. In both, `conforming_sha256` is the unflipped NL4 terrain.
 
 `kind.json` pins `satoshi-hike-v2.1-object`. The two earlier kinds refuse as `earlier_version`, and that refuse is not a fake leg.
 
-`deadline.json` pins the submission deadline. `K = 3` is placeholder, not ratified. A gap of 3 accepts. A gap of 4 refuses as `submission_deadline`. A tip below the last beacon, and a tip that was not read, are `held`. That refuse is not a fake leg.
+`deadline.json` pins the submission deadline. `K = 3` is placeholder, not ratified. A gap of 3 is not refused by this rule. A gap of 4 refuses as `submission_deadline`. A tip below the last beacon, and a tip that was not read, are `held`. That refuse is not a fake leg.
 """ + prod_line + """
 A negative case publishes the withdrawn result and the conforming result. An implementation that emits the withdrawn result does not conform.
 

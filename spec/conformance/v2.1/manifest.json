@@ -36,7 +36,7 @@
     "terrain-small",
     "test-3leg"
   ],
-  "vector_sha256": "ec72facd056694203b96fac04d331a9c48219257b254cf7f30a95c9c314e1c64",
+  "vector_sha256": "e2451caf9df3cb70debb0d6d99dc11cab20bca3729f7996f8f6d4f521484d50b",
   "vector_sha256_note": "SHA-256 over spec/conformance/v2.1 except manifest.json, each file as path, NUL, sha256(bytes), sorted by path. The sdk/SPEC_PIN hash covers the whole spec/conformance tree except tools/.",
   "floor_mark": "placeholder, not ratified"
 }

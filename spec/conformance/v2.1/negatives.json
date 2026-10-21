@@ -51,7 +51,16 @@
       "S_u64_hex": "0000000000000000",
       "forbidden_S_folded_u64_hex": "a284caf306ff68a0",
       "conforming_S_folded_u64_hex": "76e07e211682940a",
-      "note": "acc XOR= mix64(word XOR w XOR S) is not §11.1. The conforming accumulator is wrapping addition. This is not the v2.0 fold."
+      "note": "acc XOR= mix64(word XOR w XOR S) is not §11.1. The conforming accumulator is wrapping addition of mix64(word XOR ((S + w) mod 2^64)). This is not the v2.0 fold."
+    },
+    {
+      "name": "xor_w_fold",
+      "must_reject": true,
+      "words": 2048,
+      "S_u64_hex": "0000000000000001",
+      "forbidden_S_folded_u64_hex": "8d9839f10c72f3fb",
+      "conforming_S_folded_u64_hex": "bd0b175b96598842",
+      "note": "acc += mix64(word XOR w XOR S) is the withdrawn fold. word XOR w does not depend on S, so that term can be stored in place of the terrain word. It is not §11.1. S is 1. At S = 0 the two per-word inputs match, because (S + w) equals w."
     },
     {
       "name": "partial_slot_read",
@@ -84,7 +93,7 @@
       "pair_changed": 16,
       "conforming_sha256": "88c645f617547382474640c765a93d46b4369c064dc610511f76fccca8e2c81c",
       "forbidden_sha256": "3b2f493b0587a12e7a7181384f9755535a77b41326b02d0f9f4769bbdb54d2d3",
-      "note": "Flip lane 2 by 0x8000000000000001. Counted on base words, before parents. NL4 changes every word. The one-lane word changes 25 percent. The first two NL4 steps change 50 percent."
+      "note": "Flip lane 2 by 0x8000000000000001. Counted on base words, before parents. NL4 changes every word. The one-lane word changes 25 percent. The first two NL4 steps change 50 percent. forbidden_sha256 is the SHA-256 of the NL4 terrain after that lane flip. conforming_sha256 is the SHA-256 of the unflipped NL4 terrain."
     },
     {
       "name": "all4_kernel",
@@ -102,7 +111,7 @@
       "all4_sha256_flipped": "9712c1d7628fbf73760b7b83e50720530c3fee2354820c849c4d96d39a314dde",
       "conforming_sha256": "88c645f617547382474640c765a93d46b4369c064dc610511f76fccca8e2c81c",
       "forbidden_sha256": "1eb15aa48d101c0814b00ec5c076b86b7370f4ff9936ea15dfb7eaba0921663f",
-      "note": "XOR lanes 0 and 1 with all-ones. The linear four-lane word is unchanged, because each lane is mixed once and all-ones twice cancels. NL4 changes every base word."
+      "note": "XOR lanes 0 and 1 with all-ones. The linear four-lane word is unchanged, because each lane is mixed once and all-ones twice cancels. NL4 changes every base word. forbidden_sha256 is the SHA-256 of the NL4 terrain after that lane change. conforming_sha256 is the SHA-256 of the unflipped NL4 terrain. all4_sha256 and all4_sha256_flipped are the linear four-lane terrains, and they match."
     },
     {
       "name": "forged_window",

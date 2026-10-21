@@ -184,14 +184,24 @@ static uint64_t seal(uint64_t folded) {
     return load_le(d);
 }
 
-/* §11.1: acc = (acc + mix64(word XOR w XOR S)) mod 2^64. bare=1 omits MIX_ADD. */
+/* §11.1: acc += mix64(word XOR ((S + w) mod 2^64)). bare=1 omits MIX_ADD. */
 static uint64_t fold_mix(const uint8_t *slot, uint64_t words, uint64_t S, int bare, uint64_t nread) {
     uint64_t acc = 0;
     uint64_t lim = nread < words ? nread : words;
     for (uint64_t w = 0; w < lim; w++) {
         uint64_t word = load_le(slot + 8 * w);
-        uint64_t x = word ^ w ^ S;
+        uint64_t x = word ^ (S + w);
         acc += bare ? bare64(x) : mix64(x);
+    }
+    return acc;
+}
+
+/* Withdrawn f0c5b63 fold: acc += mix64(word XOR w XOR S). Negative xor_w_fold. */
+static uint64_t fold_xor_w(const uint8_t *slot, uint64_t words, uint64_t S) {
+    uint64_t acc = 0;
+    for (uint64_t w = 0; w < words; w++) {
+        uint64_t word = load_le(slot + 8 * w);
+        acc += mix64(word ^ w ^ S);
     }
     return acc;
 }
@@ -828,8 +838,38 @@ int main(int argc, char **argv) {
             long long leg_total = jnum(c, "leg_total");
             int started = (int)jnum(c, "rounds_started");
             JVal *published = jget(c, "rounds");
-            if (strcmp(jstr(c, "outcome"), leg_total < 6 || jget(c, "mismatch_on_round") ? "refuse" : "recorded") != 0) {
+            int exhausted = jget(c, "byte_source") && strcmp(jstr(c, "byte_source"), "exhausted") == 0;
+            const char *expect_out = "recorded";
+            if (leg_total < 6 || jget(c, "mismatch_on_round")) expect_out = "refuse";
+            if (exhausted) expect_out = "not read";
+            if (strcmp(jstr(c, "outcome"), expect_out) != 0) {
                 fprintf(stderr, "FAIL %s outcome\n", name); g_fail++;
+            }
+            if (exhausted) {
+                if (jget(c, "must_reject")) { fprintf(stderr, "FAIL %s must_reject\n", name); g_fail++; continue; }
+                JVal *hexes = jget(c, "draws_u64_hex");
+                uint64_t draws[64];
+                if (!hexes || hexes->an > 64) { fprintf(stderr, "FAIL %s draws\n", name); g_fail++; continue; }
+                for (int k = 0; k < hexes->an; k++) draws[k] = strtoull(hexes->a[k]->s, NULL, 16);
+                int got[4][6];
+                int nrounds = 0;
+                int extra = 0;
+                if (draw_rounds(leg_total, draws, hexes->an, started, got, &nrounds) != 0
+                    || nrounds != started
+                    || draw_rounds(leg_total, draws, hexes->an, started + 1, got, &extra) == 0
+                    || published->an != started) {
+                    fprintf(stderr, "FAIL %s exhausted\n", name); g_fail++; continue;
+                }
+                int ok_rows = 1;
+                for (int r = 0; r < started; r++) {
+                    JVal *row = published->a[r];
+                    if (row->an != 6) ok_rows = 0;
+                    for (int k = 0; ok_rows && k < 6; k++)
+                        if (row->a[k]->k != JNUM || row->a[k]->n != got[r][k]) ok_rows = 0;
+                }
+                if (!ok_rows) { fprintf(stderr, "FAIL %s rows\n", name); g_fail++; continue; }
+                pass(name);
+                continue;
             }
             if (leg_total < 6) {
                 if (strcmp(jstr(c, "draw"), "not defined") != 0 || started != 0 || published->an != 0) {
@@ -969,6 +1009,16 @@ int main(int argc, char **argv) {
                 expect_str("xor-acc", got, jstr(c, "forbidden_S_folded_u64_hex"));
                 snprintf(got, sizeof got, "%016llx", (unsigned long long)good);
                 expect_str("add-acc", got, jstr(c, "conforming_S_folded_u64_hex"));
+                if (bad == good) g_fail++; else reject(name);
+            } else if (strcmp(name, "xor_w_fold") == 0) {
+                uint64_t S = strtoull(jstr(c, "S_u64_hex"), NULL, 16);
+                uint64_t bad = fold_xor_w(slot, 2048, S);
+                uint64_t good = fold_mix(slot, 2048, S, 0, 2048);
+                char got[17];
+                snprintf(got, sizeof got, "%016llx", (unsigned long long)bad);
+                expect_str("xor-w", got, jstr(c, "forbidden_S_folded_u64_hex"));
+                snprintf(got, sizeof got, "%016llx", (unsigned long long)good);
+                expect_str("s-plus-w", got, jstr(c, "conforming_S_folded_u64_hex"));
                 if (bad == good) g_fail++; else reject(name);
             } else if (strcmp(name, "partial_slot_read") == 0 || strcmp(name, "partial_slot_read_2047") == 0) {
                 uint64_t S = strtoull(jstr(c, "S_u64_hex"), NULL, 16);
@@ -1206,7 +1256,7 @@ int main(int argc, char **argv) {
             long long tip = tipv->n;
             long long gap = tip - last;
             if (jnum(c, "gap") != gap) { fprintf(stderr, "FAIL %s gap\n", name); g_fail++; continue; }
-            const char *expect = "accept";
+            const char *expect = "not refused by this rule";
             if (tip < last) expect = "held";
             else if (gap > K) expect = "refuse";
             if (strcmp(outcome, expect) != 0) {
