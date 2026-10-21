@@ -38,7 +38,7 @@ pub use args::{
     apply_test_produce_env, parse_produce, parse_verify, AdmitPolicy, GossipDial, MeasureProfile,
     PlaneProfile, ProduceArgs, ProduceClock, UsageError, VerifyArgs,
 };
-pub use audit::{draw_distinct, Entropy, OsEntropy};
+pub use audit::{draw_distinct, draw_thorough, Entropy, OsEntropy};
 pub use bind::{
     checkpoint_sized, successor_waypoint, successor_waypoint_sized, terrain_sample_sized,
 };

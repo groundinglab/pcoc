@@ -207,7 +207,13 @@ fn negatives_and_the_rate_floor_match_the_pack() {
                 let word = u64::from_le_bytes(bad[..8].try_into().unwrap());
                 assert_eq!(format!("{word:016x}"), case["forbidden_u64_hex"].as_str().unwrap());
             }
-            "mix64_without_mix_add" | "fatslot_fold" | "v2_0_fold" | "xor_accumulator" | "partial_slot_read" => {
+            "mix64_without_mix_add"
+            | "fatslot_fold"
+            | "v2_0_fold"
+            | "xor_accumulator"
+            | "xor_accumulator_fold"
+            | "partial_slot_read"
+            | "partial_slot_read_2047" => {
                 let sizes = sizes_of(16384, 16384);
                 let terrain = fill_terrain_sized(&digest, sizes);
                 let state = hex_u64(case["S_u64_hex"].as_str().unwrap());
@@ -215,19 +221,80 @@ fn negatives_and_the_rate_floor_match_the_pack() {
                 let conforming = hex_u64(case["conforming_S_folded_u64_hex"].as_str().unwrap());
                 assert_ne!(forbidden, conforming);
                 assert_eq!(step_sized(&terrain, state, sizes), hike::seal(conforming));
-                let rejected = match case["name"].as_str().unwrap() {
+                let name = case["name"].as_str().unwrap();
+                let rejected = match name {
                     "mix64_without_mix_add" => {
                         hike::rejected::step_bare_finalizer(&terrain, state, sizes)
                     }
                     "fatslot_fold" | "v2_0_fold" => {
                         hike::rejected::step_v2_0_fold(&terrain, state, sizes)
                     }
-                    "xor_accumulator" => hike::rejected::step_xor_acc(&terrain, state, sizes),
-                    "partial_slot_read" => hike::rejected::step_partial(&terrain, state, sizes),
+                    "xor_accumulator" | "xor_accumulator_fold" => {
+                        hike::rejected::step_xor_acc(&terrain, state, sizes)
+                    }
+                    "partial_slot_read" | "partial_slot_read_2047" => {
+                        let keep = case["words_read"].as_u64().unwrap() as usize;
+                        hike::rejected::step_partial_words(&terrain, state, sizes, keep)
+                    }
                     _ => unreachable!(),
                 };
-                assert_eq!(rejected, hike::seal(forbidden), "{}", case["name"]);
+                assert_eq!(rejected, hike::seal(forbidden), "{name}");
                 assert_ne!(rejected, step_sized(&terrain, state, sizes));
+            }
+            "one_lane_flip" => {
+                let sizes = sizes_of(
+                    case["slot_bytes"].as_u64().unwrap() as usize,
+                    case["terrain_bytes"].as_u64().unwrap() as usize,
+                );
+                let good = fill_terrain_sized(&digest, sizes);
+                assert_eq!(sha256(&good), case["conforming_sha256"].as_str().unwrap());
+                let mut flipped = digest;
+                let lane = case["lane"].as_u64().unwrap() as usize;
+                let flip = hex_u64(case["flip_u64_hex"].as_str().unwrap()).to_le_bytes();
+                for (byte, mask) in flipped[lane * 8..lane * 8 + 8].iter_mut().zip(flip) {
+                    *byte ^= mask;
+                }
+                let bad = fill_terrain_sized(&flipped, sizes);
+                assert_eq!(sha256(&bad), case["forbidden_sha256"].as_str().unwrap());
+                assert_ne!(bad, good);
+            }
+            "forged_window" => {
+                let slot = case["slot_bytes"].as_u64().unwrap() as usize;
+                let bytes = case["terrain_bytes"].as_u64().unwrap() as usize;
+                let sizes = hike::Sizes::conformance_small_checked(
+                    case["sample_bytes"].as_u64().unwrap() as usize,
+                    slot,
+                    bytes,
+                    1,
+                )
+                .unwrap();
+                let terrain = fill_terrain_sized(&digest, sizes);
+                let mut previous = digest;
+                previous[..8].copy_from_slice(&hex_u64(case["leg_u64_hex"].as_str().unwrap()).to_le_bytes());
+                let sample = hike::terrain_sample_sized(&terrain, &previous, sizes);
+                let offset = (u64::from_le_bytes(previous[..8].try_into().unwrap())
+                    % sizes.offset_modulus()) as usize;
+                assert_eq!(case["sample_offset"].as_u64().unwrap() as usize, offset);
+                let leg = hex_u64(case["leg_u64_hex"].as_str().unwrap());
+                let good = hike::checkpoint_sized(&previous, &digest, &sample, leg, sizes);
+                assert_eq!(encode(good), case["conforming_hex"].as_str().unwrap());
+                let shifted = terrain[offset + 1..offset + 1 + sizes.sample_bytes].to_vec();
+                let bad = hike::checkpoint_sized(&previous, &digest, &shifted, leg, sizes);
+                assert_eq!(encode(bad), case["forbidden_hex"].as_str().unwrap());
+                assert_ne!(good, bad);
+                assert_eq!(case["fake_leg_ignore"], false);
+            }
+            "all4_kernel" => {
+                let sizes = sizes_of(
+                    case["slot_bytes"].as_u64().unwrap() as usize,
+                    case["terrain_bytes"].as_u64().unwrap() as usize,
+                );
+                let good = fill_terrain_sized(&digest, sizes);
+                assert_eq!(sha256(&good), case["conforming_sha256"].as_str().unwrap());
+                let all4 = hike::rejected::fill_all4(&digest, sizes);
+                assert_eq!(sha256(&all4), case["all4_sha256"].as_str().unwrap());
+                assert_eq!(sha256(&all4), case["all4_sha256_flipped"].as_str().unwrap());
+                assert_ne!(all4, good);
             }
             "f3_shared_terrain" => {
                 let pk2 = hex32(case["pk2_hex"].as_str().unwrap());
@@ -291,4 +358,107 @@ fn negatives_and_the_rate_floor_match_the_pack() {
             );
         }
     }
+
+    let kind = load("kind.json");
+    assert_eq!(kind["kind"], hike::KIND);
+    assert_eq!(kind["kind_bytes"], hike::KIND.len());
+    let earlier: Vec<&str> = kind["earlier"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item.as_str().unwrap())
+        .collect();
+    assert_eq!(earlier, hike::EARLIER_KINDS);
+
+    let deadline = load("deadline.json");
+    assert_eq!(deadline["K"], 3);
+    assert_eq!(deadline["K_mark"], "placeholder, not ratified");
+    assert_eq!(deadline["reason"], "submission_deadline");
+
+    let mtp = load("mtp.json");
+    for case in mtp["cases"].as_array().unwrap() {
+        for side in ["first", "last"] {
+            let Some(beacon) = case.get(side) else {
+                continue;
+            };
+            let times = beacon["times"].as_array().unwrap();
+            if times.iter().any(|item| !item.is_u64()) {
+                assert!(beacon["mtp"].is_null() || beacon["mtp"] == "not read", "{}", case["name"]);
+                continue;
+            }
+            let got = median_of(times);
+            assert_eq!(got, beacon["mtp"].as_u64().unwrap(), "{} {side}", case["name"]);
+            assert_eq!(
+                beacon["reads"].as_array().unwrap().len() as u64,
+                beacon["n"].as_u64().unwrap()
+            );
+        }
+        if let Some(span) = case.get("hike_span").and_then(|item| item.as_i64()) {
+            let first = case["first"]["mtp"].as_u64().unwrap() as i128;
+            let last = case["last"]["mtp"].as_u64().unwrap() as i128;
+            assert_eq!(last - first, span as i128, "{}", case["name"]);
+            if span <= 0 {
+                assert!(below_floor(1, span as i128, p, q));
+            }
+        }
+    }
+
+    let rounds = load("rounds.json");
+    assert_eq!(rounds["thorough_rounds"], 3);
+    assert_eq!(rounds["per_round"], 6);
+    for case in rounds["cases"].as_array().unwrap() {
+        let total = case["leg_total"].as_u64().unwrap();
+        if case["draw"].as_str() == Some("not defined") {
+            assert!(total < 6, "{}", case["name"]);
+            continue;
+        }
+        let script: Vec<u8> = case["draws_u64_hex"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|item| hex_u64(item.as_str().unwrap()).to_le_bytes())
+            .collect();
+        let mut entropy = ScriptEntropy { bytes: script, pos: 0 };
+        let started = case["rounds_started"].as_u64().unwrap() as usize;
+        let drawn = hike::draw_thorough(total, started * 6, &mut entropy).unwrap();
+        let mut got = Vec::new();
+        for chunk in drawn.chunks(6) {
+            got.push(chunk.to_vec());
+        }
+        let expected: Vec<Vec<u64>> = case["rounds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|round| {
+                round
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|item| item.as_u64().unwrap())
+                    .collect()
+            })
+            .collect();
+        assert_eq!(got, expected, "{}", case["name"]);
+    }
+}
+
+struct ScriptEntropy {
+    bytes: Vec<u8>,
+    pos: usize,
+}
+
+impl hike::Entropy for ScriptEntropy {
+    fn fill(&mut self, dest: &mut [u8]) -> Result<(), ()> {
+        for byte in dest {
+            *byte = *self.bytes.get(self.pos).ok_or(())?;
+            self.pos += 1;
+        }
+        Ok(())
+    }
+}
+
+fn median_of(times: &[Value]) -> u64 {
+    let mut values: Vec<u64> = times.iter().map(|item| item.as_u64().unwrap()).collect();
+    values.sort_unstable();
+    values[values.len() / 2]
 }

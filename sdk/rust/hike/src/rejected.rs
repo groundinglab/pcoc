@@ -53,8 +53,9 @@ pub fn fill_all4(seed: &[u8; 32], sizes: Sizes) -> Vec<u8> {
 }
 
 /// Fold that uses the bare splitmix finalizer. `MIX_ADD` is missing. That is wrong.
+/// The accumulator is still wrapping addition. Only the mixer is bare.
 pub fn step_bare_finalizer(terrain: &[u8], state: u64, sizes: Sizes) -> u64 {
-    fold_xor(terrain, state, sizes, |word, w, state| {
+    fold_add(terrain, state, sizes, |word, w, state| {
         bare_mix(word ^ w ^ state)
     })
 }
@@ -79,9 +80,17 @@ pub fn step_v2_0_fold(terrain: &[u8], state: u64, sizes: Sizes) -> u64 {
 
 /// Reads the first word and ignores the rest of the slot.
 pub fn step_partial(terrain: &[u8], state: u64, sizes: Sizes) -> u64 {
+    step_partial_words(terrain, state, sizes, 1)
+}
+
+/// Reads `keep` words and drops the rest. `keep` of 2047 is still a partial read.
+pub fn step_partial_words(terrain: &[u8], state: u64, sizes: Sizes, keep: usize) -> u64 {
     let slot = slot_of(terrain, state, sizes);
-    let word = slot.first().copied().unwrap_or(0);
-    seal(mix64(word ^ state))
+    let mut acc = 0u64;
+    for (w, word) in slot.iter().take(keep).enumerate() {
+        acc = acc.wrapping_add(mix64(word ^ (w as u64) ^ state));
+    }
+    seal(acc)
 }
 
 /// Builds one u64 per slot, then steps from that table. The slot is not read again.
@@ -132,6 +141,15 @@ fn fold_xor(terrain: &[u8], state: u64, sizes: Sizes, mix: impl Fn(u64, u64, u64
     let mut acc = 0u64;
     for (w, word) in slot.iter().enumerate() {
         acc ^= mix(*word, w as u64, state);
+    }
+    seal(acc)
+}
+
+fn fold_add(terrain: &[u8], state: u64, sizes: Sizes, mix: impl Fn(u64, u64, u64) -> u64) -> u64 {
+    let slot = slot_of(terrain, state, sizes);
+    let mut acc = 0u64;
+    for (w, word) in slot.iter().enumerate() {
+        acc = acc.wrapping_add(mix(*word, w as u64, state));
     }
     seal(acc)
 }
