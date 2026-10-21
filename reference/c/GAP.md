@@ -6,7 +6,7 @@ Implemented:
 
 - Seed `SHA-256(public_key ‖ seed_beacon)`, four little-endian lanes, no label.
 - NL4 terrain fill, once per terrain, including parents and `slot_mix`.
-- §11.1 step and §11.2 leg. Every step mixes every word of the selected slot with the state.
+- §11.1 step and §11.2 leg. Every step mixes every word of the selected slot with the state as `mix64(word XOR S)`. There is no `w` term.
 - Terrain sample, checkpoint preimage, checkpoint fold, and §12.2 waypoint.
 - A producer that walks a schedule and writes checkpoint records.
 - A verifier that re-walks chosen legs, checks the chain, the checkpoint, and the waypoint, and applies Rule B2 and Rule B4 as separate measurements (`hike rate`, `hike anchors`).

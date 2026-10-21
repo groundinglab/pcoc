@@ -249,10 +249,10 @@ uint64_t hike_fold_slot(const uint8_t *slot, uint32_t words, uint64_t state)
     uint64_t acc = 0;
     uint32_t w;
     /* Every word. acc starts at 0. Wrapping addition. SPEC §11.1.
-     * The per-word input is word XOR ((S + w) mod 2^64). word XOR w is not stored. */
+     * The per-word input is word XOR S. There is no w term. */
     for (w = 0; w < words; w++) {
         uint64_t word = hike_load_le64(slot + (size_t)w * 8);
-        acc += mix64(word ^ (state + (uint64_t)w));
+        acc += mix64(word ^ state);
     }
     return acc;
 }

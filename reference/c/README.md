@@ -1,8 +1,8 @@
 # Satoshi Hike v2.1 — C reference
 
-C11 producer and verifier for the final v2.1 construction (`spec/v2.1-correction` at `c886ef2`, FIX5). Written from `spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md` and `spec/conformance/v2.1/`. It does not use the Rust, Go, or Java trees, and it does not use the vector generator.
+C11 producer and verifier for the final v2.1 construction (`spec/v2.1-correction` at `aeb13dc`, FIX5-i). Written from `spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md` and `spec/conformance/v2.1/`. It does not use the Rust, Go, or Java trees, and it does not use the vector generator.
 
-The §11.1 accumulator is wrapping addition of `mix64(word XOR ((S + w) mod 2^64))`. The seal digest is `E`. `KIND` is `satoshi-hike-v2.1-object`. `make test` includes the production-size leg in `prod-leg0.json`.
+The §11.1 accumulator is wrapping addition of `mix64(word XOR S)`. There is no `w` term. The seal digest is `E`. `KIND` is `satoshi-hike-v2.1-object`. `make test` includes the production-size leg in `prod-leg0.json`.
 
 `make test` runs every file in `spec/conformance/v2.1/` and the permanent adversarial rejects, including a cached leg. The test binary is `hike-test`. The CLI is `hike`.
 

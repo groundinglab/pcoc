@@ -92,7 +92,7 @@ int hike_terrain_fill(const uint8_t seed[32], uint32_t slot_bytes,
                       uint32_t terrain_bytes, uint8_t *terrain);
 
 /* Wrapping-add accumulator of one slot. Reads every word.
- * Per word: mix64(word XOR ((S + w) mod 2^64)). SPEC §11.1. */
+ * Per word: mix64(word XOR S). No w term. SPEC §11.1. */
 uint64_t hike_fold_slot(const uint8_t *slot, uint32_t words, uint64_t state);
 
 #define HIKE_KIND "satoshi-hike-v2.1-object"

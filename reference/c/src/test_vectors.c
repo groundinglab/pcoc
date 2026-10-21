@@ -879,7 +879,7 @@ static int check_negatives(const char *dir)
             }
         } else if (strcmp(name, "mix64_without_mix_add") == 0 || strcmp(name, "v2_0_fold") == 0 ||
                    strcmp(name, "xor_accumulator_fold") == 0 || strcmp(name, "xor_w_fold") == 0 ||
-                   strcmp(name, "partial_slot_read") == 0 ||
+                   strcmp(name, "s_plus_w_fold") == 0 || strcmp(name, "partial_slot_read") == 0 ||
                    strcmp(name, "partial_slot_read_2047") == 0) {
             uint8_t *slot = (uint8_t *)malloc(16384);
             uint64_t folded;
@@ -1116,6 +1116,99 @@ static int check_negatives(const char *dir)
                             json_as_string(json_object_get(c, "forbidden_hex"))) != 0) {
                 goto done;
             }
+        } else if (strcmp(name, "prefold_hoist") == 0) {
+            uint8_t *slot;
+            uint8_t *hoist;
+            HikeProfile prof;
+            uint64_t state, folded, prime, walked, hoisted;
+            long long steps = 2;
+            long long t;
+            uint32_t w;
+            const char *transform = json_as_string(json_object_get(c, "transform"));
+            char hex[17];
+            state = parse_u64_hex(json_as_string(json_object_get(c, "S_u64_hex")));
+            if (json_object_get(c, "steps") != NULL &&
+                json_as_i64(json_object_get(c, "steps"), &steps) != 0) {
+                fail_msg(name, "steps");
+                goto done;
+            }
+            if (transform == NULL || strcmp(transform, "word XOR w") != 0) {
+                fail_msg(name, "transform");
+                goto done;
+            }
+            slot = (uint8_t *)malloc(16384);
+            hoist = (uint8_t *)malloc(16384);
+            if (slot == NULL || hoist == NULL ||
+                hike_terrain_fill(seed, 16384, 16384, slot) != HIKE_OK) {
+                free(slot);
+                free(hoist);
+                fail_msg(name, "slot");
+                goto done;
+            }
+            memcpy(hoist, slot, 16384);
+            for (w = 0; w < 2048; w++) {
+                uint64_t word = hike_load_le64(hoist + (size_t)w * 8);
+                hike_store_le64(hoist + (size_t)w * 8, word ^ (uint64_t)w);
+            }
+            prof.slot_bytes = 16384;
+            prof.terrain_bytes = 16384;
+            prof.sample_bytes = 8;
+            prof.steps_per_leg = (uint64_t)steps;
+            folded = hike_fold_slot(slot, 2048, state);
+            if (reject_u64(name, folded,
+                           json_as_string(json_object_get(c, "conforming_S_folded_u64_hex")),
+                           json_as_string(json_object_get(c, "forbidden_S_folded_u64_hex"))) != 0) {
+                free(slot);
+                free(hoist);
+                goto done;
+            }
+            prime = hike_step(slot, &prof, state);
+            hike_u64_hex(prime, hex);
+            if (strcmp(hex, json_as_string(json_object_get(c, "conforming_S_prime_u64_hex"))) != 0 ||
+                strcmp(hex, json_as_string(json_object_get(c, "forbidden_S_prime_u64_hex"))) == 0) {
+                fprintf(stderr, "  %s prime %s\n", name, hex);
+                free(slot);
+                free(hoist);
+                fail_msg(name, "prime");
+                goto done;
+            }
+            walked = state;
+            for (t = 0; t < steps; t++) {
+                walked = hike_step(slot, &prof, walked);
+            }
+            hike_u64_hex(walked, hex);
+            if (strcmp(hex, json_as_string(json_object_get(c, "conforming_leg_u64_hex"))) != 0 ||
+                strcmp(hex, json_as_string(json_object_get(c, "forbidden_leg_u64_hex"))) == 0) {
+                fprintf(stderr, "  %s leg %s\n", name, hex);
+                free(slot);
+                free(hoist);
+                fail_msg(name, "leg");
+                goto done;
+            }
+            hoisted = hike_fold_slot(hoist, 2048, state);
+            hike_u64_hex(hoisted, hex);
+            if (strcmp(hex, json_as_string(json_object_get(c, "forbidden_S_folded_u64_hex"))) != 0 ||
+                strcmp(hex, json_as_string(json_object_get(c, "conforming_S_folded_u64_hex"))) == 0) {
+                fprintf(stderr, "  %s hoist fold %s\n", name, hex);
+                free(slot);
+                free(hoist);
+                fail_msg(name, "hoist fold");
+                goto done;
+            }
+            hoisted = state;
+            for (t = 0; t < steps; t++) {
+                hoisted = hike_step(hoist, &prof, hoisted);
+            }
+            hike_u64_hex(hoisted, hex);
+            free(slot);
+            free(hoist);
+            if (strcmp(hex, json_as_string(json_object_get(c, "forbidden_leg_u64_hex"))) != 0 ||
+                strcmp(hex, json_as_string(json_object_get(c, "conforming_leg_u64_hex"))) == 0) {
+                fprintf(stderr, "  %s hoist leg %s\n", name, hex);
+                fail_msg(name, "hoist leg");
+                goto done;
+            }
+            row("REJECT", "prefold_hoist");
         } else {
             fprintf(stderr, "unknown negative %s\n", name);
             fail_msg(name, "unknown");
