@@ -1,0 +1,52 @@
+{
+  "id": "test-3leg",
+  "class": "positive",
+  "profile": {
+    "slot_bytes": 64,
+    "terrain_bytes": 256,
+    "sample_bytes": 32,
+    "steps_per_leg": 32
+  },
+  "public_key_hex": "4242424242424242424242424242424242424242424242424242424242424242",
+  "seed_beacon_hex": "0100000000000000000000000000000000000000000000000000000000000000",
+  "seed_hex": "cebf974020dd5adee2a774bf86eabe4d749e16fc14ae521cf77aab6434c9cad1",
+  "opening_waypoint_hex": "cebf974020dd5adee2a774bf86eabe4d749e16fc14ae521cf77aab6434c9cad1",
+  "waypoint_equals_seed": 1,
+  "terrain_sha256": "11ecce9e7702fd21d47c3558be744286f21a9ab4d3dd48f9c7ba045655835c91",
+  "stages": [
+    {
+      "leg_count": 1,
+      "next_beacon_hex": "0200000000000000000000000000000000000000000000000000000000000000",
+      "legs_le_hex": [
+        "8a9ed99ceb14077f"
+      ],
+      "checkpoints_hex": [
+        "2863bc8cd58b93db077967e4c12930f68c56f7ff07f40582ead359b172acbdb2"
+      ],
+      "next_waypoint_hex": "ca7b42d6ff7d6759a70369293c6d7d271361bfba43bac3a9659f71fc0a151212"
+    },
+    {
+      "leg_count": 1,
+      "next_beacon_hex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "legs_le_hex": [
+        "5df559f26addc120"
+      ],
+      "checkpoints_hex": [
+        "aa7690ff6efff33a0abf67b8bebb85061c726e6e27ee6c104f33ceec1ca5f4a9"
+      ],
+      "next_waypoint_hex": "6767b0ddec498f18ddabfe7bafae07e40107be66cdc34c120db1977306a75af0"
+    },
+    {
+      "leg_count": 1,
+      "next_beacon_hex": null,
+      "legs_le_hex": [
+        "c5240d2f065cdfc9"
+      ],
+      "checkpoints_hex": [
+        "21c1acbaf471d7d835da005b3ed551896dc7e9b0682d5a622978fdd458c26c41"
+      ],
+      "next_waypoint_hex": null
+    }
+  ],
+  "note": "NL4 terrain and the §11.1 fold. Stage 0 opens at the seed. Each later stage opens at the previous waypoint."
+}

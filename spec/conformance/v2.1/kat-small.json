@@ -1,0 +1,217 @@
+{
+  "id": "kat-small",
+  "class": "positive",
+  "profile": {
+    "slot_bytes": 64,
+    "terrain_bytes": 256,
+    "sample_bytes": 32,
+    "steps_per_leg": 32
+  },
+  "public_key_hex": "7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a",
+  "seed_beacon_hex": "0100000000000000000000000000000000000000000000000000000000000000",
+  "seed_hex": "33a7a5581d8c481a8d0e002a70930b209e40262aa719a3d121ad69242042210d",
+  "opening_waypoint_hex": "33a7a5581d8c481a8d0e002a70930b209e40262aa719a3d121ad69242042210d",
+  "waypoint_equals_seed": 1,
+  "terrain_sha256": "9cf4e08ecca3770640d9e8aa0579b7cba22e94baaa2a5bc064e1788b95c9d791",
+  "stages": [
+    {
+      "leg_count": 1,
+      "next_beacon_hex": "0200000000000000000000000000000000000000000000000000000000000000",
+      "legs_le_hex": [
+        "fe824e60b189983f"
+      ],
+      "checkpoints_hex": [
+        "ec8d27ef999914a3f6674bf8ce831de0102a88278a371516e0fc0995ed666eb6"
+      ],
+      "next_waypoint_hex": "9a70e0eccef5e276786028f3661c939bdb5729bac1a730f1b7f9788e990ded14"
+    },
+    {
+      "leg_count": 1,
+      "next_beacon_hex": "0300000000000000000000000000000000000000000000000000000000000000",
+      "legs_le_hex": [
+        "bd9088d60c3c3bc7"
+      ],
+      "checkpoints_hex": [
+        "4c66a36889bb487eeb376b74bab93d20380d9597a4182d8d4d3b2cacf9cbe22c"
+      ],
+      "next_waypoint_hex": "ebd89501c2e95eabd862aebc2566cc5cd80f8cd378e922fefb4cbc6750083ac8"
+    },
+    {
+      "leg_count": 1,
+      "next_beacon_hex": "0400000000000000000000000000000000000000000000000000000000000000",
+      "legs_le_hex": [
+        "3520c8145065246b"
+      ],
+      "checkpoints_hex": [
+        "e8587016906f1b924b3bdd05c4d298a7307abd46e1989c1b65c4c85829c6cf78"
+      ],
+      "next_waypoint_hex": "96bd96449e615a4e2194f13ace5b52925009cec87fbf9a592b8f23318278aa5c"
+    },
+    {
+      "leg_count": 1,
+      "next_beacon_hex": "5555555555555555555555555555555555555555555555555555555555555555",
+      "legs_le_hex": [
+        "c3a11bb9b21a2371"
+      ],
+      "checkpoints_hex": [
+        "9ba9230a299f0e780ccfe58f1da80e3e5c270be703c63c4a46beb3372868b356"
+      ],
+      "next_waypoint_hex": "4d7d5bfa121b3a484f1b8ac0061404e55460929925398d881a799d5410e89547"
+    },
+    {
+      "leg_count": 1,
+      "next_beacon_hex": "0600000000000000000000000000000000000000000000000000000000000000",
+      "legs_le_hex": [
+        "d66578ce639e3d2e"
+      ],
+      "checkpoints_hex": [
+        "2ed730708c5cfc65a73909befb19a858ec9b445071855f08e8f79249b42cc026"
+      ],
+      "next_waypoint_hex": "ce0fe6e20e4ab626e6963fc9943d81dab27f33213552386ab55c46e0a5e5b74f"
+    },
+    {
+      "leg_count": 1,
+      "next_beacon_hex": "0700000000000000000000000000000000000000000000000000000000000000",
+      "legs_le_hex": [
+        "60c70530f1821983"
+      ],
+      "checkpoints_hex": [
+        "5c3d7b6bb9fa9958371f4240ed5cc1e6ef562e6bd7901e69a00a71bdf5030e00"
+      ],
+      "next_waypoint_hex": "a07e683167cb3e83c6cb739ac9279c85a7c79daf3f46ca2e5fd17d2e589d15dc"
+    },
+    {
+      "leg_count": 1,
+      "next_beacon_hex": "0800000000000000000000000000000000000000000000000000000000000000",
+      "legs_le_hex": [
+        "0dc4314b65df3e25"
+      ],
+      "checkpoints_hex": [
+        "e6b87f9023ae282f7df37ae8da066e6c0792b46dcdac9933c64e385e07df976a"
+      ],
+      "next_waypoint_hex": "0cf9297b9238560c1e338fac6fac112b152009c0ad79bddabd26312220bb4dde"
+    },
+    {
+      "leg_count": 1,
+      "next_beacon_hex": "0900000000000000000000000000000000000000000000000000000000000000",
+      "legs_le_hex": [
+        "f85a8633fdf5f6f0"
+      ],
+      "checkpoints_hex": [
+        "4a5cf62798e8d525b6c7d4d0507be914107338eee0bb7ecca695c0dcedf4169b"
+      ],
+      "next_waypoint_hex": "998ac97afc858320ff14b71e0683d01db4ae2bdb066d79060e28c5bcbac5c304"
+    },
+    {
+      "leg_count": 1,
+      "next_beacon_hex": "0a00000000000000000000000000000000000000000000000000000000000000",
+      "legs_le_hex": [
+        "b2ee207b9f8ac370"
+      ],
+      "checkpoints_hex": [
+        "13fdcd65374c731da8b7f9c787b0f57d5c9a4af4da2fe85860e0c28be4233da0"
+      ],
+      "next_waypoint_hex": "a032ad3da44709d9e7f114e96c59f20b861b37ec91236b58009786380873007d"
+    },
+    {
+      "leg_count": 1,
+      "next_beacon_hex": "0b00000000000000000000000000000000000000000000000000000000000000",
+      "legs_le_hex": [
+        "9131bbf448c4aca9"
+      ],
+      "checkpoints_hex": [
+        "ae44670eea1f09f2eaab3eb2558705f1bebd47732a6d007ddf3cc42fc798c0b7"
+      ],
+      "next_waypoint_hex": "c44392554b57d233bd33a324e4368d3df45dc4696c2dbc5d4724bf246b63a356"
+    },
+    {
+      "leg_count": 1,
+      "next_beacon_hex": "0c00000000000000000000000000000000000000000000000000000000000000",
+      "legs_le_hex": [
+        "a7d7c988b95e6bd8"
+      ],
+      "checkpoints_hex": [
+        "040c91373baf7932ad4a8522ec84b4318116ddf09c0781251c50ec4c17a123cb"
+      ],
+      "next_waypoint_hex": "d385f3abf06a09ead07aadf3a351a28016856662f659f39a7b33aedc49577ca9"
+    },
+    {
+      "leg_count": 1,
+      "next_beacon_hex": "0d00000000000000000000000000000000000000000000000000000000000000",
+      "legs_le_hex": [
+        "9acd925aa4e68259"
+      ],
+      "checkpoints_hex": [
+        "908ac84042bcafa7281aaa784ea5406d1229e2a68af33bc44eebcfb76a136914"
+      ],
+      "next_waypoint_hex": "0d44175be0f6ca97f626a896221040eb6590a5cc45e462a555dd77dd60831207"
+    },
+    {
+      "leg_count": 1,
+      "next_beacon_hex": "0e00000000000000000000000000000000000000000000000000000000000000",
+      "legs_le_hex": [
+        "cdad34e0ac058109"
+      ],
+      "checkpoints_hex": [
+        "cb24013de0b35090f04c418f453f4696cb8df3429a6f7d69b8a3dada9d65d76a"
+      ],
+      "next_waypoint_hex": "a72b6e8b4a75e7bddf9fae81c588923c2a6d48082795faa3d0021cf2f2b2fdc2"
+    },
+    {
+      "leg_count": 1,
+      "next_beacon_hex": "0f00000000000000000000000000000000000000000000000000000000000000",
+      "legs_le_hex": [
+        "1c64a926e21fa95f"
+      ],
+      "checkpoints_hex": [
+        "e982971f5ffc21be2fee12676f950d102b897f2f5e3395065f89da3125745d3a"
+      ],
+      "next_waypoint_hex": "1408ecc5d2b4a1dc9cad6a673ff25b88c2ab7f7c126f9bd672db5e2cb0f9b77a"
+    },
+    {
+      "leg_count": 1,
+      "next_beacon_hex": "1000000000000000000000000000000000000000000000000000000000000000",
+      "legs_le_hex": [
+        "ccea5da1badd2e00"
+      ],
+      "checkpoints_hex": [
+        "9e5442f234bbde7fd1138e558eeb32f9406718cdbc1da1d617718a13d86f00e4"
+      ],
+      "next_waypoint_hex": "1a048733a5fa8fcb67e53fc94158d2ba0a3f5df6f4b4198fa321f2edd23856c7"
+    },
+    {
+      "leg_count": 1,
+      "next_beacon_hex": "1100000000000000000000000000000000000000000000000000000000000000",
+      "legs_le_hex": [
+        "c247dfa8b00a652d"
+      ],
+      "checkpoints_hex": [
+        "d2cc2f8b55063d2fc933f2a2ef3cf9035f86aa73c7ab2ee07c05d3ddb829d9e6"
+      ],
+      "next_waypoint_hex": "8ffb280f7815ed428d5415e9764c088b514692d7f54c23111d0d3ae32a18a284"
+    },
+    {
+      "leg_count": 1,
+      "next_beacon_hex": "1200000000000000000000000000000000000000000000000000000000000000",
+      "legs_le_hex": [
+        "3a88b10ee6c96bd7"
+      ],
+      "checkpoints_hex": [
+        "7c55b9fae25ed718001854dc148017361deb47d71f3e32748645439798e22ead"
+      ],
+      "next_waypoint_hex": "a9f1b220a5371c782caff8afcfa0f499fafabf28aa0c7f8cb4a1e455ddda7930"
+    },
+    {
+      "leg_count": 1,
+      "next_beacon_hex": null,
+      "legs_le_hex": [
+        "39175b1f7409d5e0"
+      ],
+      "checkpoints_hex": [
+        "27b832c8fe58946244fd0a888ae8f49f92d53e26045511602b3d7a92b51f208d"
+      ],
+      "next_waypoint_hex": null
+    }
+  ],
+  "note": "NL4 terrain and the §11.1 fold. Stage 0 opens at the seed. Each later stage opens at the previous waypoint."
+}

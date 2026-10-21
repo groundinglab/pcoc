@@ -1,0 +1,41 @@
+{
+  "id": "rate",
+  "floor": {
+    "p": 1,
+    "q": 5,
+    "mark": "placeholder, not ratified"
+  },
+  "comparison": "q * hike_legs >= p * hike_span and hike_span > 0",
+  "cases": [
+    {
+      "name": "above",
+      "class": "positive",
+      "hike_legs": 2,
+      "hike_span": 9,
+      "meets": true
+    },
+    {
+      "name": "below",
+      "class": "negative",
+      "must_reject": true,
+      "hike_legs": 2,
+      "hike_span": 11,
+      "meets": false
+    },
+    {
+      "name": "boundary-meet",
+      "class": "positive",
+      "hike_legs": 1,
+      "hike_span": 5,
+      "meets": true
+    },
+    {
+      "name": "boundary-fail",
+      "class": "negative",
+      "must_reject": true,
+      "hike_legs": 1,
+      "hike_span": 6,
+      "meets": false
+    }
+  ]
+}

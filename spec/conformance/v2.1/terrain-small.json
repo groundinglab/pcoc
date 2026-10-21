@@ -1,0 +1,19 @@
+{
+  "id": "terrain-small",
+  "class": "positive",
+  "public_key_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+  "seed_beacon_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+  "cases": [
+    {
+      "slot_bytes": 64,
+      "terrain_bytes": 256,
+      "sha256": "88c645f617547382474640c765a93d46b4369c064dc610511f76fccca8e2c81c"
+    },
+    {
+      "slot_bytes": 64,
+      "terrain_bytes": 1024,
+      "sha256": "b30fa73f11634d09030c196997412b385743ce869eb5160821e15d47a42aabf5"
+    }
+  ],
+  "note": "Full NL4 fill, parents and slot_mix included. 1024 bytes is 16 slots, so parents run."
+}

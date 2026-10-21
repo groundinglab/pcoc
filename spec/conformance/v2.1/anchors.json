@@ -1,0 +1,33 @@
+{
+  "id": "anchors",
+  "minimum": 6,
+  "cases": [
+    {
+      "name": "six",
+      "class": "positive",
+      "indices": [
+        2,
+        4,
+        6,
+        8,
+        10,
+        12
+      ],
+      "meets": true
+    },
+    {
+      "name": "five",
+      "class": "negative",
+      "must_reject": true,
+      "indices": [
+        2,
+        4,
+        6,
+        8,
+        10
+      ],
+      "meets": false
+    }
+  ],
+  "note": "anchored_total >= 6 anywhere among W_1 .. W_16. No first-planted or last-planted rule."
+}

@@ -1,0 +1,69 @@
+{
+  "id": "negatives",
+  "class": "negative",
+  "public_key_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+  "seed_beacon_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+  "cases": [
+    {
+      "name": "fill_pin_terrain",
+      "must_reject": true,
+      "slot_bytes": 64,
+      "terrain_bytes": 256,
+      "forbidden_sha256": "85fbfe9b82178c9cc9306a32ed6db6bc60d1a5ce245963279671147b6d7cf81b",
+      "conforming_sha256": "88c645f617547382474640c765a93d46b4369c064dc610511f76fccca8e2c81c"
+    },
+    {
+      "name": "ref_word",
+      "must_reject": true,
+      "i": 0,
+      "j": 0,
+      "forbidden_u64_hex": "6bd6efcd910ce11d",
+      "conforming_u64_hex": "c7582082a632c2c8"
+    },
+    {
+      "name": "all4_word",
+      "must_reject": true,
+      "i": 0,
+      "j": 0,
+      "forbidden_u64_hex": "880a81da1f152536",
+      "conforming_u64_hex": "c7582082a632c2c8"
+    },
+    {
+      "name": "mix64_without_mix_add",
+      "must_reject": true,
+      "words": 2048,
+      "S_u64_hex": "0000000000000000",
+      "forbidden_S_folded_u64_hex": "2760ebe274a7a12d",
+      "conforming_S_folded_u64_hex": "a284caf306ff68a0"
+    },
+    {
+      "name": "fatslot_fold",
+      "must_reject": true,
+      "words": 2048,
+      "S_u64_hex": "0000000000000000",
+      "forbidden_S_folded_u64_hex": "4d57a0275efaf0c0",
+      "conforming_S_folded_u64_hex": "a284caf306ff68a0"
+    },
+    {
+      "name": "partial_slot_read",
+      "must_reject": true,
+      "words": 2048,
+      "words_read": 1,
+      "S_u64_hex": "0000000000000000",
+      "forbidden_S_folded_u64_hex": "0836dd6697660d54",
+      "conforming_S_folded_u64_hex": "a284caf306ff68a0"
+    },
+    {
+      "name": "f3_shared_terrain",
+      "must_reject": true,
+      "pk2_hex": "4b11111111111111112d1111111111111111111111111111fee8e38dee97a619",
+      "slot_bytes": 64,
+      "terrain_bytes": 1024,
+      "forbidden_sha256_pk1": "910e1451f65cac9c1f03e9ce565a3f194e8bb22391745118bc7ec63f27107fcd",
+      "forbidden_sha256_pk2": "910e1451f65cac9c1f03e9ce565a3f194e8bb22391745118bc7ec63f27107fcd",
+      "conforming_sha256_pk1": "b30fa73f11634d09030c196997412b385743ce869eb5160821e15d47a42aabf5",
+      "conforming_sha256_pk2": "0698c63b0bb6b1ef7b9073407e2f7f2bdf1792868011c560c078b4ee52749067",
+      "note": "The withdrawn fill pin collides, so those two terrains match. NL4 terrains differ. A shared terrain for this pair is rejected."
+    }
+  ]
+}

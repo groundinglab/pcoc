@@ -1,0 +1,52 @@
+{
+  "id": "nl4-words",
+  "class": "positive",
+  "public_key_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+  "seed_beacon_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+  "samples": [
+    {
+      "i": 0,
+      "j": 0,
+      "u64_hex": "c7582082a632c2c8"
+    },
+    {
+      "i": 0,
+      "j": 1,
+      "u64_hex": "6395f245d5934a68"
+    },
+    {
+      "i": 0,
+      "j": 2,
+      "u64_hex": "dd3aaa1f4cc23a0b"
+    },
+    {
+      "i": 0,
+      "j": 3,
+      "u64_hex": "23da68c5377ed50a"
+    },
+    {
+      "i": 1,
+      "j": 0,
+      "u64_hex": "a9d24682c24f67c9"
+    },
+    {
+      "i": 1,
+      "j": 1,
+      "u64_hex": "6f4529b850deed8f"
+    },
+    {
+      "i": 7,
+      "j": 7,
+      "u64_hex": "38ac197bd39defe0"
+    },
+    {
+      "i": 255,
+      "j": 255,
+      "u64_hex": "9e61ddf478cdd5c7"
+    }
+  ],
+  "slot0_words": 2048,
+  "parents": false,
+  "slot0_sha256": "307ad685fb999e9a5135ad89a43ea1f0b809996f47b841f04d125ce053e0e241",
+  "note": "Base words only. Slot 0 has no parents. SHA-256 is over the 2048 little-endian words."
+}
