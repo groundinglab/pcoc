@@ -33,14 +33,17 @@ func TestVerifyRejectsWithdrawnFolds(t *testing.T) {
 	slot := NL4BaseSlot(pub, beacon, 0, 2048)
 	state := uint64(0)
 	got := FoldSlot(slot, state)
-	if got != 0xa284caf306ff68a0 {
+	if got != 0x76e07e211682940a {
 		t.Fatalf("conforming fold %x", got)
 	}
-	if foldWithoutMixAdd(slot, state) == got || foldWithoutMixAdd(slot, state) != 0x2760ebe274a7a12d {
+	if foldWithoutMixAdd(slot, state) == got || foldWithoutMixAdd(slot, state) != 0x6b98972f2e622525 {
 		t.Fatalf("mix64 without MIX_ADD %x", foldWithoutMixAdd(slot, state))
 	}
 	if fatSlotFold(slot, state) == got || fatSlotFold(slot, state) != 0x4d57a0275efaf0c0 {
-		t.Fatalf("fatslot %x", fatSlotFold(slot, state))
+		t.Fatalf("v2.0 fold %x", fatSlotFold(slot, state))
+	}
+	if xorAccFold(slot, state) == got || xorAccFold(slot, state) != 0xa284caf306ff68a0 {
+		t.Fatalf("xor accumulator %x", xorAccFold(slot, state))
 	}
 	partial := foldFirstWords(slot, state, 1)
 	if partial == got || partial != 0x0836dd6697660d54 {
@@ -191,12 +194,22 @@ func mix64WithoutAdd(x uint64) uint64 {
 	return y ^ (y >> 31)
 }
 
+func xorAccFold(slot []byte, state uint64) uint64 {
+	var acc uint64
+	n := len(slot) / 8
+	for w := 0; w < n; w++ {
+		word := binary.LittleEndian.Uint64(slot[w*8 : w*8+8])
+		acc ^= mix64(word ^ uint64(w) ^ state)
+	}
+	return acc
+}
+
 func foldWithoutMixAdd(slot []byte, state uint64) uint64 {
 	var acc uint64
 	n := len(slot) / 8
 	for w := 0; w < n; w++ {
 		word := binary.LittleEndian.Uint64(slot[w*8 : w*8+8])
-		acc ^= mix64WithoutAdd(word ^ uint64(w) ^ state)
+		acc += mix64WithoutAdd(word ^ uint64(w) ^ state)
 	}
 	return acc
 }

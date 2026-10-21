@@ -47,8 +47,11 @@ func TestSpec6ConstantsArePinned(t *testing.T) {
 	if hex.EncodeToString(SeedValue(pre[:32], pre[32:])) != "5189c77d29fe5d546a045ec46986852785fea5c13ac7da9c115ff5fb6edf817c" {
 		t.Error("P6.14 retired seed")
 	}
-	if Kind != "satoshi-hike-v2.0-object" {
+	if Kind != "satoshi-hike-v2.1-object" {
 		t.Errorf("P6.15 KIND %q", Kind)
+	}
+	if KindV20 != "satoshi-hike-v2.0-object" || !IsEarlierKind(KindV20) || !IsEarlierKind(KindV135) {
+		t.Error("earlier kinds")
 	}
 	if Fill != "dag2" {
 		t.Errorf("P6.16 FILL %q", Fill)

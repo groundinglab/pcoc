@@ -162,20 +162,21 @@ func writeSlot(blob []byte, profile Profile, index int, words []uint64) {
 }
 
 // FoldSlot is the §11.1 accumulator. acc starts at 0. Every little-endian
-// word of slot is mixed with its index and the state. A shorter read is
-// not this function.
+// word of slot is mixed with its index and the state, then added with
+// wrapping addition. An XOR of the mix64 outputs is not this function.
+// A shorter read is not this function.
 func FoldSlot(slot []byte, state uint64) uint64 {
 	var acc uint64
 	n := len(slot) / 8
 	for w := 0; w < n; w++ {
 		word := binary.LittleEndian.Uint64(slot[w*8 : w*8+8])
-		acc ^= mix64(word ^ uint64(w) ^ state)
+		acc += mix64(word ^ uint64(w) ^ state)
 	}
 	return acc
 }
 
-// SealState is SHA-256(SEAL_DOMAIN ‖ le64(S_folded)) and S' from the
-// first eight digest bytes, little-endian.
+// SealState is E = SHA-256(SEAL_DOMAIN ‖ le64(S_folded)) and S' from the
+// first eight digest bytes, little-endian. E is the seal digest. D is the seed.
 func SealState(folded uint64) (digest []byte, next uint64) {
 	sum := sealSum(folded)
 	digest = append([]byte(nil), sum[:]...)

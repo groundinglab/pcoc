@@ -1,6 +1,6 @@
 // Package hike is a clean-room Satoshi Hike produce and verify.
 // The construction is Satoshi Hike v2.1: the 32-byte seed, the NL4 word,
-// and the §11.1 fold. The wire kind stays satoshi-hike-v2.0-object.
+// and the §11.1 wrapping-add fold. The wire kind is satoshi-hike-v2.1-object.
 // An earlier kind string is recognized and is not measured.
 // Section 14 records measurements. LegRateMeets and AnchorsMeet are the
 // Rule B2 and Rule B4 comparisons. They are not section 14 tokens.
@@ -22,11 +22,16 @@ const (
 	LegResultBytes = 8
 	PublicKeyBytes = 32
 	BeaconBytes    = 32
-	// KindV135 is the earlier kind string Rule A5 names. It is not a profile.
+	// KindV135 and KindV20 are the earlier kind strings Rule A5 names.
+	// They are not a profile. Section 14 records them and does not fill terrain.
 	KindV135 = "satoshi-hike-v1.35-object"
-	// Kind is P6.15. v2.1 does not add an object field.
-	Kind = "satoshi-hike-v2.0-object"
-	Fill = "dag2"
+	KindV20  = "satoshi-hike-v2.0-object"
+	// Kind is P6.15.
+	Kind = "satoshi-hike-v2.1-object"
+	// PlaceholderDeadlineK is the §15 submission-deadline placeholder, in
+	// blocks. It is not ratified. A gap of 3 does not refuse. A gap of 4 does.
+	PlaceholderDeadlineK int64 = 3
+	Fill                       = "dag2"
 	// EarlierVersionToken is Rule A5. The record key is version.
 	// Gate reason earlier_version is section 15 and is not written here.
 	EarlierVersionToken = "earlier version"
@@ -77,10 +82,11 @@ func AnchorWindowOrigin(stageBeaconHeight uint64) uint64 {
 	return stageBeaconHeight
 }
 
-// IsEarlierKind reports the Rule A5 kind. A kind that is neither Kind nor
-// this text stays a section 14.1 shape measurement.
+// IsEarlierKind reports a Rule A5 kind. A kind that is neither Kind nor one
+// of these two texts stays a section 14.1 shape measurement. An earlier
+// object is recorded before any terrain fill.
 func IsEarlierKind(kind string) bool {
-	return kind == KindV135
+	return kind == KindV135 || kind == KindV20
 }
 
 // BindThreadsFrom reads PCOC_BIND_THREADS. Blank, unset, and non-positive
@@ -119,7 +125,7 @@ type Profile struct {
 var Production = mustProfile("production", Kind, 1024, 16384, 268435456, 2000000)
 
 // ConformanceSmallV2 is §16.1. The four integers are sample 32, slot 64,
-// terrain 256, and steps 32. KIND stays the v2.0 kind string.
+// terrain 256, and steps 32. KIND stays the v2.1 kind string.
 var ConformanceSmallV2 = mustProfile("conformance-small", Kind, 32, 64, 256, 32)
 
 func mustProfile(name, kind string, sample, slot, terrain, steps int) Profile {

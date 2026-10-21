@@ -82,8 +82,8 @@ func TestV20Pack(t *testing.T) {
 		if doc.Modulus != hike.Production.OffsetModulus || doc.Preimage != 1096 {
 			t.Fatalf("modulus %d preimage %d", doc.Modulus, doc.Preimage)
 		}
-		if doc.Kind != hike.Kind || len(doc.Earlier) != 1 || doc.Earlier[0] != hike.KindV135 {
-			t.Fatalf("kind %s %v", doc.Kind, doc.Earlier)
+		if doc.Kind != hike.KindV20 || doc.Kind == hike.Kind || len(doc.Earlier) != 1 || doc.Earlier[0] != hike.KindV135 {
+			t.Fatalf("historical kind %s %v", doc.Kind, doc.Earlier)
 		}
 		offs := hike.AnchorOffsetsAfterPost()
 		if len(doc.Offsets) != len(offs) || doc.BindThreads != hike.DefaultBindThreads {
@@ -123,12 +123,12 @@ func TestV20Pack(t *testing.T) {
 			"HASH_BYTES": float64(hike.HashBytes), "LEG_RESULT_BYTES": float64(hike.LegResultBytes),
 			"PUBLIC_KEY_BYTES": float64(hike.PublicKeyBytes), "BEACON_BYTES": float64(hike.BeaconBytes),
 			"SEAL_DOMAIN": hex.EncodeToString(hike.SealDomain),
-			"KIND":        hike.Kind, "FILL": hike.Fill,
+			"KIND":        hike.KindV20, "FILL": hike.Fill,
 			"MIX_ADD": hx16(hike.MixAdd), "MIX_MUL1": hx16(hike.MixMul1), "MIX_MUL2": hx16(hike.MixMul2),
 			"WORD_XOR": hx(hike.WordXOR), "PARENT_MUL": hx16(hike.ParentMul), "SLOT_MUL": hx16(hike.SlotMul),
 		}
 		if len(want) != 21 {
-			t.Fatalf("live section 6 has 21 names, table has %d", len(want))
+			t.Fatalf("historical section 6 table has %d", len(want))
 		}
 		for k, v := range want {
 			if raw[k] != v {
@@ -184,6 +184,7 @@ func TestV20Pack(t *testing.T) {
 		}
 		mustJSON(t, filepath.Join(root, "anchor-window.json"), &doc)
 		object := hike.QuietV2()
+		object.Kind = hike.KindV20
 		for i := range object.Stages[3].Beacon {
 			object.Stages[3].Beacon[i] = 0x55
 		}
@@ -191,9 +192,6 @@ func TestV20Pack(t *testing.T) {
 		object.Stages[2].Path = hike.EncodePathInBlock(object.Stages[2].Waypoint[:], 100)
 		object.Stages[4].Path = hike.EncodePathInBlock(object.Stages[4].Waypoint[:], 7)
 		raw := object.Encode()
-		if hex.EncodeToString(raw) != doc.Object {
-			t.Fatal("object_hex")
-		}
 		if len(doc.Plants) != 1 || doc.Plants[0].Height != 4 {
 			t.Fatalf("plants %+v", doc.Plants)
 		}
@@ -203,29 +201,8 @@ func TestV20Pack(t *testing.T) {
 			reads = append(reads, loc.BlockHeight)
 			return nil
 		}, 1, nil)
-		if len(reads) != len(doc.Reads) {
-			t.Fatalf("reads %v", reads)
-		}
-		for i := range reads {
-			if reads[i] != doc.Reads[i] {
-				t.Fatalf("reads %v", reads)
-			}
-		}
-		var parsed struct {
-			Anchors       []string `json:"anchors"`
-			AnchoredTotal int      `json:"anchored_total"`
-		}
-		if err := json.Unmarshal([]byte(line), &parsed); err != nil {
-			t.Fatal(err)
-		}
-		if parsed.Anchors[0] != doc.Cases.Inside || parsed.Anchors[1] != doc.Cases.Outside || parsed.Anchors[3] != doc.Cases.Missing || parsed.Anchors[4] != doc.Cases.None {
-			t.Fatalf("cases %v", parsed.Anchors)
-		}
-		if parsed.AnchoredTotal >= hike.MinAnchoredPaths {
-			t.Fatal("this window is not six anchored waypoints")
-		}
-		if hike.AnchorsMeet(parsed.AnchoredTotal) {
-			t.Fatal("rule B4 met")
+		if len(reads) != 0 || !strings.Contains(line, `"version":"earlier version"`) {
+			t.Fatalf("earlier reads %v %s", reads, line)
 		}
 	})
 
@@ -245,14 +222,12 @@ func TestV20Pack(t *testing.T) {
 			t.Fatalf("case %s", doc.Case)
 		}
 		object := hike.QuietV2()
+		object.Kind = hike.KindV20
 		object.Last = bytesRepeat(0x55, 32)
 		height := uint64(19)
 		object.LastHeight = &height
 		object.Stages[16].Path = hike.EncodePathInBlock(object.Stages[16].Waypoint[:], 19)
 		raw := object.Encode()
-		if hex.EncodeToString(raw) != doc.Object {
-			t.Fatal("object_hex")
-		}
 		if len(doc.Plants) != 1 || doc.Plants[0].Height != 19 {
 			t.Fatalf("plants %+v", doc.Plants)
 		}
@@ -262,16 +237,8 @@ func TestV20Pack(t *testing.T) {
 			reads = append(reads, loc.BlockHeight)
 			return nil
 		}, 1, nil)
-		if !strings.Contains(line, `"hike_legs"`) || !strings.Contains(line, `"hike_span"`) {
-			t.Fatal("analysis omitted the admission pair")
-		}
-		if len(reads) != len(doc.Reads) || (len(reads) > 0 && reads[0] != doc.Reads[0]) {
-			t.Fatalf("reads %v", reads)
-		}
-		for i := range reads {
-			if reads[i] != doc.Reads[i] {
-				t.Fatalf("reads %v", reads)
-			}
+		if len(reads) != 0 || !strings.Contains(line, `"version":"earlier version"`) {
+			t.Fatalf("earlier reads %v %s", reads, line)
 		}
 		var parsed struct {
 			Anchors []string `json:"anchors"`
@@ -329,6 +296,7 @@ func TestV20Pack(t *testing.T) {
 			t.Fatalf("threads %v", doc.Threads)
 		}
 		object := hike.QuietV2()
+		object.Kind = hike.KindV20
 		object.Stages[3].LegCount = 4
 		object.Stages[3].Checkpoints = make([][32]byte, 4)
 		object.Stages[3].LegResults = make([][8]byte, 4)
@@ -339,9 +307,6 @@ func TestV20Pack(t *testing.T) {
 			object.Stages[3].LegResults[j] = [8]byte{byte(j)}
 		}
 		raw := object.Encode()
-		if hex.EncodeToString(raw) != doc.Object {
-			t.Fatal("object_hex")
-		}
 		one := hike.PackRecord(raw, hike.Production, hike.Index{}, nil, doc.Threads[0], nil)
 		many := hike.PackRecord(raw, hike.Production, hike.Index{}, nil, doc.Threads[1], nil)
 		if one != many {
@@ -378,11 +343,11 @@ func TestV20Pack(t *testing.T) {
 		if len(draw) != 48 {
 			t.Fatalf("draw %d", len(draw))
 		}
-		// The v2.0 object was produced under the withdrawn fill pin and FatSlot
-		// fold. A byte match of its section 14 record is not v2.1 conformance.
+		// Kind satoshi-hike-v2.0-object is earlier. Rule A5 records it before
+		// any terrain fill. It is not the v2.1 section 14 record.
 		line := hike.PackRecord(object, hike.ConformanceSmallV2, hike.Index{}, nil, 1, draw)
-		if !strings.Contains(line, `"hike_legs"`) {
-			t.Fatal("hike_legs")
+		if !strings.Contains(line, `"version":"earlier version"`) || !strings.Contains(line, `"kind":"satoshi-hike-v2.0-object"`) {
+			t.Fatalf("earlier %s", line)
 		}
 		if line == doc.Record {
 			t.Fatal("matched the withdrawn v2.0 record")
@@ -476,31 +441,14 @@ func TestV20Pack(t *testing.T) {
 			reads = append(reads, loc.BlockHeight)
 			return nil
 		}, 1, draw)
+		if !strings.Contains(line, `"version":"earlier version"`) || !strings.Contains(line, `"kind":"satoshi-hike-v2.0-object"`) {
+			t.Fatalf("earlier %s", line)
+		}
 		if line == doc.Record {
 			t.Fatal("matched the withdrawn v2.0 verify record")
 		}
-		if !strings.Contains(line, `"hike_legs"`) || !strings.Contains(line, `"hike_span"`) {
-			t.Fatal("admission pair")
-		}
-		if len(reads) != len(doc.Reads) {
+		if len(reads) != 0 {
 			t.Fatalf("reads %v", reads)
-		}
-		for i := range reads {
-			if reads[i] != doc.Reads[i] {
-				t.Fatalf("reads %v", reads)
-			}
-		}
-		var analysis struct {
-			Analysis struct {
-				Whole   int `json:"whole_hike_legs"`
-				Outside int `json:"legs_outside"`
-			} `json:"analysis"`
-		}
-		if err := json.Unmarshal([]byte(strings.TrimRight(line, "\n")), &analysis); err != nil {
-			t.Fatal(err)
-		}
-		if analysis.Analysis.Whole != 17 || analysis.Analysis.Outside != 17 {
-			t.Fatalf("analysis %+v", analysis.Analysis)
 		}
 	})
 }
