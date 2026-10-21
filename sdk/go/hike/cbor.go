@@ -75,6 +75,12 @@ func encodeBytes(b []byte) []byte {
 	return append(head(2, uint64(len(b))), b...)
 }
 
+// EarlierKindObject is a one-key map whose kind is an earlier kind.
+// Rule A5 records it before any terrain fill.
+func EarlierKindObject(kind string) []byte {
+	return encodeMap([][2][]byte{textPair("kind", encodeText(kind))})
+}
+
 func encodeText(s string) []byte {
 	raw := []byte(s)
 	return append(head(3, uint64(len(raw))), raw...)

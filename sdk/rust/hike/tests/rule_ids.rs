@@ -109,7 +109,7 @@ fn a4_3_checkpoint_digest_mismatch_on_a_small_leg() {
         out.copy_from_slice(&Sha256::digest(seed));
         out
     };
-    let terrain = hike::fill_terrain_sized(hike::fill_pin(&seed), sizes);
+    let terrain = hike::fill_terrain_sized(&hike::seed_from_preimage(&seed), sizes);
     let leg = hike::leg_result_sized(&terrain, &seed_value, sizes);
     let sample = hike::terrain_sample_sized(&terrain, &seed_value, sizes);
     let digest = hike::checkpoint_sized(&seed_value, &seed_value, &sample, leg, sizes);
@@ -141,7 +141,7 @@ fn a4_3_waypoint_rehash_mismatch_on_a_small_leg() {
         out.copy_from_slice(&Sha256::digest(seed));
         out
     };
-    let terrain = hike::fill_terrain_sized(hike::fill_pin(&seed), sizes);
+    let terrain = hike::fill_terrain_sized(&hike::seed_from_preimage(&seed), sizes);
     let leg = hike::leg_result_sized(&terrain, &seed_value, sizes);
     let sample = hike::terrain_sample_sized(&terrain, &seed_value, sizes);
     let digest = hike::checkpoint_sized(&seed_value, &seed_value, &sample, leg, sizes);
@@ -195,7 +195,7 @@ fn a4_4_six_leg_match_on_a_small_stage() {
         out.copy_from_slice(&Sha256::digest(seed));
         out
     };
-    let terrain = hike::fill_terrain_sized(hike::fill_pin(&seed), sizes);
+    let terrain = hike::fill_terrain_sized(&hike::seed_from_preimage(&seed), sizes);
     let mut previous = seed_value;
     let mut checkpoints = Vec::new();
     let mut legs = Vec::new();

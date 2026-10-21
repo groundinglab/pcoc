@@ -94,7 +94,7 @@ mod tests {
         assert_eq!(PIN, "../../sdk/rust/hike");
         assert_eq!(PIN_COMMIT, "local");
         assert_eq!(pin_line(), "in-tree Rust SDK at ../../sdk/rust/hike");
-        assert_eq!(OBJECT_KIND, "satoshi-hike-v2.0-object");
+        assert_eq!(OBJECT_KIND, "satoshi-hike-v2.1-object");
         assert_eq!(hike::MAINNET_DNS_SEEDS.len(), 7);
     }
 

@@ -3,7 +3,9 @@
 // Exit 0: the object decoded and a section 14 record was written.
 // Exit 1: the object file cannot be read or decoded.
 // Exit 2: usage.
-// Standard streams do not carry a policy verdict.
+// The record carries hike_legs and hike_span. It does not apply the
+// Rule B2 floor or the Rule B4 count. Standard streams do not carry a
+// policy verdict.
 package main
 
 import (

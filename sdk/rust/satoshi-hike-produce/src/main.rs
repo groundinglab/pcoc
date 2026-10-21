@@ -92,7 +92,13 @@ fn run() -> i32 {
                     }
                 }
             }
-            produce_anchored(book, bits, &clock, parsed.public_key)
+            match produce_anchored(book, bits, &clock, parsed.public_key) {
+                Ok(bytes) => {
+                    print_hike_summary(&bytes, &clock);
+                    Ok(bytes)
+                }
+                Err(err) => Err(err),
+            }
         }
     };
     let bytes = match produced {
@@ -186,6 +192,59 @@ fn produce_anchored(
     )
 }
 
+/// One line for the measurement runs: legs, the first and last beacon, and legs/s.
+fn print_hike_summary(bytes: &[u8], clock: &hike::HeaderClock) {
+    let Ok(hike) = hike::decoded_hike(bytes) else {
+        return;
+    };
+    let legs: u64 = hike.stages.iter().map(|stage| stage.leg_count).sum();
+    let (first_height, first_time) = match hike.stages.first() {
+        Some(stage) => (
+            Some(stage.beacon_height),
+            clock.n_time(&stage.beacon),
+        ),
+        None => (None, None),
+    };
+    let last_time = clock.n_time(&hike.last_interrupt);
+    let steps = legs.saturating_mul(hike::STEPS_PER_LEG);
+    let raw_rate = rate_per_s(legs, first_time, last_time);
+    let raw_steps = rate_per_s(steps, first_time, last_time);
+    let first_mtp = hike
+        .stages
+        .first()
+        .and_then(|stage| clock.median_time_past(&stage.beacon));
+    let last_mtp = clock.median_time_past(&hike.last_interrupt);
+    let mtp_rate = rate_per_s(legs, first_mtp, last_mtp);
+    let mtp_steps = rate_per_s(steps, first_mtp, last_mtp);
+    let show = |value: Option<u64>| value.map(|item| item.to_string()).unwrap_or_else(|| "not read".to_owned());
+    let show_u32 = |value: Option<u32>| value.map(|item| item.to_string()).unwrap_or_else(|| "not read".to_owned());
+    eprintln!(
+        "satoshi-hike-produce: hike_summary legs={legs} steps={steps} first_beacon_height={} first_beacon_time={} last_beacon_height={} last_beacon_time={} legs_per_s_raw_ntime={} steps_per_s_raw_ntime={} first_beacon_mtp={} last_beacon_mtp={} legs_per_s_mtp={} steps_per_s_mtp={}",
+        show(first_height),
+        show_u32(first_time),
+        hike.last_interrupt_height,
+        show_u32(last_time),
+        show_rate(raw_rate),
+        show_rate(raw_steps),
+        show_u32(first_mtp),
+        show_u32(last_mtp),
+        show_rate(mtp_rate),
+        show_rate(mtp_steps)
+    );
+}
+
+fn rate_per_s(legs: u64, first: Option<u32>, last: Option<u32>) -> Option<f64> {
+    match (first, last) {
+        (Some(first), Some(last)) if last > first => Some(legs as f64 / f64::from(last - first)),
+        _ => None,
+    }
+}
+
+fn show_rate(rate: Option<f64>) -> String {
+    rate.map(|item| format!("{item:.6}"))
+        .unwrap_or_else(|| "not read".to_owned())
+}
+
 fn finish(status: i32, report: &hike::Report, report_path: Option<&str>) -> i32 {
     if let Err(err) = hike::emit_report(report, report_path) {
         eprintln!("satoshi-hike-produce: {err}");
@@ -228,7 +287,7 @@ enum DemoFront {
 
 fn usage() {
     eprintln!(
-        "usage: satoshi-hike-produce --pubkey-hex HEX --output PATH --gossip-peer HOST:PORT --bari-url URL [--report PATH] [--profile test|live|slow-lan] [--clock-source gossip] [--gossip-network mainnet|regtest]\n       satoshi-hike-produce --demo-mnemonic PHRASE [--output PATH] [--report PATH] [--profile test|live|slow-lan] [--gossip-peer HOST:PORT] [--bari-url URL] [--clock-source gossip] [--gossip-network mainnet|regtest]\n       default profile is test. Observe is the synth tip sequence. Omitted --gossip-peer is PCOC_TEST_GOSSIP_PEER. Omitted --bari-url is PCOC_TEST_BARI_URL. Unset is a usage error. This tree does not fill those hosts. Omitted --gossip-network is regtest wire magic only (header network magic), not a Bitcoin Core tip clock or plant. slow-lan defaults to that same wire magic. It does not fill a live origin.\n       --profile live Observes mainnet gossip. With no --gossip-peer and no PCOC_LIVE_GOSSIP_PEER, the starting list is Bitcoin Core's mainnet DNS seeds. A lookup returns node addresses. The producer connects and asks those nodes for more peers. A bad address fails and is discarded. A named --gossip-peer or PCOC_LIVE_GOSSIP_PEER (host:port) still wins, and the command line wins over the environment variable. This tree does not invent that host or port. The network is mainnet. An omitted --bari-url is https://bari.groundinglab.io. --gossip-network regtest on live is a usage error.\n       --tip-url and --clock-source http are usage errors. Bitcoin Core, regtest, and testnet4 are not the test tip clock or plant. The test profile and slow-lan do not use the mainnet DNS seeds."
+        "usage: satoshi-hike-produce --pubkey-hex HEX --output PATH --gossip-peer HOST:PORT --bari-url URL [--report PATH] [--profile test|live|slow-lan] [--clock-source gossip] [--gossip-network mainnet|regtest]\n       satoshi-hike-produce --demo-mnemonic PHRASE [--output PATH] [--report PATH] [--profile test|live|slow-lan] [--gossip-peer HOST:PORT] [--bari-url URL] [--clock-source gossip] [--gossip-network mainnet|regtest]\n       default profile is test. Observe is the synth tip sequence. Omitted --gossip-peer is PCOC_TEST_GOSSIP_PEER. Omitted --bari-url is PCOC_TEST_BARI_URL. Unset is a usage error. This tree does not fill those hosts. Omitted --gossip-network is regtest wire magic only (header network magic), not a Bitcoin Core tip clock or plant. slow-lan defaults to that same wire magic. It does not fill a live origin.\n       --profile live Observes mainnet gossip. With no --gossip-peer and no PCOC_LIVE_GOSSIP_PEER, the starting list is Bitcoin Core's mainnet DNS seeds. A lookup returns node addresses. The producer connects and asks those nodes for more peers. A bad address fails and is discarded. A named --gossip-peer or PCOC_LIVE_GOSSIP_PEER (host:port) still wins, and the command line wins over the environment variable. This tree does not invent that host or port. The network is mainnet. An omitted --bari-url is https://bari.groundinglab.io. --gossip-network regtest on live is a usage error.\n       --tip-url and --clock-source http are usage errors. Bitcoin Core, regtest, and testnet4 are not the test tip clock or plant. The test profile and slow-lan do not use the mainnet DNS seeds.\n       A fresh test key is `satoshi-hike-keygen --pub-out FILE`. The producer takes only --pubkey-hex. It does not read a secret."
     );
 }
 

@@ -2,7 +2,6 @@ package pcoc.hike;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 import pcoc.json.Json;
 
 /**
@@ -16,7 +15,6 @@ public final class Measure {
         String body(long height);
     }
 
-    private static final ConcurrentHashMap<String, Terrain> TERRAIN = new ConcurrentHashMap<>();
     private static final String[] SHAPE_ORDER = {
         "field set",
         "stage-0 path key",
@@ -112,7 +110,9 @@ public final class Measure {
                 .put("whole_hike_legs", wholeDefined ? Json.num(wholeLegs) : Json.str("not defined"))
                 .put("whole_hike_span", span(timeAt(headers, 18), timeAt(headers, 1)))
                 .put("per_stage", perStage)
-                .put("legs_outside", book.outside);
+                .put("legs_outside", book.outside)
+                .put("hike_legs", hikeLegs(counts))
+                .put("hike_span", hikeSpan(top, stages, headers, reader));
         Json.Obj out = Json.obj();
         out.put("profile", profile.name);
         if ("conformance-small".equals(profile.name)) {
@@ -303,9 +303,9 @@ public final class Measure {
         return Json.num(total);
     }
 
+    /** One fill for this measurement. The terrain is not kept for a later call. */
     private static Terrain terrain(byte[] publicKey, byte[] seedBeacon, Profile profile) {
-        String key = profile.name + ":" + Bytes.hex(publicKey) + ":" + Bytes.hex(seedBeacon);
-        return TERRAIN.computeIfAbsent(key, ignored -> Terrain.fill(publicKey, seedBeacon, profile));
+        return Terrain.fill(publicKey, seedBeacon, profile);
     }
 
     private static boolean[] shape(Cbor.Val top, List<Cbor.Val> stages, Profile profile) {
@@ -929,7 +929,9 @@ public final class Measure {
                 .put("whole_hike_legs", notDefined)
                 .put("whole_hike_span", notRead)
                 .put("per_stage", perStage)
-                .put("legs_outside", notDefined);
+                .put("legs_outside", notDefined)
+                .put("hike_legs", notDefined)
+                .put("hike_span", notRead);
         Json.Obj fixed = Json.obj().put("N", notDefined).put("S", notDefined).put("delta_h", notDefined);
         Json.Obj out = Json.obj();
         out.put("profile", profile.name);
@@ -1111,6 +1113,69 @@ public final class Measure {
             return 0;
         }
         return mod;
+    }
+
+    /** Checkpoints over stages 0–17. A missing stage is not defined. Not bookend {@code N}. */
+    private static Json hikeLegs(int[] counts) {
+        long sum = 0;
+        for (int count : counts) {
+            if (count < 0) {
+                return Json.str("not defined");
+            }
+            sum += count;
+        }
+        return Json.num(sum);
+    }
+
+    /**
+     * Rule A4.10. {@code MTP(last beacon) − MTP(first beacon)}. Bookend {@code S}
+     * still uses raw {@code header.time}. A missing window time is {@code not read}.
+     */
+    private static Json hikeSpan(Cbor.Val top, List<Cbor.Val> stages, Header[] headers, Reader reader) {
+        Long firstHeight = stages != null && !stages.isEmpty() ? uint(stages.get(0), "beacon_height") : null;
+        Long lastHeight = uint(top, "last_interrupt_height");
+        Long first = medianAt(firstHeight, headers[0], reader);
+        Long last = medianAt(lastHeight, headers[18], reader);
+        Long span = Admit.hikeSpan(first, last);
+        if (span == null) {
+            return Json.str("not read");
+        }
+        return Json.num(span);
+    }
+
+    /** The beacon's own time is the Rule A4.2 {@code T}. The other heights are extra reads. */
+    private static Long medianAt(Long height, Header beacon, Reader reader) {
+        if (height == null || height < 0 || Hike.aboveJson(height)) {
+            return null;
+        }
+        int n = Admit.mtpCount(height);
+        long[] times = new long[n];
+        long start = height - n + 1;
+        for (int i = 0; i < n; i++) {
+            long at = start + i;
+            Long time = at == height ? beacon.time : windowTime(reader, at);
+            if (time == null) {
+                return null;
+            }
+            times[i] = time;
+        }
+        return Admit.medianTimePast(times);
+    }
+
+    /** A non-beacon header in the MTP window. Height must match. No hash compare. */
+    private static Long windowTime(Reader reader, long height) {
+        if (reader == null) {
+            return null;
+        }
+        String body = reader.body(height);
+        if (body == null) {
+            return null;
+        }
+        Index read = Index.readDocument(body);
+        if (read == null || read.height != height || read.time == null) {
+            return null;
+        }
+        return read.time;
     }
 
     private static Json span(Long later, Long earlier) {

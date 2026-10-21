@@ -83,7 +83,60 @@ fn run() -> i32 {
     }
     let profile = parsed.measure.record_name();
     let record = hike::verify_record_json(profile, &measurements);
+    if decoded {
+        print_admission(&record, &parsed);
+    }
     write_out(record.as_bytes(), parsed.report.as_deref())
+}
+
+/// Admission is the all-legs rate and six anchored waypoints anywhere.
+/// Stdout stays the section 14 record. The floor line is stderr.
+fn print_admission(record: &str, parsed: &hike::VerifyArgs) {
+    let (p, q) = parsed.leg_rate_floor.unwrap_or_else(floor_from_env);
+    let note = if (p, q) == (hike::PLACEHOLDER_FLOOR_P, hike::PLACEHOLDER_FLOOR_Q) {
+        hike::PLACEHOLDER_FLOOR_NOTE
+    } else {
+        "configured"
+    };
+    let rate = hike::beacon_rate(record);
+    let judgment = hike::judge_beacon_rate(&rate, p, q);
+    let decision = match judgment {
+        hike::RateJudgment::Clear => "clear".to_owned(),
+        hike::RateJudgment::Held => "held".to_owned(),
+        hike::RateJudgment::Refuse(reason) => format!("refuse:{reason}"),
+    };
+    let legs = rate
+        .legs
+        .map(|legs| legs.to_string())
+        .unwrap_or_else(|| "not read".to_owned());
+    let span = rate
+        .span_s
+        .map(|span| span.to_string())
+        .unwrap_or_else(|| "not read".to_owned());
+    let per_s = match (rate.legs, rate.span_s) {
+        (Some(legs), Some(span)) if span > 0 => format!("{:.6}", legs as f64 / span as f64),
+        _ => "not read".to_owned(),
+    };
+    let anchored = rate
+        .anchored
+        .map(|count| count.to_string())
+        .unwrap_or_else(|| "not read".to_owned());
+    eprintln!(
+        "satoshi-hike-verify: admission legs={legs} span_s={span} legs_per_s={per_s} anchored={anchored} floor={p}/{q} ({note}) decision={decision}"
+    );
+}
+
+fn floor_from_env() -> (u64, u64) {
+    let Ok(text) = std::env::var("PCOC_LEG_RATE_FLOOR") else {
+        return (hike::PLACEHOLDER_FLOOR_P, hike::PLACEHOLDER_FLOOR_Q);
+    };
+    let Some((left, right)) = text.trim().split_once('/') else {
+        return (hike::PLACEHOLDER_FLOOR_P, hike::PLACEHOLDER_FLOOR_Q);
+    };
+    match (left.parse::<u64>(), right.parse::<u64>()) {
+        (Ok(p), Ok(q)) if p > 0 && q > 0 => (p, q),
+        _ => (hike::PLACEHOLDER_FLOOR_P, hike::PLACEHOLDER_FLOOR_Q),
+    }
 }
 
 fn chain_rpc(parsed: &hike::VerifyArgs) -> Result<Option<hike_net::ChainRpc>, ()> {
@@ -109,7 +162,7 @@ fn chain_rpc(parsed: &hike::VerifyArgs) -> Result<Option<hike_net::ChainRpc>, ()
 
 fn usage() {
     eprintln!(
-        "usage: satoshi-hike-verify --input PATH --index-url URL [--audit-seed HEX] [--report PATH] [--profile production|conformance-small|test|live] [--sample-bytes N --slot-bytes N --terrain-bytes N --steps-per-leg N] [--chain-rpc URL] [--log quiet|verbose]\n       default profile is test. Omitted --index-url is PCOC_TEST_INDEX_URL. Unset is a usage error. This tree does not fill that host. It does not fill https://index.groundinglab.io.\n       --profile live fills that index. --chain-rpc is live-only.\n       --profile conformance-small requires all four integers. Any of them with another profile is a usage error, exit 2.\n       --log defaults to quiet. verbose writes the measurement record to stderr. stdout is the measurement record when the object decodes."
+        "usage: satoshi-hike-verify --input PATH --index-url URL [--audit-seed HEX] [--report PATH] [--profile production|conformance-small|test|live] [--sample-bytes N --slot-bytes N --terrain-bytes N --steps-per-leg N] [--leg-rate-floor P/Q] [--chain-rpc URL] [--log quiet|verbose]\n       default profile is test. Omitted --index-url is PCOC_TEST_INDEX_URL. Unset is a usage error. This tree does not fill that host. It does not fill https://index.groundinglab.io.\n       --profile live fills that index. --chain-rpc is live-only.\n       --profile conformance-small requires all four integers. Any of them with another profile is a usage error, exit 2.\n       --leg-rate-floor defaults to 1/5 (0.2 legs/s), placeholder, not ratified. PCOC_LEG_RATE_FLOOR is the same P/Q when the flag is omitted.\n       Admission on stderr is all legs / (T(last beacon) - T(first beacon)) and at least 6 anchored waypoints anywhere. There is no first/last-planted rule and no leg minimum. stdout is the measurement record when the object decodes.\n       --log defaults to quiet. verbose writes the measurement record to stderr."
     );
 }
 

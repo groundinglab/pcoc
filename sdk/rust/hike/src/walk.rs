@@ -1,7 +1,11 @@
 use crate::consts::*;
 use crate::sha::sha256;
+use crate::terrain::mix64;
 
 /// Next leg state after one step. `s_folded` is the integer folded into the seal.
+///
+/// The seal digest is `E`. `D` is the seed, not this digest. `E` is
+/// `u64_le(SHA-256(SEAL_DOMAIN ‖ le64(S_folded))[0:8])`.
 pub fn seal(s_folded: u64) -> u64 {
     let mut pre = [0u8; 20];
     pre[..12].copy_from_slice(SEAL_DOMAIN);
@@ -20,12 +24,17 @@ pub fn step_sized(terrain: &[u8], state: u64, sizes: Sizes) -> u64 {
     let i = (state % n_slots) as usize;
     let start = i * sizes.slot_bytes;
     let slot = &terrain[start..start + sizes.slot_bytes];
-    let mut folded = state;
-    for w in 0..sizes.words_per_slot() {
+    // §11.1: acc starts at 0. Every word of the slot is mixed with w and S.
+    // mix64 includes MIX_ADD. The accumulator is wrapping add. The seal
+    // digest of that acc is E.
+    let words = sizes.words_per_slot();
+    debug_assert_eq!(slot.len(), words * 8);
+    let mut acc = 0u64;
+    for w in 0..words {
         let word = u64::from_le_bytes(slot[w * 8..w * 8 + 8].try_into().unwrap());
-        folded ^= word ^ (w as u64);
+        acc = acc.wrapping_add(mix64(word ^ (w as u64) ^ state));
     }
-    seal(folded)
+    seal(acc)
 }
 
 pub fn leg_result(terrain: &[u8], previous_checkpoint: &[u8; 32]) -> u64 {
@@ -49,6 +58,7 @@ mod tests {
     use super::*;
 
     /// Section 11.1. The seal preimage is `SEAL_DOMAIN ‖ le64(S_folded)`, 20 bytes.
+    /// The digest's first 8 bytes are `E`.
     #[test]
     fn p11_1_seal_preimage_is_domain_then_le64() {
         let folded = 0x0102u64;
@@ -88,5 +98,37 @@ mod tests {
         assert_eq!(sizes.steps_per_leg, 32);
         assert_ne!(state, start);
         assert_eq!(leg_result_sized(&terrain, &previous, sizes), state);
+    }
+
+    /// §11.1 on four words. The accumulator is wrapping add. XOR of the same
+    /// mixes is the rejected accumulator. mix64 includes MIX_ADD.
+    #[test]
+    fn c1_fold_is_wrapping_add() {
+        let words = [
+            0x1111_1111_1111_1111u64,
+            0x2222_2222_2222_2222,
+            0x3333_3333_3333_3333,
+            0x4444_4444_4444_4444,
+        ];
+        let state = 0x0123_4567_89ab_cdefu64;
+        let mut acc = 0u64;
+        let mut xor = 0u64;
+        for (w, word) in words.iter().enumerate() {
+            let mixed = mix64(word ^ (w as u64) ^ state);
+            acc = acc.wrapping_add(mixed);
+            xor ^= mixed;
+        }
+        assert_eq!(acc, 0x5ab2_5313_2ce7_67e2);
+        assert_eq!(xor, 0x2af1_8a27_e8cd_3106);
+        assert_ne!(xor, acc);
+        let mut bare = 0u64;
+        for (w, word) in words.iter().enumerate() {
+            let x = word ^ (w as u64) ^ state;
+            let mut y = x;
+            y = (y ^ (y >> 30)).wrapping_mul(crate::consts::MIX_MUL1);
+            y = (y ^ (y >> 27)).wrapping_mul(crate::consts::MIX_MUL2);
+            bare = bare.wrapping_add(y ^ (y >> 31));
+        }
+        assert_ne!(bare, acc);
     }
 }

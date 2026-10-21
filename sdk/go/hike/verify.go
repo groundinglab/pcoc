@@ -3,6 +3,8 @@ package hike
 import (
 	"bytes"
 	"encoding/json"
+	"math/bits"
+	"sort"
 	"strconv"
 )
 
@@ -130,6 +132,8 @@ func undecodedV2(profile Profile) Record {
 		rec.Analysis.PerStage[i].CheckpointCount = jstr("not defined")
 	}
 	rec.Analysis.WholeHikeLegs = jstr("not defined")
+	rec.Analysis.HikeLegs = jstr("not defined")
+	rec.Analysis.HikeSpan = jstr("not read")
 	rec.SixLeg = jstr("not read")
 	rec.SixLegRuns = jstr("not read")
 	return rec
@@ -300,6 +304,8 @@ type Analysis struct {
 	WholeHikeSpan json.RawMessage `json:"whole_hike_span"`
 	PerStage      []StageSpan     `json:"per_stage"`
 	LegsOutside   json.RawMessage `json:"legs_outside"`
+	HikeLegs      json.RawMessage `json:"hike_legs"`
+	HikeSpan      json.RawMessage `json:"hike_span"`
 }
 
 type StageSpan struct {
@@ -557,6 +563,19 @@ func measure(item cborVal, profile Profile, index Index, pathChain func(PathLoca
 	if profile.Kind == Kind {
 		outside = book.outside
 	}
+	hikeLegsN := 0
+	hikeLegsOK := true
+	for g := 0; g < Stages; g++ {
+		if counts[g] < 0 {
+			hikeLegsOK = false
+			break
+		}
+		hikeLegsN += counts[g]
+	}
+	hikeLegs := jnum(int64(hikeLegsN))
+	if !hikeLegsOK {
+		hikeLegs = jstr("not defined")
+	}
 
 	rec := Record{
 		Profile:           profile.Name,
@@ -589,6 +608,8 @@ func measure(item cborVal, profile Profile, index Index, pathChain func(PathLoca
 			WholeHikeSpan: spanOf(times[18], times[1]),
 			PerStage:      per,
 			LegsOutside:   outside,
+			HikeLegs:      hikeLegs,
+			HikeSpan:      hikeSpanOf(index, headers[0], headers[18]),
 		},
 	}
 	if profile.Name == ConformanceSmallV2.Name {
@@ -834,7 +855,10 @@ func emptyBookends(profile Profile, shape string, items []string, headers []Head
 		A: nd, B: nd, N: nd, S: nd, DeltaH: nd, PB: nd, HeightPB: nd,
 		IndexComparisonPB: nd, TPB: nd, HeightIAMinus1: nd, TIAMinus1: nd,
 		FixedStart: FixedStart{N: nd, S: nd, DeltaH: nd},
-		Analysis:   Analysis{WholeHikeLegs: jnum(0), WholeHikeSpan: jstr("not read"), PerStage: per, LegsOutside: nd},
+		Analysis: Analysis{
+			WholeHikeLegs: jnum(0), WholeHikeSpan: jstr("not read"), PerStage: per, LegsOutside: nd,
+			HikeLegs: jstr("not defined"), HikeSpan: jstr("not read"),
+		},
 	}
 	if profile.Name == ConformanceSmallV2.Name {
 		s, sl, t, st := profile.SampleBytes, profile.SlotBytes, profile.TerrainBytes, profile.StepsPerLeg
@@ -1586,6 +1610,200 @@ func DG(plantMatch, headerMatch bool, heightPG, headerHeight int64) (int64, stri
 		return heightPG - headerHeight, ""
 	}
 	return 0, "not defined"
+}
+
+// hikeSpanOf is Rule A4.10. hike_span is MTP(last beacon) minus MTP(first
+// beacon). A missing height or a missing window time is not read.
+func hikeSpanOf(index Index, first, last Header) json.RawMessage {
+	fh, okF := rawInt(first.StoredHeight)
+	lh, okL := rawInt(last.StoredHeight)
+	if !okF || !okL || fh < 0 || lh < 0 {
+		return jstr("not read")
+	}
+	mtpF, okF := MedianTimePast(index, uint64(fh), first)
+	mtpL, okL := MedianTimePast(index, uint64(lh), last)
+	if !okF || !okL {
+		return jstr("not read")
+	}
+	return jnum(mtpL - mtpF)
+}
+
+// MedianTimePast is the BIP113 median at height h. n = min(11, h+1).
+// The beacon's own time is taken only when that header's index comparison
+// is match and the time follows section 9. Each other height in the window
+// supplies header.time when the read returned a document, header.height
+// equals the requested height, and the time follows section 9.
+func MedianTimePast(index Index, height uint64, beacon Header) (int64, bool) {
+	n := uint64(11)
+	if height+1 < n {
+		n = height + 1
+	}
+	if n == 0 {
+		return 0, false
+	}
+	start := height - n + 1
+	times := make([]int64, 0, n)
+	for h := start; h <= height; h++ {
+		var t int64
+		var ok bool
+		if h == height {
+			t, ok = beaconTime(beacon, height)
+		} else {
+			t, ok = windowTime(index, h)
+		}
+		if !ok {
+			return 0, false
+		}
+		times = append(times, t)
+	}
+	sort.Slice(times, func(i, j int) bool { return times[i] < times[j] })
+	return times[n/2], true
+}
+
+func beaconTime(beacon Header, height uint64) (int64, bool) {
+	if beacon.IndexComparison != "match" {
+		return 0, false
+	}
+	stored, ok := rawInt(beacon.StoredHeight)
+	if !ok || stored != int64(height) {
+		return 0, false
+	}
+	return rawInt(beacon.T)
+}
+
+func windowTime(index Index, height uint64) (int64, bool) {
+	doc := index.Read(height)
+	if doc == nil || doc.Height != height || doc.Time == nil {
+		return 0, false
+	}
+	return int64(*doc.Time), true
+}
+
+// RateOutcome is Rule B2 on a recorded hike_span. A span that is not read
+// is held. A span of zero or below is refuse. A span that meets the floor
+// is accept. A span that falls short is refuse.
+func RateOutcome(hikeLegs, hikeSpan int64, spanRead bool, p, q int64) string {
+	if !spanRead {
+		return "held"
+	}
+	if hikeSpan <= 0 || !LegRateMeets(hikeLegs, hikeSpan, p, q) {
+		return "refuse"
+	}
+	return "accept"
+}
+
+// SubmissionDeadline is the gate receipt rule. tip below the last beacon,
+// and a tip that was not read, are held. A gap greater than K refuses with
+// reason submission_deadline. That refuse is not a fake leg.
+func SubmissionDeadline(tip *int64, lastBeacon, k int64) (outcome, reason string) {
+	if tip == nil || *tip < lastBeacon {
+		return "held", ""
+	}
+	if *tip-lastBeacon > k {
+		return "refuse", "submission_deadline"
+	}
+	return "accept", ""
+}
+
+// DrawThorough is the §15.5 index draw. Below 6 legs the draw is not
+// defined. Otherwise one section 14.6 stream fills 18 indices, split in
+// order into rounds of 6. An index already in the current group of 6 is
+// discarded. An index already in the phase is discarded while an unused
+// index remains. A short byte source is not read.
+func DrawThorough(stream []byte, legTotal uint64, rounds, perRound int) (groups [][]uint64, token string) {
+	if legTotal < 6 {
+		return nil, "not defined"
+	}
+	if rounds < 1 || perRound < 1 {
+		return nil, "not defined"
+	}
+	need := rounds * perRound
+	phase := make([]uint64, 0, need)
+	pos := 0
+	for len(phase) < need {
+		if pos+8 > len(stream) {
+			return nil, "not read"
+		}
+		draw := binaryLE(stream[pos : pos+8])
+		pos += 8
+		if !belowLimit(draw, legTotal) {
+			continue
+		}
+		q := draw % legTotal
+		roundStart := (len(phase) / perRound) * perRound
+		if containsU64(phase[roundStart:], q) {
+			continue
+		}
+		if containsU64(phase, q) && unusedIndex(phase, legTotal) {
+			continue
+		}
+		phase = append(phase, q)
+	}
+	groups = make([][]uint64, rounds)
+	for r := 0; r < rounds; r++ {
+		groups[r] = append([]uint64(nil), phase[r*perRound:(r+1)*perRound]...)
+	}
+	return groups, ""
+}
+
+func binaryLE(b []byte) uint64 {
+	var v uint64
+	for i := 7; i >= 0; i-- {
+		v = v<<8 | uint64(b[i])
+	}
+	return v
+}
+
+func unusedIndex(phase []uint64, legTotal uint64) bool {
+	seen := make([]bool, legTotal)
+	for _, q := range phase {
+		if q < legTotal {
+			seen[q] = true
+		}
+	}
+	for _, used := range seen {
+		if !used {
+			return true
+		}
+	}
+	return false
+}
+
+// LegRateMeets is Rule B2. The comparison is integer-only:
+// hike_span > 0 and q·hike_legs ≥ p·hike_span. It does not round.
+// A span that is not a positive integer does not meet the floor.
+// The bookend pair (N, S) is not an input.
+func LegRateMeets(hikeLegs, hikeSpan, p, q int64) bool {
+	if hikeSpan <= 0 || q <= 0 || p < 0 || hikeLegs < 0 {
+		return false
+	}
+	hiL, loL := bits.Mul64(uint64(q), uint64(hikeLegs))
+	hiR, loR := bits.Mul64(uint64(p), uint64(hikeSpan))
+	if hiL != hiR {
+		return hiL > hiR
+	}
+	return loL >= loR
+}
+
+// AnchorsMeet is Rule B4. anchored_total ≥ 6, anywhere among W_1 … W_16.
+// There is no first-planted rule and no last-planted rule.
+func AnchorsMeet(anchoredTotal int) bool {
+	return anchoredTotal >= MinAnchoredPaths
+}
+
+// AnchoredIndicesMeet counts distinct indices in 1 … 16 and applies Rule B4.
+// An index outside that range is not one of the sixteen waypoints.
+func AnchoredIndicesMeet(indices []int) bool {
+	seen := make([]bool, 17)
+	n := 0
+	for _, g := range indices {
+		if g < 1 || g > 16 || seen[g] {
+			continue
+		}
+		seen[g] = true
+		n++
+	}
+	return AnchorsMeet(n)
 }
 
 // Status204Appended is Rule A1.4. Status 204 means the waypoint was appended.

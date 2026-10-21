@@ -222,15 +222,31 @@ mod tests {
         let run = run(&path, &small());
         let Outcome::Record {
             json,
-            presented: Presented::Record(view),
+            presented: Presented::Earlier { kind },
             bytes: n,
             ..
         } = run.outcome
         else {
-            panic!("expected a record");
+            panic!("a v2.0 object is an earlier version");
         };
         assert_eq!(n, bytes.len() as u64);
         assert!(json.ends_with('\n'));
+        assert_eq!(kind, "satoshi-hike-v2.0-object");
+        assert!(json.contains("earlier version"));
+        let current_bytes = hike::encode_hike_sized(
+            &hike::structural_object(),
+            hike::Sizes::conformance_small(),
+        );
+        let current_path = dir.join("v21.cbor");
+        std::fs::write(&current_path, &current_bytes).unwrap();
+        let current = super::run(&current_path, &small());
+        let Outcome::Record {
+            presented: Presented::Record(view),
+            ..
+        } = current.outcome
+        else {
+            panic!("a v2.1 object is measured");
+        };
         assert_eq!(view.profile, "conformance-small");
         assert_eq!(view.shape, "match");
         assert!(view
@@ -238,9 +254,9 @@ mod tests {
             .0
             .iter()
             .any(|(t, _)| t == "not read"));
-        assert!(run.reads.issued > 0);
-        assert_eq!(run.reads.answered, 0);
-        assert!(run
+        assert!(current.reads.issued > 0);
+        assert_eq!(current.reads.answered, 0);
+        assert!(current
             .reads
             .status(NO_INDEX)
             .starts_with("Portable index did not answer"));
@@ -294,8 +310,12 @@ mod tests {
         assert!(matches!(old.outcome, Outcome::Unreadable));
         assert_eq!(old.reads.issued, 0);
 
-        let good = dir.join("kat.cbor");
-        std::fs::write(&good, &bytes).unwrap();
+        let good = dir.join("v21.cbor");
+        let current = hike::encode_hike_sized(
+            &hike::structural_object(),
+            hike::Sizes::conformance_small(),
+        );
+        std::fs::write(&good, &current).unwrap();
         let run = run(&good, &small());
         assert!(matches!(run.outcome, Outcome::Record { .. }));
         assert!(run.reads.issued > 0);

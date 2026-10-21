@@ -33,6 +33,13 @@ func loadKat(t *testing.T) ([]byte, Index) {
 		t.Fatal(err)
 	}
 	obj, err := hex.DecodeString(k.ObjectHex)
+	if err == nil {
+		// The v2.0 object is an earlier kind under v2.1. These byte edits
+		// measure a current object, so the kind text is the v2.1 kind.
+		old := []byte("satoshi-hike-v2.0-object")
+		next := []byte("satoshi-hike-v2.1-object")
+		obj = bytes.Replace(obj, old, next, 1)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

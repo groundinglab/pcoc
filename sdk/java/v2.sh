@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# v2.0 conformance pack for the Java produce and verify port.
-# Reads spec/conformance/v2.0 and compares the section 14 record to the Rust reference.
+# v2.1 conformance pack for the Java produce and verify port.
+# Reads spec/conformance/v2.1. The v2.0 pack is historical and is not this target.
 set -euo pipefail
 cd "$(dirname "$0")"
 jv="$(javac -version 2>&1 | sed -n 's/^javac \([0-9][0-9]*\).*/\1/p')"
@@ -14,5 +14,6 @@ mkdir -p "$out/classes"
 find src -name '*.java' | sort > "$out/sources.txt"
 javac --release 21 -Xlint:all -Werror -d "$out/classes" @"$out/sources.txt"
 java -Xmx128m -cp "$out/classes" pcoc.hike.F10Reserve
-java -cp "$out/classes" pcoc.conformance.V2Pack
+# The production leg reads every word of every step. nice keeps that off the fast cores' priority.
+nice -n 10 java -cp "$out/classes" pcoc.conformance.V21Pack
 java -cp "$out/classes" pcoc.hike.Spec6Pins

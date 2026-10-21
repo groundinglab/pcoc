@@ -11,7 +11,9 @@ getrandom = "0.2"
 rayon = "1.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "=1.0.151"
-sha2 = "0.10"
+# `asm` selects the aarch64 SHA-256 path that emits `sha256h` (sha2 0.10; sha2 0.11 needs rustc 1.85).
+# On x86_64 the same crate dispatches to SHA-NI (`sha256rnds2`) when the CPU has it.
+sha2 = { version = "0.10", features = ["asm"] }
 ureq = { version = "=2.12.1", default-features = false, features = ["tls"] }
 # url 2.5.4+ pulls idna 1 (GHSA-h97m-ww89-6jmq fix). The lock pins idna_adapter 1.1 (unicode-rs backend) so the build stays on rustc 1.83; idna_adapter 1.2 pulls icu 2.x, which needs a newer rustc. Newer zeroize needs edition 2024.
 url = "2.5.4"

@@ -29,8 +29,7 @@ pub fn seed_value(public_key: &[u8; 32], seed_beacon: &[u8; 32]) -> [u8; 32] {
 
 /// Library terrain, used only as the byte source for a sample or a slot.
 pub fn terrain_input(public_key: &[u8; 32], seed_beacon: &[u8; 32]) -> Vec<u8> {
-    let seed = hike::production_seed(public_key, seed_beacon);
-    hike::fill_terrain(hike::fill_pin(&seed))
+    hike::fill_terrain(&hike::seed(public_key, seed_beacon))
 }
 
 pub fn terrain_sample(terrain: &[u8], previous: &[u8; 32]) -> Vec<u8> {

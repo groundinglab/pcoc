@@ -1,8 +1,9 @@
 // Command satoshi-hike-produce writes one hike object.
 //
-// The locked pack's produce is the deterministic tip sequence. Pass --tips
-// with a drive document to run that clock. Without it, this port does not
-// Observe gossip and does not write an object.
+// The drive is Satoshi Hike v2.1: NL4 terrain from the 32-byte seed, and
+// the §11.1 fold on every full slot. Pass --tips with a drive document to
+// run that clock. Without it, this port does not Observe gossip and does
+// not write an object.
 package main
 
 import (

@@ -139,10 +139,26 @@ struct PolicyFile {
     #[serde(default)]
     require_last_anchored: Option<u64>,
     thorough_six_leg_runs: u64,
+    /// Legs in one parallel round. Omitted means 6.
+    #[serde(default)]
+    thorough_legs_per_run: Option<u64>,
+    /// v8. All-legs rate over the first beacon to the last beacon.
+    #[serde(default)]
+    leg_rate_basis: Option<String>,
+    /// v8. `placeholder, not ratified` when the floor is the test placeholder.
+    #[serde(default)]
+    floor_status: Option<String>,
     thorough_early_stop: bool,
     provisional: String,
     held_on_not_read: bool,
     ban_key_on_fake_leg: bool,
+    /// Blocks after the last beacon. Omitted means the rule is off.
+    /// v8's value is a placeholder and is not ratified.
+    #[serde(default)]
+    submission_deadline_blocks: Option<u64>,
+    /// v8. `placeholder, not ratified` on the deadline.
+    #[serde(default)]
+    deadline_status: Option<String>,
     draw_commitment: String,
     /// Optional. The shipped file omits these. The code default fills them.
     #[serde(default)]
@@ -388,6 +404,9 @@ fn policy_from_file(file: PolicyFile, max_concurrent: usize) -> Result<Admission
     if file.thorough_six_leg_runs == 0 {
         return Err("thorough_six_leg_runs must be at least 1".to_owned());
     }
+    if file.thorough_legs_per_run == Some(0) {
+        return Err("thorough_legs_per_run must be at least 1".to_owned());
+    }
     if file.provisional != "on" && file.provisional != "off" {
         return Err("provisional must be \"on\" or \"off\"".to_owned());
     }
@@ -434,10 +453,15 @@ fn policy_from_file(file: PolicyFile, max_concurrent: usize) -> Result<Admission
         require_first_anchored: file.require_first_anchored,
         require_last_anchored: file.require_last_anchored,
         thorough_six_leg_runs: file.thorough_six_leg_runs,
+        thorough_legs_per_run: file.thorough_legs_per_run,
+        leg_rate_basis: file.leg_rate_basis,
+        floor_status: file.floor_status,
         thorough_early_stop: file.thorough_early_stop,
         provisional: file.provisional,
         held_on_not_read: file.held_on_not_read,
         ban_key_on_fake_leg: file.ban_key_on_fake_leg,
+        submission_deadline_blocks: file.submission_deadline_blocks,
+        deadline_status: file.deadline_status,
         draw_commitment: file.draw_commitment,
         reverify_max_attempts,
         max_held_blocks,
@@ -487,6 +511,37 @@ mod tests {
             ..FileConfig::default()
         };
         Config::from_file(file, None).unwrap()
+    }
+
+    #[test]
+    fn v8_draft_uses_the_placeholder_floor_and_is_not_deployed() {
+        let text = include_str!("../policy/gl-admit-v8.toml");
+        assert!(text.contains("NOT DEPLOYED") || text.contains("not deployed"));
+        assert!(text.contains("placeholder, not ratified"));
+        let file: PolicyFile = toml::from_str(text).expect("v8 toml");
+        let policy = policy_from_file(file, 2).expect("v8 policy");
+        assert_eq!(policy.policy_id, "gl-admit-v8");
+        assert_ne!(policy.policy_id, policy::DEFAULT_POLICY_ID);
+        assert_eq!((policy.leg_rate_floor.p, policy.leg_rate_floor.q), (1, 5));
+        assert_eq!(
+            policy.floor_status.as_deref(),
+            Some("placeholder, not ratified")
+        );
+        assert_eq!(policy.thorough_six_leg_runs, 3);
+        assert_eq!(policy.legs_per_run(), 6);
+        assert_eq!(policy.submission_deadline_blocks, Some(3));
+        assert_eq!(
+            policy.deadline_status.as_deref(),
+            Some("placeholder, not ratified")
+        );
+        assert_eq!(policy.min_anchored_paths, 6);
+        assert!(policy.require_first_anchored.is_none());
+        assert!(policy.require_last_anchored.is_none());
+        let deployed = include_str!("../deploy/gate.toml");
+        assert!(
+            !deployed.contains("gl-admit-v8"),
+            "v8 must not be the deployed policy"
+        );
     }
 
     #[test]

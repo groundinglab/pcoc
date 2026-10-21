@@ -10,7 +10,7 @@ use crate::clock::IndexBeacon;
 use crate::consts::{bind_threads_from, height_in_anchor_window, Sizes, STAGES};
 use crate::object::{earlier_object_kind, read_measured_object_sized, Hike, Stage, StageAbsent};
 use crate::pathbody::{path_locators, validate_path};
-use crate::terrain::{fill_pin, fill_terrain_sized, production_seed};
+use crate::terrain::{fill_terrain_sized, seed};
 use crate::walk::leg_result_sized;
 use rayon::prelude::*;
 use sha2::{Digest, Sha256};
@@ -269,10 +269,7 @@ fn locate(lens: &[u64], q: u64) -> (usize, usize) {
 }
 
 fn terrain_of(hike: &Hike, sizes: Sizes) -> Vec<u8> {
-    fill_terrain_sized(
-        fill_pin(&production_seed(&hike.public_key, &hike.seed_beacon)),
-        sizes,
-    )
+    fill_terrain_sized(&seed(&hike.public_key, &hike.seed_beacon), sizes)
 }
 
 /// Absence flags for stage `g`. A hike built in code (no wire) has none.
@@ -414,7 +411,7 @@ fn configured_bind_threads() -> usize {
 /// `SHA-256(public_key ‖ seed_beacon)`. Stage 0’s checkpoint limb and its
 /// `j = 0` previous. Not the stored `stages[0].waypoint`.
 fn computed_seed(hike: &Hike) -> [u8; 32] {
-    crate::sha::sha256(&production_seed(&hike.public_key, &hike.seed_beacon))
+    seed(&hike.public_key, &hike.seed_beacon)
 }
 
 /// Rule A4.3. `j = 0` on stage 0 is the computed seed. `j = 0` on stage
@@ -1680,6 +1677,16 @@ mod tests {
         }
     }
 
+    /// An ancestor in a median-time-past window. The hash is not a stored beacon.
+    fn ancestor_beacon(height: u64) -> Result<IndexBeacon, ()> {
+        Ok(IndexBeacon {
+            natural: [0; 32],
+            height,
+            header_time_s: Some(height.saturating_mul(1_000)),
+            timestamp_unix_ms: None,
+        })
+    }
+
     fn beacon(natural: [u8; 32], height: u64) -> Result<IndexBeacon, ()> {
         Ok(IndexBeacon {
             natural,
@@ -1787,10 +1794,10 @@ mod tests {
         assert!(trailing.contains("\"shape_item\":[\"malformed cbor\"]"));
         assert!(!trailing.contains("field set"));
         assert!(trailing.contains("\"seed_value\":\"not defined\""));
-        assert_eq!(trailing.len(), 7613);
+        assert_eq!(trailing.len(), 7662);
         assert_eq!(
             crate::hex::encode_hex32(&crate::sha::sha256(trailing.as_bytes())),
-            "c9bea178ac50f3dcf786f5aa944953682b7d4ffa673a9bfddfe9757a9c29925e"
+            "8395b683d2763b301eaa86907293ff0c0f679f910837690a6e92bba29c486a58"
         );
     }
 
@@ -1820,10 +1827,10 @@ mod tests {
         assert!(raw.ends_with('\n'));
         assert!(raw.contains("\"shape_item\":[\"malformed cbor\"]"));
         assert!(!raw.contains("field set"));
-        assert_eq!(raw.len(), 7722);
+        assert_eq!(raw.len(), 7759);
         assert_eq!(
             crate::hex::encode_hex32(&crate::sha::sha256(raw.as_bytes())),
-            "fe46e35a55d2c43f82e86c062cab25026103ffa8e206e3028d752674aad3fa03"
+            "a5eddf2175501a9e49d33d19bfe73ea48e6727102912eacc74b5da6c674a43ed"
         );
     }
 
@@ -1887,10 +1894,10 @@ mod tests {
             serde_json::json!(["field set", "stage-0 path key", "leg_count"])
         );
         assert_eq!(record["seed_value"], "match");
-        assert_eq!(raw.len(), 7748);
+        assert_eq!(raw.len(), 7785);
         assert_eq!(
             crate::hex::encode_hex32(&crate::sha::sha256(raw.as_bytes())),
-            "d8f75d27a34a9309ac6a862aa7e775f975092531b58431fe83a8c2b35b939ec3"
+            "e101183e6bd5c2e8253c330ea6fc68db1cef900ed3ff8581ed9f14083fba79f5"
         );
     }
 
@@ -2051,11 +2058,13 @@ mod tests {
                 if height == hike.last_interrupt_height {
                     return beacon_at(hike.last_interrupt, height, height * 1_000);
                 }
-                let stage = hike
+                let Some(stage) = hike
                     .stages
                     .iter()
                     .find(|stage| stage.beacon_height == height)
-                    .expect("stored height");
+                else {
+                    return ancestor_beacon(height);
+                };
                 if height == 1 {
                     beacon_at(stage.beacon, height + 1, height * 1_000)
                 } else if height == 2 {
@@ -2080,10 +2089,10 @@ mod tests {
         assert!(!measurements.shape);
         let mut expected_heights: Vec<u64> = (1..=18).collect();
         expected_heights.push(hike.last_interrupt_height);
-        assert_eq!(heights, expected_heights);
+        assert_eq!(&heights[..expected_heights.len()], expected_heights.as_slice());
         let trace = trace.borrow();
         assert!(trace.iter().all(|event| *event == "beacon"));
-        assert_eq!(trace.len(), 19);
+        assert!(trace.len() >= 19);
         let checkpoints = obtained(&measurements.checkpoints);
         assert_eq!(
             &checkpoints.beacon_matches_index[..3],
@@ -2187,11 +2196,13 @@ mod tests {
                         timestamp_unix_ms: Some(1_800_000_000_000 + height),
                     });
                 }
-                let stage = hike
+                let Some(stage) = hike
                     .stages
                     .iter()
                     .find(|stage| stage.beacon_height == height)
-                    .expect("stored height");
+                else {
+                    return ancestor_beacon(height);
+                };
                 if height == 1 {
                     Ok(IndexBeacon {
                         natural: stage.beacon,
@@ -2260,7 +2271,7 @@ mod tests {
         let waypoint = [0x22u8; 32];
         let public_key = [0x33u8; 32];
         let seed_beacon = [0x44u8; 32];
-        let seed = sha256(&production_seed(&public_key, &seed_beacon));
+        let seed = crate::seed(&public_key, &seed_beacon);
         assert_ne!(seed, waypoint);
         // Stage 0 uses the computed seed as `j = 0` previous and as the limb.
         // Stage `g ≥ 1` uses the stored waypoint for both.
@@ -2573,11 +2584,13 @@ mod tests {
                         timestamp_unix_ms: None,
                     });
                 }
-                let stage = hike
+                let Some(stage) = hike
                     .stages
                     .iter()
                     .find(|stage| stage.beacon_height == height)
-                    .expect("stored header");
+                else {
+                    return ancestor_beacon(height);
+                };
                 Ok(IndexBeacon {
                     natural: stage.beacon,
                     height,
@@ -2737,11 +2750,13 @@ mod tests {
                         timestamp_unix_ms: None,
                     });
                 }
-                let stage = hike
+                let Some(stage) = hike
                     .stages
                     .iter()
                     .find(|stage| stage.beacon_height == height)
-                    .expect("stored header");
+                else {
+                    return ancestor_beacon(height);
+                };
                 Ok(IndexBeacon {
                     natural: stage.beacon,
                     height,

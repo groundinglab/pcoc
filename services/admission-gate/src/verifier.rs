@@ -11,10 +11,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 /// Locked version id (#206). Health reports this name.
-pub const SPEC_NAME: &str = "Satoshi Hike v2.0";
+pub const SPEC_NAME: &str = "Satoshi Hike v2.1";
 
 /// Health field. The parenthetical in the ticket.
-pub const SPEC_KIND_LABEL: &str = "v2.0";
+pub const SPEC_KIND_LABEL: &str = "v2.1";
 
 /// Wire KIND exported by the Rust SDK.
 pub const SPEC_KIND: &str = hike::KIND;
@@ -142,11 +142,9 @@ fn bookend_measures(record_body: &str) -> (Option<u64>, Option<u64>, Option<f64>
     } else {
         record_body
     };
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(text) else {
-        return (None, None, None);
-    };
-    let legs = value.get("N").and_then(serde_json::Value::as_u64);
-    let span_s = value.get("S").and_then(serde_json::Value::as_u64);
+    let rate = hike::beacon_rate(text);
+    let legs = rate.legs;
+    let span_s = rate.span_s.and_then(|span| u64::try_from(span).ok());
     let leg_rate = match (legs, span_s) {
         (Some(legs), Some(span)) if span > 0 => Some(legs as f64 / span as f64),
         _ => None,
@@ -314,6 +312,10 @@ pub trait IndexRead {
     fn observed_networks(&self) -> Vec<String> {
         Vec::new()
     }
+    /// `GET {index-url}/index` height. `Err` when the tip was not read.
+    fn tip_height(&self) -> Result<u64, ()> {
+        Err(())
+    }
 }
 
 /// Recorded for an index document that carries no string `network` field.
@@ -450,6 +452,13 @@ impl IndexRead for IndexClient {
             .iter()
             .cloned()
             .collect()
+    }
+
+    fn tip_height(&self) -> Result<u64, ()> {
+        let body = self.read_body(&format!("{}/index", self.url), "tip", true)?;
+        hike::parse_index_document(&body)
+            .map(|(_, height)| height)
+            .map_err(|_| ())
     }
 }
 
@@ -751,10 +760,21 @@ mod tests {
             sizes,
         );
         let record = hike::verify_record_json("conformance-small", &measurements);
-        assert_eq!(record, doc["record"].as_str().unwrap());
-        let facts = hike::failure_facts(&measurements);
-        assert!(facts.iter().any(|fact| *fact == "shape is false"));
-        assert!(facts.iter().any(|fact| fact.contains("fewer than 6")));
+        // The committed vector is a v2.0 object. v2.1 is a hard cut: that kind
+        // is an earlier version and is not measured under the new fold.
+        assert_ne!(record, doc["record"].as_str().unwrap());
+        assert_eq!(
+            hike::earlier_object_kind(&object).as_deref(),
+            Some("satoshi-hike-v2.0-object")
+        );
+        assert_eq!(
+            record,
+            "{\"version\":\"earlier version\",\"kind\":\"satoshi-hike-v2.0-object\"}\n"
+        );
+        assert_eq!(
+            hike::failure_facts(&measurements),
+            vec!["earlier_version".to_owned()]
+        );
     }
 
     fn small_hike(stages: Vec<hike::Stage>, last_height: u64) -> Vec<u8> {
@@ -995,7 +1015,7 @@ mod tests {
             out.copy_from_slice(&digest);
             out
         };
-        let terrain = hike::fill_terrain_sized(hike::fill_pin(&seed), sizes);
+        let terrain = hike::fill_terrain_sized(&hike::seed_from_preimage(&seed), sizes);
         let leg = hike::leg_result_sized(&terrain, &seed_value, sizes);
         let sample = hike::terrain_sample_sized(&terrain, &seed_value, sizes);
         let digest = hike::checkpoint_sized(&seed_value, &seed_value, &sample, leg, sizes);

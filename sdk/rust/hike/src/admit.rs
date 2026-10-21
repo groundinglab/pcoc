@@ -65,8 +65,8 @@ pub fn admission(measurements: &Measurements) -> Admission {
                 return Admission::Refuse;
             }
         }
-        // Fewer than six legs is settled by the object's bytes: refuse at once.
-        SixLegs::CouldNotDraw => return Admission::Refuse,
+        // Fewer than six legs is not a minimum. The rate and the anchored count judge it.
+        SixLegs::CouldNotDraw => {}
         // A short draw, and a six-leg read that was not taken, are `not read`.
         // That is held, not a refuse.
         SixLegs::DrawNotObtained | SixLegs::NotObtained => held = true,
@@ -126,9 +126,8 @@ pub fn failure_facts(measurements: &Measurements) -> Vec<&'static str> {
                 facts.push("a recomputed leg result differs");
             }
         }
-        SixLegs::CouldNotDraw => {
-            facts.push("fewer than 6 legs, so the six indices could not be drawn");
-        }
+        // No whole-hike or per-stage leg minimum. A short hike is not this fact.
+        SixLegs::CouldNotDraw => {}
         // A short draw is held. It is not a refuse fact.
         SixLegs::DrawNotObtained | SixLegs::NotObtained => {}
     }
@@ -230,7 +229,7 @@ mod tests {
 
         let mut measurements = passing();
         measurements.six_legs = SixLegs::CouldNotDraw;
-        assert!(!admit(&measurements));
+        assert!(admit(&measurements));
 
         let mut measurements = passing();
         measurements.six_legs = SixLegs::DrawNotObtained;
@@ -286,7 +285,6 @@ mod tests {
                 "checkpoint mismatch",
                 "a present path does not match the plant",
                 "a successor waypoint differs",
-                "fewer than 6 legs, so the six indices could not be drawn",
             ]
         );
         assert!(!admit(&measurements));

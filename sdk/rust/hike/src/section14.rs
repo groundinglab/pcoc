@@ -5,7 +5,7 @@
 //! hash encoding. The byte order here is the reference CLI and the conformance
 //! pack.
 
-use crate::clock::IndexBeacon;
+use crate::clock::{median_time_past, IndexBeacon, MTP_WINDOW};
 use crate::consts::JSON_INT_MAX;
 use crate::hex::encode_hex32;
 use crate::pathchain::display_hex;
@@ -112,7 +112,7 @@ where
         push_pair(&mut out, "six_leg", &six_leg_json(input.six));
         push_pair(&mut out, "six_leg_runs", &six_runs_json(input.six));
     }
-    push_pair(&mut out, "analysis", &analysis_json(input, &book));
+    push_pair(&mut out, "analysis", &analysis_json(input, &book, beacon_at));
     out.push('}');
     out
 }
@@ -723,9 +723,17 @@ fn fixed_tokens(n: &str, s: &str, delta: &str) -> String {
     obj(&[("N", n), ("S", s), ("delta_h", delta)])
 }
 
-fn analysis_json(input: &RecordInput<'_>, book: &Book) -> String {
+fn analysis_json<F>(input: &RecordInput<'_>, book: &Book, beacon_at: &mut F) -> String
+where
+    F: FnMut(u64) -> Result<IndexBeacon, ()>,
+{
     let legs =
         count_range(input.checkpoint_counts, 1, 18).unwrap_or_else(|| "\"not defined\"".to_owned());
+    let hike_legs =
+        count_range(input.checkpoint_counts, 0, 18).unwrap_or_else(|| "\"not defined\"".to_owned());
+    // Admission span is median-time-past of the last beacon minus median-time-past
+    // of the first. `T` on each header stays that header's own nTime.
+    let hike_span = mtp_hike_span(input.headers, beacon_at);
     let span = match (input.headers.get(18), input.headers.get(1)) {
         (Some(end), Some(start)) => {
             let (_, t_end) = endpoint(end);
@@ -758,7 +766,62 @@ fn analysis_json(input: &RecordInput<'_>, book: &Book) -> String {
         ("whole_hike_span", &span),
         ("per_stage", &format!("[{}]", rows.join(","))),
         ("legs_outside", &outside),
+        ("hike_legs", &hike_legs),
+        ("hike_span", &hike_span),
     ])
+}
+
+/// `hike_span = MTP(last beacon) − MTP(first beacon)`.
+///
+/// MTP is the BIP113 median of `header.time` over the 11 blocks ending at
+/// that beacon (fewer only when the height is below 10). Each of those
+/// heights is one portable-index read. A failed read, a height that does not
+/// match, or a missing `header.time` makes the span `not read`. A non-match
+/// on either beacon does too: there is no integer to invent.
+fn mtp_hike_span<F>(headers: &[HeaderFact], beacon_at: &mut F) -> String
+where
+    F: FnMut(u64) -> Result<IndexBeacon, ()>,
+{
+    let (Some(start), Some(end)) = (headers.first(), headers.get(18)) else {
+        return "\"not read\"".to_owned();
+    };
+    let (Some(h0), Some(h1)) = (matched_height(start), matched_height(end)) else {
+        return "\"not read\"".to_owned();
+    };
+    match (mtp_at(h0, beacon_at), mtp_at(h1, beacon_at)) {
+        (Some(t0), Some(t1)) => subtract_times(&t1.to_string(), &t0.to_string()),
+        _ => "\"not read\"".to_owned(),
+    }
+}
+
+fn matched_height(header: &HeaderFact) -> Option<u64> {
+    match header.cmp {
+        IndexCmp::Match { height, time: Some(time) }
+            if time <= u64::from(u32::MAX) && time <= JSON_INT_MAX =>
+        {
+            Some(height)
+        }
+        _ => None,
+    }
+}
+
+fn mtp_at<F>(height: u64, beacon_at: &mut F) -> Option<u64>
+where
+    F: FnMut(u64) -> Result<IndexBeacon, ()>,
+{
+    let start = height.saturating_sub(MTP_WINDOW - 1);
+    let mut times = Vec::with_capacity((height - start) as usize + 1);
+    for h in start..=height {
+        let beacon = beacon_at(h).ok()?;
+        if beacon.height != h {
+            return None;
+        }
+        let time = beacon
+            .header_time_s
+            .filter(|time| *time <= u64::from(u32::MAX))?;
+        times.push(time);
+    }
+    median_time_past(&times)
 }
 
 fn stage_span(headers: &[HeaderFact], g: usize) -> String {

@@ -108,6 +108,8 @@ pub struct VerifyArgs {
     pub chain_rpc: Option<String>,
     /// `production` or `conformance-small` on the measurement record.
     pub measure: MeasureProfile,
+    /// `p/q` legs per second. `None` means the caller applies the placeholder `1/5`.
+    pub leg_rate_floor: Option<(u64, u64)>,
 }
 
 enum FlagForm<'a> {
@@ -493,6 +495,7 @@ pub fn parse_verify(args: &[String]) -> Result<VerifyArgs, UsageError> {
     let mut slot_bytes = None;
     let mut terrain_bytes = None;
     let mut steps_per_leg = None;
+    let mut leg_rate_floor = None;
     let mut i = 0;
     while i < args.len() {
         let arg = &args[i];
@@ -540,6 +543,11 @@ pub fn parse_verify(args: &[String]) -> Result<VerifyArgs, UsageError> {
             terrain_bytes = Some(take_profile_int(form, args, &mut i, terrain_bytes)?);
         } else if let Some(form) = match_flag(arg, "--steps-per-leg") {
             steps_per_leg = Some(take_profile_int(form, args, &mut i, steps_per_leg)?);
+        } else if let Some(form) = match_flag(arg, "--leg-rate-floor") {
+            if leg_rate_floor.is_some() {
+                return Err(UsageError);
+            }
+            leg_rate_floor = Some(parse_rate_floor(flag_value(form, args, &mut i)?)?);
         } else {
             return Err(UsageError);
         }
@@ -612,7 +620,30 @@ pub fn parse_verify(args: &[String]) -> Result<VerifyArgs, UsageError> {
         chain_rpc,
         log: log.unwrap_or(VerifyLog::Quiet),
         measure,
+        leg_rate_floor,
     })
+}
+
+/// `p/q` with both sides positive integers. `1/5` is 0.2 legs/s.
+fn parse_rate_floor(text: &str) -> Result<(u64, u64), UsageError> {
+    let (left, right) = text.split_once('/').ok_or(UsageError)?;
+    let p = parse_positive(left)?;
+    let q = parse_positive(right)?;
+    Ok((p, q))
+}
+
+fn parse_positive(text: &str) -> Result<u64, UsageError> {
+    if text.is_empty()
+        || !text.bytes().all(|byte| byte.is_ascii_digit())
+        || (text.len() > 1 && text.starts_with('0'))
+    {
+        return Err(UsageError);
+    }
+    let value = text.parse::<u64>().map_err(|_| UsageError)?;
+    if value == 0 {
+        return Err(UsageError);
+    }
+    Ok(value)
 }
 
 #[cfg(test)]

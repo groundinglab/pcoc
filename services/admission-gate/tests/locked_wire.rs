@@ -255,7 +255,7 @@ fn v2_object(secret: &[u8; 32]) -> Vec<u8> {
     let key = pubkey(secret);
     let mut out = vec![0xa2];
     out.extend(cbor_text("kind"));
-    out.extend(cbor_text("satoshi-hike-v2.0-object"));
+    out.extend(cbor_text("satoshi-hike-v2.1-object"));
     out.extend(cbor_text("public_key"));
     out.push(0x58);
     out.push(32);

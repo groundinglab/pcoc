@@ -1,6 +1,6 @@
 # Java SDK
 
-The Java SDK for Satoshi Hike v2.0, the PCOC specification. It has three packages:
+The Java SDK for Satoshi Hike v2.1, the PCOC specification. The wire kind is `satoshi-hike-v2.1-object`. Kind `satoshi-hike-v2.0-object` and kind `satoshi-hike-v1.35-object` are earlier objects: section 14 records `version` `earlier version` and section 15 refuses `earlier_version` before any terrain fill. That refuse is not a fake leg. The seed is `SHA-256(public_key ‖ seed_beacon)`, 32 bytes, no label. Terrain words are the NL4 chain over all four lanes. A step folds every word of the selected slot by wrapping addition of `mix64` (including `MIX_ADD`). The seal digest is `E`. An XOR accumulator is not this fold. `hike_span` is the median-time-past of the last beacon minus the median-time-past of the first beacon. There is no fill pin, no `SEED_DOMAIN`, no per-slot summary, and no leg-result cache. It has three packages:
 
 | Package | What it holds |
 |---|---|
@@ -8,7 +8,7 @@ The Java SDK for Satoshi Hike v2.0, the PCOC specification. It has three package
 | `pcoc.json` | Strict JSON |
 | `pcoc.cli` | The programs `Verify` and `Produce` |
 
-The record it writes is byte-identical to the Rust and Go SDKs. The JDK alone is enough: it has no third-party dependencies.
+The section 14 record keeps the same key order. Checkpoint and waypoint bytes follow the v2.1 terrain and fold. A byte match to `spec/conformance/v2.0/` is not v2.1 conformance. The JDK alone is enough: it has no third-party dependencies. SHA-256 is `java.security.MessageDigest`. On this JDK, HotSpot uses the SHA-256 intrinsic when the host has SHA-NI (`UseSHA` and `UseSHA256Intrinsics`).
 
 ## Install / pin
 
@@ -28,7 +28,9 @@ Then compile and run against the jar: `javac --release 21 -cp lib/pcoc-sdk-2.0.0
 
 > `sdk-v2.0.0-rc.3` is the repository tag for this version. Build from a checkout until that tag exists.
 
-## Quickstart (run by `sdk/test.sh`)
+## Quickstart (historical v2.0 pack)
+
+The program below reads `spec/conformance/v2.0/`. That pack was generated with the withdrawn fill pin and the withdrawn v2.0 fold. It is not the v2.1 target. `bash sdk/java/v2.sh` is the v2.1 check.
 
 [`sdk/examples/java/Quickstart.java`](../examples/java/Quickstart.java) verifies the `kat-small` conformance object against the index replies recorded in the vector, and reproduces the vector's stored record byte for byte:
 
@@ -213,7 +215,7 @@ public static String issue(byte[] data)                          // "" for one w
 - **Helpers.** `Json.asObj`, `asArr`, `asString`, `asNumber` and `deepEqual`. `compact()` writes compact JSON.
 
 **Building blocks.**
-- `Terrain.fill`, `Terrain.fillPin` and `Measure.drawSix`.
+- `Terrain.fill`, `Terrain.mix64`, `Terrain.baseWord`, `Terrain.foldSlot`, and `Measure.drawSix`. The fold accumulator is wrapping addition. `Admit` applies Rule B2 (`hike_legs / hike_span`, placeholder floor `1/5`, not ratified), Rule B4 (`anchored_total ≥ 6` anywhere among `W_1` … `W_16`), the submission deadline (placeholder `K = 3`, not ratified), and the section 15.5 thorough draw. Section 14 records `hike_span` as the median-time-past difference and does not carry the judgment. The verify CLI does not print it.
 - `Bytes`: `sha256`, `hex`, `unhex`, `le64`, `u64le` and `displayHex`.
 - The constants in `Hike`. (The §15.5 leg-rate floor examples are no longer SDK constants as of rc.2: a policy sets the value.)
 
@@ -247,7 +249,7 @@ try {
 | `.issue` `"not a map"` | `Cbor.mapKeys` | The top item is not a map |
 | `.issue` `"stage"` | `Cbor.stageKeys` | `stages` is missing, is not an array or has no such index, or that stage is not a map. Call `mapKeys` first: `stageKeys` assumes the top item is a map, and throws `NullPointerException` when it is not |
 | `Drive.Clock` | `Drive.run` | The public key is not 32 bytes; no tips were given; the tips ran out; or a tip's `natural` is not 32 bytes |
-| `IllegalArgumentException("production_seed")` | `Terrain.fillPin` | The seed is not 64 bytes |
+| `IllegalArgumentException("seed preimage")` | `Terrain.seed`, `Terrain.fill` | The public key or the seed beacon is not 32 bytes |
 | `IllegalArgumentException` (`getMessage()`: `"trailing json"`, `"truncated json"`, `"duplicate json key"`, `"escape"`, `"control"`, `"number"`, `"expected …"`, `"object"`, `"array"`, `"string"`) | `Json.parse`, `parseStrict`, `asObj`, … | Text that is not one strict JSON value of the expected type |
 | `IllegalArgumentException` from `Json.parse` | `RecordHash.verifyRecordSha256` | The record is not JSON |
 | `IllegalStateException` | `Bytes.digest`, `Terrain` | The JRE has no SHA-256 (cannot happen on a conforming JDK) |
@@ -268,13 +270,13 @@ The programs exit 1 only when no top-level CBOR map decodes: the file cannot be 
 
 ## Conformance vectors
 
-`spec/conformance/v2.0/` is the source of truth ([what each file is](../../spec/conformance/v2.0/README.md)). This SDK does not generate the vectors. `pcoc.conformance.V2Pack` reads them in place and compares the record byte for byte, and `pcoc.hike.Spec6Pins` checks the section 6 constants. [../SPEC_PIN](../SPEC_PIN) holds the spec tag and the vector hash.
+`spec/conformance/v2.1/` is the v2.1 target ([what each file is](../../spec/conformance/v2.1/README.md)). This SDK does not generate the vectors. `pcoc.conformance.V21Pack` recomputes every file in that pack, including the production leg. `pcoc.conformance.Adversarial` rejects a fill-pin terrain, a one-lane word, a linear four-lane word, `mix64` without `MIX_ADD`, the v2.0 fold, the XOR accumulator, a partial slot read, a shared terrain, and a cached leg. `pcoc.hike.Spec6Pins` checks the section 6 constants. P6.14 is retired. The pack under `spec/conformance/v2.0/` is historical. [../SPEC_PIN](../SPEC_PIN) names tag `spec-v2.1.0`. CoS cuts that tag. The tag half cannot pass until the tag exists.
 
 ## Test
 
 ```sh
 bash sdk/test.sh       # every SDK, the cross-check, examples and docs (from the repo root)
-bash sdk/java/v2.sh    # this SDK only: javac --release 21 -Xlint:all -Werror, then V2Pack and Spec6Pins; exit 0 on success
+bash sdk/java/v2.sh    # this SDK only: javac --release 21 -Xlint:all -Werror, then F10Reserve, V21Pack, and Spec6Pins; exit 0 on success
 ```
 
 ## Programs

@@ -22,6 +22,8 @@ pub mod pathchain;
 mod plane;
 mod produce;
 mod producelog;
+mod rate;
+pub mod rejected;
 mod report;
 mod section14;
 mod sha;
@@ -36,17 +38,17 @@ pub use args::{
     apply_test_produce_env, parse_produce, parse_verify, AdmitPolicy, GossipDial, MeasureProfile,
     PlaneProfile, ProduceArgs, ProduceClock, UsageError, VerifyArgs,
 };
-pub use audit::{draw_distinct, Entropy, OsEntropy};
+pub use audit::{draw_distinct, draw_thorough, Entropy, OsEntropy};
 pub use bind::{
     checkpoint_sized, successor_waypoint, successor_waypoint_sized, terrain_sample_sized,
 };
-pub use clock::{parse_index_beacon, parse_index_document, IndexBeacon};
+pub use clock::{median_time_past, parse_index_beacon, parse_index_document, IndexBeacon, MTP_WINDOW};
 pub use cbor::MAX_CBOR_NESTING;
 pub use consts::{
     anchor_window, height_in_anchor_window, Sizes, ANCHOR_WINDOW_OFFSETS, BEACON_BYTES,
     CHECKPOINT_PREIMAGE_LEN, DEFAULT_BIND_THREADS, DEFAULT_INDEX_URL, EARLIER_KINDS, FILL,
     HASH_BYTES, KIND, LEG_RESULT_BYTES, MIX_ADD, MIX_MUL1, MIX_MUL2, N_SLOTS, OFFSET_MODULUS,
-    PARENT_MUL, PUBLIC_KEY_BYTES, SAMPLE_BYTES, SEAL_DOMAIN, SEED_DOMAIN, SLOT_BYTES, SLOT_MUL,
+    PARENT_MUL, PUBLIC_KEY_BYTES, SAMPLE_BYTES, SEAL_DOMAIN, SLOT_BYTES, SLOT_MUL,
     STAGES, STEPS_PER_LEG, TERRAIN_BYTES, WORDS_PER_SLOT, WORD_XOR,
 };
 pub use gossip::{
@@ -77,12 +79,19 @@ pub use produce::{
     StageRun,
 };
 pub use producelog::event_log_path as produce_event_log_path;
+pub use rate::{
+    beacon_rate, below_floor, judge_beacon_rate, BeaconRate, RateJudgment, MIN_ANCHORED_WAYPOINTS,
+    PLACEHOLDER_FLOOR_NOTE, PLACEHOLDER_FLOOR_P, PLACEHOLDER_FLOOR_Q,
+};
 pub use report::{emit_report, parent_dir_exists, Report};
 pub use subscribe::{
     publish_verify, verify_events, Found, VerifyEvent, VerifyLog, VerifyObservation,
     VerifySubscriber, CHECK_ORDER,
 };
-pub use terrain::{fill_pin, fill_terrain, fill_terrain_sized, production_seed, terrain_builds};
+pub use terrain::{
+    base_word_nl4, fill_terrain, fill_terrain_sized, lanes_of, production_seed, seed,
+    seed_from_preimage, seed_preimage, terrain_builds,
+};
 pub use verify::{
     screen_fast, screen_fast_sized, verify, verify_fast, verify_fast_sized, verify_record_json,
     verify_record_sha256, verify_sized, verify_with_bind_threads, verify_with_bind_threads_sized,
@@ -90,7 +99,7 @@ pub use verify::{
     ObjectLineage, Recorded, SixLegs, StageClock, StageMeasurement, StageReport, StoredGap,
     StoredRate, WaypointMeasurement,
 };
-pub use walk::{leg_result, leg_result_sized};
+pub use walk::{leg_result, leg_result_sized, seal, step, step_sized};
 
 /// Stderr lines from gossip, Hashcash, and the path book, for one test at a time.
 ///
