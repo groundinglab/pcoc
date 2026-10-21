@@ -60,10 +60,10 @@ pub const REFUSE_HELD_BOUND: &str = "held_bound";
 /// and shows a `reason` string that contains a space. This sentence is that
 /// line. It is not "could not be read".
 pub const EARLIER_LINE: &str =
-    "This object is an earlier version. This gate checks Satoshi Hike v2.0 only.";
+    "This object is an earlier version. This gate checks Satoshi Hike v2.1 only.";
 
 pub const UNREADABLE_REASON: &str = "unreadable";
-pub const UNREADABLE_LINE: &str = "This file is not a Satoshi Hike v2.0 object.";
+pub const UNREADABLE_LINE: &str = "This file is not a Satoshi Hike v2.1 object.";
 
 pub const NO_KEY_REASON: &str = "no_public_key";
 pub const NO_KEY_LINE: &str = "This object has no public key the gate can check.";
@@ -243,6 +243,14 @@ pub struct AdmissionPolicy {
     pub provisional: String,
     pub held_on_not_read: bool,
     pub ban_key_on_fake_leg: bool,
+    /// Refuse when the gate-observed tip is more than this many blocks after
+    /// the last beacon. `None` (v6 and v7) does not apply the rule and is not
+    /// serialized, so those bind hashes stay put. v8's `3` is a placeholder.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub submission_deadline_blocks: Option<u64>,
+    /// v8 labels the deadline placeholder. Absent on v6 and v7.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deadline_status: Option<String>,
     /// Draw commitment spelling published with the table. The bytes are
     /// `H("pcoc-deep-v1" ‖ seq ‖ object_sha ‖ salt ‖ indices)`.
     pub draw_commitment: String,
@@ -277,6 +285,8 @@ impl Default for AdmissionPolicy {
             provisional: "on".to_owned(),
             held_on_not_read: true,
             ban_key_on_fake_leg: true,
+            submission_deadline_blocks: None,
+            deadline_status: None,
             draw_commitment: "sha256(draw || salt), revealed with the result".to_owned(),
             reverify_max_attempts: 3,
             max_held_blocks: 6,
@@ -432,10 +442,13 @@ pub enum Judgment {
 
 /// Rule B2. The pair is below the floor when `q·N ≥ p·S` does not hold.
 ///
-/// Compared in `u128` so a large pair does not wrap. `S` of 0 meets the
-/// floor when `N` is not negative: `q·N ≥ 0`. A negative side, or a product
-/// that does not fit in `u128`, is below the floor.
+/// Compared in `u128` so a large pair does not wrap. `S` ≤ 0 does not meet
+/// the floor. A negative side, or a product that does not fit in `u128`,
+/// is below the floor.
 pub fn bookend_below_floor(n: i128, s: i128, p: u64, q: u64) -> bool {
+    if s <= 0 {
+        return true;
+    }
     let (Ok(n), Ok(s)) = (u128::try_from(n), u128::try_from(s)) else {
         return true;
     };
@@ -607,7 +620,8 @@ mod tests {
         assert!(!bookend_below_floor(1, 5, 1, 5));
         assert!(bookend_below_floor(1, 6, 1, 5));
         assert!(!bookend_below_floor(2, 5, 1, 5));
-        assert!(!bookend_below_floor(1, 0, 1, 5));
+        assert!(bookend_below_floor(1, 0, 1, 5));
+        assert!(bookend_below_floor(1, -1, 1, 5));
         assert!(bookend_below_floor(0, 5, 1, 5));
         // The same function applies a caller-chosen p/q. 7/20 is not a default.
         assert!(bookend_below_floor(1, 4, 7, 20));

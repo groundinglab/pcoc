@@ -372,8 +372,8 @@ async fn health_reports_version_commit_spec_and_config() {
     );
     assert_eq!(body["sdk"], sdk, "{body}");
     assert!(pcoc_admission::http::version_line().ends_with(&format!("sdk={sdk}")));
-    assert_eq!(body["spec"], "Satoshi Hike v2.0");
-    assert_eq!(body["spec_kind"], "v2.0");
+    assert_eq!(body["spec"], "Satoshi Hike v2.1");
+    assert_eq!(body["spec_kind"], "v2.1");
     assert_eq!(body["config"]["index_url"], "https://index.example");
     assert!(body["config"].get("log_dir").is_none(), "{body}");
     assert!(body["config"].get("config_path").is_none(), "{body}");
@@ -396,7 +396,7 @@ async fn health_reports_version_commit_spec_and_config() {
     assert_eq!(policy["leg_rate_floor"]["q"], 5);
     assert_eq!(policy["min_anchored_paths"], 6);
     assert_eq!(policy["source"], "recommendation, not specification");
-    assert_eq!(policy["spec"], "Satoshi Hike v2.0");
+    assert_eq!(policy["spec"], "Satoshi Hike v2.1");
     let text = body.to_string();
     assert!(!text.contains("friendly_list"));
     assert!(!text.contains("GL_VERIFY_"));
@@ -480,7 +480,7 @@ async fn a_v135_decision_log_is_not_served() {
         Err(error) => error,
         Ok(_) => panic!("a v1.35 decision log was opened"),
     };
-    assert!(error.contains("not a Satoshi Hike v2.0"), "{error}");
+    assert!(error.contains("not a Satoshi Hike v2.1"), "{error}");
     assert_eq!(std::fs::read(&chain).unwrap(), original);
     assert!(!dir.join("latest.json").exists());
     let _ = std::fs::remove_dir_all(&dir);

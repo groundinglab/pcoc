@@ -2,7 +2,7 @@
 //!
 //! Produce does not call this module. Each function is a known break: a terrain
 //! that does not depend on all 256 seed bits, a fold that drops `MIX_ADD`, the
-//! old slot-XOR fold, a partial slot read, or a per-slot cache.
+//! XOR accumulator, the v2.0 fold, a partial slot read, or a per-slot cache.
 
 use crate::consts::*;
 use crate::terrain::{self, fill_from_bases, lanes_of, mix64};
@@ -52,15 +52,23 @@ pub fn fill_all4(seed: &[u8; 32], sizes: Sizes) -> Vec<u8> {
     })
 }
 
-/// C1 fold that uses the bare splitmix finalizer. `MIX_ADD` is missing. That is wrong.
+/// Fold that uses the bare splitmix finalizer. `MIX_ADD` is missing. That is wrong.
 pub fn step_bare_finalizer(terrain: &[u8], state: u64, sizes: Sizes) -> u64 {
-    fold_slot(terrain, state, sizes, |word, w, state| {
+    fold_xor(terrain, state, sizes, |word, w, state| {
         bare_mix(word ^ w ^ state)
     })
 }
 
-/// Old FatSlot fold: `S XOR (XOR of (word XOR w))`. The slot collapses to one value independent of `S`.
-pub fn step_fatslot(terrain: &[u8], state: u64, sizes: Sizes) -> u64 {
+/// Withdrawn XOR accumulator: `acc ^= mix64(word(w) ^ w ^ S)`. The v2.1 fold adds.
+pub fn step_xor_acc(terrain: &[u8], state: u64, sizes: Sizes) -> u64 {
+    fold_xor(terrain, state, sizes, |word, w, state| {
+        mix64(word ^ w ^ state)
+    })
+}
+
+/// The v2.0 fold: `S XOR (XOR of (word XOR w))`. The slot collapses to one value independent of `S`.
+/// Vector key `v2_0_fold`.
+pub fn step_v2_0_fold(terrain: &[u8], state: u64, sizes: Sizes) -> u64 {
     let slot = slot_of(terrain, state, sizes);
     let mut folded = state;
     for (w, word) in slot.iter().enumerate() {
@@ -118,7 +126,8 @@ fn bare_mix(x: u64) -> u64 {
     y ^ (y >> 31)
 }
 
-fn fold_slot(terrain: &[u8], state: u64, sizes: Sizes, mix: impl Fn(u64, u64, u64) -> u64) -> u64 {
+/// Rejected accumulator. The honest step uses wrapping add, not this XOR.
+fn fold_xor(terrain: &[u8], state: u64, sizes: Sizes, mix: impl Fn(u64, u64, u64) -> u64) -> u64 {
     let slot = slot_of(terrain, state, sizes);
     let mut acc = 0u64;
     for (w, word) in slot.iter().enumerate() {

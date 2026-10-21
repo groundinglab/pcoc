@@ -3,17 +3,17 @@
 # It is not a ratified SPEC value. Measuring a beacon-paced hike on the new
 # reference sets the floor later, a little below the low-end host.
 #
-# Rate basis (code, every policy id): total legs across ALL stages divided by
-# Bitcoin header time from the first beacon to the last beacon, via the
-# portable index. Compared as q·legs ≥ p·span. No first/last planted waypoint.
-# No per-stage or whole-hike leg-count minimum. Anchored waypoints: any 6.
+# Rate basis: total legs across ALL stages divided by the median-time-past
+# span of the first and last beacon blocks (BIP113, 11 headers ending at the
+# block, portable index). Compared as q·legs ≥ p·span and span > 0.
+# No first/last planted waypoint. leg_total < 6 refuses. Anchored waypoints: any 6.
 
 policy_id = "gl-admit-v8"
 
 # PLACEHOLDER, NOT RATIFIED. 1/5 = 0.2 legs/s. Testing only.
 leg_rate_floor = { p = 1, q = 5 }
 floor_status = "placeholder, not ratified"
-leg_rate_basis = "all_legs / (T(last beacon) - T(first beacon))"
+leg_rate_basis = "all_legs / (MTP(last beacon) - MTP(first beacon))"
 
 # Any 6 anchored waypoints. No specific index is required.
 min_anchored_paths = 6
@@ -27,8 +27,14 @@ draw_commitment = "sha256(draw || salt), revealed with the result"
 provisional = "on"
 held_on_not_read = true
 
-# A fake leg refuses and this gate ignores later submits for that public key.
+# A fake leg refuses and this gate keeps that public key ignored.
+# The ignore survives restarts and policy-version bumps. A cheap-check miss does not ban.
 ban_key_on_fake_leg = true
+
+# PLACEHOLDER, NOT RATIFIED. Refuse when the gate-observed tip is more than K
+# blocks after the last beacon.
+submission_deadline_blocks = 3
+deadline_status = "placeholder, not ratified"
 
 [index]
 expected_network = "main"

@@ -14,6 +14,22 @@ fn earlier_kind_object() -> Vec<u8> {
 }
 
 #[test]
+fn a_v2_0_kind_is_an_earlier_version() {
+    let new = b"satoshi-hike-v2.0-object";
+    let mut bytes = vec![0xa1, 0x64];
+    bytes.extend_from_slice(b"kind");
+    bytes.push(0x78);
+    bytes.push(new.len() as u8);
+    bytes.extend_from_slice(new);
+    let record = earlier_record(&bytes);
+    assert_eq!(
+        record,
+        "{\"version\":\"earlier version\",\"kind\":\"satoshi-hike-v2.0-object\"}\n"
+    );
+    assert_eq!(hike::KIND, "satoshi-hike-v2.1-object");
+}
+
+#[test]
 fn a5_earlier_kind_records_earlier_version_and_is_not_measured() {
     let bytes = earlier_kind_object();
     let committed = include_bytes!("../../../../spec/conformance/v2.0/earlier-kind.cbor");

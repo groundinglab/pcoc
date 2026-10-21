@@ -42,7 +42,7 @@ pub use audit::{draw_distinct, Entropy, OsEntropy};
 pub use bind::{
     checkpoint_sized, successor_waypoint, successor_waypoint_sized, terrain_sample_sized,
 };
-pub use clock::{parse_index_beacon, parse_index_document, IndexBeacon};
+pub use clock::{median_time_past, parse_index_beacon, parse_index_document, IndexBeacon, MTP_WINDOW};
 pub use cbor::MAX_CBOR_NESTING;
 pub use consts::{
     anchor_window, height_in_anchor_window, Sizes, ANCHOR_WINDOW_OFFSETS, BEACON_BYTES,

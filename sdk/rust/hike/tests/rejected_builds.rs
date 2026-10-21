@@ -3,7 +3,7 @@
 
 use hike::rejected::{
     fill_all4, fill_pin_terrain, fill_ref, honest_terrain, leg_result_cached, leg_result_with,
-    step_bare_finalizer, step_fatslot, step_partial,
+    step_bare_finalizer, step_partial, step_v2_0_fold, step_xor_acc,
 };
 use hike::{leg_result_sized, seed_preimage, Sizes};
 
@@ -27,11 +27,13 @@ fn each_rejected_build_differs_from_the_honest_leg() {
     let honest = leg_result_sized(&terrain, &previous, sizes);
 
     let bare = leg_result_with(&terrain, &previous, sizes, step_bare_finalizer);
-    let fat = leg_result_with(&terrain, &previous, sizes, step_fatslot);
+    let xor = leg_result_with(&terrain, &previous, sizes, step_xor_acc);
+    let v20 = leg_result_with(&terrain, &previous, sizes, step_v2_0_fold);
     let partial = leg_result_with(&terrain, &previous, sizes, step_partial);
     let cached = leg_result_cached(&terrain, &previous, sizes);
     assert_ne!(bare, honest, "mix64 without MIX_ADD");
-    assert_ne!(fat, honest, "old FatSlot fold");
+    assert_ne!(xor, honest, "XOR accumulator");
+    assert_ne!(v20, honest, "v2.0 fold");
     assert_ne!(partial, honest, "partial slot read");
     assert_ne!(cached, honest, "cached leg");
 
@@ -58,7 +60,8 @@ fn verify_rejects_a_leg_stored_from_each_rejected_fold() {
     let honest = leg_result_sized(&terrain, &seed, sizes);
     let rejected = [
         ("bare", leg_result_with(&terrain, &seed, sizes, step_bare_finalizer)),
-        ("fatslot", leg_result_with(&terrain, &seed, sizes, step_fatslot)),
+        ("xor", leg_result_with(&terrain, &seed, sizes, step_xor_acc)),
+        ("v2_0_fold", leg_result_with(&terrain, &seed, sizes, step_v2_0_fold)),
         ("partial", leg_result_with(&terrain, &seed, sizes, step_partial)),
         ("cached", leg_result_cached(&terrain, &seed, sizes)),
     ];

@@ -41,6 +41,8 @@ pub const CODE_CHALLENGE_EXPIRED: &str = "challenge_expired";
 /// An index document a decision rests on is not from the policy's
 /// `[index] expected_network` (or carries no `network`). gl-admit-v7 on.
 pub const CODE_INDEX_NETWORK_NOT_EXPECTED: &str = "index_network_not_expected";
+/// The gate's observed tip is more than K blocks after the last beacon.
+pub const CODE_SUBMISSION_DEADLINE: &str = "submission_deadline";
 
 /// Every code this gate writes, in table order. A test covers this list.
 pub const INVENTORY: &[(&str, &str)] = &[
@@ -64,6 +66,7 @@ pub const INVENTORY: &[(&str, &str)] = &[
     (CODE_VERIFIER_ERROR, CLASS_OPERATIONAL),
     (CODE_CHALLENGE_EXPIRED, CLASS_OPERATIONAL),
     (CODE_INDEX_NETWORK_NOT_EXPECTED, CLASS_INVALID),
+    (CODE_SUBMISSION_DEADLINE, CLASS_BELOW_POLICY),
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -96,6 +99,7 @@ pub fn code_of_note(note: &str) -> &'static str {
         note if note == REFUSE_BOOKENDS_NOT_READ => CODE_BOOKENDS_NOT_READ,
         note if note == REFUSE_LEG_RATE => CODE_BELOW_LEG_RATE,
         note if note == OUTCOME_TOO_FEW => CODE_BELOW_WAYPOINTS,
+        "submission deadline" => CODE_SUBMISSION_DEADLINE,
         "verifier_error" => CODE_VERIFIER_ERROR,
         CODE_CHALLENGE_EXPIRED => CODE_CHALLENGE_EXPIRED,
         CODE_INDEX_NETWORK_NOT_EXPECTED => CODE_INDEX_NETWORK_NOT_EXPECTED,
@@ -227,7 +231,7 @@ fn sentence(code: &str, measures: &Measures) -> String {
             "No decision on the PCOC: the sign-in challenge expired before it was answered."
                 .to_owned()
         }
-        CODE_SHAPE_MISMATCH => "Invalid: the object does not match the v2.0 shape.".to_owned(),
+        CODE_SHAPE_MISMATCH => "Invalid: the object does not match the v2.1 shape.".to_owned(),
         CODE_SEED_VALUE_MISMATCH => "Invalid: the opening waypoint does not match.".to_owned(),
         CODE_PATH_PLANT_MISMATCH => "Invalid: a present path does not match the plant.".to_owned(),
         CODE_SUCCESSOR_MISMATCH => "Invalid: a successor waypoint differs.".to_owned(),
@@ -235,6 +239,9 @@ fn sentence(code: &str, measures: &Measures) -> String {
         CODE_INDEX_NETWORK_NOT_EXPECTED => policy::NETWORK_NOT_MAIN_LINE.to_owned(),
         CODE_BELOW_LEG_RATE => "Valid, measured below the configured leg rate.".to_owned(),
         CODE_BELOW_WAYPOINTS => "Valid, fewer waypoints than the configured minimum.".to_owned(),
+        CODE_SUBMISSION_DEADLINE => {
+            "Too late: the last beacon is more than K blocks behind the tip. placeholder, not ratified.".to_owned()
+        }
         _ => "Invalid: the proof does not hold.".to_owned(),
     }
 }

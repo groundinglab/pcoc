@@ -262,7 +262,7 @@ impl Door {
         } else {
             // The website token stays `rejected`. `revoked` is not a §15.1 token.
             self.rows.settle(&job.nonce, wire::OUTCOME_REJECTED, now);
-            if self.policy.ban_key_on_fake_leg {
+            if out.fake_leg && self.policy.ban_key_on_fake_leg {
                 self.ban_key(&job.public_key, seq.unwrap_or(0));
             }
         }
@@ -398,7 +398,7 @@ impl Door {
                 }
             }
         };
-        if !out.matched && self.policy.ban_key_on_fake_leg {
+        if !out.matched && out.fake_leg && self.policy.ban_key_on_fake_leg {
             self.ban_key(&job.public_key, seq);
         }
     }
@@ -481,7 +481,29 @@ impl Door {
         }
     }
 
+    /// A later submission from a banned key. Same reason as the fake leg.
+    /// Does not draw and does not walk. The ban file is not keyed by policy id,
+    /// so a policy-version bump still refuses this key.
+    pub fn record_banned_refusal(&self, public_key: &[u8; 32]) {
+        let now = self.now_unix_s();
+        let mut write = DecisionWrite::bare(now, None, "fast", "refuse");
+        self.stamp_network(&mut write, Value::Null);
+        write.public_key = *public_key;
+        write.reasons = vec![wire::OUTCOME_REJECTED.to_owned()];
+        write.reason = Some("a recomputed leg result differs".to_owned());
+        let code = reasons::code_of_note("a recomputed leg result differs");
+        write.reason_code = Some(code.to_owned());
+        write.class = Some(reasons::class_of(code).to_owned());
+        write.policy_id = Some(self.policy.policy_id.clone());
+        let mut inner = self.lock();
+        if inner.log.append(&write).is_err() {
+            eprintln!("admission-service banned refusal was not written");
+        }
+    }
+
     /// Write a ban for the public key only. The seed is not stored.
+    /// `banned_keys.json` is not keyed by `policy_id`. A restart and a new
+    /// policy id both load the same file.
     pub fn ban_key(&self, public_key: &[u8; 32], seq: u64) {
         let mut inner = self.lock();
         inner.banned.insert(*public_key, seq);
@@ -723,10 +745,14 @@ impl Door {
         let pending_key = pending_key(&public_key);
         match self.try_begin_pending(&public_key, &pending_key) {
             PendingAdmit::Banned => {
+                // The same refusal as the fake leg that wrote the ban. No new
+                // draw and no thorough walk. A cheap-check miss does not reach
+                // this branch: it never called `ban_key`.
+                self.record_banned_refusal(&public_key);
                 return match self.rows.consume(
                     &body,
                     ClientClass::DeliveryOk,
-                    wire::OUTCOME_PENDING,
+                    wire::OUTCOME_REJECTED,
                     now,
                 ) {
                     Ok(()) => locked_client(ClientClass::DeliveryOk, None),
@@ -1676,12 +1702,29 @@ mod tests {
         assert_eq!(keys, vec![canon::hex32(&honest.public_key)]);
         assert!(!ban.contains(&canon::hex32(&built.hike.seed_beacon)));
 
-        // The sign-in task calls `banned` before `settle_fast`. That call is
-        // the ignore: the counter moves, and no decision line is written.
+        // A later submission is the same refusal: the fake-leg reason, no new draw.
         let seq = door.last_seq();
         assert!(door.banned(&honest.public_key));
-        assert_eq!(door.last_seq(), seq);
         assert_eq!(door.ban_ignored(), 1);
+        door.record_banned_refusal(&honest.public_key);
+        let lines = chain(&dir);
+        assert_eq!(lines.last().unwrap()["decision"], "refuse");
+        assert_eq!(
+            lines.last().unwrap()["reason"],
+            "a recomputed leg result differs"
+        );
+        assert!(door.last_seq() > seq);
+        let mut bumped = door.policy().clone();
+        bumped.policy_id = "gl-admit-v9-resync".to_owned();
+        let reopened = Door::open(
+            &dir,
+            bumped,
+            "http://127.0.0.1:9",
+            std::time::Duration::from_secs(1),
+            vec!["https://groundinglab.io".to_owned()],
+        )
+        .unwrap();
+        assert!(reopened.is_banned(&honest.public_key));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -2149,7 +2192,7 @@ mod tests {
         );
         assert_eq!(
             serde_json::to_string(&crate::policy::public_document(&v6)).unwrap(),
-            r#"{"policy_id":"gl-admit-v6","leg_rate_floor":{"p":1,"q":5},"min_anchored_paths":6,"thorough_six_leg_runs":3,"thorough_early_stop":true,"provisional":"on","held_on_not_read":true,"ban_key_on_fake_leg":true,"draw_commitment":"sha256(draw || salt), revealed with the result","reverify_max_attempts":3,"max_held_blocks":6,"pending_per_source":1,"pending_global":4,"verify_cap_per_door_session":3,"source":"recommendation, not specification","spec":"Satoshi Hike v2.0","anchored_span":16}"#
+            r#"{"policy_id":"gl-admit-v6","leg_rate_floor":{"p":1,"q":5},"min_anchored_paths":6,"thorough_six_leg_runs":3,"thorough_early_stop":true,"provisional":"on","held_on_not_read":true,"ban_key_on_fake_leg":true,"draw_commitment":"sha256(draw || salt), revealed with the result","reverify_max_attempts":3,"max_held_blocks":6,"pending_per_source":1,"pending_global":4,"verify_cap_per_door_session":3,"source":"recommendation, not specification","spec":"Satoshi Hike v2.1","anchored_span":16}"#
         );
         let built = small_honest_on("synthetic");
         let (url, _) = serve(&built.docs, Mirror::Honest);
@@ -2590,6 +2633,33 @@ mod tests {
                 plants.get(&last_height).map(Vec::as_slice).unwrap_or(&[]),
             ),
         );
+        // BIP113 windows for the first and last beacons. Times stay linear in
+        // height, so the median span equals the raw nTime span.
+        let first = hike.stages[0].beacon_height;
+        for height in first.saturating_sub(10)..first {
+            if docs.contains_key(&height) {
+                continue;
+            }
+            let mut hash = [0u8; 32];
+            hash[0] = 0xEE;
+            hash[1] = height as u8;
+            docs.insert(
+                height,
+                index_document(network, &hash, height, 1_700_000_000 + height, &[]),
+            );
+        }
+        for height in last_height.saturating_sub(10)..last_height {
+            if docs.contains_key(&height) {
+                continue;
+            }
+            let mut hash = [0u8; 32];
+            hash[0] = 0xEF;
+            hash[1] = height as u8;
+            docs.insert(
+                height,
+                index_document(network, &hash, height, 1_700_000_000 + height, &[]),
+            );
+        }
         let plant_height = u64::from(
             hike::path_locators(&hike.stages[1].path)
                 .expect("W_1 path")

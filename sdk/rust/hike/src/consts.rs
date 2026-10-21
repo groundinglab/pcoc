@@ -16,9 +16,12 @@ pub const PUBLIC_KEY_BYTES: usize = 32;
 pub const BEACON_BYTES: usize = 32;
 
 pub const SEAL_DOMAIN: &[u8; 12] = b"pcoc-walk-v1";
-pub const KIND: &str = "satoshi-hike-v2.0-object";
-/// Rule A5. The only earlier kind this verifier names.
-pub const EARLIER_KINDS: &[&str] = &["satoshi-hike-v1.35-object"];
+pub const KIND: &str = "satoshi-hike-v2.1-object";
+/// Rule A5. v2.0 is a hard cut: that kind is an earlier version, with v1.35.
+pub const EARLIER_KINDS: &[&str] = &[
+    "satoshi-hike-v2.0-object",
+    "satoshi-hike-v1.35-object",
+];
 pub const FILL: &str = "dag2";
 
 /// Section 13.1. The only anchor-window offsets. Producer and verifier both use this list.
@@ -291,7 +294,8 @@ mod spec6_pins {
         assert_eq!(STAGES, 18, "P6.8");
         assert_eq!(HASH_BYTES, 32, "P6.9");
         assert_eq!(SEAL_DOMAIN, b"pcoc-walk-v1", "P6.13");
-        assert_eq!(KIND, "satoshi-hike-v2.0-object", "P6.15");
+        assert_eq!(KIND, "satoshi-hike-v2.1-object", "P6.15");
+        assert_eq!(KIND.len(), 24);
         assert_eq!(FILL, "dag2", "P6.16");
         assert_eq!(MIX_ADD, 0x9E3779B97F4A7C15, "P6.17");
         assert_eq!(MIX_MUL1, 0xBF58476D1CE4E5B9, "P6.18");

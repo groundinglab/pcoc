@@ -1,12 +1,15 @@
 //! Thorough phase. Runs only after a fast `provisional`.
 //!
-//! Three runs of six distinct indices, drawn from `OsRng` by the section 14.6
-//! rejection rule, uniform over every leg. The commitment
+//! Eighteen distinct indices, drawn once from `OsRng` by the section 14.6
+//! rejection rule, then split into three rounds of six. The commitment
 //! `H("pcoc-deep-v1" ‖ seq ‖ object_sha ‖ salt ‖ indices)` is fsynced before
-//! any leg is checked. Runs stop at the first mismatch. Rule A4.3 digests for
-//! every leg run after the walks. A mismatch revokes when a grant was issued
-//! and, under this policy, bans the public key. The salt and the indices are
-//! revealed on the result. They are not readable over HTTP before that.
+//! any leg is checked. A round's six legs run together. The next round does
+//! not start after a mismatch. A stored draw is reused, including on restart
+//! and on a later policy id: re-verify does not draw again. Rule A4.3 digests
+//! for every leg run after the walks. A fake leg revokes when a grant was
+//! issued and, under this policy, bans the public key. A short hike is not a
+//! ban. The salt and the indices are revealed on the result. They are not
+//! readable over HTTP before that.
 
 use crate::canon::{self, hex32};
 use crate::policy::AdmissionPolicy;
@@ -50,6 +53,9 @@ pub struct ThoroughOut {
     pub failed: Option<LegHit>,
     /// Digest mismatch, after the walks. Also a revoke.
     pub digest_mismatch: bool,
+    /// A walked leg or a digest disagreed. A short draw is not this.
+    /// The door bans only when this is set.
+    pub fake_leg: bool,
     pub salt: String,
     pub indices: Vec<Vec<u64>>,
     pub commitment: String,
@@ -182,8 +188,16 @@ fn run_draws(
         load_draw(&path, seq, object_sha)?
     } else if mode == Draw::StoredOnly {
         return Err(format!("no stored draw for seq {seq}; not drawn again"));
+    } else if legs < 6 {
+        // The fast phase already refuses this. A thorough result here would
+        // revoke a grant. There is no grant to revoke, and this is not a ban.
+        return Err("fewer than 6 legs".to_owned());
     } else {
-        let draw = fresh_draw(seq, object_sha, legs, policy)?;
+        let draw = match fresh_draw(seq, object_sha, legs, policy) {
+            Ok(draw) => draw,
+            Err(err) if err.starts_with("short of") => return Ok(not_drawn(seq, legs)),
+            Err(err) => return Err(err),
+        };
         store_draw(log_dir, &draw)?;
         draw
     };
@@ -219,14 +233,16 @@ fn run_draws(
         }
     }
     let digest_mismatch = failed.is_none() && digest_miss(hike, &terrain, &seed, sizes);
+    let fake_leg = failed.is_some() || digest_mismatch;
     Ok(ThoroughOut {
         seq,
-        matched: failed.is_none() && !digest_mismatch,
+        matched: !fake_leg,
         runs_done,
         legs_matched,
         legs_total,
         failed,
         digest_mismatch,
+        fake_leg,
         salt: draw.salt,
         indices: draw.runs,
         commitment: draw.commitment,
@@ -257,6 +273,23 @@ pub fn commitment(seq: u64, object_sha: &[u8; 32], salt: &[u8; 32], runs: &[Vec<
     canon::sha256(&preimage)
 }
 
+/// Fewer than six legs, or fewer legs than one full distinct draw. Not a fake leg.
+fn not_drawn(seq: u64, legs: u64) -> ThoroughOut {
+    ThoroughOut {
+        seq,
+        matched: false,
+        runs_done: 0,
+        legs_matched: 0,
+        legs_total: legs,
+        failed: None,
+        digest_mismatch: false,
+        fake_leg: false,
+        salt: String::new(),
+        indices: Vec::new(),
+        commitment: String::new(),
+    }
+}
+
 fn fresh_draw(
     seq: u64,
     object_sha: &[u8; 32],
@@ -264,13 +297,19 @@ fn fresh_draw(
     policy: &AdmissionPolicy,
 ) -> Result<DrawFile, String> {
     let mut entropy = OsEntropy;
-    let mut runs = Vec::with_capacity(policy.thorough_six_leg_runs as usize);
-    for _ in 0..policy.thorough_six_leg_runs {
-        let width = policy.legs_per_run();
-        let indices = draw_distinct(legs, width, &mut entropy as &mut dyn Entropy)
-            .map_err(|_| format!("could not draw {width} legs"))?;
-        runs.push(indices);
+    let width = policy.legs_per_run();
+    let rounds = policy.thorough_six_leg_runs as usize;
+    let sample = width
+        .checked_mul(rounds)
+        .ok_or_else(|| "thorough draw count overflowed".to_owned())?;
+    if (legs as usize) < sample {
+        return Err(format!("short of {sample} distinct legs"));
     }
+    // One draw, without replacement. The rounds are a split of that draw,
+    // so an index is not selected twice across rounds.
+    let drawn = draw_distinct(legs, sample, &mut entropy as &mut dyn Entropy)
+        .map_err(|_| format!("could not draw {sample} legs"))?;
+    let runs: Vec<Vec<u64>> = drawn.chunks(width).map(|chunk| chunk.to_vec()).collect();
     let mut salt = [0u8; 32];
     (&mut entropy as &mut dyn Entropy)
         .fill_bytes(&mut salt)
@@ -478,9 +517,9 @@ fn digest_miss(hike: &hike::Hike, terrain: &[u8], seed: &[u8; 32], sizes: hike::
 mod tests {
     use super::*;
 
-    /// A leg stored from the old FatSlot fold does not match the honest walk.
+    /// A leg stored from the v2.0 fold does not match the honest walk.
     #[test]
-    fn a_fatslot_leg_is_refused_by_the_thorough_walk() {
+    fn a_v2_0_fold_leg_is_refused_by_the_thorough_walk() {
         let sizes = hike::Sizes::conformance_small();
         let public_key = [0x11u8; 32];
         let mut beacon = [0u8; 32];
@@ -488,14 +527,14 @@ mod tests {
         let terrain = hike::rejected::honest_terrain(&public_key, &beacon, sizes);
         let seed = hike::seed(&public_key, &beacon);
         let mut stages = Vec::new();
-        for j in 0..6u64 {
+        for j in 0..18u64 {
             let mut previous = seed;
             previous[0] ^= j as u8;
             let bad = hike::rejected::leg_result_with(
                 &terrain,
                 &previous,
                 sizes,
-                hike::rejected::step_fatslot,
+                hike::rejected::step_v2_0_fold,
             );
             stages.push(hike::Stage {
                 beacon,
@@ -520,7 +559,7 @@ mod tests {
             last_interrupt_height_absent: false,
         };
         let dir = std::env::temp_dir().join(format!(
-            "pcoc-fatslot-{}-{}",
+            "pcoc-v2-0-fold-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -529,8 +568,16 @@ mod tests {
         ));
         let out = run_for_test(&dir, 1, &hike, &[7u8; 32], &crate::policy::AdmissionPolicy::default())
             .unwrap();
-        assert!(!out.matched, "old FatSlot fold was accepted");
+        assert!(!out.matched, "v2.0 fold was accepted");
+        assert!(out.fake_leg);
         assert!(out.failed.is_some());
+        let mut flat: Vec<u64> = out.indices.iter().flatten().copied().collect();
+        let n = flat.len();
+        flat.sort_unstable();
+        flat.dedup();
+        assert_eq!(flat.len(), n, "a thorough index was drawn twice");
+        assert_eq!(n, 18);
+        assert_eq!(out.runs_done, 1, "a later round started after the mismatch");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

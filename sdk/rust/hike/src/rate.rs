@@ -1,5 +1,6 @@
-//! Admission rate. Total legs over every stage, divided by the Bitcoin time
-//! from the first beacon to the last beacon. Times are portable-index `header.time`.
+//! Admission rate. Total legs over every stage, divided by the median-time-past
+//! span from the first beacon to the last beacon. MTP is the BIP113 median of
+//! portable-index `header.time` over the 11 blocks ending at that beacon.
 //!
 //! The floor is policy. `1/5` (0.2 legs/s) is a test placeholder and is not ratified.
 //! There is no first-or-last planted rule and no leg-count minimum in this judgment.
@@ -55,8 +56,9 @@ pub fn below_floor(legs: u64, span_s: i128, p: u64, q: u64) -> bool {
 /// Read the rate from a section 14 record.
 ///
 /// Legs are the sum of `analysis.per_stage[].checkpoint_count` over every stage.
-/// The span is `T` of the last header minus `T` of the first header. Those headers
-/// are the seed beacon and `last_interrupt`.
+/// The span is `analysis.hike_span` when the record has it: MTP of the last
+/// beacon minus MTP of the first. Those beacons are the seed beacon and
+/// `last_interrupt`. A record without that field falls back to raw `T`.
 pub fn beacon_rate(record: &str) -> BeaconRate {
     let Ok(value) = serde_json::from_str::<Value>(record.trim()) else {
         return unread();

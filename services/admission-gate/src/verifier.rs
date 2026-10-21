@@ -11,10 +11,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 /// Locked version id (#206). Health reports this name.
-pub const SPEC_NAME: &str = "Satoshi Hike v2.0";
+pub const SPEC_NAME: &str = "Satoshi Hike v2.1";
 
 /// Health field. The parenthetical in the ticket.
-pub const SPEC_KIND_LABEL: &str = "v2.0";
+pub const SPEC_KIND_LABEL: &str = "v2.1";
 
 /// Wire KIND exported by the Rust SDK.
 pub const SPEC_KIND: &str = hike::KIND;
@@ -312,6 +312,10 @@ pub trait IndexRead {
     fn observed_networks(&self) -> Vec<String> {
         Vec::new()
     }
+    /// `GET {index-url}/index` height. `Err` when the tip was not read.
+    fn tip_height(&self) -> Result<u64, ()> {
+        Err(())
+    }
 }
 
 /// Recorded for an index document that carries no string `network` field.
@@ -448,6 +452,13 @@ impl IndexRead for IndexClient {
             .iter()
             .cloned()
             .collect()
+    }
+
+    fn tip_height(&self) -> Result<u64, ()> {
+        let body = self.read_body(&format!("{}/index", self.url), "tip", true)?;
+        hike::parse_index_document(&body)
+            .map(|(_, height)| height)
+            .map_err(|_| ())
     }
 }
 
@@ -749,12 +760,21 @@ mod tests {
             sizes,
         );
         let record = hike::verify_record_json("conformance-small", &measurements);
-        // The committed vector is a v2.0 object. NL4 and C1 do not reproduce its record.
+        // The committed vector is a v2.0 object. v2.1 is a hard cut: that kind
+        // is an earlier version and is not measured under the new fold.
         assert_ne!(record, doc["record"].as_str().unwrap());
-        assert!(record.contains("\"shape\":\"mismatch\""));
-        let facts = hike::failure_facts(&measurements);
-        assert!(facts.iter().any(|fact| *fact == "shape is false"));
-        assert!(facts.iter().all(|fact| !fact.contains("fewer than 6")));
+        assert_eq!(
+            hike::earlier_object_kind(&object).as_deref(),
+            Some("satoshi-hike-v2.0-object")
+        );
+        assert_eq!(
+            record,
+            "{\"version\":\"earlier version\",\"kind\":\"satoshi-hike-v2.0-object\"}\n"
+        );
+        assert_eq!(
+            hike::failure_facts(&measurements),
+            vec!["earlier_version".to_owned()]
+        );
     }
 
     fn small_hike(stages: Vec<hike::Stage>, last_height: u64) -> Vec<u8> {
