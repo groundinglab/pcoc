@@ -3,7 +3,7 @@ package pcoc.hike;
 /**
  * Section 6 sizes. conformance-small may shrink only the four free integers
  * named in section 16.1. The other three integers are the section 6 formulas.
- * The current production profile uses the locked v2.0 sample and step count.
+ * v2.1 does not change these production sizes.
  */
 public final class Profile {
     public static final Profile PRODUCTION = new Profile(
