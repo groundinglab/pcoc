@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 static int g_fail = 0;
 static int g_rows = 0;
@@ -705,18 +706,16 @@ static int check_rate(const char *dir)
         } else {
             row("REJECT", name);
         }
-    }
-    {
-        int meets = 1;
-        if (hike_rate_meets(10, 0, 1, 5, &meets) != HIKE_OK || meets != 0) {
-            fail_msg("rate-span-zero", "meets");
-            goto done;
+        {
+            const Json *outcome = json_object_get(c, "outcome");
+            if (outcome != NULL) {
+                const char *text = json_as_string(outcome);
+                if (text == NULL || strcmp(text, "refuse") != 0 || want) {
+                    fail_msg(name, "outcome");
+                    goto done;
+                }
+            }
         }
-        if (hike_rate_meets(10, -1, 1, 5, &meets) != HIKE_OK || meets != 0) {
-            fail_msg("rate-span-negative", "meets");
-            goto done;
-        }
-        row("REJECT", "rate-span-zero");
     }
     rc = 0;
 done:
@@ -876,8 +875,9 @@ static int check_negatives(const char *dir)
                            json_as_string(json_object_get(c, "forbidden_u64_hex"))) != 0) {
                 goto done;
             }
-        } else if (strcmp(name, "mix64_without_mix_add") == 0 || strcmp(name, "fatslot_fold") == 0 ||
-                   strcmp(name, "partial_slot_read") == 0) {
+        } else if (strcmp(name, "mix64_without_mix_add") == 0 || strcmp(name, "v2_0_fold") == 0 ||
+                   strcmp(name, "xor_accumulator_fold") == 0 || strcmp(name, "partial_slot_read") == 0 ||
+                   strcmp(name, "partial_slot_read_2047") == 0) {
             uint8_t *slot = (uint8_t *)malloc(16384);
             uint64_t folded;
             if (slot == NULL || hike_terrain_fill(seed, 16384, 16384, slot) != HIKE_OK) {
@@ -920,6 +920,163 @@ static int check_negatives(const char *dir)
                 goto done;
             }
             row("REJECT", name);
+        } else if (strcmp(name, "one_lane_flip") == 0) {
+            uint64_t lane[4], flipped[4];
+            long long slot, bytes, words;
+            uint64_t flip;
+            uint32_t changed = 0;
+            uint32_t total = 0;
+            uint32_t i, j, nslots, nwords;
+            if (json_as_i64(json_object_get(c, "slot_bytes"), &slot) != 0 ||
+                json_as_i64(json_object_get(c, "terrain_bytes"), &bytes) != 0 ||
+                json_as_i64(json_object_get(c, "words"), &words) != 0 ||
+                fill_hash(seed, (uint32_t)slot, (uint32_t)bytes, dig) != 0) {
+                fail_msg(name, "fill");
+                goto done;
+            }
+            if (reject_hash(name, dig, json_as_string(json_object_get(c, "conforming_sha256")),
+                            json_as_string(json_object_get(c, "forbidden_sha256"))) != 0) {
+                goto done;
+            }
+            hike_lanes(seed, lane);
+            flipped[0] = lane[0];
+            flipped[1] = lane[1];
+            flipped[2] = lane[2];
+            flipped[3] = lane[3];
+            flip = 0;
+            {
+                const char *t = json_as_string(json_object_get(c, "flip_u64_hex"));
+                size_t k;
+                for (k = 0; t && t[k]; k++) {
+                    int d = (t[k] <= '9') ? t[k] - '0' : t[k] - 'a' + 10;
+                    flip = (flip << 4) | (uint64_t)d;
+                }
+            }
+            flipped[2] ^= flip;
+            nwords = (uint32_t)slot / 8;
+            nslots = (uint32_t)bytes / (uint32_t)slot;
+            for (i = 0; i < nslots; i++) {
+                for (j = 0; j < nwords; j++) {
+                    uint64_t a = hike_base_word(lane, i, j);
+                    uint64_t b = hike_base_word(flipped, i, j);
+                    total++;
+                    if (a != b) {
+                        changed++;
+                    }
+                }
+            }
+            if (changed != (uint32_t)words || total != (uint32_t)words) {
+                fprintf(stderr, "  one_lane_flip changed %u of %u\n", changed, total);
+                fail_msg(name, "nl4_changed");
+                goto done;
+            }
+        } else if (strcmp(name, "all4_kernel") == 0) {
+            uint64_t lane[4], flipped[4];
+            long long slot, bytes, words;
+            uint8_t dig2[32];
+            uint8_t *buf;
+            uint32_t changed = 0, total = 0, i, j, nslots, nwords;
+            char hex[65];
+            const char *stuck;
+            if (json_as_i64(json_object_get(c, "slot_bytes"), &slot) != 0 ||
+                json_as_i64(json_object_get(c, "terrain_bytes"), &bytes) != 0 ||
+                json_as_i64(json_object_get(c, "words"), &words) != 0 ||
+                fill_hash(seed, (uint32_t)slot, (uint32_t)bytes, dig) != 0) {
+                fail_msg(name, "fill");
+                goto done;
+            }
+            if (reject_hash(name, dig, json_as_string(json_object_get(c, "conforming_sha256")),
+                            json_as_string(json_object_get(c, "forbidden_sha256"))) != 0) {
+                goto done;
+            }
+            hike_lanes(seed, lane);
+            flipped[0] = lane[0] ^ ~(uint64_t)0;
+            flipped[1] = lane[1] ^ ~(uint64_t)0;
+            flipped[2] = lane[2];
+            flipped[3] = lane[3];
+            nwords = (uint32_t)slot / 8;
+            nslots = (uint32_t)bytes / (uint32_t)slot;
+            for (i = 0; i < nslots; i++) {
+                for (j = 0; j < nwords; j++) {
+                    total++;
+                    if (hike_base_word(lane, i, j) != hike_base_word(flipped, i, j)) {
+                        changed++;
+                    }
+                }
+            }
+            if (changed != (uint32_t)words) {
+                fail_msg(name, "nl4_changed");
+                goto done;
+            }
+            buf = (uint8_t *)malloc((size_t)bytes);
+            if (buf == NULL) {
+                fail_msg(name, "memory");
+                goto done;
+            }
+            /* Rebuild is the NL4 fill of the flipped lanes, via a seed that is those lanes. */
+            {
+                uint8_t flipped_seed[32];
+                unsigned k;
+                for (k = 0; k < 4; k++) {
+                    hike_store_le64(flipped_seed + 8 * k, flipped[k]);
+                }
+                if (hike_terrain_fill(flipped_seed, (uint32_t)slot, (uint32_t)bytes, buf) != HIKE_OK) {
+                    free(buf);
+                    fail_msg(name, "flipped fill");
+                    goto done;
+                }
+            }
+            hike_sha256(buf, (size_t)bytes, dig2);
+            free(buf);
+            hike_hex_encode(dig2, 32, hex);
+            stuck = json_as_string(json_object_get(c, "all4_sha256"));
+            if (strcmp(hex, stuck) == 0 ||
+                strcmp(hex, json_as_string(json_object_get(c, "all4_sha256_flipped"))) == 0 ||
+                strcmp(hex, json_as_string(json_object_get(c, "conforming_sha256"))) == 0) {
+                fail_msg(name, "flipped terrain matched a withdrawn hash");
+                goto done;
+            }
+            row("REJECT", "all4_kernel_flip");
+        } else if (strcmp(name, "forged_window") == 0) {
+            long long slot, bytes, sample_n, off_want;
+            uint8_t *terrain;
+            uint8_t digest[32];
+            uint64_t leg = 0;
+            uint64_t offset;
+            const char *t;
+            size_t k;
+            if (json_as_i64(json_object_get(c, "slot_bytes"), &slot) != 0 ||
+                json_as_i64(json_object_get(c, "terrain_bytes"), &bytes) != 0 ||
+                json_as_i64(json_object_get(c, "sample_bytes"), &sample_n) != 0 ||
+                json_as_i64(json_object_get(c, "sample_offset"), &off_want) != 0) {
+                fail_msg(name, "fields");
+                goto done;
+            }
+            t = json_as_string(json_object_get(c, "leg_u64_hex"));
+            for (k = 0; t && t[k]; k++) {
+                int d = (t[k] <= '9') ? t[k] - '0' : t[k] - 'a' + 10;
+                leg = (leg << 4) | (uint64_t)d;
+            }
+            terrain = (uint8_t *)malloc((size_t)bytes);
+            if (terrain == NULL ||
+                hike_terrain_fill(seed, (uint32_t)slot, (uint32_t)bytes, terrain) != HIKE_OK) {
+                free(terrain);
+                fail_msg(name, "terrain");
+                goto done;
+            }
+            offset = hike_load_le64(seed) % ((uint64_t)bytes - (uint64_t)sample_n + 1);
+            if (offset != (uint64_t)off_want) {
+                fprintf(stderr, "  forged_window offset %llu\n", (unsigned long long)offset);
+                free(terrain);
+                fail_msg(name, "offset");
+                goto done;
+            }
+            hike_checkpoint(seed, seed, terrain + offset, (uint32_t)sample_n, leg, digest);
+            free(terrain);
+            if (reject_hash(name, digest, json_as_string(json_object_get(c, "conforming_hex")),
+                            json_as_string(json_object_get(c, "forbidden_hex"))) != 0) {
+                goto done;
+            }
         } else {
             fprintf(stderr, "unknown negative %s\n", name);
             fail_msg(name, "unknown");
@@ -991,6 +1148,454 @@ static int check_cached_leg(void)
     return 0;
 }
 
+static int pass_file(const char *name)
+{
+    printf("PASS     %s\n", name);
+    return 0;
+}
+
+static uint64_t parse_u64_hex(const char *text)
+{
+    uint64_t v = 0;
+    size_t k;
+    if (text == NULL) {
+        return 0;
+    }
+    for (k = 0; text[k]; k++) {
+        char c = text[k];
+        int d;
+        if (c >= '0' && c <= '9') {
+            d = c - '0';
+        } else if (c >= 'a' && c <= 'f') {
+            d = c - 'a' + 10;
+        } else if (c >= 'A' && c <= 'F') {
+            d = c - 'A' + 10;
+        } else {
+            return 0;
+        }
+        v = (v << 4) | (uint64_t)d;
+    }
+    return v;
+}
+
+static int check_kind(const char *dir)
+{
+    Json *root = load_json(dir, "kind.json");
+    const Json *earlier;
+    const char *reason = NULL;
+    long long nbytes;
+    int i;
+    int rc = -1;
+    if (root == NULL) {
+        fail_msg("kind", "load");
+        return -1;
+    }
+    if (strcmp(json_as_string(json_object_get(root, "kind")), HIKE_KIND) != 0 ||
+        hike_kind_check(HIKE_KIND, &reason) != 0 || reason != NULL) {
+        fail_msg("kind", "current");
+        goto done;
+    }
+    if (json_as_i64(json_object_get(root, "kind_bytes"), &nbytes) != 0 ||
+        nbytes != (long long)strlen(HIKE_KIND)) {
+        fail_msg("kind", "bytes");
+        goto done;
+    }
+    earlier = json_object_get(root, "earlier");
+    if (earlier == NULL || earlier->type != JSON_ARR) {
+        fail_msg("kind", "earlier");
+        goto done;
+    }
+    for (i = 0; i < earlier->count; i++) {
+        const char *text = json_as_string(earlier->child[i]);
+        reason = NULL;
+        if (hike_kind_check(text, &reason) != 1 || reason == NULL ||
+            strcmp(reason, json_as_string(json_object_get(root, "earlier_reason"))) != 0) {
+            fail_msg("kind", text ? text : "?");
+            goto done;
+        }
+        row("REJECT", text);
+    }
+    rc = pass_file("kind.json");
+done:
+    json_free(root);
+    return rc;
+}
+
+static int mtp_side(const Json *side, int64_t *mtp, int *not_read)
+{
+    const Json *times;
+    const Json *reads;
+    long long height, n, raw;
+    int64_t buf[11];
+    int missing[11];
+    int i;
+    int64_t h;
+    if (json_as_i64(json_object_get(side, "height"), &height) != 0 ||
+        json_as_i64(json_object_get(side, "n"), &n) != 0) {
+        return -1;
+    }
+    h = height;
+    if (hike_mtp_n(h) != (int)n) {
+        return -1;
+    }
+    reads = json_object_get(side, "reads");
+    times = json_object_get(side, "times");
+    if (reads == NULL || times == NULL || reads->count != (int)n || times->count != (int)n) {
+        return -1;
+    }
+    for (i = 0; i < (int)n; i++) {
+        long long rh;
+        if (json_as_i64(reads->child[i], &rh) != 0 || rh != h - n + 1 + i) {
+            return -1;
+        }
+        if (json_is_null(times->child[i])) {
+            missing[i] = 1;
+            buf[i] = 0;
+        } else if (json_as_i64(times->child[i], &raw) != 0) {
+            return -1;
+        } else {
+            missing[i] = 0;
+            buf[i] = raw;
+        }
+    }
+    if (hike_mtp(buf, missing, (int)n, not_read, mtp) != HIKE_OK) {
+        return -1;
+    }
+    if (!*not_read) {
+        const Json *want = json_object_get(side, "mtp");
+        long long published;
+        if (json_is_null(want) || json_as_i64(want, &published) != 0 || published != *mtp) {
+            return -1;
+        }
+    } else if (!json_is_null(json_object_get(side, "mtp"))) {
+        return -1;
+    }
+    return 0;
+}
+
+static int check_mtp(const char *dir)
+{
+    Json *root = load_json(dir, "mtp.json");
+    const Json *cases;
+    int i;
+    int rc = -1;
+    if (root == NULL) {
+        fail_msg("mtp", "load");
+        return -1;
+    }
+    cases = json_object_get(root, "cases");
+    for (i = 0; cases && i < cases->count; i++) {
+        const Json *c = cases->child[i];
+        const char *name = json_as_string(json_object_get(c, "name"));
+        const char *outcome = json_as_string(json_object_get(c, "outcome"));
+        const Json *first = json_object_get(c, "first");
+        const Json *last = json_object_get(c, "last");
+        int64_t mtp_a = 0, mtp_b = 0;
+        int unread_a = 0, unread_b = 0;
+        if (mtp_side(first, &mtp_a, &unread_a) != 0) {
+            fail_msg(name ? name : "mtp", "first");
+            goto done;
+        }
+        if (last == NULL) {
+            if (unread_a || outcome == NULL || strcmp(outcome, "read") != 0) {
+                fail_msg(name, "short");
+                goto done;
+            }
+            row("MATCH", name);
+            continue;
+        }
+        if (mtp_side(last, &mtp_b, &unread_b) != 0) {
+            fail_msg(name, "last");
+            goto done;
+        }
+        if (unread_a || unread_b) {
+            if (outcome == NULL || strcmp(outcome, "held") != 0) {
+                fail_msg(name, "held");
+                goto done;
+            }
+            if (json_as_string(json_object_get(c, "hike_span")) == NULL ||
+                strcmp(json_as_string(json_object_get(c, "hike_span")), "not read") != 0) {
+                fail_msg(name, "span");
+                goto done;
+            }
+            row("REJECT", name);
+            continue;
+        }
+        {
+            long long want;
+            int64_t span = mtp_b - mtp_a;
+            const Json *span_j = json_object_get(c, "hike_span");
+            if (json_as_i64(span_j, &want) != 0 || want != span) {
+                fprintf(stderr, "  %s span %lld\n", name, (long long)span);
+                fail_msg(name, "span");
+                goto done;
+            }
+            if (span <= 0) {
+                if (outcome == NULL || strcmp(outcome, "refuse") != 0) {
+                    fail_msg(name, "refuse");
+                    goto done;
+                }
+                row("REJECT", name);
+            } else {
+                if (outcome == NULL || strcmp(outcome, "read") != 0) {
+                    fail_msg(name, "read");
+                    goto done;
+                }
+                row("MATCH", name);
+            }
+        }
+    }
+    rc = pass_file("mtp.json");
+done:
+    json_free(root);
+    return rc;
+}
+
+static int check_deadline(const char *dir)
+{
+    Json *root = load_json(dir, "deadline.json");
+    const Json *cases;
+    long long k_file;
+    int i;
+    int rc = -1;
+    if (root == NULL) {
+        fail_msg("deadline", "load");
+        return -1;
+    }
+    if (json_as_i64(json_object_get(root, "K"), &k_file) != 0 || k_file != 3) {
+        fail_msg("deadline", "K");
+        goto done;
+    }
+    cases = json_object_get(root, "cases");
+    for (i = 0; cases && i < cases->count; i++) {
+        const Json *c = cases->child[i];
+        const char *name = json_as_string(json_object_get(c, "name"));
+        const char *want = json_as_string(json_object_get(c, "outcome"));
+        const Json *tip = json_object_get(c, "tip_height");
+        long long last, kk;
+        const char *reason = "x";
+        const char *got;
+        int present = !json_is_null(tip);
+        long long tip_v = 0;
+        if (json_as_i64(json_object_get(c, "last_beacon_height"), &last) != 0 ||
+            json_as_i64(json_object_get(c, "K"), &kk) != 0) {
+            fail_msg(name, "fields");
+            goto done;
+        }
+        if (present && json_as_i64(tip, &tip_v) != 0) {
+            fail_msg(name, "tip");
+            goto done;
+        }
+        got = hike_deadline(present, tip_v, last, kk, &reason);
+        if (got == NULL || want == NULL || strcmp(got, want) != 0) {
+            fprintf(stderr, "  %s got %s want %s\n", name, got ? got : "?", want ? want : "?");
+            fail_msg(name, "outcome");
+            goto done;
+        }
+        if (strcmp(got, "refuse") == 0) {
+            const char *why = json_as_string(json_object_get(c, "reason"));
+            if (reason == NULL || why == NULL || strcmp(reason, why) != 0) {
+                fail_msg(name, "reason");
+                goto done;
+            }
+            row("REJECT", name);
+        } else if (strcmp(got, "held") == 0) {
+            if (reason != NULL) {
+                fail_msg(name, "held reason");
+                goto done;
+            }
+            row("REJECT", name);
+        } else {
+            row("MATCH", name);
+        }
+    }
+    rc = pass_file("deadline.json");
+done:
+    json_free(root);
+    return rc;
+}
+
+static int check_rounds(const char *dir)
+{
+    Json *root = load_json(dir, "rounds.json");
+    const Json *cases;
+    int i;
+    int rc = -1;
+    if (root == NULL) {
+        fail_msg("rounds", "load");
+        return -1;
+    }
+    cases = json_object_get(root, "cases");
+    for (i = 0; cases && i < cases->count; i++) {
+        const Json *c = cases->child[i];
+        const char *name = json_as_string(json_object_get(c, "name"));
+        const Json *draw_list = json_object_get(c, "draws_u64_hex");
+        const Json *rounds = json_object_get(c, "rounds");
+        long long leg_total, started;
+        uint64_t draws[64];
+        uint32_t indices[18];
+        uint32_t n_idx = 0;
+        int defined = 1, not_read = 0;
+        int d, r, k;
+        int n_draws = 0;
+        if (json_as_i64(json_object_get(c, "leg_total"), &leg_total) != 0 ||
+            json_as_i64(json_object_get(c, "rounds_started"), &started) != 0 || rounds == NULL) {
+            fail_msg(name, "fields");
+            goto done;
+        }
+        if (draw_list != NULL) {
+            if (draw_list->count > 64) {
+                fail_msg(name, "draws");
+                goto done;
+            }
+            for (d = 0; d < draw_list->count; d++) {
+                draws[d] = parse_u64_hex(json_as_string(draw_list->child[d]));
+            }
+            n_draws = draw_list->count;
+        }
+        if (hike_thorough_rounds((uint64_t)leg_total, draws, (size_t)n_draws, indices, &n_idx,
+                                 &defined, &not_read) != HIKE_OK) {
+            fail_msg(name, "draw");
+            goto done;
+        }
+        if (leg_total < 6) {
+            const char *draw = json_as_string(json_object_get(c, "draw"));
+            if (defined || not_read || n_idx != 0 || started != 0 || rounds->count != 0 ||
+                draw == NULL || strcmp(draw, "not defined") != 0) {
+                fail_msg(name, "not defined");
+                goto done;
+            }
+            row("REJECT", name);
+            continue;
+        }
+        if (!defined || not_read || n_idx != 18 || rounds->count != (int)started) {
+            fprintf(stderr, "  %s n_idx %u rounds %d started %lld not_read %d\n", name, n_idx,
+                    rounds ? rounds->count : -1, started, not_read);
+            fail_msg(name, "count");
+            goto done;
+        }
+        for (r = 0; r < rounds->count; r++) {
+            const Json *group = rounds->child[r];
+            if (group->count != 6) {
+                fail_msg(name, "group");
+                goto done;
+            }
+            for (k = 0; k < 6; k++) {
+                long long q;
+                if (json_as_i64(group->child[k], &q) != 0 || (uint32_t)q != indices[r * 6 + k]) {
+                    fprintf(stderr, "  %s round %d k %d got %u\n", name, r, k, indices[r * 6 + k]);
+                    fail_msg(name, "index");
+                    goto done;
+                }
+            }
+        }
+        if (json_object_get(c, "must_reject") != NULL) {
+            row("REJECT", name);
+        } else {
+            row("MATCH", name);
+        }
+    }
+    rc = pass_file("rounds.json");
+done:
+    json_free(root);
+    return rc;
+}
+
+static int check_prod(const char *dir)
+{
+    Json *root = load_json(dir, "prod-leg0.json");
+    HikeProfile profile;
+    uint8_t pk[32], beacon[32], seed[32];
+    uint8_t *terrain = NULL;
+    uint8_t *sample = NULL;
+    uint8_t digest[32];
+    uint64_t leg, offset;
+    long long steps, sample_n, off_want;
+    char hex[17];
+    struct timespec a, b;
+    double fill_s, leg_s;
+    FILE *load;
+    int rc = -1;
+
+    if (root == NULL) {
+        fail_msg("prod-leg0", "load");
+        return -1;
+    }
+    if (decode32(json_as_string(json_object_get(root, "public_key_hex")), pk) != 0 ||
+        decode32(json_as_string(json_object_get(root, "seed_beacon_hex")), beacon) != 0 ||
+        json_as_i64(json_object_get(root, "steps"), &steps) != 0 ||
+        json_as_i64(json_object_get(root, "sample_bytes"), &sample_n) != 0 ||
+        json_as_i64(json_object_get(root, "sample_offset"), &off_want) != 0) {
+        fail_msg("prod-leg0", "fields");
+        goto done;
+    }
+    profile.slot_bytes = 16384;
+    profile.terrain_bytes = 268435456;
+    profile.sample_bytes = (uint32_t)sample_n;
+    profile.steps_per_leg = (uint64_t)steps;
+    hike_seed(pk, beacon, seed);
+    terrain = (uint8_t *)malloc(profile.terrain_bytes);
+    sample = (uint8_t *)malloc(profile.sample_bytes);
+    if (terrain == NULL || sample == NULL) {
+        fail_msg("prod-leg0", "memory");
+        goto done;
+    }
+    fprintf(stderr, "prod-leg0 fill\n");
+    clock_gettime(CLOCK_MONOTONIC, &a);
+    if (hike_terrain_fill(seed, profile.slot_bytes, profile.terrain_bytes, terrain) != HIKE_OK) {
+        fail_msg("prod-leg0", "fill");
+        goto done;
+    }
+    clock_gettime(CLOCK_MONOTONIC, &b);
+    fill_s = (double)(b.tv_sec - a.tv_sec) + (double)(b.tv_nsec - a.tv_nsec) / 1e9;
+    hike_sha256(terrain, profile.terrain_bytes, digest);
+    if (expect_hex("prod-terrain", digest, 32,
+                   json_as_string(json_object_get(root, "terrain_sha256"))) != 0) {
+        goto done;
+    }
+    fprintf(stderr, "prod-leg0 leg\n");
+    clock_gettime(CLOCK_MONOTONIC, &a);
+    leg = hike_leg(terrain, &profile, seed);
+    clock_gettime(CLOCK_MONOTONIC, &b);
+    leg_s = (double)(b.tv_sec - a.tv_sec) + (double)(b.tv_nsec - a.tv_nsec) / 1e9;
+    hike_u64_hex(leg, hex);
+    if (strcmp(hex, json_as_string(json_object_get(root, "leg0_u64_hex"))) != 0) {
+        fprintf(stderr, "  prod leg %s\n", hex);
+        fail_msg("prod-leg0", "leg");
+        goto done;
+    }
+    offset = hike_load_le64(seed) %
+             ((uint64_t)profile.terrain_bytes - profile.sample_bytes + 1);
+    if (offset != (uint64_t)off_want) {
+        fprintf(stderr, "  prod offset %llu\n", (unsigned long long)offset);
+        fail_msg("prod-leg0", "offset");
+        goto done;
+    }
+    memcpy(sample, terrain + offset, profile.sample_bytes);
+    hike_checkpoint(seed, seed, sample, profile.sample_bytes, leg, digest);
+    if (expect_hex("prod-checkpoint", digest, 32,
+                   json_as_string(json_object_get(root, "checkpoint0_hex"))) != 0) {
+        goto done;
+    }
+    printf("prod_fill_s %.6f\n", fill_s);
+    printf("prod_leg_s %.6f\n", leg_s);
+    load = fopen("/proc/loadavg", "r");
+    if (load) {
+        char line[128];
+        if (fgets(line, sizeof line, load)) {
+            printf("loadavg %s", line);
+        }
+        fclose(load);
+    }
+    row("MATCH", "prod-leg0");
+    rc = pass_file("prod-leg0.json");
+done:
+    free(terrain);
+    free(sample);
+    json_free(root);
+    return rc;
+}
+
 int main(int argc, char **argv)
 {
     const char *dir;
@@ -1002,17 +1607,46 @@ int main(int argc, char **argv)
     dir = argv[1];
     printf("sha256_hw %d\n", hike_sha256_hw());
     printf("sha256_hw_fault %d\n", hike_sha256_hw_fault());
-    check_section_74();
-    check_seed(dir);
-    check_nl4(dir);
-    check_terrain(dir);
-    check_step(dir);
-    check_rate(dir);
-    check_anchors(dir);
-    check_negatives(dir);
-    check_hike_file(dir, "test-3leg.json", "test-3leg");
-    check_hike_file(dir, "kat-small.json", "kat-small");
-    check_cached_leg();
+    if (check_section_74() == 0) {
+        pass_file("section-7.4");
+    }
+    if (check_seed(dir) == 0) {
+        pass_file("seed.json");
+    }
+    if (check_nl4(dir) == 0) {
+        pass_file("nl4-words.json");
+    }
+    if (check_terrain(dir) == 0) {
+        pass_file("terrain-small.json");
+    }
+    if (check_step(dir) == 0) {
+        pass_file("step-c1.json");
+    }
+    if (check_rate(dir) == 0) {
+        pass_file("rate.json");
+    }
+    if (check_anchors(dir) == 0) {
+        pass_file("anchors.json");
+    }
+    if (check_negatives(dir) == 0) {
+        pass_file("negatives.json");
+    }
+    check_kind(dir);
+    check_deadline(dir);
+    check_mtp(dir);
+    check_rounds(dir);
+    if (check_hike_file(dir, "test-3leg.json", "test-3leg") == 0) {
+        pass_file("test-3leg.json");
+    }
+    if (check_hike_file(dir, "kat-small.json", "kat-small") == 0) {
+        pass_file("kat-small.json");
+    }
+    if (check_cached_leg() == 0) {
+        pass_file("cached_leg");
+    }
+    if (g_fail == 0) {
+        check_prod(dir);
+    }
     if (g_fail) {
         printf("FAILED %d\n", g_fail);
         return 1;

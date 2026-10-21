@@ -10,13 +10,16 @@ Implemented:
 - Terrain sample, checkpoint preimage, checkpoint fold, and §12.2 waypoint.
 - A producer that walks a schedule and writes checkpoint records.
 - A verifier that re-walks chosen legs, checks the chain, the checkpoint, and the waypoint, and applies Rule B2 and Rule B4 as separate measurements (`hike rate`, `hike anchors`).
+- Kind check: `satoshi-hike-v2.1-object` is current. The two earlier kinds return `earlier_version` and do not fill terrain.
+- Median-time-past (Rule A4.10) and `hike_span`. A span of 0 or below is `refuse`. A missing time is `held`.
+- Submission deadline at receipt. Placeholder `K = 3`. A missing tip, or a tip below the last beacon, is `held`.
+- The section 15.5 thorough-round index draw from injected `u64` draws (`rounds.json`).
 
 Not implemented, because the v2.1 files do not carry the inputs:
 
 - Section 7.3 deterministic object encoding and CBOR decode.
 - Section 14 record keys (`shape`, `headers`, `paths`, `anchors`, bookends, `N`, `S`, `six_leg`, and the rest of that list).
-- The section 14.6 six-index draw from the operating-system CSPRNG. The verifier re-walks the legs the caller names. With no `--leg`, it re-walks every stored leg. `kat-small` has 18 legs, so a draw could be defined, but the pack publishes no `draw_bytes_hex` and no expected six-leg record. Inventing that output is not a vector match.
-- Hashcash, Bari posts, and portable-index reads.
-- Admission outcomes. This program does not print `accept`, `refuse`, `revoke`, or `held`.
+- A live operating-system CSPRNG read. `rounds.json` supplies the draw integers. Production verify would read the CSPRNG itself. This pack does not publish `draw_bytes_hex`.
+- Hashcash, Bari posts, and live portable-index GETs. `mtp.json` is a numeric replay of header times.
 
-`SPEC-FINDINGS.md` records the §16 sentences that still describe the v2.0 object pack.
+`hike_deadline` returns the section 15 tokens `accept`, `refuse`, and `held` for that one comparison. It is not a gate.

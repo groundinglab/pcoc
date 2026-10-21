@@ -248,10 +248,10 @@ uint64_t hike_fold_slot(const uint8_t *slot, uint32_t words, uint64_t state)
 {
     uint64_t acc = 0;
     uint32_t w;
-    /* Every word. acc starts at 0. S is inside mix64. SPEC §11.1. */
+    /* Every word. acc starts at 0. Wrapping addition, not XOR. SPEC §11.1. */
     for (w = 0; w < words; w++) {
         uint64_t word = hike_load_le64(slot + (size_t)w * 8);
-        acc ^= mix64(word ^ (uint64_t)w ^ state);
+        acc += mix64(word ^ (uint64_t)w ^ state);
     }
     return acc;
 }
@@ -694,6 +694,164 @@ uint32_t hike_anchor_count(const uint32_t *indices, uint32_t n)
 int hike_anchors_meet(const uint32_t *indices, uint32_t n)
 {
     return hike_anchor_count(indices, n) >= 6;
+}
+
+int hike_kind_check(const char *kind, const char **reason)
+{
+    if (reason) {
+        *reason = NULL;
+    }
+    if (kind == NULL) {
+        return -1;
+    }
+    if (strcmp(kind, HIKE_KIND) == 0) {
+        return 0;
+    }
+    /* Earlier kinds stop here. No terrain is filled. */
+    if (strcmp(kind, HIKE_KIND_V20) == 0 || strcmp(kind, HIKE_KIND_V135) == 0) {
+        if (reason) {
+            *reason = "earlier_version";
+        }
+        return 1;
+    }
+    return -1;
+}
+
+int hike_mtp_n(int64_t height)
+{
+    if (height < 0) {
+        return 0;
+    }
+    if (height + 1 < 11) {
+        return (int)(height + 1);
+    }
+    return 11;
+}
+
+int hike_mtp(const int64_t *times, const int *missing, int n, int *not_read, int64_t *out)
+{
+    int64_t sorted[11];
+    int i, j;
+    if (not_read == NULL || out == NULL || n < 1 || n > 11 || times == NULL) {
+        return HIKE_ERR;
+    }
+    for (i = 0; i < n; i++) {
+        if (missing != NULL && missing[i]) {
+            *not_read = 1;
+            return HIKE_OK;
+        }
+        sorted[i] = times[i];
+    }
+    for (i = 1; i < n; i++) {
+        int64_t v = sorted[i];
+        j = i;
+        while (j > 0 && sorted[j - 1] > v) {
+            sorted[j] = sorted[j - 1];
+            j--;
+        }
+        sorted[j] = v;
+    }
+    *not_read = 0;
+    *out = sorted[n / 2];
+    return HIKE_OK;
+}
+
+const char *hike_deadline(int tip_present, int64_t tip_height, int64_t last_beacon_height, int64_t k,
+                          const char **reason)
+{
+    if (reason) {
+        *reason = NULL;
+    }
+    if (!tip_present) {
+        return "held";
+    }
+    if (tip_height < last_beacon_height) {
+        return "held";
+    }
+    if (tip_height - last_beacon_height > k) {
+        if (reason) {
+            *reason = "submission_deadline";
+        }
+        return "refuse";
+    }
+    return "accept";
+}
+
+int hike_thorough_rounds(uint64_t leg_total, const uint64_t *draws, size_t n_draws,
+                         uint32_t indices[18], uint32_t *n_indices, int *defined, int *not_read)
+{
+    uint8_t *seen;
+    size_t di = 0;
+    uint32_t n = 0;
+    int unlimited;
+    uint64_t limit = 0;
+
+    if (n_indices == NULL || defined == NULL || not_read == NULL) {
+        return HIKE_ERR;
+    }
+    *n_indices = 0;
+    *defined = 1;
+    *not_read = 0;
+    if (leg_total < 6) {
+        *defined = 0;
+        return HIKE_OK;
+    }
+    if (leg_total > 1000000ull || indices == NULL) {
+        return HIKE_ERR;
+    }
+    /* M = 2^64. limit = M - (M mod leg_total). A power of two accepts every u. */
+    unlimited = (leg_total & (leg_total - 1)) == 0;
+    if (!unlimited) {
+        unsigned __int128 mod = ((unsigned __int128)1 << 64) % leg_total;
+        limit = (uint64_t)(((unsigned __int128)1 << 64) - mod);
+    }
+    seen = (uint8_t *)calloc((size_t)leg_total, 1);
+    if (seen == NULL) {
+        return HIKE_ERR;
+    }
+    while (n < 18) {
+        uint64_t u;
+        uint32_t q;
+        uint32_t group;
+        uint32_t k;
+        int in_group = 0;
+        int unused = 0;
+        if (draws == NULL || di >= n_draws) {
+            free(seen);
+            *not_read = 1;
+            *n_indices = n;
+            return HIKE_OK;
+        }
+        u = draws[di++];
+        if (!unlimited && u >= limit) {
+            continue;
+        }
+        q = (uint32_t)(u % leg_total);
+        group = (n / 6u) * 6u;
+        for (k = group; k < n; k++) {
+            if (indices[k] == q) {
+                in_group = 1;
+                break;
+            }
+        }
+        if (in_group) {
+            continue;
+        }
+        for (k = 0; k < leg_total; k++) {
+            if (!seen[k]) {
+                unused = 1;
+                break;
+            }
+        }
+        if (seen[q] && unused) {
+            continue;
+        }
+        indices[n++] = q;
+        seen[q] = 1;
+    }
+    free(seen);
+    *n_indices = n;
+    return HIKE_OK;
 }
 
 static int write_hex_line(FILE *fp, const char *key, const uint8_t *bytes, size_t n)
