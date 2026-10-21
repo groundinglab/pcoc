@@ -45,6 +45,11 @@ func TestVerifyRejectsWithdrawnFolds(t *testing.T) {
 	if xorAccFold(slot, state) == got || xorAccFold(slot, state) != 0xa284caf306ff68a0 {
 		t.Fatalf("xor accumulator %x", xorAccFold(slot, state))
 	}
+	// At S = 0, (S + w) equals w, so xor_w_fold matches. S = 1 separates them.
+	const s1 = uint64(1)
+	if FoldSlot(slot, s1) == xorWFold(slot, s1) || hexU64Fold(xorWFold(slot, s1)) != "8d9839f10c72f3fb" || hexU64Fold(FoldSlot(slot, s1)) != "bd0b175b96598842" {
+		t.Fatalf("xor_w S1 conforming %x withdrawn %x", FoldSlot(slot, s1), xorWFold(slot, s1))
+	}
 	partial := foldFirstWords(slot, state, 1)
 	if partial == got || partial != 0x0836dd6697660d54 {
 		t.Fatalf("partial %x", partial)
@@ -192,6 +197,23 @@ func mix64WithoutAdd(x uint64) uint64 {
 	y = (y ^ (y >> 30)) * MixMul1
 	y = (y ^ (y >> 27)) * MixMul2
 	return y ^ (y >> 31)
+}
+
+func xorWFold(slot []byte, state uint64) uint64 {
+	var acc uint64
+	n := len(slot) / 8
+	for w := 0; w < n; w++ {
+		word := binary.LittleEndian.Uint64(slot[w*8 : w*8+8])
+		acc += mix64(word ^ uint64(w) ^ state)
+	}
+	return acc
+}
+
+func hexU64Fold(v uint64) string {
+	return hex.EncodeToString([]byte{
+		byte(v >> 56), byte(v >> 48), byte(v >> 40), byte(v >> 32),
+		byte(v >> 24), byte(v >> 16), byte(v >> 8), byte(v),
+	})
 }
 
 func xorAccFold(slot []byte, state uint64) uint64 {

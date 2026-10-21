@@ -1702,7 +1702,7 @@ func SubmissionDeadline(tip *int64, lastBeacon, k int64) (outcome, reason string
 	if *tip-lastBeacon > k {
 		return "refuse", "submission_deadline"
 	}
-	return "accept", ""
+	return "not refused by this rule", ""
 }
 
 // DrawThorough is the §15.5 index draw. Below 6 legs the draw is not
@@ -1722,7 +1722,17 @@ func DrawThorough(stream []byte, legTotal uint64, rounds, perRound int) (groups 
 	pos := 0
 	for len(phase) < need {
 		if pos+8 > len(stream) {
-			return nil, "not read"
+			// An unfinished group is not a round. Completed groups stay.
+			done := (len(phase) / perRound) * perRound
+			if done == 0 {
+				return nil, "not read"
+			}
+			nRounds := done / perRound
+			groups = make([][]uint64, nRounds)
+			for r := 0; r < nRounds; r++ {
+				groups[r] = append([]uint64(nil), phase[r*perRound:(r+1)*perRound]...)
+			}
+			return groups, "not read"
 		}
 		draw := binaryLE(stream[pos : pos+8])
 		pos += 8

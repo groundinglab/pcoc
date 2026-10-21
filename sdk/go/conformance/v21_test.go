@@ -27,6 +27,24 @@ func TestV21Pack(t *testing.T) {
 		t.Fatalf("pack %s", manifest.Pack)
 	}
 
+	t.Run("constants", func(t *testing.T) {
+		var raw map[string]any
+		mustJSON(t, filepath.Join(root, "constants.json"), &raw)
+		p := hike.Production
+		if raw["KIND"] != hike.Kind || raw["FILL"] != hike.Fill {
+			t.Fatalf("kind %v", raw["KIND"])
+		}
+		if raw["SEAL_DOMAIN"] != hex.EncodeToString(hike.SealDomain) {
+			t.Fatalf("seal %v", raw["SEAL_DOMAIN"])
+		}
+		if raw["SLOT_BYTES"] != float64(p.SlotBytes) || raw["STEPS_PER_LEG"] != float64(p.StepsPerLeg) || raw["TERRAIN_BYTES"] != float64(p.TerrainBytes) || raw["OFFSET_MODULUS"] != float64(p.OffsetModulus) {
+			t.Fatalf("sizes %v", raw["SLOT_BYTES"])
+		}
+		if _, retired := raw["SEED_DOMAIN"]; retired {
+			t.Fatal("P6.14 is retired")
+		}
+	})
+
 	t.Run("seed", func(t *testing.T) {
 		var doc struct {
 			Public   string   `json:"public_key_hex"`
@@ -397,7 +415,7 @@ func checkNegatives(t *testing.T, path string) {
 	}
 	want := []string{
 		"fill_pin_terrain", "ref_word", "all4_word", "mix64_without_mix_add",
-		"v2_0_fold", "xor_accumulator_fold", "partial_slot_read", "partial_slot_read_2047",
+		"v2_0_fold", "xor_accumulator_fold", "xor_w_fold", "partial_slot_read", "partial_slot_read_2047",
 		"one_lane_flip", "all4_kernel", "forged_window", "f3_shared_terrain",
 	}
 	if len(doc.Cases) != len(want) || doc.Public == "" {
@@ -416,7 +434,7 @@ func checkNegatives(t *testing.T, path string) {
 			if got != item.Conforming || got == item.Forbidden {
 				t.Fatalf("%s %s", name, got)
 			}
-		case "mix64_without_mix_add", "v2_0_fold", "xor_accumulator_fold", "partial_slot_read", "partial_slot_read_2047":
+		case "mix64_without_mix_add", "v2_0_fold", "xor_accumulator_fold", "xor_w_fold", "partial_slot_read", "partial_slot_read_2047":
 			got := hexU64(hike.FoldSlot(slot[:item.Words*8], mustU64(t, item.S)))
 			if got != item.GoodFold || got == item.BadFold {
 				t.Fatalf("%s %s", name, got)
@@ -571,6 +589,7 @@ func checkRounds(t *testing.T, path string) {
 			Draws   []string   `json:"draws_u64_hex"`
 			Draw    string     `json:"draw"`
 			Started int        `json:"rounds_started"`
+			Outcome string     `json:"outcome"`
 		} `json:"cases"`
 	}
 	raw, err := os.ReadFile(path)
@@ -600,6 +619,19 @@ func checkRounds(t *testing.T, path string) {
 		if item.Draw == "not defined" {
 			if token != "not defined" || groups != nil {
 				t.Fatalf("%s %s", item.Name, token)
+			}
+			continue
+		}
+		if item.Outcome == "not read" {
+			if token != "not read" || len(groups) != len(item.Rounds) {
+				t.Fatalf("%s not read %s %v", item.Name, token, groups)
+			}
+			for r := range item.Rounds {
+				for i := range item.Rounds[r] {
+					if groups[r][i] != item.Rounds[r][i] {
+						t.Fatalf("%s round %d got %v", item.Name, r, groups[r])
+					}
+				}
 			}
 			continue
 		}
