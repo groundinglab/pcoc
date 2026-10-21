@@ -190,6 +190,32 @@ impl HeaderClock {
         guard.chain.nodes.get(hash).map(|node| node.n_time)
     }
 
+    /// BIP113 median time past of `hash`, in unix seconds.
+    ///
+    /// The window is this header and up to 10 ancestors already on this clock.
+    /// Below height 10 the window is every header back to genesis. `None` when
+    /// `hash` is unknown or an ancestor in that window was not applied.
+    pub fn median_time_past(&self, hash: &[u8; 32]) -> Option<u32> {
+        let (lock, _) = &*self.shared;
+        let guard = lock.lock().unwrap_or_else(|err| err.into_inner());
+        let start = guard.chain.nodes.get(hash).copied()?;
+        let need = (start.height + 1).min(crate::clock::MTP_WINDOW) as usize;
+        let mut times = Vec::with_capacity(need);
+        let mut cursor = *hash;
+        for _ in 0..need {
+            let node = guard.chain.nodes.get(&cursor).copied()?;
+            times.push(u64::from(node.n_time));
+            if node.height == 0 {
+                break;
+            }
+            cursor = node.prev;
+        }
+        if times.len() != need {
+            return None;
+        }
+        crate::clock::median_time_past(&times).and_then(|time| u32::try_from(time).ok())
+    }
+
     /// Latest synced tip as `(natural hash, height)`.
     ///
     /// Blocks while the peer is down (Class T is the background thread).

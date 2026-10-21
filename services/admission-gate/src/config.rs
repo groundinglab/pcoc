@@ -152,6 +152,13 @@ struct PolicyFile {
     provisional: String,
     held_on_not_read: bool,
     ban_key_on_fake_leg: bool,
+    /// Blocks after the last beacon. Omitted means the rule is off.
+    /// v8's value is a placeholder and is not ratified.
+    #[serde(default)]
+    submission_deadline_blocks: Option<u64>,
+    /// v8. `placeholder, not ratified` on the deadline.
+    #[serde(default)]
+    deadline_status: Option<String>,
     draw_commitment: String,
     /// Optional. The shipped file omits these. The code default fills them.
     #[serde(default)]
@@ -453,6 +460,8 @@ fn policy_from_file(file: PolicyFile, max_concurrent: usize) -> Result<Admission
         provisional: file.provisional,
         held_on_not_read: file.held_on_not_read,
         ban_key_on_fake_leg: file.ban_key_on_fake_leg,
+        submission_deadline_blocks: file.submission_deadline_blocks,
+        deadline_status: file.deadline_status,
         draw_commitment: file.draw_commitment,
         reverify_max_attempts,
         max_held_blocks,
@@ -520,6 +529,11 @@ mod tests {
         );
         assert_eq!(policy.thorough_six_leg_runs, 3);
         assert_eq!(policy.legs_per_run(), 6);
+        assert_eq!(policy.submission_deadline_blocks, Some(3));
+        assert_eq!(
+            policy.deadline_status.as_deref(),
+            Some("placeholder, not ratified")
+        );
         assert_eq!(policy.min_anchored_paths, 6);
         assert!(policy.require_first_anchored.is_none());
         assert!(policy.require_last_anchored.is_none());

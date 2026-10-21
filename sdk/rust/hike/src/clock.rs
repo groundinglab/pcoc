@@ -69,6 +69,22 @@ pub fn parse_index_beacon(body: &str) -> Result<IndexBeacon, ClockError> {
     })
 }
 
+/// BIP113 window: this block and the previous 10. Near genesis the window is shorter.
+pub const MTP_WINDOW: u64 = 11;
+
+/// Median `nTime` of the blocks in one BIP113 window.
+///
+/// `times` is unsorted. The median is the element at index `len/2` after an
+/// ascending sort, the same index Bitcoin Core uses. An empty window is not a time.
+pub fn median_time_past(times: &[u64]) -> Option<u64> {
+    if times.is_empty() {
+        return None;
+    }
+    let mut sorted = times.to_vec();
+    sorted.sort_unstable();
+    sorted.get(sorted.len() / 2).copied()
+}
+
 /// Section 9. `header.time` is a JSON integer in `0 … 2^32 − 1`.
 /// `Number::is_u64` is false for a fractional part or an exponent.
 fn header_time_seconds(header: &Map<String, Value>) -> Option<u64> {

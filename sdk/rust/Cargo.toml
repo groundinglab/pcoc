@@ -6,4 +6,5 @@ members = [
     "nip06",
     "satoshi-hike-produce",
     "satoshi-hike-verify",
+    "satoshi-hike-keygen",
 ]

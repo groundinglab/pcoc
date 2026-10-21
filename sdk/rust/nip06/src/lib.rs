@@ -126,6 +126,51 @@ pub fn create_demo_key() -> Result<DemoKey, String> {
     from_mnemonic(&phrase)
 }
 
+/// A fresh random secp256k1 key. The secret is not a mnemonic and has no `nsec` spelling.
+///
+/// Dropping the value zeroes the secret. Callers may write [`FreshTestKey::secret_bytes`]
+/// to a mode `0600` file. They must not print it.
+pub struct FreshTestKey {
+    secret: zeroize::Zeroizing<[u8; 32]>,
+    public_key: [u8; 32],
+}
+
+impl FreshTestKey {
+    pub fn secret_bytes(&self) -> &[u8; 32] {
+        &self.secret
+    }
+
+    pub fn public_key(&self) -> [u8; 32] {
+        self.public_key
+    }
+
+    pub fn public_key_hex(&self) -> String {
+        encode_hex(&self.public_key)
+    }
+}
+
+/// Draw a new secret from the OS CSPRNG. Not the demo mnemonic.
+pub fn fresh_test_key() -> Result<FreshTestKey, String> {
+    let secp = Secp256k1::new();
+    for _ in 0..64 {
+        let mut bytes = [0u8; 32];
+        getrandom::getrandom(&mut bytes).map_err(|err| format!("OS CSPRNG: {err}"))?;
+        if let Ok(key) = SecretKey::from_slice(&bytes) {
+            let keypair = Keypair::from_secret_key(&secp, &key);
+            let public_key = keypair.x_only_public_key().0.serialize();
+            bytes.zeroize();
+            let mut secret = [0u8; 32];
+            secret.copy_from_slice(&key.secret_bytes());
+            return Ok(FreshTestKey {
+                secret: zeroize::Zeroizing::new(secret),
+                public_key,
+            });
+        }
+        bytes.zeroize();
+    }
+    Err("could not draw a secret key".to_owned())
+}
+
 pub fn random_32() -> Result<[u8; 32], String> {
     let mut bytes = [0u8; 32];
     getrandom::getrandom(&mut bytes).map_err(|err| format!("OS CSPRNG: {err}"))?;
@@ -264,6 +309,18 @@ fn hmac_sha512(key: &[u8], data: &[u8]) -> [u8; 64] {
     out
 }
 
+pub fn npub_of(public_key: &[u8; 32]) -> String {
+    nip19("npub", public_key)
+}
+
+/// x-only public key of a 32-byte secret. `Err` when the secret is not on the curve.
+pub fn public_key_of_secret(secret: &[u8; 32]) -> Result<[u8; 32], String> {
+    let secp = Secp256k1::new();
+    let key = SecretKey::from_slice(secret).map_err(|_| "secret key was not accepted".to_owned())?;
+    let keypair = Keypair::from_secret_key(&secp, &key);
+    Ok(keypair.x_only_public_key().0.serialize())
+}
+
 fn nip19(hrp: &str, bytes: &[u8; 32]) -> String {
     bech32::encode(hrp, bytes.to_base32(), bech32::Variant::Bech32).expect("nip-19 bech32")
 }
@@ -295,6 +352,15 @@ struct DemoMnemonicDoc {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_fresh_test_key_is_a_new_public_key() {
+        let first = fresh_test_key().unwrap();
+        let second = fresh_test_key().unwrap();
+        assert_ne!(first.public_key(), second.public_key());
+        assert_eq!(first.public_key_hex().len(), 64);
+        assert_ne!(first.secret_bytes(), second.secret_bytes());
+    }
 
     #[test]
     fn gold_vector_matches_nip06() {

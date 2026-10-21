@@ -9,11 +9,12 @@
   "DEFAULT_BIND_THREADS": 6,
   "DEFAULT_BIND_THREADS_NOTE": "non-normative reference default",
   "EARLIER_KINDS": [
+    "satoshi-hike-v2.0-object",
     "satoshi-hike-v1.35-object"
   ],
   "FILL": "dag2",
   "HASH_BYTES": 32,
-  "KIND": "satoshi-hike-v2.0-object",
+  "KIND": "satoshi-hike-v2.1-object",
   "LEG_RATE_FLOOR": {
     "default": {
       "p": 1,

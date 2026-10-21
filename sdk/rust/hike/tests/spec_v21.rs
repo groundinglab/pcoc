@@ -98,7 +98,12 @@ fn c1_steps_on_slot0_match_the_pack() {
     for step in doc["steps"].as_array().unwrap() {
         let state = hex_u64(step["S_u64_hex"].as_str().unwrap());
         let folded = hex_u64(step["S_folded_u64_hex"].as_str().unwrap());
-        let prime = hex_u64(step["S_prime_u64_hex"].as_str().unwrap());
+        let prime_text = step
+            .get("E_u64_hex")
+            .or_else(|| step.get("S_prime_u64_hex"))
+            .and_then(|item| item.as_str())
+            .unwrap();
+        let prime = hex_u64(prime_text);
         assert_eq!(hike::seal(folded), prime);
         assert_eq!(step_sized(&terrain, state, sizes), prime);
     }
@@ -202,7 +207,7 @@ fn negatives_and_the_rate_floor_match_the_pack() {
                 let word = u64::from_le_bytes(bad[..8].try_into().unwrap());
                 assert_eq!(format!("{word:016x}"), case["forbidden_u64_hex"].as_str().unwrap());
             }
-            "mix64_without_mix_add" | "fatslot_fold" | "partial_slot_read" => {
+            "mix64_without_mix_add" | "fatslot_fold" | "v2_0_fold" | "xor_accumulator" | "partial_slot_read" => {
                 let sizes = sizes_of(16384, 16384);
                 let terrain = fill_terrain_sized(&digest, sizes);
                 let state = hex_u64(case["S_u64_hex"].as_str().unwrap());
@@ -214,7 +219,10 @@ fn negatives_and_the_rate_floor_match_the_pack() {
                     "mix64_without_mix_add" => {
                         hike::rejected::step_bare_finalizer(&terrain, state, sizes)
                     }
-                    "fatslot_fold" => hike::rejected::step_fatslot(&terrain, state, sizes),
+                    "fatslot_fold" | "v2_0_fold" => {
+                        hike::rejected::step_v2_0_fold(&terrain, state, sizes)
+                    }
+                    "xor_accumulator" => hike::rejected::step_xor_acc(&terrain, state, sizes),
                     "partial_slot_read" => hike::rejected::step_partial(&terrain, state, sizes),
                     _ => unreachable!(),
                 };

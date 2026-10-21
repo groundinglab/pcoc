@@ -106,7 +106,7 @@ fn decide_at(
     } else {
         "conformance-small"
     };
-    let decision = judge_fast(&measurements, policy, profile);
+    let decision = apply_deadline(judge_fast(&measurements, policy, profile), policy, index);
     if let FastDecision::Refuse {
         reasons, record, ..
     } = &decision
@@ -168,10 +168,18 @@ fn settled_without_terrain(
     screen: &hike::FastScreen,
     policy: &AdmissionPolicy,
 ) -> Option<FastDecision> {
+    if screen.legs.is_some_and(|legs| legs < 6) {
+        return Some(refuse_now(
+            vec!["fewer than 6 legs, so the six indices could not be drawn".to_owned()],
+            "Invalid: fewer than 6 legs, so the proof cannot be drawn.".to_owned(),
+            "{}".to_owned(),
+            crate::wire::OUTCOME_REJECTED,
+        ));
+    }
     if !screen.shape {
         return Some(refuse_now(
             vec!["shape is false".to_owned()],
-            "Invalid: the object does not match the v2.0 shape.".to_owned(),
+            "Invalid: the object does not match the v2.1 shape.".to_owned(),
             "{}".to_owned(),
             crate::wire::OUTCOME_REJECTED,
         ));
@@ -231,7 +239,7 @@ fn judge_fast(
     if !measurements.shape {
         return refuse_now(
             vec!["shape is false".to_owned()],
-            "Invalid: the object does not match the v2.0 shape.".to_owned(),
+            "Invalid: the object does not match the v2.1 shape.".to_owned(),
             record,
             crate::wire::OUTCOME_REJECTED,
         );
@@ -340,6 +348,47 @@ fn judge_fast(
             }
         }
     }
+}
+
+/// Placeholder K, not ratified. A missing tip or last beacon is `held`.
+/// A pass that is more than K blocks behind the gate's observed tip is a refuse.
+/// This is a cheap check: it does not ban the key.
+fn apply_deadline(
+    decision: FastDecision,
+    policy: &AdmissionPolicy,
+    index: &impl IndexRead,
+) -> FastDecision {
+    let Some(k) = policy.submission_deadline_blocks else {
+        return decision;
+    };
+    let FastDecision::Provisional { record } = &decision else {
+        return decision;
+    };
+    let last = last_beacon_height(record);
+    match (index.tip_height().ok(), last) {
+        (Some(tip), Some(last)) if tip > last && tip - last > k => refuse_now(
+            vec!["submission deadline".to_owned()],
+            format!(
+                "Too late: tip {tip} is more than {k} blocks after last beacon {last}. placeholder, not ratified."
+            ),
+            record.clone(),
+            crate::wire::OUTCOME_REJECTED,
+        ),
+        (Some(_), Some(_)) => decision,
+        _ if policy.held_on_not_read => FastDecision::Held {
+            record: record.clone(),
+        },
+        _ => decision,
+    }
+}
+
+fn last_beacon_height(record: &str) -> Option<u64> {
+    let value = serde_json::from_str::<serde_json::Value>(record.trim_end()).ok()?;
+    let headers = value.get("headers")?.as_array()?;
+    headers
+        .last()?
+        .get("stored_height")
+        .and_then(|item| item.as_u64())
 }
 
 fn refuse_now(
@@ -516,6 +565,47 @@ mod tests {
         assert!(words["legs"].is_null() && words["leg_rate"].is_null());
         assert_eq!(words["anchored"], 3);
         assert!(fast_measures("{}").is_none());
+    }
+
+    struct Tip(u64);
+
+    impl IndexRead for Tip {
+        fn beacon(&self, _: u64) -> Result<hike::IndexBeacon, ()> {
+            Err(())
+        }
+        fn beacon_fresh(&self, _: u64) -> Result<hike::IndexBeacon, ()> {
+            Err(())
+        }
+        fn plant(&self, _: &hike::PathLocators) -> hike::ChainRead {
+            hike::ChainRead::NotRead
+        }
+        fn plant_fresh(&self, _: &hike::PathLocators) -> hike::ChainRead {
+            hike::ChainRead::NotRead
+        }
+        fn tip_height(&self) -> Result<u64, ()> {
+            Ok(self.0)
+        }
+    }
+
+    #[test]
+    fn a_late_submission_is_refused_and_a_missing_tip_is_held() {
+        let record = r#"{"headers":[{"stored_height":1000,"T":1},{"stored_height":1010,"T":2}]}"#;
+        let mut policy = policy();
+        policy.submission_deadline_blocks = Some(3);
+        let provisional = FastDecision::Provisional {
+            record: record.to_owned(),
+        };
+        let late = apply_deadline(provisional.clone(), &policy, &Tip(1014));
+        match late {
+            FastDecision::Refuse { reasons, .. } => {
+                assert_eq!(reasons, vec!["submission deadline".to_owned()]);
+            }
+            other => panic!("expected a deadline refuse, got {other:?}"),
+        }
+        let on_time = apply_deadline(provisional.clone(), &policy, &Tip(1013));
+        assert!(matches!(on_time, FastDecision::Provisional { .. }));
+        let unread = apply_deadline(provisional, &policy, &ClosedIndex);
+        assert!(matches!(unread, FastDecision::Held { .. }));
     }
 
     /// One anchored waypoint and a bookend rate of 0.05. Terrain stays 0.

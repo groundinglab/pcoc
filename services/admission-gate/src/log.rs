@@ -156,7 +156,7 @@ impl DecisionLog {
         if parsed.torn {
             if parsed.lines.is_empty() {
                 return Err(LogError::NotThisLineage(format!(
-                    "{} has no complete Satoshi Hike v2.0 line; this gate does not rewrite it",
+                    "{} has no complete Satoshi Hike v2.1 line; this gate does not rewrite it",
                     chain.display()
                 )));
             }
@@ -370,11 +370,11 @@ fn parse_chain(blob: &[u8]) -> Result<Parsed, LogError> {
     let mut prev_hash = genesis_hash();
     for (index, raw) in objects.raw.iter().enumerate() {
         let value: Value = serde_json::from_slice(raw).map_err(|err| {
-            LogError::NotThisLineage(format!("log line {index} is not a v2.0 line: {err}"))
+            LogError::NotThisLineage(format!("log line {index} is not a v2.1 line: {err}"))
         })?;
         if value.get("spec").and_then(|item| item.as_str()) != Some(SPEC_NAME) {
             return Err(LogError::NotThisLineage(format!(
-                "log line {index} is not a Satoshi Hike v2.0 decision; this gate does not serve it"
+                "log line {index} is not a Satoshi Hike v2.1 decision; this gate does not serve it"
             )));
         }
         let seq = value

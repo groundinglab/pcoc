@@ -1677,6 +1677,16 @@ mod tests {
         }
     }
 
+    /// An ancestor in a median-time-past window. The hash is not a stored beacon.
+    fn ancestor_beacon(height: u64) -> Result<IndexBeacon, ()> {
+        Ok(IndexBeacon {
+            natural: [0; 32],
+            height,
+            header_time_s: Some(height.saturating_mul(1_000)),
+            timestamp_unix_ms: None,
+        })
+    }
+
     fn beacon(natural: [u8; 32], height: u64) -> Result<IndexBeacon, ()> {
         Ok(IndexBeacon {
             natural,
@@ -2048,11 +2058,13 @@ mod tests {
                 if height == hike.last_interrupt_height {
                     return beacon_at(hike.last_interrupt, height, height * 1_000);
                 }
-                let stage = hike
+                let Some(stage) = hike
                     .stages
                     .iter()
                     .find(|stage| stage.beacon_height == height)
-                    .expect("stored height");
+                else {
+                    return ancestor_beacon(height);
+                };
                 if height == 1 {
                     beacon_at(stage.beacon, height + 1, height * 1_000)
                 } else if height == 2 {
@@ -2077,10 +2089,10 @@ mod tests {
         assert!(!measurements.shape);
         let mut expected_heights: Vec<u64> = (1..=18).collect();
         expected_heights.push(hike.last_interrupt_height);
-        assert_eq!(heights, expected_heights);
+        assert_eq!(&heights[..expected_heights.len()], expected_heights.as_slice());
         let trace = trace.borrow();
         assert!(trace.iter().all(|event| *event == "beacon"));
-        assert_eq!(trace.len(), 19);
+        assert!(trace.len() >= 19);
         let checkpoints = obtained(&measurements.checkpoints);
         assert_eq!(
             &checkpoints.beacon_matches_index[..3],
@@ -2184,11 +2196,13 @@ mod tests {
                         timestamp_unix_ms: Some(1_800_000_000_000 + height),
                     });
                 }
-                let stage = hike
+                let Some(stage) = hike
                     .stages
                     .iter()
                     .find(|stage| stage.beacon_height == height)
-                    .expect("stored height");
+                else {
+                    return ancestor_beacon(height);
+                };
                 if height == 1 {
                     Ok(IndexBeacon {
                         natural: stage.beacon,
@@ -2570,11 +2584,13 @@ mod tests {
                         timestamp_unix_ms: None,
                     });
                 }
-                let stage = hike
+                let Some(stage) = hike
                     .stages
                     .iter()
                     .find(|stage| stage.beacon_height == height)
-                    .expect("stored header");
+                else {
+                    return ancestor_beacon(height);
+                };
                 Ok(IndexBeacon {
                     natural: stage.beacon,
                     height,
@@ -2734,11 +2750,13 @@ mod tests {
                         timestamp_unix_ms: None,
                     });
                 }
-                let stage = hike
+                let Some(stage) = hike
                     .stages
                     .iter()
                     .find(|stage| stage.beacon_height == height)
-                    .expect("stored header");
+                else {
+                    return ancestor_beacon(height);
+                };
                 Ok(IndexBeacon {
                     natural: stage.beacon,
                     height,

@@ -1,0 +1,13 @@
+[package]
+name = "satoshi-hike-keygen"
+version = "2.0.0-rc.3"
+license = "Apache-2.0"
+edition = "2021"
+rust-version = "1.83"
+publish = false
+
+[dependencies]
+nip06 = { path = "../nip06" }
+
+[dev-dependencies]
+nip06 = { path = "../nip06" }
