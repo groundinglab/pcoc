@@ -270,7 +270,7 @@ The programs exit 1 only when no top-level CBOR map decodes: the file cannot be 
 
 ## Conformance vectors
 
-`spec/conformance/v2.1/` is the v2.1 target ([what each file is](../../spec/conformance/v2.1/README.md)). This SDK does not generate the vectors. `pcoc.conformance.V21Pack` recomputes every file in that pack, including the production leg. `pcoc.conformance.Adversarial` rejects a fill-pin terrain, a one-lane word, a linear four-lane word, `mix64` without `MIX_ADD`, the v2.0 fold, the XOR accumulator, a partial slot read, a shared terrain, and a cached leg. `pcoc.hike.Spec6Pins` checks the section 6 constants. P6.14 is retired. The pack under `spec/conformance/v2.0/` is historical. [../SPEC_PIN](../SPEC_PIN) names tag `spec-v2.1.0`. CoS cuts that tag. The tag half cannot pass until the tag exists.
+`spec/conformance/v2.1/` is the v2.1 target ([what each file is](../../spec/conformance/v2.1/README.md)). This SDK does not generate the vectors. `pcoc.conformance.V21Pack` recomputes every file in that pack, including the production leg. `pcoc.conformance.Adversarial` rejects a fill-pin terrain, a one-lane word, a linear four-lane word, `mix64` without `MIX_ADD`, the v2.0 fold, the XOR accumulator, a partial slot read, a shared terrain, and a cached leg. `pcoc.hike.Spec6Pins` checks the section 6 constants. P6.14 is retired. The pack under `spec/conformance/v2.0/` is historical. [../SPEC_PIN](../SPEC_PIN) names tag `spec-v2.1.0`. The maintainers cut that tag. The tag half cannot pass until the tag exists.
 
 ## Test
 
