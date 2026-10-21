@@ -61,12 +61,18 @@ pub fn beacon_rate(record: &str) -> BeaconRate {
     let Ok(value) = serde_json::from_str::<Value>(record.trim()) else {
         return unread();
     };
-    let (legs, legs_not_defined) = sum_legs(&value);
+    let (legs, legs_not_defined) = hike_legs_of(&value).unwrap_or_else(|| sum_legs(&value));
     let headers = value.get("headers").and_then(Value::as_array);
-    let (first_time, last_time, times_not_read) = beacon_times(headers);
-    let span_s = match (first_time, last_time) {
-        (Some(first), Some(last)) => Some(i128::from(last) - i128::from(first)),
-        _ => None,
+    let (first_time, last_time, header_times_missing) = beacon_times(headers);
+    let (span_s, times_not_read) = match hike_span_of(&value) {
+        Some(span) => span,
+        None => {
+            let span = match (first_time, last_time) {
+                (Some(first), Some(last)) => Some(i128::from(last) - i128::from(first)),
+                _ => None,
+            };
+            (span, header_times_missing)
+        }
     };
     let first_height = header_height(headers, 0);
     let last_height = headers.and_then(|items| {
@@ -121,6 +127,31 @@ fn unread() -> BeaconRate {
         legs_not_defined: false,
         times_not_read: true,
     }
+}
+
+/// `Some((legs, not_defined))` when the record carries `analysis.hike_legs`.
+fn hike_legs_of(value: &Value) -> Option<(Option<u64>, bool)> {
+    let field = value.pointer("/analysis/hike_legs")?;
+    Some(match field {
+        Value::Number(number) => (number.as_u64(), false),
+        Value::String(text) if text == "not read" => (None, false),
+        _ => (None, true),
+    })
+}
+
+/// `Some((span, times_not_read))` when the record carries `analysis.hike_span`.
+fn hike_span_of(value: &Value) -> Option<(Option<i128>, bool)> {
+    let field = value.pointer("/analysis/hike_span")?;
+    Some(match field {
+        Value::Number(number) => (
+            number
+                .as_i64()
+                .map(i128::from)
+                .or_else(|| number.as_u64().map(i128::from)),
+            false,
+        ),
+        _ => (None, true),
+    })
 }
 
 fn sum_legs(value: &Value) -> (Option<u64>, bool) {
