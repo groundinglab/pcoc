@@ -1,5 +1,7 @@
 # Known divergences between the SDKs
 
+SPEC v2.1 withdraws the state-independent slot fold, the 64-bit fill, the candidates of 48 and 90 legs, and bookend admission. Rows below describe the v2.0 SDKs. The rule is SPEC v2.1 (`spec/v2.1-correction`).
+
 `sdk/test.sh` cross-checks the three SDKs on the same inputs (`sdk/tools/crosscheck.py`), at two levels:
 
 - **Programs:** the Rust, Go and Java `satoshi-hike-verify` programs must write byte-identical stdout and exit with the same code.

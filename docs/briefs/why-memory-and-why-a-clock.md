@@ -4,7 +4,7 @@ Occupancy is the unit. The time half is not in the bytes.
 
 The cost that will not divide is a holding. [What kind of cost refuses to divide?](what-kind-of-cost-refuses-to-divide.md) That leaves two questions, in order. Why is the holding memory? And why is a clock in the same sentence?
 
-Memory first. Fetching a piece of memory is quick. Most of the time goes to the processor doing arithmetic. The reason to hold a region is what the arithmetic is arranged to need. Each step reads one small piece of a large region, mixes it into a running value, and the result decides which piece to read next. You cannot know the third piece until you have finished the second. There is no looking ahead. This is not a search for a rare result. The work is the forced route through a region you have to keep holding.
+Memory first. Fetching a piece of memory is quick. Most of the time goes to the processor doing arithmetic. The reason to hold a region is what the arithmetic is arranged to need. Every step reads a full 16 KiB slot of a 256 MiB terrain. The step mixes the walk state into every word of that slot. A digest, a lookup table, or a smaller read cannot stand in for the slot. The next step needs the state this step produced. There is no looking ahead. This is not a search for a rare result. The work is the forced read of the whole slot, from a region you have to keep holding.
 
 A producer who stores nothing, or who stores on disk, pays more than one who holds the region in memory. The design did not impose the memory. It arranged the work so that memory is what anyone sensible would choose.
 

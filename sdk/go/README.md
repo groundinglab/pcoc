@@ -210,7 +210,7 @@ func NewProfile(name, kind string, sample, slot, terrain, steps int) (Profile, e
 - **`Record` fields** (exported, JSON-tagged as the record keys):
   - shape: `Profile`, `Shape` (`match` or `mismatch`), `ShapeItem []string`;
   - stored data: `Headers`, `SeedValue`, `Checkpoints`, `Waypoints`, `Paths`, `Anchors`, `AnchoredTotal`, `SkipList`;
-  - bookends: `A`, `B`, `N`, `S`, `DeltaH`, `FixedStart`, `PB`, `HeightPB`, `IndexComparisonPB`, `TPB`, `HeightIAMinus1`, `TIAMinus1`;
+  - bookends: `A`, `B`, `N`, `S`, `DeltaH`, `FixedStart`, `PB`, `HeightPB`, `IndexComparisonPB`, `TPB`, `HeightIAMinus1`, `TIAMinus1` (v2.0 record fields this SDK still writes; SPEC v2.1 withdraws bookend admission — the rate is total legs across all stages divided by Bitcoin clock time from the first beacon to the last beacon);
   - draw and analysis: `SixLeg`, `SixLegRuns`, `Analysis`;
   - for `conformance-small`: `SampleBytes`, `SlotBytes`, `TerrainBytes`, `StepsPerLeg`.
 

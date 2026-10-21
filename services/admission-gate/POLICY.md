@@ -1,5 +1,7 @@
 # Admission policy companion
 
+**SPEC v2.1 withdraws bookend admission.** Do not use the pair `(N, S)`, a first-or-last planted waypoint, or the §15.5 candidates of 48 and 90 legs. The rate is total legs across all stages divided by Bitcoin clock time from the first beacon to the last beacon. At least 6 waypoints must be planted anywhere. There is no first-or-last-planted requirement and no per-stage or whole-hike minimum leg count. Thorough sampling is 3 rounds of 6 legs, each round in parallel. The floor is TBD in SPEC v2.1. The checked-in gate code and `gl-admit-v6.toml` still implement the withdrawn comparison until `impl/v2.1-rust` lands. Do not copy that comparison.
+
 This is the policy companion to the admission gate service. It holds groundinglab's argued defaults for one policy, `gl-admit-v6` ([policy/gl-admit-v6.toml](policy/gl-admit-v6.toml)).
 
 ## Where policy sits
@@ -16,9 +18,9 @@ The admission gate is a service. groundinglab's gate is one configured instance 
 
 | Parameter (§15.4 name) | Value | Argument |
 |---|---|---|
-| `leg_rate_floor` (B2) | `1/5` legs per second: one leg every 5 seconds | This default asks for at least one leg every 5 seconds on average across the timed span `S`, and refuses slower hikes. The comparison is integer-only on the bookend pair, `5·N ≥ S`. Threshold evidence is a follow-up (see [EVIDENCE.md](EVIDENCE.md)). |
+| `leg_rate_floor` (B2) | `1/5` legs per second on this build | SPEC v2.1 replaces this comparison. The rate is total legs across all stages divided by Bitcoin clock time from the first beacon to the last beacon. `1/5` is what `gl-admit-v6.toml` still configures. It is not the ratified SPEC v2.1 floor (that floor is TBD). Threshold evidence is a follow-up (see [EVIDENCE.md](EVIDENCE.md)). |
 | `min_anchored_paths` (B4) | At least 6 anchored among `W_1` … `W_16`, anywhere, counted | Enough waypoints to time the hike without punishing a weak connection. No specific waypoint is required: insisting on the first or last one would refuse many honest hikes whose final anchors had not landed, and would cost more in fees and retry logic. The object carries 18 stages; 16 of them (`W_1` … `W_16`) can be anchored. |
-| `thorough_six_leg_runs` (§15.4, Rule A4.4) | 3 runs, 18 leg results | Each run is a fresh draw of 6 distinct legs, uniform over every leg, from the gate's own OS CSPRNG (A4.4). Stop at the first mismatch (a B9 invariant). A hike missing 25% of its leg results is caught with probability about `1 − 0.75^18 ≈ 99.4%` (derived from the draw size; not a measured catch rate). The figure is approximate because runs may repeat an index. |
+| `thorough_six_leg_runs` (§15.4, Rule A4.4) | 3 runs, 18 leg results | SPEC v2.1: 3 rounds of 6 legs, each round in parallel. The §15.5 candidates of 48 and 90 legs are withdrawn. Each run is a fresh draw of 6 distinct legs, uniform over every leg, from the gate's own OS CSPRNG (A4.4). A hike missing 25% of its leg results is caught with probability about `1 − 0.75^18 ≈ 99.4%` (derived from the draw size; not a measured catch rate). This build still walks the drawn legs one after another until `impl/v2.1-rust`. |
 | Draw commitment | log `H(draw ‖ salt)` at draw, reveal with the result | Anyone can check afterwards that the draw was not chosen against the submitter. This is a decision-log extension, not part of the specification. |
 | `provisional` (§15.3) | `on` | Cheap checks first, then a fast `provisional` grant. It is never `accept`. `provisional_action_cap` is 0 by the specification. Only the thorough phase accepts. |
 | Not read (§15.3) | `held`, then retry | A missing waypoint read is likely a connection problem: "try again", not a refusal or a ban. A count settled by the object's own bytes is a plain refusal. |
@@ -43,7 +45,7 @@ Copy `policy/gl-admit-v6.toml`, change the values, and give it a new id that enc
 
 ## Where this policy runs
 
-This build reads `policy/gl-admit-v6.toml`, or an inline `policy_table` with the same keys. The code default is `gl-admit-v6`. The comparison is the integer `q·N ≥ p·S` on the bookend pair. Anchored waypoints are counted among `W_1` … `W_16`; any 6 will do. A shortfall is refused as `too_few_waypoints_anchored` with the count in the line, for example `4 of 16 anchored, need 6`. The fast phase issues `provisional`. A `not read` is held and retried. Thorough runs three six-leg draws, commits the draw before walking, recomputes the checkpoint digests, and bans the public key on a fake leg. See [STATUS.md](STATUS.md).
+This build reads `policy/gl-admit-v6.toml`, or an inline `policy_table` with the same keys. The code default is `gl-admit-v6`. SPEC v2.1 replaces the bookend comparison; see the banner above. This tree's code still compares the withdrawn pair until `impl/v2.1-rust`. Anchored waypoints are counted among `W_1` … `W_16`; any 6 will do. A shortfall is refused as `too_few_waypoints_anchored` with the count in the line, for example `4 of 16 anchored, need 6`. The fast phase issues `provisional`. A `not read` is held and retried. Thorough runs three six-leg draws, commits the draw before walking, recomputes the checkpoint digests, and bans the public key on a fake leg. See [STATUS.md](STATUS.md).
 
 Why v6. `gl-admit-v5` was the same table plus a rule that `W_1` and `W_16` must both be anchored (optional keys `require_first_anchored`, `require_last_anchored`, which this build still reads). v6 drops that rule. v5 is bound on groundinglab's live gate, so the change takes a new id.
 

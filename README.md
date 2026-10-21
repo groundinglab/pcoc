@@ -178,7 +178,7 @@ The index is its own component ([services/index](services/index/)). Three ways t
 
 ## Built on
 
-Satoshi Nakamoto's timestamp server and attack economics (Bitcoin white paper §3, §4, §6, §11), Haber and Stornetta's linked timestamps, Dwork and Naor's pricing via computation and Adam Back's Hashcash, and memory-hard work (scrypt). The composition is ours.
+Satoshi Nakamoto's timestamp server and attack economics (Bitcoin white paper §3, §4, §6, §11), Haber and Stornetta's linked timestamps, Dwork and Naor's pricing via computation and Adam Back's Hashcash, and the rule that every step reads a full 16 KiB slot of a 256 MiB terrain. The composition is ours.
 
 ## Licence
 

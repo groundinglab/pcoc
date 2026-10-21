@@ -1,5 +1,7 @@
 # Satoshi Hike v2.0
 
+**The file this page maps is v2.0. SPEC v2.1 withdraws it as the rule.** Do not implement the v2.0 step, the 64-bit fill, the §15.5 candidates of 48 and 90 legs, or bookend / first-and-last-planted admission. Every step reads a full 16 KiB slot of a 256 MiB terrain, and the walk state is mixed into every word. The seed is 32 bytes, SHA-256 of the public key concatenated with the beacon, with no domain label, and every terrain word depends on all 256 bits. The admission rate is total legs across all stages divided by Bitcoin clock time from the first beacon to the last beacon, with at least 6 waypoints planted anywhere. Gate sampling is 3 rounds of 6 legs, each round in parallel. The normative text is SPEC v2.1 (`spec/v2.1-correction`). This page stays a map of the v2.0 file until that merge.
+
 The PCOC specification and its conformance vectors. Together they are the core deliverable of this project.
 
 The point is interoperability. A PCOC made by one implementation must check the same way in every other. Everything else in this repository serves that. The SDKs, the services, and the apps are built from this folder, not the other way round.

@@ -250,9 +250,22 @@ jobs:
       - name: retired-term check (exact-line allowlist)
         run: python3 .github/scripts/retired-term-prose.py
 
+  withdrawn-step:
+    # Self-hosted only, same as the other scans. Red until spec/v2.1-correction
+    # and the SDK branches delete the withdrawn terms. This branch does not.
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, linux, pcoc-pub]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: withdrawn step terms
+        run: python3 .github/scripts/withdrawn-step.py
+
   ci-ok:
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    needs: [changes, spec, sdk, services, desktop, docs, gitleaks, g1, retired-term]
+    needs: [changes, spec, sdk, services, desktop, docs, gitleaks, g1, retired-term, withdrawn-step]
     runs-on: [self-hosted, linux, pcoc-pub]
     timeout-minutes: 5
     steps:
@@ -289,7 +302,7 @@ jobs:
               bad.append(f"changes={needs['changes']['result']}")
           # always-on scans must succeed; g1 may be skipped only on a fork PR
           fork = os.environ.get("FORK_PR") == "true"
-          for name in ("gitleaks", "g1", "retired-term"):
+          for name in ("gitleaks", "g1", "retired-term", "withdrawn-step"):
               r = needs[name]["result"]
               if r == "skipped" and name == "g1" and fork:
                   print("g1: skipped on fork PR (accepted)")
