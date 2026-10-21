@@ -1,11 +1,19 @@
 package pcoc.conformance;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import pcoc.hike.Admit;
 import pcoc.hike.Bytes;
+import pcoc.hike.Cbor;
+import pcoc.hike.Hike;
+import pcoc.hike.Measure;
 import pcoc.hike.Profile;
 import pcoc.hike.Terrain;
 import pcoc.json.Json;
@@ -21,6 +29,7 @@ public final class V21Pack {
 
     public static void main(String[] args) throws Exception {
         Path pack = repoRoot().resolve("spec/conformance/v2.1");
+        checkManifest(pack, load(pack.resolve("manifest.json")));
         checkSeed(load(pack.resolve("seed.json")));
         checkWords(load(pack.resolve("nl4-words.json")));
         checkTerrain(load(pack.resolve("terrain-small.json")));
@@ -30,6 +39,11 @@ public final class V21Pack {
         checkRate(load(pack.resolve("rate.json")));
         checkAnchors(load(pack.resolve("anchors.json")));
         checkNegatives(load(pack.resolve("negatives.json")));
+        checkKind(load(pack.resolve("kind.json")));
+        checkDeadline(load(pack.resolve("deadline.json")));
+        checkMtp(load(pack.resolve("mtp.json")));
+        checkRounds(load(pack.resolve("rounds.json")));
+        checkProd(load(pack.resolve("prod-leg0.json")));
         Adversarial.cachedLeg();
         System.out.println("vector match");
         for (String row : ROWS) {
@@ -204,6 +218,10 @@ public final class V21Pack {
             if (bool(row, "must_reject") && meets) {
                 throw new AssertionError(text(row, "name") + " was not rejected");
             }
+            String outcome = optionalText(row, "outcome");
+            if (outcome != null && longNum(row, "hike_span") <= 0 && !"refuse".equals(outcome)) {
+                throw new AssertionError(text(row, "name") + " span outcome");
+            }
             if (!meets) {
                 System.out.println("REJECT rate " + text(row, "name"));
             }
@@ -250,8 +268,12 @@ public final class V21Pack {
                 case "fill_pin_terrain" -> rejectTerrain(name, publicKey, beacon, row);
                 case "ref_word", "all4_word" -> rejectWord(name, publicKey, beacon, row);
                 case "mix64_without_mix_add" -> rejectFold(name, publicKey, beacon, row, Adversarial.Kind.NO_ADD);
-                case "fatslot_fold" -> rejectFold(name, publicKey, beacon, row, Adversarial.Kind.FATSLOT);
-                case "partial_slot_read" -> rejectFold(name, publicKey, beacon, row, Adversarial.Kind.PARTIAL);
+                case "v2_0_fold" -> rejectFold(name, publicKey, beacon, row, Adversarial.Kind.V2_0);
+                case "xor_accumulator_fold" -> rejectFold(name, publicKey, beacon, row, Adversarial.Kind.XOR_ACC);
+                case "partial_slot_read", "partial_slot_read_2047" -> rejectFold(name, publicKey, beacon, row, Adversarial.Kind.PARTIAL);
+                case "one_lane_flip" -> rejectLaneFlip(name, publicKey, beacon, row);
+                case "all4_kernel" -> rejectAll4(name, publicKey, beacon, row);
+                case "forged_window" -> rejectWindow(name, publicKey, beacon, row);
                 case "f3_shared_terrain" -> rejectShared(name, publicKey, beacon, row);
                 default -> throw new AssertionError("unknown negative " + name);
             }
@@ -313,6 +335,385 @@ public final class V21Pack {
         }
     }
 
+    private static void rejectLaneFlip(String name, byte[] publicKey, byte[] beacon, Json.Obj row) {
+        long[] lane = Terrain.lanes(Terrain.seed(publicKey, beacon));
+        Profile profile = Profile.conformanceSmall(1, (int) longNum(row, "slot_bytes"), (int) longNum(row, "terrain_bytes"), 1);
+        String conforming = Bytes.hex(Bytes.sha256(Terrain.fillLanes(lane, profile).blob));
+        reject(name, conforming, text(row, "conforming_sha256"), text(row, "forbidden_sha256"));
+        int laneIndex = (int) longNum(row, "lane");
+        long[] flipped = lane.clone();
+        flipped[laneIndex] ^= Long.parseUnsignedLong(text(row, "flip_u64_hex"), 16);
+        int words = profile.nSlots * profile.wordsPerSlot;
+        if (words != longNum(row, "words")) {
+            throw new AssertionError(name + " words");
+        }
+        int nl4 = 0;
+        int ref = 0;
+        int pair = 0;
+        for (int i = 0; i < profile.nSlots; i++) {
+            for (int j = 0; j < profile.wordsPerSlot; j++) {
+                if (Terrain.baseWord(lane, i, j) != Terrain.baseWord(flipped, i, j)) {
+                    nl4++;
+                }
+                if (Adversarial.refWord(lane, i, j) != Adversarial.refWord(flipped, i, j)) {
+                    ref++;
+                }
+                if (Adversarial.pairWord(lane, i, j) != Adversarial.pairWord(flipped, i, j)) {
+                    pair++;
+                }
+            }
+        }
+        if (nl4 != longNum(row, "nl4_changed") || ref != longNum(row, "ref_changed") || pair != longNum(row, "pair_changed")) {
+            throw new AssertionError(name + " changed nl4 " + nl4 + " ref " + ref + " pair " + pair);
+        }
+        String forbidden = Bytes.hex(Bytes.sha256(Terrain.fillLanes(flipped, profile).blob));
+        if (!forbidden.equals(text(row, "forbidden_sha256")) || forbidden.equals(conforming)) {
+            throw new AssertionError(name + " flipped terrain " + forbidden);
+        }
+    }
+
+    private static void rejectAll4(String name, byte[] publicKey, byte[] beacon, Json.Obj row) {
+        long[] lane = Terrain.lanes(Terrain.seed(publicKey, beacon));
+        Profile profile = Profile.conformanceSmall(1, (int) longNum(row, "slot_bytes"), (int) longNum(row, "terrain_bytes"), 1);
+        String conforming = Bytes.hex(Bytes.sha256(Terrain.fillLanes(lane, profile).blob));
+        reject(name, conforming, text(row, "conforming_sha256"), text(row, "forbidden_sha256"));
+        long mask = Long.parseUnsignedLong(text(row, "xor_u64_hex"), 16);
+        long[] flipped = lane.clone();
+        for (Json item : Json.asArr(row.fields().get("lanes")).items()) {
+            flipped[(int) Long.parseLong(Json.asNumber(item))] ^= mask;
+        }
+        int words = profile.nSlots * profile.wordsPerSlot;
+        int nl4 = 0;
+        for (int i = 0; i < profile.nSlots; i++) {
+            for (int j = 0; j < profile.wordsPerSlot; j++) {
+                if (Terrain.baseWord(lane, i, j) != Terrain.baseWord(flipped, i, j)) {
+                    nl4++;
+                }
+                if (Adversarial.all4Word(lane, i, j) != Adversarial.all4Word(flipped, i, j)) {
+                    throw new AssertionError(name + " linear word moved");
+                }
+            }
+        }
+        if (nl4 != longNum(row, "nl4_changed") || words != longNum(row, "words")) {
+            throw new AssertionError(name + " nl4 " + nl4);
+        }
+        String linear = Bytes.hex(Bytes.sha256(Adversarial.linearTerrain(lane, profile)));
+        String linearFlipped = Bytes.hex(Bytes.sha256(Adversarial.linearTerrain(flipped, profile)));
+        eq(name + " all4", linear, text(row, "all4_sha256"));
+        eq(name + " all4 flipped", linearFlipped, text(row, "all4_sha256_flipped"));
+        if (!linear.equals(linearFlipped)) {
+            throw new AssertionError(name + " linear terrain moved");
+        }
+        String forbidden = Bytes.hex(Bytes.sha256(Terrain.fillLanes(flipped, profile).blob));
+        if (!forbidden.equals(text(row, "forbidden_sha256")) || forbidden.equals(conforming)) {
+            throw new AssertionError(name + " nl4 flipped " + forbidden);
+        }
+    }
+
+    private static void rejectWindow(String name, byte[] publicKey, byte[] beacon, Json.Obj row) {
+        if (!"shifted-one".equals(text(row, "forbidden_window"))) {
+            throw new AssertionError(name + " window");
+        }
+        if (bool(row, "fake_leg_ignore")) {
+            throw new AssertionError(name + " fake leg");
+        }
+        Profile profile = Profile.conformanceSmall(
+                (int) longNum(row, "sample_bytes"),
+                (int) longNum(row, "slot_bytes"),
+                (int) longNum(row, "terrain_bytes"),
+                1);
+        byte[] seed = Terrain.seed(publicKey, beacon);
+        Terrain terrain = Terrain.fillLanes(Terrain.lanes(seed), profile);
+        int offset = (int) longNum(row, "sample_offset");
+        int derived = (int) Long.remainderUnsigned(Bytes.u64le(seed), profile.offsetModulus);
+        if (derived != offset) {
+            throw new AssertionError(name + " offset " + derived);
+        }
+        long leg = Long.parseUnsignedLong(text(row, "leg_u64_hex"), 16);
+        byte[] conforming = Adversarial.checkpointAt(seed, seed, terrain.blob, offset, profile.sampleBytes, leg);
+        byte[] shifted = Adversarial.checkpointAt(seed, seed, terrain.blob, offset + 1, profile.sampleBytes, leg);
+        eq(name + " window", Bytes.hex(conforming), text(row, "conforming_hex"));
+        eq(name + " shifted", Bytes.hex(shifted), text(row, "forbidden_hex"));
+        if (Arrays.equals(conforming, shifted)) {
+            throw new AssertionError(name + " windows matched");
+        }
+    }
+
+    private static void checkManifest(Path pack, Json.Obj doc) throws Exception {
+        if (!"12f619ce234a7e1de60b99adb3e9b0040d94880628a8abc8f413f8d52359f4f1".equals(text(doc, "vector_sha256"))) {
+            throw new AssertionError("manifest pin");
+        }
+        eq("manifest", packHash(pack), text(doc, "vector_sha256"));
+        pass("manifest");
+    }
+
+    /** SHA-256 over the pack except manifest.json: repo-relative path, NUL, sha256(bytes), sorted by path. */
+    private static String packHash(Path pack) throws Exception {
+        List<Path> files = new ArrayList<>();
+        try (var stream = Files.list(pack)) {
+            stream.filter(path -> !"manifest.json".equals(path.getFileName().toString())).forEach(files::add);
+        }
+        files.sort(Comparator.comparing(path -> path.getFileName().toString()));
+        MessageDigest digest = Bytes.digest();
+        for (Path file : files) {
+            String rel = "spec/conformance/v2.1/" + file.getFileName();
+            digest.update(rel.getBytes(StandardCharsets.UTF_8));
+            digest.update((byte) 0);
+            digest.update(Bytes.sha256(Files.readAllBytes(file)));
+        }
+        return Bytes.hex(digest.digest());
+    }
+
+    private static void checkKind(Json.Obj doc) {
+        if (!Hike.KIND.equals(text(doc, "kind")) || Hike.KIND.length() != longNum(doc, "kind_bytes")) {
+            throw new AssertionError("kind");
+        }
+        if (!Admit.EARLIER_VERSION_REASON.equals(text(doc, "earlier_reason"))) {
+            throw new AssertionError("earlier reason");
+        }
+        for (Json item : Json.asArr(doc.fields().get("earlier")).items()) {
+            String kind = Json.asString(item);
+            if (!Hike.isEarlierKind(kind)) {
+                throw new AssertionError("not earlier " + kind);
+            }
+            Admit.Gate gate = Admit.earlierVersion(kind);
+            if (!"refuse".equals(gate.outcome) || !Admit.EARLIER_VERSION_REASON.equals(gate.reason) || gate.fakeLegIgnore) {
+                throw new AssertionError("earlier gate " + kind);
+            }
+            byte[] raw = Cbor.encodeMap(List.of(Map.entry("kind", Cbor.encodeText(kind))));
+            String line = Measure.record(raw, Profile.CONFORMANCE_SMALL_V2, height -> {
+                throw new AssertionError("index read before the earlier-kind return");
+            }, null, true);
+            String want = "{\"version\":\"earlier version\",\"kind\":\"" + kind + "\"}\n";
+            if (!want.equals(line)) {
+                throw new AssertionError("earlier record " + line);
+            }
+            System.out.println("REJECT earlier_version " + kind);
+        }
+        if (Hike.isEarlierKind(Hike.KIND)) {
+            throw new AssertionError("current kind refused");
+        }
+        pass("kind");
+    }
+
+    private static void checkDeadline(Json.Obj doc) {
+        if (longNum(doc, "K") != Admit.PLACEHOLDER_DEADLINE_K || !"placeholder, not ratified".equals(text(doc, "K_mark"))) {
+            throw new AssertionError("deadline placeholder");
+        }
+        if (!Admit.SUBMISSION_DEADLINE.equals(text(doc, "reason"))) {
+            throw new AssertionError("deadline reason");
+        }
+        for (Json item : Json.asArr(doc.fields().get("cases")).items()) {
+            Json.Obj row = Json.asObj(item);
+            Long tip = optionalLong(row, "tip_height");
+            Admit.Gate gate = Admit.submissionDeadline(tip, longNum(row, "last_beacon_height"), (int) longNum(row, "K"));
+            if (!text(row, "outcome").equals(gate.outcome) || gate.fakeLegIgnore != bool(row, "fake_leg_ignore")) {
+                throw new AssertionError(text(row, "name") + " deadline " + gate.outcome);
+            }
+            String reason = optionalText(row, "reason");
+            if (reason != null && !reason.equals(gate.reason)) {
+                throw new AssertionError(text(row, "name") + " reason");
+            }
+            if ("refuse".equals(gate.outcome) && gate.reason == null) {
+                throw new AssertionError(text(row, "name") + " missing reason");
+            }
+            if (bool(row, "must_reject") && !"refuse".equals(gate.outcome)) {
+                throw new AssertionError(text(row, "name") + " was not rejected");
+            }
+            if (!"accept".equals(gate.outcome)) {
+                System.out.println("REJECT deadline " + text(row, "name"));
+            }
+        }
+        pass("deadline");
+    }
+
+    private static void checkMtp(Json.Obj doc) {
+        if (!"A4.10".equals(text(doc, "rule"))) {
+            throw new AssertionError("mtp rule");
+        }
+        for (Json item : Json.asArr(doc.fields().get("cases")).items()) {
+            Json.Obj row = Json.asObj(item);
+            String name = text(row, "name");
+            Long first = checkBeacon(name, Json.asObj(row.fields().get("first")));
+            Json lastValue = row.fields().get("last");
+            Long last = lastValue == null || lastValue instanceof Json.Null ? null : checkBeacon(name, Json.asObj(lastValue));
+            Long span = Admit.hikeSpan(first, last);
+            Json spanValue = row.fields().get("hike_span");
+            if (spanValue instanceof Json.Str) {
+                if (span != null || !"not read".equals(Json.asString(spanValue))) {
+                    throw new AssertionError(name + " hike_span");
+                }
+            } else if (spanValue != null) {
+                if (span == null || span != Long.parseLong(Json.asNumber(spanValue))) {
+                    throw new AssertionError(name + " hike_span " + span);
+                }
+            }
+            Json raw = row.fields().get("raw_span");
+            if (raw instanceof Json.Str) {
+                if (!"not read".equals(Json.asString(raw))) {
+                    throw new AssertionError(name + " raw");
+                }
+            } else if (raw != null && first != null && last != null) {
+                long rawSpan = rawNtime(Json.asObj(row.fields().get("last"))) - rawNtime(Json.asObj(row.fields().get("first")));
+                if (rawSpan != Long.parseLong(Json.asNumber(raw))) {
+                    throw new AssertionError(name + " raw_span " + rawSpan);
+                }
+                if (span != null && rawSpan == span) {
+                    throw new AssertionError(name + " raw ntime used as hike_span");
+                }
+            }
+            String outcome = text(row, "outcome");
+            if (span != null && span > 0 && !"read".equals(outcome)) {
+                throw new AssertionError(name + " positive span");
+            }
+            if (span != null && span <= 0 && !"refuse".equals(outcome)) {
+                throw new AssertionError(name + " non-positive span");
+            }
+            if (span == null && !"held".equals(outcome) && row.fields().get("hike_span") != null) {
+                throw new AssertionError(name + " missing span");
+            }
+            if (bool(row, "must_reject") && span != null && span > 0 && Admit.placeholderRateMeets(1, span)) {
+                throw new AssertionError(name + " was not rejected");
+            }
+            if ("refuse".equals(outcome) || "held".equals(outcome)) {
+                System.out.println("REJECT mtp " + name);
+            }
+        }
+        pass("mtp");
+    }
+
+    private static Long checkBeacon(String name, Json.Obj beacon) {
+        long height = longNum(beacon, "height");
+        int n = (int) longNum(beacon, "n");
+        if (n != Admit.mtpCount(height)) {
+            throw new AssertionError(name + " n");
+        }
+        Json.Arr reads = Json.asArr(beacon.fields().get("reads"));
+        if (reads.items().size() != n) {
+            throw new AssertionError(name + " reads");
+        }
+        long[] times = new long[n];
+        boolean missing = false;
+        for (int i = 0; i < n; i++) {
+            long want = height - n + 1 + i;
+            if (Long.parseLong(Json.asNumber(reads.items().get(i))) != want) {
+                throw new AssertionError(name + " read " + i);
+            }
+            Json time = Json.asArr(beacon.fields().get("times")).items().get(i);
+            if (time instanceof Json.Null) {
+                missing = true;
+            } else {
+                times[i] = Long.parseLong(Json.asNumber(time));
+            }
+        }
+        Json raw = beacon.fields().get("raw_ntime");
+        Json lastTime = Json.asArr(beacon.fields().get("times")).items().get(n - 1);
+        if (raw instanceof Json.Null) {
+            if (!(lastTime instanceof Json.Null)) {
+                throw new AssertionError(name + " raw ntime");
+            }
+        } else if (Long.parseLong(Json.asNumber(raw)) != Long.parseLong(Json.asNumber(lastTime))) {
+            throw new AssertionError(name + " raw ntime");
+        }
+        Json wantMtp = beacon.fields().get("mtp");
+        if (missing || wantMtp instanceof Json.Null) {
+            if (!missing || !(wantMtp instanceof Json.Null)) {
+                throw new AssertionError(name + " mtp missing");
+            }
+            return null;
+        }
+        long got = Admit.medianTimePast(times);
+        if (got != Long.parseLong(Json.asNumber(wantMtp))) {
+            throw new AssertionError(name + " mtp " + got);
+        }
+        return got;
+    }
+
+    private static long rawNtime(Json.Obj beacon) {
+        return Long.parseLong(Json.asNumber(beacon.fields().get("raw_ntime")));
+    }
+
+    private static void checkRounds(Json.Obj doc) {
+        if (longNum(doc, "thorough_rounds") != Admit.THOROUGH_ROUNDS || longNum(doc, "per_round") != Admit.PER_ROUND) {
+            throw new AssertionError("rounds size");
+        }
+        for (Json item : Json.asArr(doc.fields().get("cases")).items()) {
+            Json.Obj row = Json.asObj(item);
+            String name = text(row, "name");
+            long[] draws = draws(row);
+            Integer mismatch = row.fields().containsKey("mismatch_on_round") ? (int) longNum(row, "mismatch_on_round") : null;
+            Admit.Thorough got = Admit.thoroughRounds(longNum(row, "leg_total"), draws, mismatch);
+            if (!text(row, "outcome").equals(got.outcome) || longNum(row, "rounds_started") != got.roundsStarted) {
+                throw new AssertionError(name + " outcome " + got.outcome + " started " + got.roundsStarted);
+            }
+            String draw = optionalText(row, "draw");
+            if (draw != null && !draw.equals(got.draw)) {
+                throw new AssertionError(name + " draw");
+            }
+            Json.Arr rounds = Json.asArr(row.fields().get("rounds"));
+            if (rounds.items().size() != got.rounds.length) {
+                throw new AssertionError(name + " round count");
+            }
+            for (int r = 0; r < got.rounds.length; r++) {
+                Json.Arr group = Json.asArr(rounds.items().get(r));
+                if (group.items().size() != got.rounds[r].length) {
+                    throw new AssertionError(name + " group");
+                }
+                for (int j = 0; j < got.rounds[r].length; j++) {
+                    if (got.rounds[r][j] != Long.parseLong(Json.asNumber(group.items().get(j)))) {
+                        throw new AssertionError(name + " index " + r + "," + j);
+                    }
+                }
+            }
+            if (bool(row, "must_reject") && !"refuse".equals(got.outcome)) {
+                throw new AssertionError(name + " was not rejected");
+            }
+            if ("refuse".equals(got.outcome)) {
+                System.out.println("REJECT rounds " + name);
+            }
+        }
+        pass("rounds");
+    }
+
+    private static long[] draws(Json.Obj row) {
+        Json value = row.fields().get("draws_u64_hex");
+        if (value == null) {
+            return new long[0];
+        }
+        Json.Arr arr = Json.asArr(value);
+        long[] draws = new long[arr.items().size()];
+        for (int i = 0; i < draws.length; i++) {
+            draws[i] = Long.parseUnsignedLong(Json.asString(arr.items().get(i)), 16);
+        }
+        return draws;
+    }
+
+    private static void checkProd(Json.Obj doc) throws Exception {
+        if (!"production".equals(text(doc, "profile")) || longNum(doc, "steps") != Profile.PRODUCTION.stepsPerLeg) {
+            throw new AssertionError("prod profile");
+        }
+        byte[] publicKey = Bytes.unhex(text(doc, "public_key_hex"));
+        byte[] beacon = Bytes.unhex(text(doc, "seed_beacon_hex"));
+        long fillStart = System.nanoTime();
+        Terrain terrain = Terrain.fill(publicKey, beacon, Profile.PRODUCTION);
+        long filled = System.nanoTime();
+        eq("prod terrain", Bytes.hex(Bytes.sha256(terrain.blob)), text(doc, "terrain_sha256"));
+        byte[] seed = Terrain.seed(publicKey, beacon);
+        int offset = terrain.sampleOffset(seed);
+        if (offset != longNum(doc, "sample_offset")) {
+            throw new AssertionError("prod offset " + offset);
+        }
+        long legStart = System.nanoTime();
+        long leg = terrain.leg(seed);
+        long legDone = System.nanoTime();
+        eq("prod leg", Bytes.pin(leg), text(doc, "leg0_u64_hex"));
+        byte[] sample = terrain.sample(seed);
+        byte[] checkpoint = Bytes.sha256(seed, seed, sample, Bytes.le64(leg));
+        eq("prod checkpoint", Bytes.hex(checkpoint), text(doc, "checkpoint0_hex"));
+        System.out.printf(java.util.Locale.ROOT, "prod-leg0 fill_s %.9f leg_s %.9f%n", (filled - fillStart) / 1e9, (legDone - legStart) / 1e9);
+        pass("prod-leg0");
+    }
+
     /** The recomputed value verifies. The withdrawn value does not. */
     private static void reject(String name, String got, String conforming, String forbidden) {
         if (!conforming.equals(got)) {
@@ -339,6 +740,22 @@ public final class V21Pack {
 
     private static String text(Json.Obj obj, String key) {
         return Json.asString(obj.fields().get(key));
+    }
+
+    private static String optionalText(Json.Obj obj, String key) {
+        Json value = obj.fields().get(key);
+        if (value == null || value instanceof Json.Null) {
+            return null;
+        }
+        return Json.asString(value);
+    }
+
+    private static Long optionalLong(Json.Obj obj, String key) {
+        Json value = obj.fields().get(key);
+        if (value == null || value instanceof Json.Null) {
+            return null;
+        }
+        return Long.parseLong(Json.asNumber(value));
     }
 
     private static String optionalHex(Json.Obj obj, String key) {

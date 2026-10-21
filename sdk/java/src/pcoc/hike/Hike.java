@@ -9,8 +9,10 @@ public final class Hike {
     public static final int BEACON_BYTES = 32;
     /** Earlier kind string. Rule A5. Not a profile. */
     public static final String KIND_V135 = "satoshi-hike-v1.35-object";
-    /** SPEC v2.0 P6.15. */
-    public static final String KIND = "satoshi-hike-v2.0-object";
+    /** Earlier kind string. Rule A5. A v2.0 object is not measured under v2.1. */
+    public static final String KIND_V20 = "satoshi-hike-v2.0-object";
+    /** SPEC v2.1 P6.15. */
+    public static final String KIND = "satoshi-hike-v2.1-object";
     public static final String FILL = "dag2";
     /**
      * Rule A5 measurement. The record key is {@code version}.
@@ -50,9 +52,12 @@ public final class Hike {
         return stageBeaconHeight;
     }
 
-    /** Rule A5. A kind that is neither {@link #KIND} nor this text stays a shape measurement. */
+    /**
+     * Rule A5. Kind {@code satoshi-hike-v1.35-object} or {@code satoshi-hike-v2.0-object}.
+     * The check is the kind text. It runs before any terrain fill.
+     */
     public static boolean isEarlierKind(String kind) {
-        return KIND_V135.equals(kind);
+        return KIND_V135.equals(kind) || KIND_V20.equals(kind);
     }
 
     /**
