@@ -3,6 +3,7 @@
   "generator": "python3 spec/conformance/tools/gen_v21.py",
   "files": [
     "anchors.json",
+    "constants.json",
     "deadline.json",
     "kat-small.json",
     "kind.json",
@@ -20,6 +21,7 @@
   ],
   "ids": [
     "anchors",
+    "constants",
     "deadline",
     "kat-small",
     "kind",
@@ -34,7 +36,7 @@
     "terrain-small",
     "test-3leg"
   ],
-  "vector_sha256": "12f619ce234a7e1de60b99adb3e9b0040d94880628a8abc8f413f8d52359f4f1",
+  "vector_sha256": "ec72facd056694203b96fac04d331a9c48219257b254cf7f30a95c9c314e1c64",
   "vector_sha256_note": "SHA-256 over spec/conformance/v2.1 except manifest.json, each file as path, NUL, sha256(bytes), sorted by path. The sdk/SPEC_PIN hash covers the whole spec/conformance tree except tools/.",
   "floor_mark": "placeholder, not ratified"
 }

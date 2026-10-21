@@ -5,7 +5,9 @@ Run from the repository root. Exit 1 on any failure. Short and deterministic."""
 import hashlib, json, os, re, sys
 
 SPEC = "spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md"
+# Section 6 is the v2.1 table. The locked sign-in wire stays on the v2.0 files.
 PACK = "spec/conformance/v2.0"
+CONSTS = "spec/conformance/v2.1/constants.json"
 # spec/README.md may link these repository parents. No other page under spec/ may.
 README_PARENTS = {
     "sdk", "services", "apps", "docs",
@@ -25,7 +27,7 @@ spec = open(SPEC, encoding="utf-8").read()
 sec6 = spec[spec.index("## 6. Constants"):]
 sec6 = sec6[: sec6.index("\n## 7")]
 rows = re.findall(r"^\| `([A-Z][A-Z0-9_]+)` \| (.+?) \|$", sec6, re.M)
-consts = json.load(open(f"{PACK}/constants.json"))
+consts = json.load(open(CONSTS))
 def spec_value(raw):
     raw = raw.strip()
     m = re.match(r"^`(0x[0-9A-F]+)`$", raw)
@@ -35,7 +37,7 @@ def spec_value(raw):
     m = re.match(r"^`([^`]+)`$", raw)
     if m: return m.group(1)
     return int(raw.split()[0])
-check("section6 has 22 names", len(rows) == 22, str(len(rows)))
+check("section6 has 21 names", len(rows) == 21, str(len(rows)))
 for name, raw in rows:
     check(f"section6 {name}", consts.get(name) == spec_value(raw), f"json={consts.get(name)!r} spec={spec_value(raw)!r}")
 
