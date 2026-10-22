@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pcoc-sdk-release/1",
+  "type": "object",
+  "required": ["schema", "release", "spec", "conformance", "sdks"],
+  "properties": {
+    "schema": {"const": "pcoc-sdk-release/1"},
+    "release": {"type": "object", "required": ["version", "date", "commit"]},
+    "spec": {
+      "type": "object",
+      "required": ["version", "erratum", "tag", "pack_manifest_sha256"],
+      "properties": {
+        "erratum": {"const": 2},
+        "tag": {"const": "spec-2.2.0"},
+        "pack_manifest_sha256": {"type": "string", "minLength": 64, "maxLength": 64}
+      }
+    },
+    "conformance": {"type": "object"},
+    "sdks": {"type": "array", "minItems": 4},
+    "performance": {"type": "array"}
+  }
+}

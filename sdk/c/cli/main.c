@@ -17,6 +17,7 @@ static void usage(void) {
           "                   [--slot-bytes N] [--sample-bytes N] [--terrain-bytes N]\n"
           "                   [--steps-per-leg N] [--draw-label LABEL] OBJECT\n"
           "       pcoc selftest\n"
+          "       pcoc quickstart\n"
           "       pcoc candidates [DIR]\n"
           "       pcoc produce --rig s1|s2|prod -o FILE\n"
           "       pcoc --version\n");
@@ -306,6 +307,253 @@ static int cmd_version(void) {
   return 0;
 }
 
+static void hex32(const uint8_t in[32], char out[65]) {
+  static const char *digits = "0123456789abcdef";
+  for (int i = 0; i < 32; i++) {
+    out[2 * i] = digits[in[i] >> 4];
+    out[2 * i + 1] = digits[in[i] & 15];
+  }
+  out[64] = 0;
+}
+
+static int read_file(const char *path, uint8_t **out, size_t *len) {
+  FILE *f = fopen(path, "rb");
+  if (!f) return -1;
+  if (fseek(f, 0, SEEK_END) != 0) {
+    fclose(f);
+    return -1;
+  }
+  long n = ftell(f);
+  if (n < 0) {
+    fclose(f);
+    return -1;
+  }
+  if (fseek(f, 0, SEEK_SET) != 0) {
+    fclose(f);
+    return -1;
+  }
+  uint8_t *buf = malloc((size_t)n + 1);
+  if (!buf) {
+    fclose(f);
+    return -1;
+  }
+  if (n && fread(buf, 1, (size_t)n, f) != (size_t)n) {
+    free(buf);
+    fclose(f);
+    return -1;
+  }
+  buf[n] = 0;
+  fclose(f);
+  *out = buf;
+  *len = (size_t)n;
+  return 0;
+}
+
+static int copy_field(const char *text, const char *key, char *dst, size_t cap) {
+  size_t k = strlen(key);
+  const char *p = text;
+  while (p && *p) {
+    if (strncmp(p, key, k) == 0 && p[k] == '=') {
+      const char *v = p + k + 1;
+      size_t n = 0;
+      while (v[n] && v[n] != '\n' && v[n] != '\r') n++;
+      if (n + 1 > cap) return -1;
+      memcpy(dst, v, n);
+      dst[n] = 0;
+      return 0;
+    }
+    p = strchr(p, '\n');
+    if (p) p++;
+  }
+  return -1;
+}
+
+static int count_lit(const char *s, const char *lit) {
+  int n = 0;
+  size_t k = strlen(lit);
+  for (const char *p = s; (p = strstr(p, lit)) != NULL; p += k) n++;
+  return n;
+}
+
+static const char *between(const char *text, const char *start, const char *end, size_t *n) {
+  const char *a = strstr(text, start);
+  if (!a) return NULL;
+  a += strlen(start);
+  const char *b = strstr(a, end);
+  if (!b) return NULL;
+  *n = (size_t)(b - a);
+  return a;
+}
+
+static int results_match(const char *body, size_t n) {
+  int hits = 0;
+  for (size_t i = 0; i + 10 <= n; i++) {
+    if (memcmp(body + i, "\"result\":\"", 10) != 0) continue;
+    if (i + 16 > n || memcmp(body + i + 10, "match\"", 6) != 0) return 0;
+    hits++;
+    i += 15;
+  }
+  return hits > 0;
+}
+
+static int measured_ok(const char *record) {
+  size_t n = 0;
+  const char *six = between(record, "\"six_leg\":", ",\"six_leg_runs\":", &n);
+  if (!six) return 0;
+  char *tmp = malloc(n + 1);
+  if (!tmp) return 0;
+  memcpy(tmp, six, n);
+  tmp[n] = 0;
+  int six_ok = strstr(tmp, "mismatch") == NULL && count_lit(tmp, "\"match\"") == 6;
+  free(tmp);
+  if (!six_ok) return 0;
+  const char *cp = between(record, "\"checkpoints\":", ",\"waypoints\":", &n);
+  if (!cp || !results_match(cp, n)) return 0;
+  const char *wp = between(record, "\"waypoints\":", ",\"paths\":", &n);
+  return wp && results_match(wp, n);
+}
+
+static int cmd_quickstart(void) {
+  char pin_path[4096];
+  if (find_spec_pin(pin_path, sizeof(pin_path)) != 0) {
+    fprintf(stderr, "SPEC_PIN not found\n");
+    return 1;
+  }
+  const char *slash = strstr(pin_path, "/sdk/SPEC_PIN");
+  if (!slash) {
+    fprintf(stderr, "SPEC_PIN not found\n");
+    return 1;
+  }
+  char root[4096];
+  size_t rn = (size_t)(slash - pin_path);
+  if (rn + 1 > sizeof(root)) return 1;
+  memcpy(root, pin_path, rn);
+  root[rn] = 0;
+
+  uint8_t *pin = NULL, *manifest = NULL, *object = NULL, *neg = NULL, *prod = NULL;
+  size_t pin_len = 0, man_len = 0, obj_len = 0, neg_len = 0, prod_len = 0;
+  char path[4096];
+  snprintf(path, sizeof(path), "%s/sdk/SPEC_PIN", root);
+  if (read_file(path, &pin, &pin_len) != 0) {
+    fprintf(stderr, "SPEC_PIN not read\n");
+    return 1;
+  }
+  snprintf(path, sizeof(path), "%s/spec/conformance/pack/manifest.json", root);
+  if (read_file(path, &manifest, &man_len) != 0) {
+    free(pin);
+    fprintf(stderr, "manifest not read\n");
+    return 1;
+  }
+  uint8_t dig[32];
+  char dighex[65], vector[80], erratum[16];
+  pcoc_sha256(manifest, man_len, dig);
+  hex32(dig, dighex);
+  if (copy_field((char *)pin, "vector-sha256", vector, sizeof(vector)) != 0 ||
+      copy_field((char *)pin, "erratum", erratum, sizeof(erratum)) != 0 ||
+      strcmp(dighex, vector) != 0 || strcmp(erratum, "2") != 0 || strlen(vector) < 16) {
+    free(pin);
+    free(manifest);
+    fprintf(stderr, "pin mismatch\n");
+    return 1;
+  }
+  snprintf(path, sizeof(path), "%s/sdk/c/objects/O1-S1.cbor", root);
+  if (read_file(path, &object, &obj_len) != 0) {
+    free(pin);
+    free(manifest);
+    fprintf(stderr, "O1-S1 not read\n");
+    return 1;
+  }
+  pcoc_sha256(object, obj_len, dig);
+  hex32(dig, dighex);
+  const char *o1 = "800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246";
+  if (strcmp(dighex, o1) != 0) {
+    free(pin);
+    free(manifest);
+    free(object);
+    fprintf(stderr, "O1-S1 sha256\n");
+    return 1;
+  }
+  pcoc_profile prof;
+  if (pcoc_profile_small(&prof, 64, 32, 65536, 100) != 0) {
+    free(pin);
+    free(manifest);
+    free(object);
+    return 1;
+  }
+  uint8_t *draw = NULL;
+  size_t draw_len = 0;
+  if (expand_label("pcoc-pack-2.2/draw", &draw, &draw_len) != 0) {
+    free(pin);
+    free(manifest);
+    free(object);
+    return 1;
+  }
+  char *rec = malloc(1 << 20);
+  if (!rec) {
+    free(draw);
+    free(pin);
+    free(manifest);
+    free(object);
+    return 1;
+  }
+  pcoc_verify_input in;
+  memset(&in, 0, sizeof(in));
+  in.profile = &prof;
+  in.object_bytes = object;
+  in.object_len = obj_len;
+  in.draw_bytes = draw;
+  in.draw_len = draw_len;
+  int n = pcoc_verify(&in, rec, (1 << 20) - 1);
+  if (n > 0) rec[n] = 0;
+  int ok = n > 0 && measured_ok(rec);
+  free(rec);
+  free(draw);
+  if (!ok) {
+    free(pin);
+    free(manifest);
+    free(object);
+    fprintf(stderr, "O1-S1 six_leg, checkpoints, or waypoints differ\n");
+    return 1;
+  }
+  snprintf(path, sizeof(path), "%s/sdk/c/candidates/negatives.txt", root);
+  if (read_file(path, &neg, &neg_len) != 0 || count_lit((char *)neg, "matches_honest\tfalse") != 13) {
+    free(pin);
+    free(manifest);
+    free(object);
+    free(neg);
+    fprintf(stderr, "negatives\n");
+    return 1;
+  }
+  snprintf(path, sizeof(path), "%s/sdk/c/candidates/prod.txt", root);
+  if (read_file(path, &prod, &prod_len) != 0 ||
+      strstr((char *)prod, "prod.PROD.stage.0.leg.0.legs_le_hex\t88a04ac5beacb8a7") == NULL) {
+    free(pin);
+    free(manifest);
+    free(object);
+    free(neg);
+    free(prod);
+    fprintf(stderr, "prod leg\n");
+    return 1;
+  }
+  pcoc_build_info info;
+  pcoc_build_info_get(&info, pin_path);
+  char prefix[17];
+  memcpy(prefix, vector, 16);
+  prefix[16] = 0;
+  printf("pcoc 2.2.0 (c) spec-2.2.0 erratum 2 pack %s: pin match\n", prefix);
+  printf("kernel scalar, sha256 %s\n", info.sha256_backend);
+  printf("O1-S1 object sha256 %s\n", o1);
+  printf("O1-S1 six_leg match, checkpoints match, waypoints match\n");
+  printf("negatives 13 non-match\n");
+  printf("PROD leg 0 legs_le_hex 88a04ac5beacb8a7\n");
+  free(pin);
+  free(manifest);
+  free(object);
+  free(neg);
+  free(prod);
+  return 0;
+}
+
 int main(int argc, char **argv) {
   if (argc < 2) {
     usage();
@@ -319,6 +567,9 @@ int main(int argc, char **argv) {
     const char *path = NULL;
     if (find_spec_pin(pin, sizeof(pin)) == 0) path = pin;
     return pcoc_selftest(stdout, path);
+  }
+  if (strcmp(argv[1], "quickstart") == 0) {
+    return cmd_quickstart();
   }
   if (strcmp(argv[1], "candidates") == 0) {
     return exec_gen(argc - 2, argv + 2);

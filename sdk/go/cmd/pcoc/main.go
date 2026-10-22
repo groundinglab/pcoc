@@ -5,6 +5,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -31,6 +33,8 @@ func main() {
 		os.Exit(cmdVerify(os.Args[2:]))
 	case "selftest":
 		fmt.Print(pcoc.SelftestText(readPin()))
+	case "quickstart":
+		os.Exit(cmdQuickstart())
 	case "candidates":
 		cmdCandidates(os.Args[2:])
 	case "produce":
@@ -44,7 +48,143 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: pcoc verify|selftest|candidates|produce|--version\n")
+	fmt.Fprintf(os.Stderr, "usage: pcoc verify|selftest|quickstart|candidates|produce|--version\n")
+}
+
+func cmdQuickstart() int {
+	root := repoFromCwd()
+	if root == "" {
+		fmt.Fprintln(os.Stderr, "SPEC_PIN not found")
+		return 1
+	}
+	pinText, err := os.ReadFile(filepath.Join(root, "sdk", "SPEC_PIN"))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "SPEC_PIN not read")
+		return 1
+	}
+	manifest, err := os.ReadFile(filepath.Join(root, "spec", "conformance", "pack", "manifest.json"))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "manifest not read")
+		return 1
+	}
+	sum := sha256.Sum256(manifest)
+	vector := pinField(string(pinText), "vector-sha256")
+	if hex.EncodeToString(sum[:]) != vector || pinField(string(pinText), "erratum") != "2" || len(vector) < 16 {
+		fmt.Fprintln(os.Stderr, "pin mismatch")
+		return 1
+	}
+	object, err := os.ReadFile(filepath.Join(root, "sdk", "go", "objects", "O1-S1.cbor"))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "O1-S1 not read")
+		return 1
+	}
+	const o1 = "800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246"
+	objSum := sha256.Sum256(object)
+	if hex.EncodeToString(objSum[:]) != o1 {
+		fmt.Fprintln(os.Stderr, "O1-S1 sha256")
+		return 1
+	}
+	profile := pcoc.Profile{Name: "conformance-small", SlotBytes: 64, SampleBytes: 32, TerrainBytes: 65536, StepsPerLeg: 100}
+	rec, decFail := pcoc.Verify(pcoc.VerifyInput{
+		Profile: profile,
+		Object:  object,
+		Draw:    pcoc.ExpandDrawLabel("pcoc-pack-2.2/draw"),
+	})
+	if decFail || !measuredOK(string(rec)) {
+		fmt.Fprintln(os.Stderr, "O1-S1 six_leg, checkpoints, or waypoints differ")
+		return 1
+	}
+	neg, err := os.ReadFile(filepath.Join(root, "sdk", "go", "candidates", "negatives.txt"))
+	if err != nil || strings.Count(string(neg), "matches_honest\tfalse") != 13 {
+		fmt.Fprintln(os.Stderr, "negatives")
+		return 1
+	}
+	prod, err := os.ReadFile(filepath.Join(root, "sdk", "go", "candidates", "prod.txt"))
+	if err != nil || !strings.Contains(string(prod), "prod.PROD.stage.0.leg.0.legs_le_hex\t88a04ac5beacb8a7\n") {
+		fmt.Fprintln(os.Stderr, "prod leg")
+		return 1
+	}
+	fmt.Printf("pcoc 2.2.0 (go) spec-2.2.0 erratum 2 pack %s: pin match\n", vector[:16])
+	fmt.Printf("kernel scalar, sha256 %s\n", pcoc.SHABackend())
+	fmt.Printf("O1-S1 object sha256 %s\n", o1)
+	fmt.Println("O1-S1 six_leg match, checkpoints match, waypoints match")
+	fmt.Println("negatives 13 non-match")
+	fmt.Println("PROD leg 0 legs_le_hex 88a04ac5beacb8a7")
+	return 0
+}
+
+func repoFromCwd() string {
+	dir, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	for i := 0; i < 8; i++ {
+		if _, err := os.Stat(filepath.Join(dir, "sdk", "SPEC_PIN")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return ""
+}
+
+func pinField(text, key string) string {
+	prefix := key + "="
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, prefix) {
+			return strings.TrimPrefix(line, prefix)
+		}
+	}
+	return ""
+}
+
+func between(text, start, end string) (string, bool) {
+	i := strings.Index(text, start)
+	if i < 0 {
+		return "", false
+	}
+	rest := text[i+len(start):]
+	j := strings.Index(rest, end)
+	if j < 0 {
+		return "", false
+	}
+	return rest[:j], true
+}
+
+func resultsMatch(body string) bool {
+	n := 0
+	rest := body
+	const mark = `"result":"`
+	for {
+		i := strings.Index(rest, mark)
+		if i < 0 {
+			break
+		}
+		v := rest[i+len(mark):]
+		if !strings.HasPrefix(v, `match"`) {
+			return false
+		}
+		n++
+		rest = v[len(`match"`):]
+	}
+	return n > 0
+}
+
+func measuredOK(record string) bool {
+	six, ok := between(record, `"six_leg":`, `,"six_leg_runs":`)
+	if !ok || strings.Contains(six, "mismatch") || strings.Count(six, `"match"`) != 6 {
+		return false
+	}
+	checkpoints, ok := between(record, `"checkpoints":`, `,"waypoints":`)
+	if !ok || !resultsMatch(checkpoints) {
+		return false
+	}
+	waypoints, ok := between(record, `"waypoints":`, `,"paths":`)
+	return ok && resultsMatch(waypoints)
 }
 
 func cmdVerify(args []string) int {

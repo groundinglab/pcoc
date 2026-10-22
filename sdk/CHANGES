@@ -1,0 +1,11 @@
+# CHANGES
+
+## 2.2.0
+
+Satoshi Hike 2.2, erratum 2. Four SDKs: Rust, C, Go, and Java.
+
+The conformance pack at `spec/conformance/pack/` holds the candidate bytes those four SDKs already agree on: seed, NL4, terrain digests, the section 11.1 fold, `kat-small`, `test-3leg`, one production leg, `waypoint_equals_seed`, integer rate and anchor comparisons, the draw label and its indices, the Hashcash challenge and digest, the 13 permanent negatives, and the unknown-kind line. It does not publish `object_hex` or `draw_bytes_hex`.
+
+Still absent, because this tree has no Rule BR1 or sign-in implementation to agree on: the Bari paid-rule vectors (current, before, after, outside, wrong origin, the three display-order mismatches, and the live-plane and test-plane after and wrong-`nBits` cases) and `sign-in.json` / `sign-in-origins.json`. The manifest status stays `incomplete` until those bytes exist.
+
+`pcoc quickstart` in each SDK prints six lines. The fixed lines are the same text in every language. The production-leg line is the pinned `legs_le_hex`. This release does not publish a timed leg.

@@ -1,0 +1,23 @@
+{
+  "agreed_by": [
+    "rust",
+    "c",
+    "go",
+    "java"
+  ],
+  "candidate": "seed.txt",
+  "values": {
+    "seed.pk_A.D": "1cf2e2a5fc0849a3f5400241d3f52977d605042677b1cda1257cf185a305ecec",
+    "seed.pk_A.P0_u64": "a34908fca5e2f21c",
+    "seed.pk_A.P1_u64": "7729f5d3410240f5",
+    "seed.pk_A.P2_u64": "a1cdb177260405d6",
+    "seed.pk_A.P3_u64": "ecec05a385f17c25",
+    "seed.pk_A.preimage": "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9bac91a1b52b8ce663404ef4c275df559246083d86ce925ab52d46c67735fb4db",
+    "seed.pk_B.D": "4a657dd312de5b5a52750fbf932cb145bd9283e369ff93ee70a5f5702b9ba356",
+    "seed.pk_B.P0_u64": "5a5bde12d37d654a",
+    "seed.pk_B.P1_u64": "45b12c93bf0f7552",
+    "seed.pk_B.P2_u64": "ee93ff69e38392bd",
+    "seed.pk_B.P3_u64": "56a39b2b70f5a570",
+    "seed.pk_B.preimage": "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659bac91a1b52b8ce663404ef4c275df559246083d86ce925ab52d46c67735fb4db"
+  }
+}

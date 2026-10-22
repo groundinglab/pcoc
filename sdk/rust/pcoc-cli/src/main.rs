@@ -22,6 +22,7 @@ fn main() -> ExitCode {
     match args[0].as_str() {
         "verify" => cmd_verify(&args[1..]),
         "selftest" => cmd_selftest(),
+        "quickstart" => cmd_quickstart(),
         "candidates" => cmd_candidates(&args[1..]),
         "produce" => cmd_produce(&args[1..]),
         _ => {
@@ -52,6 +53,7 @@ fn usage() {
     eprintln!(
         "usage: pcoc verify [--profile production|conformance-small] [--sample-bytes N --slot-bytes N --terrain-bytes N --steps-per-leg N] [--draw-label LABEL] [--input PATH] [PATH]\n\
          pcoc selftest\n\
+         pcoc quickstart\n\
          pcoc candidates [--out DIR]\n\
          pcoc produce --rig --case s1|s2|prod --public-key HEX --out PATH\n\
          pcoc --version"
@@ -356,4 +358,172 @@ fn cmd_produce(args: &[String]) -> ExitCode {
             ExitCode::SUCCESS
         }
     }
+}
+
+fn find_root() -> Option<PathBuf> {
+    let mut dir = std::env::current_dir().ok()?;
+    for _ in 0..8 {
+        if dir.join("sdk/SPEC_PIN").is_file() {
+            return Some(dir);
+        }
+        if !dir.pop() {
+            break;
+        }
+    }
+    None
+}
+
+fn pin_value(text: &str, key: &str) -> String {
+    let prefix = format!("{key}=");
+    for line in text.lines() {
+        let line = line.trim();
+        if let Some(rest) = line.strip_prefix(&prefix) {
+            return rest.to_string();
+        }
+    }
+    String::new()
+}
+
+fn between<'a>(text: &'a str, start: &str, end: &str) -> Option<&'a str> {
+    let rest = text.split_once(start)?.1;
+    Some(rest.split_once(end)?.0)
+}
+
+fn results_are_match(body: &str) -> bool {
+    let mut rest = body;
+    let mut n = 0;
+    while let Some(i) = rest.find("\"result\":\"") {
+        let v = &rest[i + 10..];
+        if !v.starts_with("match\"") {
+            return false;
+        }
+        n += 1;
+        rest = &v[6..];
+    }
+    n > 0
+}
+
+fn measured_ok(record: &str) -> bool {
+    let Some(six) = between(record, "\"six_leg\":", ",\"six_leg_runs\":") else {
+        return false;
+    };
+    if six.contains("mismatch") || six.matches("\"match\"").count() != 6 {
+        return false;
+    }
+    let Some(checkpoints) = between(record, "\"checkpoints\":", ",\"waypoints\":") else {
+        return false;
+    };
+    let Some(waypoints) = between(record, "\"waypoints\":", ",\"paths\":") else {
+        return false;
+    };
+    results_are_match(checkpoints) && results_are_match(waypoints)
+}
+
+/// Six lines. The production leg is the pinned `legs_le_hex`. This command does not time a leg.
+fn cmd_quickstart() -> ExitCode {
+    let Some(root) = find_root() else {
+        eprintln!("SPEC_PIN not found");
+        return ExitCode::from(1);
+    };
+    let pin_text = match std::fs::read_to_string(root.join("sdk/SPEC_PIN")) {
+        Ok(text) => text,
+        Err(_) => {
+            eprintln!("SPEC_PIN not read");
+            return ExitCode::from(1);
+        }
+    };
+    let manifest = match std::fs::read(root.join("spec/conformance/pack/manifest.json")) {
+        Ok(bytes) => bytes,
+        Err(_) => {
+            eprintln!("manifest not read");
+            return ExitCode::from(1);
+        }
+    };
+    if pcoc::pin::check_pin(&pin_text, &manifest).is_err() {
+        eprintln!("pin mismatch");
+        return ExitCode::from(1);
+    }
+    let vector = pin_value(&pin_text, "vector-sha256");
+    if pin_value(&pin_text, "erratum") != "2" || vector.len() < 16 {
+        eprintln!("pin is not erratum 2");
+        return ExitCode::from(1);
+    }
+    let object = match std::fs::read(root.join("sdk/rust/objects/O1-S1.cbor")) {
+        Ok(bytes) => bytes,
+        Err(_) => {
+            eprintln!("O1-S1 not read");
+            return ExitCode::from(1);
+        }
+    };
+    let object_sha = pcoc::hexutil::hex_encode(&pcoc::hash::sha256(&object));
+    const O1: &str = "800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246";
+    if object_sha != O1 {
+        eprintln!("O1-S1 sha256 {object_sha}");
+        return ExitCode::from(1);
+    }
+    let profile = match Profile::conformance_small(32, 64, 65_536, 100) {
+        Ok(profile) => profile,
+        Err(err) => {
+            eprintln!("{err}");
+            return ExitCode::from(1);
+        }
+    };
+    let mut chain = LabelChain::new("pcoc-pack-2.2/draw");
+    let mut next = || chain.next8();
+    let mut index = EmptyIndex;
+    let record = match pcoc_testing::verify_from_bytes(&object, &profile, &mut index, &mut next) {
+        Verified::Record(text) => text,
+        Verified::UnknownKind(_) => {
+            eprintln!("O1-S1 unknown kind");
+            return ExitCode::from(1);
+        }
+        Verified::DecodeFailure => {
+            eprintln!("O1-S1 decode failure");
+            return ExitCode::from(1);
+        }
+    };
+    if !measured_ok(&record) {
+        eprintln!("O1-S1 six_leg, checkpoints, or waypoints differ");
+        return ExitCode::from(1);
+    }
+    let negatives = match std::fs::read_to_string(root.join("sdk/rust/candidates/negatives.txt")) {
+        Ok(text) => text,
+        Err(_) => {
+            eprintln!("negatives not read");
+            return ExitCode::from(1);
+        }
+    };
+    let n = negatives
+        .lines()
+        .filter(|line| line.contains("matches_honest\tfalse"))
+        .count();
+    if n != 13 {
+        eprintln!("negatives {n}");
+        return ExitCode::from(1);
+    }
+    let prod = match std::fs::read_to_string(root.join("sdk/rust/candidates/prod.txt")) {
+        Ok(text) => text,
+        Err(_) => {
+            eprintln!("prod not read");
+            return ExitCode::from(1);
+        }
+    };
+    if !prod
+        .lines()
+        .any(|line| line == "prod.PROD.stage.0.leg.0.legs_le_hex\t88a04ac5beacb8a7")
+    {
+        eprintln!("prod leg");
+        return ExitCode::from(1);
+    }
+    let sha = pcoc::sha_backend();
+    println!(
+        "pcoc 2.2.0 (rust) spec-2.2.0 erratum 2 pack {}: pin match",
+        &vector[..16]
+    );
+    println!("kernel scalar, sha256 {sha}");
+    println!("O1-S1 object sha256 {O1}");
+    println!("O1-S1 six_leg match, checkpoints match, waypoints match");
+    println!("negatives 13 non-match");
+    println!("PROD leg 0 legs_le_hex 88a04ac5beacb8a7");
+    ExitCode::SUCCESS
 }

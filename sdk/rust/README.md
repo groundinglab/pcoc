@@ -25,3 +25,13 @@ sh check/negatives.sh
 ```
 
 `check/negatives.sh` is also run by the `ac_a10` test. It builds the release library and the `pcoc` binary in its own target directory.
+
+## Quickstart
+
+From this directory:
+
+```sh
+cargo run -p pcoc-cli --release --quiet -- quickstart
+```
+
+Six lines. The first names `rust`. The second names the SHA-256 backend on this machine. The other four lines are the same text the C, Go, and Java quickstarts print. The production-leg line is the pinned `legs_le_hex`. The command does not time a leg.
