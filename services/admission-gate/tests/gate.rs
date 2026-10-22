@@ -1,6 +1,6 @@
-//! Gate v2.0. Sign-in is the locked §15.1 wire, covered in `locked_wire`.
+//! Gate on the 2.2 SDK. Sign-in is the locked §15.1 wire, covered in `locked_wire`.
 //! This file covers health, the verify job, the decision log, and restart.
-//! A real v1.35 object is `earlier_version` on verify.
+//! Any other kind is `unknown_kind` on verify (Rule A5).
 #![forbid(unsafe_code)]
 
 use axum::body::Body;
@@ -73,20 +73,29 @@ fn v135_object() -> Vec<u8> {
     std::fs::read(&path).expect("earlier kind object")
 }
 
-/// A short object: no terrain fill, no leg. `stages` is 1 or 2.
-fn quiet_hike(public_key: [u8; 32], stages: usize) -> Vec<u8> {
-    let mut hike = hike::structural_object();
-    hike.public_key = public_key;
-    hike.stages.truncate(stages);
-    for stage in &mut hike.stages {
-        stage.leg_count = 0;
-        stage.checkpoints.clear();
-        stage.leg_results.clear();
-        stage.path.clear();
+/// Kind text that is not `v2.2-pcoc-object`, plus a 32-byte key.
+/// SPEC §14.7 / Rule A5. The verify job does not read the index.
+fn other_kind(public_key: [u8; 32]) -> Vec<u8> {
+    fn text(value: &str) -> Vec<u8> {
+        let bytes = value.as_bytes();
+        let mut out = Vec::new();
+        if bytes.len() < 24 {
+            out.push(0x60 | bytes.len() as u8);
+        } else {
+            out.push(0x78);
+            out.push(u8::try_from(bytes.len()).expect("short text"));
+        }
+        out.extend_from_slice(bytes);
+        out
     }
-    hike.seed_beacon = hike.stages[0].beacon;
-    hike.stages[0].waypoint = sha256_bytes(&hike::production_seed(&public_key, &hike.seed_beacon));
-    hike::encode_hike(&hike)
+    let mut out = vec![0xa2];
+    out.extend(text("kind"));
+    out.extend(text("satoshi-hike-v2.0-object"));
+    out.extend(text("public_key"));
+    out.push(0x58);
+    out.push(32);
+    out.extend_from_slice(&public_key);
+    out
 }
 
 fn append_line(
@@ -372,15 +381,15 @@ async fn health_reports_version_commit_spec_and_config() {
     );
     assert_eq!(body["sdk"], sdk, "{body}");
     assert!(pcoc_admission::http::version_line().ends_with(&format!("sdk={sdk}")));
-    assert_eq!(body["spec"], "Satoshi Hike v2.0");
-    assert_eq!(body["spec_kind"], "v2.0");
+    assert_eq!(body["spec"], "Satoshi Hike 2.2");
+    assert_eq!(body["spec_kind"], "2.2");
     assert_eq!(body["config"]["index_url"], "https://index.example");
     assert!(body["config"].get("log_dir").is_none(), "{body}");
     assert!(body["config"].get("config_path").is_none(), "{body}");
     assert!(!body.to_string().contains("log_dir"), "{body}");
     assert!(!body.to_string().contains("config_path"), "{body}");
     assert!(body["config"].get("leg_rate_floor").is_none(), "{body}");
-    assert_eq!(body["config"]["policy_id"], "gl-admit-v6");
+    assert_eq!(body["config"]["policy_id"], "gl-admit-v9");
     assert_eq!(body["config"]["bind_threads"], 6);
     let origins = body["config"]["allowed_origins"].as_array().unwrap();
     assert!(origins.is_empty(), "the default names no site");
@@ -391,12 +400,12 @@ async fn health_reports_version_commit_spec_and_config() {
     )
     .await;
     assert_eq!(policy_status, StatusCode::OK);
-    assert_eq!(policy["policy_id"], "gl-admit-v6");
+    assert_eq!(policy["policy_id"], "gl-admit-v9");
     assert_eq!(policy["leg_rate_floor"]["p"], 1);
     assert_eq!(policy["leg_rate_floor"]["q"], 5);
     assert_eq!(policy["min_anchored_paths"], 6);
     assert_eq!(policy["source"], "recommendation, not specification");
-    assert_eq!(policy["spec"], "Satoshi Hike v2.0");
+    assert_eq!(policy["spec"], "Satoshi Hike 2.2");
     let text = body.to_string();
     assert!(!text.contains("friendly_list"));
     assert!(!text.contains("GL_VERIFY_"));
@@ -406,18 +415,18 @@ async fn health_reports_version_commit_spec_and_config() {
 }
 
 #[tokio::test]
-async fn a_real_v135_object_is_earlier_version_on_verify() {
+async fn a_real_v135_object_is_unknown_kind_on_verify() {
     let (router, dir) = service("http://127.0.0.1:1");
     let object = v135_object();
     let (status, posted) = post_cbor(&router, object).await;
     assert_eq!(status, StatusCode::ACCEPTED);
     let job = poll_job(&router, posted["job_id"].as_str().unwrap()).await;
     assert_eq!(job["status"], "error");
-    assert_eq!(job["error"]["code"], "earlier_version");
+    assert_eq!(job["error"]["code"], "unknown_kind");
     let message = job["error"]["message"].as_str().unwrap();
     assert!(!message.to_ascii_lowercase().contains("could not be read"));
-    assert!(message.contains("earlier version"));
-    assert_eq!(job["reasons"][0], "earlier_version");
+    assert!(message.contains("v2.2"));
+    assert_eq!(job["reasons"][0], "unknown_kind");
 
     let (status, _) = send(
         &router,
@@ -480,7 +489,7 @@ async fn a_v135_decision_log_is_not_served() {
         Err(error) => error,
         Ok(_) => panic!("a v1.35 decision log was opened"),
     };
-    assert!(error.contains("not a Satoshi Hike v2.0"), "{error}");
+    assert!(error.contains("not a Satoshi Hike 2.2"), "{error}");
     assert_eq!(std::fs::read(&chain).unwrap(), original);
     assert!(!dir.join("latest.json").exists());
     let _ = std::fs::remove_dir_all(&dir);
@@ -501,7 +510,7 @@ async fn thorough_verify_returns_when_the_index_answers_500() {
         cfg.index_timeout = Duration::from_millis(400);
     });
     let started = std::time::Instant::now();
-    let (status, posted) = post_cbor(&router, quiet_hike([8u8; 32], 1)).await;
+    let (status, posted) = post_cbor(&router, other_kind([8u8; 32])).await;
     assert_eq!(status, StatusCode::ACCEPTED, "{posted}");
     let job = poll_job_for(
         &router,
@@ -519,10 +528,10 @@ async fn thorough_verify_returns_when_the_index_answers_500() {
     assert!(
         reasons
             .iter()
-            .any(|reason| reason == "the index did not answer for a stored beacon"),
+            .any(|reason| reason == "unknown_kind"),
         "{job}"
     );
-    let (status, second) = post_cbor(&router, quiet_hike([9u8; 32], 1)).await;
+    let (status, second) = post_cbor(&router, other_kind([9u8; 32])).await;
     assert_eq!(status, StatusCode::ACCEPTED, "{second}");
     let job = poll_job_for(
         &router,
@@ -549,7 +558,7 @@ async fn thorough_verify_returns_when_the_index_hangs() {
         cfg.index_timeout = Duration::from_millis(400);
     });
     let started = std::time::Instant::now();
-    let (status, posted) = post_cbor(&router, quiet_hike([8u8; 32], 1)).await;
+    let (status, posted) = post_cbor(&router, other_kind([8u8; 32])).await;
     assert_eq!(status, StatusCode::ACCEPTED, "{posted}");
     let job = poll_job_for(
         &router,
@@ -563,7 +572,7 @@ async fn thorough_verify_returns_when_the_index_hangs() {
         .as_array()
         .unwrap()
         .iter()
-        .any(|reason| reason == "the index did not answer for a stored beacon"));
+        .any(|reason| reason == "unknown_kind"));
     let (_, health) = send(
         &router,
         Request::get("/v1/health").body(Body::empty()).unwrap(),
@@ -580,7 +589,7 @@ async fn a_restart_does_not_wait_on_a_hung_index() {
     let submission = [4u8; 32];
     append_line(
         &dir,
-        quiet_hike([3u8; 32], 1),
+        other_kind([3u8; 32]),
         9,
         submission,
         "fast",
@@ -638,7 +647,7 @@ async fn latest_json_matches_the_chain_after_restart() {
     assert_eq!(status, StatusCode::OK, "{latest}");
     assert_eq!(latest["last_seq"], 1);
     assert_eq!(latest["feed"], "pcoc-gate-feed-v2");
-    assert_eq!(latest["policy"]["policy_id"], "gl-admit-v6");
+    assert_eq!(latest["policy"]["policy_id"], "gl-admit-v9");
     assert_eq!(latest["policy"]["leg_rate_floor"]["p"], 1);
     assert_eq!(latest["policy"]["leg_rate_floor"]["q"], 5);
     assert_eq!(
@@ -683,93 +692,19 @@ async fn verify_over_the_object_cap_is_refused() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// `tests/vectors/anchor-window.json` (pinned from `spec/conformance/v2.0/`) `record` is the CLI bytes, newline
-/// included. The HTTP job and a decision line splice those same bytes.
-/// `six_leg` is `not defined` on this object, so the draw does not change it.
+/// Rule A5. A verify job for any other kind is `unknown_kind`.
+/// SPEC §14.7. The 2.0 pack record is not spliced.
 #[tokio::test]
-async fn the_http_record_and_the_decision_log_match_the_pack() {
-    let mut hike = hike::structural_object();
-    for stage in &mut hike.stages {
-        stage.leg_count = 0;
-        stage.checkpoints.clear();
-        stage.leg_results.clear();
-        stage.path.clear();
-    }
-    hike.stages[3].beacon = [0x55; 32];
-    let inside = hike.stages[1].waypoint;
-    hike.stages[1].path = hike::encode_path_in_block(&inside, 4);
-    let outside = hike.stages[2].waypoint;
-    hike.stages[2].path = hike::encode_path_in_block(&outside, 100);
-    let missing = hike.stages[4].waypoint;
-    hike.stages[4].path = hike::encode_path_in_block(&missing, 7);
-    let object = hike::encode_hike(&hike);
-
-    let reference = hike::verify_record_json(
-        "production",
-        &hike::verify(&object, hike::AuditDraw::OsCsprng, |_| Err(()), |_| Ok(())),
-    );
-    let pack: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/vectors/anchor-window.json"),
-        )
-        .unwrap(),
-    )
-    .unwrap();
-    let stored = pack["record"].as_str().unwrap();
-    assert_eq!(reference.as_bytes(), stored.as_bytes());
-    assert!(stored.ends_with('\n'));
-
-    let index = Index::every(plant_document(&inside));
-    let dir = scratch("pack-record");
-    let router = opened(dir.clone(), &index.base, |cfg| {
-        cfg.index_timeout = Duration::from_secs(2);
-    });
-    let (status, posted) = post_cbor(&router, object.clone()).await;
+async fn an_other_kind_verify_job_is_unknown_kind() {
+    let (router, dir) = service("http://127.0.0.1:1");
+    let (status, posted) = post_cbor(&router, other_kind([7u8; 32])).await;
     assert_eq!(status, StatusCode::ACCEPTED, "{posted}");
-    let (job, raw) = poll_job_text(
-        &router,
-        posted["job_id"].as_str().unwrap(),
-        Duration::from_secs(30),
-    )
-    .await;
+    let job = poll_job(&router, posted["job_id"].as_str().unwrap()).await;
     assert_eq!(job["terminal"], true, "{job}");
-    assert!(job.get("measurements").is_none(), "{job}");
-    assert_eq!(job["record"]["profile"], "production");
-    assert!(job["record"].get("leg_rate").is_none(), "{job}");
-    assert_record_bytes(&raw, "\"record\":", &reference);
-    assert_record_bytes(&raw, "\"record\":", stored);
-
-    let measured = match pcoc_admission::verifier::measure(
-        &object,
-        &pcoc_admission::verifier::MeasureOpts {
-            index_url: index.base.clone(),
-            timeout: Duration::from_secs(2),
-            bind_threads: 1,
-        },
-    ) {
-        pcoc_admission::verifier::Report::Read(measured) => measured,
-        other => panic!("expected a record, got {other:?}"),
-    };
-    assert_eq!(measured.record, reference);
-
-    let log_dir = scratch("pack-log");
-    let mut log = pcoc_admission::log::DecisionLog::open(&log_dir).unwrap();
-    let mut write =
-        pcoc_admission::log::DecisionWrite::bare(1_700_000_000, Some(4), "thorough", "refuse");
-    write.fast_seq = Some(0);
-    write.submission_sha256 = [1u8; 32];
-    write.public_key = [2u8; 32];
-    write.object_sha256 = sha256_bytes(&object);
-    write.object = object;
-    write.reasons = vec!["bookends_not_defined".to_owned()];
-    write.reason = Some("N and S are not defined.".to_owned());
-    write.summary = Some(measured.record);
-    log.append(&write).unwrap();
-    let chain = std::fs::read_to_string(log_dir.join("chain.jsonl")).unwrap();
-    assert_record_bytes(&chain, "\"verify_summary\":", &reference);
-    assert_record_bytes(&chain, "\"verify_summary\":", stored);
+    assert_eq!(job["error"]["code"], "unknown_kind");
+    assert_eq!(job["reasons"][0], "unknown_kind");
+    assert_eq!(job["record"]["kind"], "unknown kind");
     let _ = std::fs::remove_dir_all(&dir);
-    let _ = std::fs::remove_dir_all(&log_dir);
 }
 
 fn plant_document(waypoint: &[u8; 32]) -> String {

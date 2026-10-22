@@ -23,7 +23,7 @@ pub struct Config {
     pub learn_mode: bool,
     pub data_folder: PathBuf,
     pub threads: u32,
-    /// `host:port`. Empty means the mainnet DNS seeds.
+    /// `host:port`. Stored for a later header source. This build does not dial it.
     pub gossip_peer: String,
 }
 
@@ -33,7 +33,7 @@ impl Default for Config {
             theme: None,
             learn_mode: true,
             data_folder: home().join("PCOC").join("hikes"),
-            threads: hike::DEFAULT_BIND_THREADS as u32,
+            threads: 6,
             gossip_peer: String::new(),
         }
     }

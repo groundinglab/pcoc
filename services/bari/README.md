@@ -20,9 +20,11 @@ Bari timestamps waypoints by sealing each tip's pool into one Bitcoin transactio
 | Test | `BARI_TIP_SOURCE=synth`, plus a simulated commit |
 | Unset | `BARI_TIP_SOURCE` remains the RPC poll and is not the live tip |
 
-## Pins
+## Header source
 
-`hike` and `hike-net` are pinned at `ref-rust-v2.0.5`.
+The synth plane is in this crate (`header_source`). A live Bitcoin header source is not in this build (SPEC §9, Phase C). The process fails closed if `BARI_TIP_SOURCE=bitcoin-gossip` is asked to follow live headers. Nothing here is deployed from this change.
+
+Hashcash is `bari-hc-v2` (SPEC §13.1). `BARI_PUBLIC_ORIGIN` is this process's public origin, serialized as RFC 6454 §6.2 and mixed into the challenge. The fee header arrives in `X-Bari-Hashcash-Header`. A header for another origin is refused. A live-plane "after" header (the next block, including a retarget) is refused in this build: Bari does not yet apply the Bitcoin consensus target. The synthetic plane still accepts an "after" header at `nBits` `0x207fffff`.
 
 ## More
 

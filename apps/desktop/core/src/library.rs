@@ -11,9 +11,10 @@ const MAX_OBJECT_BYTES: u64 = 64 << 20;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Kind {
+    /// Kind `v2.2-pcoc-object`.
     V2,
-    /// Rule A5 earlier object kind.
-    Earlier(String),
+    /// Rule A5. Any other kind text.
+    Unknown(String),
     Unreadable,
 }
 
@@ -47,20 +48,23 @@ impl Entry {
     }
 
     pub fn from_bytes(path: PathBuf, bytes: &[u8], modified_unix_s: u64) -> Entry {
-        let summary = summarize(bytes);
-        let kind = if let Some(kind) = hike::earlier_object_kind(bytes) {
-            Kind::Earlier(kind)
-        } else if matches!(
-            hike::yielded_public_key(bytes),
-            hike::YieldedKey::Undecodable
-        ) {
+        let too_deep = crate::object_key::nesting_too_deep(bytes);
+        let summary = if too_deep { None } else { summarize(bytes) };
+        let kind = if too_deep {
             Kind::Unreadable
         } else {
-            Kind::V2
+            match pcoc::precheck(bytes, &pcoc::profile::Profile::production()) {
+                pcoc::verify::Precheck::UnknownKind(record) => Kind::Unknown(kind_text_of(&record)),
+                pcoc::verify::Precheck::Shape { .. } => Kind::V2,
+                pcoc::verify::Precheck::DecodeFailure | pcoc::verify::Precheck::Malformed => {
+                    Kind::Unreadable
+                }
+            }
         };
-        let public_key = match hike::yielded_public_key(bytes) {
-            hike::YieldedKey::PublicKey(pk) => Some(pk),
-            _ => None,
+        let public_key = if too_deep {
+            None
+        } else {
+            crate::object_key::public_key(bytes)
         };
         Entry {
             path,
@@ -87,7 +91,7 @@ impl Entry {
     /// The second line in the sidebar.
     pub fn line(&self, active_public_key: Option<[u8; 32]>) -> String {
         match &self.kind {
-            Kind::Earlier(_) => "earlier version".to_owned(),
+            Kind::Unknown(_) => "unknown kind".to_owned(),
             Kind::Unreadable => "not a hike object this verifier decodes".to_owned(),
             Kind::V2 => {
                 if active_public_key.is_some()
@@ -339,6 +343,13 @@ struct Summary {
 /// Reads the stage checkpoint counts out of the object's CBOR map without
 /// decoding the rest. Only definite lengths are read; anything else is
 /// "no count" and the list shows no leg figure.
+fn kind_text_of(record: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(record)
+        .ok()
+        .and_then(|v| v.get("kind_text").and_then(|t| t.as_str()).map(str::to_owned))
+        .unwrap_or_default()
+}
+
 fn summarize(bytes: &[u8]) -> Option<Summary> {
     let mut r = Reader { b: bytes, at: 0 };
     let (major, pairs) = r.head()?;
@@ -448,29 +459,31 @@ impl Reader<'_> {
 mod tests {
     use super::*;
 
-    fn vector_object(file: &str) -> Vec<u8> {
-        let path = format!(
-            "{}/../../../spec/conformance/v2.0/{file}",
+    fn o1() -> Vec<u8> {
+        std::fs::read(format!(
+            "{}/../../../sdk/rust/objects/O1-S1.cbor",
             env!("CARGO_MANIFEST_DIR")
-        );
-        let v: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-        crate::hex::decode(v["object_hex"].as_str().unwrap()).unwrap()
+        ))
+        .unwrap()
     }
 
     #[test]
     fn counts_checkpoints_and_reads_the_key() {
-        let bytes = vector_object("test-3leg.json");
-        let e = Entry::from_bytes(PathBuf::from("/x/test-3leg.cbor"), &bytes, 1_791_322_260);
+        let bytes = o1();
+        let e = Entry::from_bytes(PathBuf::from("/x/O1-S1.cbor"), &bytes, 1_791_322_260);
         assert_eq!(e.kind, Kind::V2);
-        assert_eq!(e.legs, Some(3));
-        assert_eq!(e.public_key, Some([0x42; 32]));
-        assert_eq!(e.line(e.public_key), "6 Oct 21:31 UTC · 3 legs");
+        assert_eq!(e.legs, Some(18));
+        assert_eq!(
+            e.public_key,
+            Some(
+                crate::hex::decode32(
+                    "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9"
+                )
+                .unwrap()
+            )
+        );
+        assert_eq!(e.line(e.public_key), "6 Oct 21:31 UTC · 18 legs");
         assert_eq!(e.line(Some([0x22; 32])), "opened · other npub");
-
-        let structural = hike::encode_hike(&hike::structural_object());
-        let s = Entry::from_bytes(PathBuf::from("s.cbor"), &structural, 0);
-        assert_eq!(s.legs, Some(18));
     }
 
     #[test]
@@ -500,15 +513,14 @@ mod tests {
     }
 
     #[test]
-    fn earlier_and_unreadable_rows() {
-        let path = format!(
-            "{}/../../../spec/conformance/v2.0/earlier-kind.cbor",
-            env!("CARGO_MANIFEST_DIR")
-        );
-        let bytes = std::fs::read(path).unwrap();
+    fn unknown_kind_and_unreadable_rows() {
+        let bytes = pcoc::cbor::encode_map(&[(
+            "kind".into(),
+            pcoc::cbor::encode_text("not-v2.2-pcoc-object"),
+        )]);
         let e = Entry::from_bytes(PathBuf::from("run-b-stages18.cbor"), &bytes, 0);
-        assert_eq!(e.kind, Kind::Earlier("satoshi-hike-v1.35-object".into()));
-        assert_eq!(e.line(None), "earlier version");
+        assert_eq!(e.kind, Kind::Unknown("not-v2.2-pcoc-object".into()));
+        assert_eq!(e.line(None), "unknown kind");
 
         let junk = Entry::from_bytes(PathBuf::from("junk.cbor"), &[0xff, 0x00], 0);
         assert_eq!(junk.kind, Kind::Unreadable);
@@ -520,7 +532,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("pcoc-lib-{}", std::process::id()));
         let run = dir.join("2026-10-09_070431_npub16896f");
         std::fs::create_dir_all(&run).unwrap();
-        let bytes = vector_object("test-3leg.json");
+        let bytes = o1();
         std::fs::write(run.join("pcoc.cbor"), &bytes).unwrap();
         std::fs::write(run.join("pcoc.cbor.events"), b"{}\n").unwrap();
         std::fs::write(run.join(".hidden.cbor"), &bytes).unwrap();

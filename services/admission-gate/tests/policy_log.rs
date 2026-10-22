@@ -66,7 +66,7 @@ fn ac1_measures_hold_no_threshold() {
     assert!(!text.contains("threshold"));
 }
 
-/// A configured p/q is applied. 1/5 refuses N=19 over S=100 (0.19) and admits N=20.
+/// A configured p/q is applied. 1/5 refuses 19 hike legs over a span of 100 and admits 20.
 /// Five anchored of sixteen refuses. Six admits.
 #[test]
 fn ac2_configured_floor_is_enforced() {
@@ -146,7 +146,7 @@ fn ac3_every_new_line_names_its_policy() {
         .map(|check| json!({"field": check.field, "min": check.min, "met": check.met}))
         .collect::<Vec<_>>()));
     let line = write_line(&mut log, &write);
-    assert_eq!(line["policy_id"], "gl-admit-v6");
+    assert_eq!(line["policy_id"], "gl-admit-v9");
     assert_eq!(line["policy_checks"][0]["field"], "leg_rate");
     assert_eq!(line["policy_checks"][0]["min"]["p"], 1);
     assert_eq!(line["policy_checks"][0]["min"]["q"], 5);
@@ -284,7 +284,7 @@ fn ac2b_return_line_skips_measurement() {
         accept.reasons = vec!["accepted".to_owned()];
         accept.summary = None;
         accept.measures = Some(measures(0.25, 6).to_json());
-        accept.policy_id = Some("gl-admit-v6".to_owned());
+        accept.policy_id = Some("gl-admit-v9".to_owned());
         accept.policy_checks = Some(json!([
             {"field": "leg_rate", "min": {"p": 1, "q": 5}, "met": true},
             {"field": "waypoints_fetched", "min": 6, "met": true}
@@ -311,7 +311,7 @@ fn ac2b_return_line_skips_measurement() {
     let ret = &lines[1];
     assert_eq!(ret["decision"], "return");
     assert_eq!(ret["phase"], "return");
-    assert_eq!(ret["policy_id"], "gl-admit-v6");
+    assert_eq!(ret["policy_id"], "gl-admit-v9");
     assert_eq!(ret["access_ref_seq"], 0);
     assert!(ret.get("measures").is_none(), "{ret}");
     assert!(ret.get("legs").is_none(), "{ret}");

@@ -22,7 +22,7 @@ primal-pcoc is a fork of [PrimalHQ/primal-android-app](https://github.com/Primal
 - Product: [primal.net](https://primal.net). This fork is not an official Primal release and is not endorsed by Primal Systems Inc.
 - groundinglab's changes, as shipped on the fork: the `net.primal.android.pcoc` doors (enroll, local produce, local verify, sign-in), the `pcoc-bridge` JNI crate and its vendored `hike`, and `docs/pcoc/`. The complete file list against the upstream commit is in the fork's README. This page does not guess that list.
 
-The vendored reference on the fork (`pcoc-bridge/vendor/hike`) was copied from an earlier private checkout. It is due to be retargeted to [`ref-rust-v2.0.4`](https://github.com/groundinglab/pcoc/tree/ref-rust-v2.0.4) in this repository. This repository does not vendor the Android app.
+This repository does not vendor the Android app. The fork's copy is outside this tree. Retarget that fork onto the 2.2 Rust SDK at `sdk/rust`, and onto `pcoc-ffi` when Phase D lands it. That retarget is a follow-up; it is not this change.
 
 ## Rebuild and verify
 

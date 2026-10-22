@@ -1,4 +1,4 @@
-//! Admission Gate for a Satoshi Hike v2.0 object.
+//! Admission Gate for a Satoshi Hike 2.2 object.
 //!
 //! One process reads one config file. `POST /v1/sign-in` is the admission
 //! door. The body is the locked §15.1 six-field JSON object. The website
@@ -6,17 +6,20 @@
 //! A signature miss is `bad_signature` with no message. Anything else the
 //! phone sees is delivery of that POST.
 //!
-//! [`verifier`] is the only module that will call the v2.0 reference crate.
-//! This crate does not run v1.35 verify and does not load a v1.35 profile.
+//! [`fast`] and [`thorough`] call the 2.2 Rust SDK (`pcoc`). Any other kind
+//! is `unknown_kind` from the fast phase (Rule A5). The thorough draw reads
+//! the OS CSPRNG and takes no byte source.
 #![forbid(unsafe_code)]
 
 pub mod canon;
+pub mod cbor_limit;
 pub mod config;
 pub mod door;
 pub mod fast;
 pub mod http;
 pub mod ids;
 pub mod jobs;
+pub mod levers;
 pub mod log;
 pub mod policy;
 pub mod ratelimit;

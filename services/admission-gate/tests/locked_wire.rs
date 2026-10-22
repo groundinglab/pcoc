@@ -358,7 +358,7 @@ async fn a_fresh_six_field_post_is_delivery_ok() {
         ..draft
     };
     let posted = signed.body();
-    let yielded = hike::yielded_public_key(&signed.object);
+    let yielded = pcoc_admission::verifier::public_key(&signed.object);
     let (status, body, text) = post_json(&lab, &posted).await;
     assert_eq!(
         status,
@@ -656,7 +656,7 @@ async fn the_new_wire_hides_the_floor_and_still_enforces_it() {
     )
     .await;
     assert_eq!(health_status, StatusCode::OK);
-    assert_eq!(health["config"]["policy_id"], "gl-admit-v6");
+    assert_eq!(health["config"]["policy_id"], "gl-admit-v9");
     assert!(health["config"].get("leg_rate_floor").is_none(), "{health}");
     assert!(health["config"].get("log_dir").is_none(), "{health}");
     assert!(health["config"].get("config_path").is_none(), "{health}");
@@ -685,40 +685,38 @@ async fn website_tokens_follow_the_table() {
 
     let earlier_bytes = v135_object();
     assert!(
-        hike::earlier_object_kind(&earlier_bytes).is_some(),
-        "the vector is the earlier kind"
+        pcoc_admission::fast::is_unknown_kind(&earlier_bytes)
+            || pcoc_admission::verifier::public_key(&earlier_bytes).is_none(),
+        "the vector is not the 2.2 kind"
     );
     let earlier = Signed::fresh(earlier_bytes, exp);
     let (status, body, _) = post_json(&lab, &earlier.body()).await;
     // This fixture yields no 32-byte key, so step 6 is `bad_signature` and
-    // the nonce is not consumed. A kind with a key is step 7 below.
-    if hike::yielded_public_key(&earlier.object)
-        == hike::YieldedKey::PublicKey(pubkey(&earlier.secret))
+    // the nonce is not consumed. A kind with a key is the fast phase below.
+    if pcoc_admission::verifier::public_key(&earlier.object) == Some(pubkey(&earlier.secret))
     {
         assert_delivery(status, &body);
-        assert_eq!(outcome_of(&lab, &earlier.nonce).await, "earlier_version");
+        assert_eq!(settled(&lab, &earlier.nonce).await, "rejected");
     } else {
         assert_only_code(status, &body, &body.to_string(), "bad_signature");
         assert_eq!(outcome_of(&lab, &earlier.nonce).await, "bad_signature");
     }
 
-    let with_key = earlier_kind_with_key(&earlier.secret);
-    let earlier_signed = Signed {
-        object: with_key,
-        ..earlier.clone()
-    };
-    // A second nonce: the fixture above may already have stored this one.
-    let earlier_signed = Signed::fresh(earlier_signed.object, exp);
-    // Re-stamp the key to this submission's secret.
+    let earlier_signed = Signed::fresh(earlier_kind_with_key(&{
+        let draft = Signed::fresh(Vec::new(), exp);
+        draft.secret
+    }), exp);
     let earlier_signed = Signed {
         object: earlier_kind_with_key(&earlier_signed.secret),
         ..earlier_signed
     };
     let (status, body, _) = post_json(&lab, &earlier_signed.body()).await;
     assert_delivery(status, &body);
-    assert_eq!(
-        outcome_of(&lab, &earlier_signed.nonce).await,
-        "earlier_version"
+    assert_eq!(settled(&lab, &earlier_signed.nonce).await, "rejected");
+    let chain = std::fs::read_to_string(lab.dir.join("chain.jsonl")).expect("chain");
+    assert!(
+        chain.contains("\"unknown_kind\""),
+        "fast phase reason: {chain}"
     );
 
     let garbage = Signed::fresh(b"not a hike object, just some bytes!!".to_vec(), exp);
@@ -732,9 +730,9 @@ async fn website_tokens_follow_the_table() {
     };
     let (status, body, _) = post_json(&lab, &shell.body()).await;
     assert_delivery(status, &body);
-    assert_eq!(outcome_of(&lab, &shell.nonce).await, "pending");
     let token = settled(&lab, &shell.nonce).await;
     assert_eq!(token, "rejected");
+    assert_ne!(token, "earlier_version");
     assert_ne!(token, "too_few_waypoints_anchored");
 }
 
@@ -966,7 +964,7 @@ fn an_8kb_nested_post_is_bad_signature_not_a_crash() {
                 .block_on(async {
                     let lab = lab();
                     let exp = NOW_2026_10_10 + 120;
-                    assert_eq!(hike::MAX_CBOR_NESTING, 64);
+                    assert_eq!(pcoc_admission::cbor_limit::MAX_CBOR_NESTING, 64);
                     for depth in [8_000usize, 100_000] {
                         let mut deep = Signed::fresh(Vec::new(), exp);
                         deep.object = nested_object(&deep.secret, depth);
@@ -981,13 +979,17 @@ fn an_8kb_nested_post_is_bad_signature_not_a_crash() {
                     // At the limit the object decodes: the key is read, the
                     // signature verifies, and the nonce is consumed.
                     let mut edge = Signed::fresh(Vec::new(), exp);
-                    edge.object = nested_object(&edge.secret, hike::MAX_CBOR_NESTING - 1);
+                    edge.object = nested_object(
+                        &edge.secret,
+                        pcoc_admission::cbor_limit::MAX_CBOR_NESTING - 1,
+                    );
                     let (status, body, _) = post_json(&lab, &edge.body()).await;
                     assert_delivery(status, &body);
                     assert!(lab.door.consumed_nonce(&edge.nonce));
                     // One past the limit is undecodable before the signature.
                     let mut over = Signed::fresh(Vec::new(), exp);
-                    over.object = nested_object(&over.secret, hike::MAX_CBOR_NESTING);
+                    over.object =
+                        nested_object(&over.secret, pcoc_admission::cbor_limit::MAX_CBOR_NESTING);
                     let (status, body, text) = post_json(&lab, &over.body()).await;
                     assert_only_code(status, &body, &text, "bad_signature");
                     assert!(!lab.door.consumed_nonce(&over.nonce));

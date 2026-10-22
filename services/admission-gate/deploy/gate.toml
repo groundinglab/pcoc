@@ -64,9 +64,10 @@ allowed_origins = ["https://groundinglab.io", "https://www.groundinglab.io"]
 # Further exact CORS origins, no trailing slash.
 extra_origins = []
 
-# Admission policy file, relative to this file. The keys are those of
-# gl-admit-v6.toml. An inline [policy] table is the other form. The two
-# cannot both be set. Unknown keys are an error.
+# Admission policy file, relative to this file. SPEC §15.4 levers.
+# An inline [policy_table] is the other form. The two cannot both be set.
+# An unknown lever name, a wrong type, or an out-of-range value refuses
+# the whole file.
 #
 # v1 → v4: gate 0.4.1 read policy_id, a float min_leg_rate, and min_waypoints,
 # and a named leg_rate_floor (strict / default / lenient) for a resumed
@@ -76,7 +77,4 @@ extra_origins = []
 # The first start writes {log_dir}/policy-bind.json, a hash of the full
 # table. A later start with the same id and a different table exits before
 # it listens. A value change needs a new id.
-policy = "../policy/gl-admit-v6.toml"
-# gl-admit-v7 (../policy/gl-admit-v7.toml) is v6 plus [index]
-# expected_network = "main": mainnet index evidence only. It binds as a new
-# id beside v6 in policy-bind.json. Switching is a deploy decision.
+policy = "../../../policy/groundinglab-admission/gl-admit-v9.toml"

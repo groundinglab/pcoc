@@ -1,0 +1,28 @@
+{
+  "agreed_by": [
+    "rust",
+    "c",
+    "go",
+    "java"
+  ],
+  "candidate": "fold.txt",
+  "values": {
+    "fold.S1.leg_result_u64": "31bd4c57986a9a4c",
+    "fold.S1.step.0.S_next_u64": "be5f7be316f66502",
+    "fold.S1.step.0.S_u64": "a34908fca5e2f21c",
+    "fold.S1.step.0.acc_u64": "cc9e04ee133f53ac",
+    "fold.S1.step.0.slot_index": "540",
+    "fold.S1.step.1.S_next_u64": "8958f17fe8d237e7",
+    "fold.S1.step.1.S_u64": "be5f7be316f66502",
+    "fold.S1.step.1.acc_u64": "e2af2fe50dedbdf6",
+    "fold.S1.step.1.slot_index": "258",
+    "fold.S1.step.2.S_next_u64": "8f350516add59935",
+    "fold.S1.step.2.S_u64": "8958f17fe8d237e7",
+    "fold.S1.step.2.acc_u64": "0858aae1ea776861",
+    "fold.S1.step.2.slot_index": "999",
+    "fold.S1.step.3.S_next_u64": "27cb44e7362812aa",
+    "fold.S1.step.3.S_u64": "8f350516add59935",
+    "fold.S1.step.3.acc_u64": "43b036500d8d3366",
+    "fold.S1.step.3.slot_index": "309"
+  }
+}

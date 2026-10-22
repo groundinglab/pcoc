@@ -12,7 +12,8 @@ publish.workspace = true
 sample = []
 
 [dependencies]
-hike.workspace = true
+pcoc.workspace = true
+pcoc-produce.workspace = true
 base64.workspace = true
 bech32.workspace = true
 getrandom.workspace = true

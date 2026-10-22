@@ -1,0 +1,10 @@
+[package]
+name = "pcoc-produce"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+description = "Satoshi Hike 2.2 offline producer on the scripted rig"
+
+[dependencies]
+pcoc = { path = "../pcoc" }

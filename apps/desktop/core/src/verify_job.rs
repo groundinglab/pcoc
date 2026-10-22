@@ -1,26 +1,30 @@
-//! Verify, in-process (DESIGN-v2 sections 7.5 and 10). The pinned crate
-//! measures the object and returns the §14 record; the app shows that
-//! record and saves its bytes unchanged. The three old exit codes are the
-//! three outcomes here: a record, an unreadable object, and a file that
-//! could not be opened. None of them is a verdict.
+//! Verify, in-process (DESIGN-v2 sections 7.5 and 10).
+//!
+//! The measurement is `pcoc::verify`, the same function the `pcoc verify`
+//! CLI calls. The app shows that record and saves its bytes unchanged.
+//! A record, an unreadable object, and a file that could not be opened are
+//! the three outcomes. None of them is a verdict.
 
 use crate::format::now_unix_s;
+use crate::object_key;
 use crate::record::{present, Presented};
+use pcoc::profile::Profile;
+use pcoc::verify::{EmptyIndex, HeightIndex, Precheck, Verified};
 use sha2::{Digest, Sha256};
-use std::cell::Cell;
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 #[derive(Clone, Debug)]
 pub enum Outcome {
     Record {
-        /// The §14 JSON exactly as the crate wrote it, trailing newline included.
+        /// The §14 JSON exactly as `pcoc::verify` wrote it. No trailing newline.
         json: String,
         presented: Presented,
         bytes: u64,
         sha256: [u8; 32],
     },
-    /// The bytes are not a value this verifier decodes.
+    /// The bytes are not a value this verifier decodes into a record.
     Unreadable,
     CouldNotOpen(String),
 }
@@ -68,8 +72,7 @@ pub struct VerifyRun {
 pub struct VerifyConfig<'a> {
     pub index_url: &'a str,
     pub threads: usize,
-    pub sizes: hike::Sizes,
-    pub profile: &'a str,
+    pub(crate) profile: Profile,
 }
 
 impl VerifyConfig<'_> {
@@ -77,93 +80,93 @@ impl VerifyConfig<'_> {
         VerifyConfig {
             index_url: crate::endpoints::INDEX,
             threads,
-            sizes: hike::Sizes::production(),
-            profile: "production",
+            profile: Profile::production(),
         }
     }
 }
 
+struct HttpIndex<'a> {
+    base: String,
+    agent: ureq::Agent,
+    reads: &'a mut IndexReads,
+}
+
+impl HeightIndex for HttpIndex<'_> {
+    fn read_height(&mut self, height: u64) -> Option<Vec<u8>> {
+        self.reads.issued += 1;
+        let url = format!(
+            "{}/index/{height}",
+            self.base.trim_end_matches('/')
+        );
+        let started = Instant::now();
+        let response = self.agent.get(&url).call().ok()?;
+        if response.status() != 200 {
+            return None;
+        }
+        let mut body = Vec::new();
+        if response.into_reader().take(1 << 20).read_to_end(&mut body).is_err() {
+            return None;
+        }
+        self.reads.answered += 1;
+        self.reads.total_ms += started.elapsed().as_millis() as u64;
+        Some(body)
+    }
+}
+
+fn agent() -> ureq::Agent {
+    ureq::AgentBuilder::new()
+        .redirects(0)
+        .timeout(Duration::from_secs(10))
+        .user_agent("pcoc-hike-desktop")
+        .build()
+}
+
 pub fn run(path: &Path, config: &VerifyConfig<'_>) -> VerifyRun {
     let started = Instant::now();
-    let reads = Cell::new(IndexReads {
-        issued: 0,
-        answered: 0,
-        total_ms: 0,
-    });
-    let note = |ok: bool, since: Instant| {
-        let mut r = reads.take();
-        r.issued += 1;
-        if ok {
-            r.answered += 1;
-            r.total_ms += since.elapsed().as_millis() as u64;
-        }
-        reads.set(r);
-    };
     let outcome = match std::fs::read(path) {
-        Err(err) => Outcome::CouldNotOpen(err.to_string()),
-        Ok(bytes) if !object_bytes_are_measurable(&bytes) => Outcome::Unreadable,
-        Ok(bytes) => {
-            let agent = hike::http_agent();
-            let measurements = hike::verify_with_bind_threads_sized(
-                &bytes,
-                hike::AuditDraw::OsCsprng,
-                |height| {
-                    let t = Instant::now();
-                    let read =
-                        hike::read_index_beacon(&agent, config.index_url, height).map_err(|_| ());
-                    note(read.is_ok(), t);
-                    read
-                },
-                |loc| {
-                    let t = Instant::now();
-                    match hike::index_document(
-                        &agent,
-                        config.index_url,
-                        u64::from(loc.block_height),
-                    ) {
-                        Ok(document) => {
-                            note(true, t);
-                            match hike::proxy_matches(&document, loc) {
-                                Ok(()) => hike::ChainRead::Match,
-                                Err(()) => hike::ChainRead::Mismatch,
-                            }
-                        }
-                        Err(_) => {
-                            note(false, t);
-                            hike::ChainRead::NotRead
-                        }
-                    }
-                },
-                config.threads.max(1),
-                config.sizes,
-            );
-            if matches!(
-                hike::yielded_public_key(&bytes),
-                hike::YieldedKey::Undecodable
-            ) {
-                Outcome::Unreadable
-            } else {
-                let json = hike::verify_record_json(config.profile, &measurements);
-                match present(&json) {
-                    Ok(presented) => Outcome::Record {
-                        presented,
-                        bytes: bytes.len() as u64,
-                        sha256: Sha256::digest(&bytes).into(),
-                        json,
-                    },
-                    Err(_) => Outcome::Unreadable,
-                }
-            }
-        }
+        Err(err) => (Outcome::CouldNotOpen(err.to_string()), IndexReads::default()),
+        Ok(bytes) => measure(&bytes, config),
     };
     VerifyRun {
         path: path.to_owned(),
-        outcome,
-        reads: reads.take(),
+        outcome: outcome.0,
+        reads: outcome.1,
         elapsed_s: started.elapsed().as_secs(),
         threads: config.threads.max(1),
         finished_unix_s: now_unix_s(),
     }
+}
+
+fn measure(bytes: &[u8], config: &VerifyConfig<'_>) -> (Outcome, IndexReads) {
+    if !object_bytes_are_measurable(bytes) {
+        return (Outcome::Unreadable, IndexReads::default());
+    }
+    let mut reads = IndexReads::default();
+    let url = config.index_url.trim();
+    let verified = if url.is_empty() {
+        let mut index = EmptyIndex;
+        pcoc::verify(bytes, &config.profile, &mut index)
+    } else {
+        let mut index = HttpIndex {
+            base: url.to_owned(),
+            agent: agent(),
+            reads: &mut reads,
+        };
+        pcoc::verify(bytes, &config.profile, &mut index)
+    };
+    let outcome = match verified {
+        Verified::Record(json) | Verified::UnknownKind(json) => match present(&json) {
+            Ok(presented) => Outcome::Record {
+                presented,
+                bytes: bytes.len() as u64,
+                sha256: Sha256::digest(bytes).into(),
+                json,
+            },
+            Err(_) => Outcome::Unreadable,
+        },
+        Verified::DecodeFailure => Outcome::Unreadable,
+    };
+    (outcome, reads)
 }
 
 /// Save record writes the §14 JSON bytes unchanged.
@@ -171,17 +174,19 @@ pub fn save_record(path: &Path, json: &str) -> std::io::Result<()> {
     std::fs::write(path, json.as_bytes())
 }
 
-/// A file Verify can measure: a current hike object, or an earlier kind.
+/// A file Verify can measure: kind `v2.2-pcoc-object`, an unknown kind
+/// (Rule A5), or a malformed item that still yields a §14 record.
 ///
-/// A non-CBOR file, a truncated item, or an old map the decoder rejects is
-/// `None`. That case is an error line. It does not start an index read.
+/// Nesting deeper than 63 is rejected before the decoder runs. A well-formed
+/// item that is not an object map is not measurable. That case is an error
+/// line. It does not start an index read.
 pub fn object_bytes_are_measurable(bytes: &[u8]) -> bool {
-    if hike::earlier_object_kind(bytes).is_some() {
-        return true;
+    if object_key::nesting_too_deep(bytes) {
+        return false;
     }
-    matches!(
-        hike::yielded_public_key(bytes),
-        hike::YieldedKey::PublicKey(_)
+    !matches!(
+        pcoc::precheck(bytes, &Profile::production()),
+        Precheck::DecodeFailure
     )
 }
 
@@ -194,112 +199,175 @@ pub fn unreadable_object_line(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pcoc_produce::Case;
 
-    /// A closed local port: every index read fails at once and is `not read`.
-    const NO_INDEX: &str = "http://127.0.0.1:9";
+    fn object_path(name: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../../sdk/rust/objects/{name}"))
+    }
 
-    fn small() -> VerifyConfig<'static> {
+    fn config_for(profile: Profile, index_url: &'static str) -> VerifyConfig<'static> {
         VerifyConfig {
-            index_url: NO_INDEX,
+            index_url,
             threads: 2,
-            sizes: hike::Sizes::conformance_small(),
-            profile: "conformance-small",
+            profile,
+        }
+    }
+
+    /// `six_leg` is an OS draw inside the one `pcoc::verify` call. A second
+    /// call draws again, so the comparison drops those two keys.
+    fn stable(json: &str) -> serde_json::Value {
+        let mut value: serde_json::Value = serde_json::from_str(json).unwrap();
+        let obj = value.as_object_mut().unwrap();
+        obj.remove("six_leg");
+        obj.remove("six_leg_runs");
+        value
+    }
+
+    fn json_of(outcome: &Outcome) -> &str {
+        match outcome {
+            Outcome::Record { json, .. } => json,
+            other => panic!("expected a record, got {other:?}"),
         }
     }
 
     #[test]
-    fn a_record_with_no_index_is_measured_not_failed() {
-        let dir = std::env::temp_dir().join(format!("pcoc-verify-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let v: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../spec/conformance/v2.0/kat-small.json"
-        ))
-        .unwrap();
-        let bytes = crate::hex::decode(v["object_hex"].as_str().unwrap()).unwrap();
-        let path = dir.join("kat.cbor");
-        std::fs::write(&path, &bytes).unwrap();
+    fn o1_and_o2_match_pcoc_verify_on_the_same_profile() {
+        let cases = [
+            (
+                "O1-S1.cbor",
+                pcoc_produce::cases_profile(Case::S1),
+                "conformance-small",
+            ),
+            (
+                "O2-S2.cbor",
+                pcoc_produce::cases_profile(Case::S2),
+                "conformance-small",
+            ),
+        ];
+        for (name, profile, profile_name) in cases {
+            let path = object_path(name);
+            let bytes = std::fs::read(&path).unwrap();
+            let run = run(&path, &config_for(profile.clone(), ""));
+            let Outcome::Record {
+                presented: Presented::Record(view),
+                bytes: n,
+                ..
+            } = &run.outcome
+            else {
+                panic!("{name} did not present a record");
+            };
+            assert_eq!(*n, bytes.len() as u64);
+            assert_eq!(view.profile, profile_name);
+            assert_eq!(run.reads.issued, 0);
+            let mut index = EmptyIndex;
+            let sdk = pcoc::verify(&bytes, &profile, &mut index);
+            let Verified::Record(sdk_json) = sdk else {
+                panic!("{name} sdk verify was not a record");
+            };
+            assert_eq!(stable(json_of(&run.outcome)), stable(&sdk_json));
+        }
+    }
 
-        let run = run(&path, &small());
+    /// One production verify. The terrain is 256 MiB and the walk is the
+    /// section 14 measurement. Not timed.
+    #[test]
+    fn o3_verify_is_one_production_record() {
+        let path = object_path("O3-PROD.cbor");
+        let bytes = std::fs::read(&path).unwrap();
+        let run = run(&path, &config_for(Profile::production(), ""));
         let Outcome::Record {
             json,
             presented: Presented::Record(view),
-            bytes: n,
             ..
-        } = run.outcome
+        } = &run.outcome
         else {
-            panic!("expected a record");
+            panic!("O3 did not present a record");
         };
-        assert_eq!(n, bytes.len() as u64);
-        assert!(json.ends_with('\n'));
-        assert_eq!(view.profile, "conformance-small");
-        assert_eq!(view.shape, "match");
-        assert!(view
-            .header_comparisons()
-            .0
-            .iter()
-            .any(|(t, _)| t == "not read"));
+        assert_eq!(view.profile, "production");
+        assert_eq!(view.headers.len(), 19);
+        assert!(json.starts_with('{'));
+        assert!(!json.contains("satoshi-hike"));
+        assert_eq!(run.reads.issued, 0);
+        let value: serde_json::Value = serde_json::from_str(json).unwrap();
+        assert_eq!(value["profile"], "production");
+        assert!(value.get("six_leg").is_some());
+        let _ = bytes;
+    }
+
+    #[test]
+    fn a_refused_index_read_matches_an_empty_index() {
+        let path = object_path("O1-S1.cbor");
+        let bytes = std::fs::read(&path).unwrap();
+        let profile = pcoc_produce::cases_profile(Case::S1);
+        let run = run(&path, &config_for(profile.clone(), "http://127.0.0.1:9"));
         assert!(run.reads.issued > 0);
         assert_eq!(run.reads.answered, 0);
         assert!(run
             .reads
-            .status(NO_INDEX)
+            .status("http://127.0.0.1:9")
             .starts_with("Portable index did not answer"));
-
-        let saved = dir.join("record.json");
-        save_record(&saved, &json).unwrap();
-        assert_eq!(std::fs::read_to_string(&saved).unwrap(), json);
-        std::fs::remove_dir_all(&dir).unwrap();
+        let mut index = EmptyIndex;
+        let Verified::Record(sdk_json) = pcoc::verify(&bytes, &profile, &mut index) else {
+            panic!("record");
+        };
+        assert_eq!(stable(json_of(&run.outcome)), stable(&sdk_json));
     }
 
     #[test]
     fn unreadable_and_missing_files() {
         let dir = std::env::temp_dir().join(format!("pcoc-verify-junk-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("junk.cbor");
-        std::fs::write(&path, [0xffu8, 0x00, 0x01]).unwrap();
-        assert!(matches!(run(&path, &small()).outcome, Outcome::Unreadable));
+        let path = dir.join("empty-map.cbor");
+        std::fs::write(&path, [0xa0]).unwrap();
+        let opened = run(&path, &config_for(Profile::production(), "http://127.0.0.1:9"));
+        assert!(matches!(opened.outcome, Outcome::Unreadable));
+        assert_eq!(opened.reads.issued, 0);
         assert!(matches!(
-            run(&dir.join("absent.cbor"), &small()).outcome,
+            run(
+                &dir.join("absent.cbor"),
+                &config_for(Profile::production(), "")
+            )
+            .outcome,
             Outcome::CouldNotOpen(_)
         ));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// AC4. A non-CBOR file and a truncated .cbor are unreadable, issue no
-    /// index read, and leave the next good object free to measure.
     #[test]
-    fn bad_and_truncated_files_reset_without_an_index_read() {
+    fn malformed_bytes_match_pcoc_verify_and_a_deep_nest_does_not_decode() {
         let dir = std::env::temp_dir().join(format!("pcoc-verify-reset-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-
         let text = dir.join("notes.txt");
         std::fs::write(&text, b"this is not cbor\n").unwrap();
-        let bad = run(&text, &small());
-        assert!(matches!(bad.outcome, Outcome::Unreadable));
+        let profile = Profile::production();
+        let bad = run(&text, &config_for(profile.clone(), ""));
+        let Outcome::Record { json, .. } = &bad.outcome else {
+            panic!("malformed input is still a record");
+        };
+        let mut index = EmptyIndex;
+        let Verified::Record(sdk_json) = pcoc::verify(b"this is not cbor\n", &profile, &mut index)
+        else {
+            panic!("sdk record");
+        };
+        assert_eq!(json, &sdk_json);
         assert_eq!(bad.reads.issued, 0);
-        assert_eq!(bad.reads.answered, 0);
         let line = unreadable_object_line(&text);
         assert_eq!(line.matches('\n').count(), 0);
         assert!(!line.to_ascii_lowercase().contains("not ready"));
         assert!(!line.to_ascii_lowercase().contains("portable index"));
 
-        let truncated = dir.join("old.cbor");
-        let v: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../spec/conformance/v2.0/kat-small.json"
-        ))
-        .unwrap();
-        let bytes = crate::hex::decode(v["object_hex"].as_str().unwrap()).unwrap();
-        std::fs::write(&truncated, &bytes[..bytes.len() / 3]).unwrap();
-        let old = run(&truncated, &small());
-        assert!(matches!(old.outcome, Outcome::Unreadable));
-        assert_eq!(old.reads.issued, 0);
-
-        let good = dir.join("kat.cbor");
-        std::fs::write(&good, &bytes).unwrap();
-        let run = run(&good, &small());
-        assert!(matches!(run.outcome, Outcome::Record { .. }));
-        assert!(run.reads.issued > 0);
-
+        let mut deep = pcoc::cbor::encode_map(&[(
+            "public_key".into(),
+            pcoc::cbor::encode_bytes(&[0x11; 32]),
+        )]);
+        for _ in 0..64 {
+            deep = pcoc::cbor::encode_array(&[deep]);
+        }
+        let deep_path = dir.join("deep.cbor");
+        std::fs::write(&deep_path, &deep).unwrap();
+        let deep_run = run(&deep_path, &config_for(profile, "http://127.0.0.1:9"));
+        assert!(matches!(deep_run.outcome, Outcome::Unreadable));
+        assert_eq!(deep_run.reads.issued, 0);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

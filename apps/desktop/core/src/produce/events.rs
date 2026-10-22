@@ -1,11 +1,8 @@
 //! Progress events, DESIGN-v2 section 6.
 //!
-//! At the pinned revision the crate has no dedicated progress callback.
-//! Legs, tips and stage boundaries come from the closures the crate calls:
-//! `observe` runs right after each checkpoint is stored, `open_stage` at
-//! each stage boundary, and `settle` after the last leg (see `adapter`).
-//! Posts and asks come from the crate's own `.events` sibling (see
-//! `eventlog`). None of these run inside a step.
+//! Offline produce maps rig progress onto these events. Live produce fails
+//! closed: the header source is not in this build. None of these run inside
+//! a step.
 
 use std::path::PathBuf;
 

@@ -26,7 +26,8 @@ pub const MULTIPART_ENVELOPE_SLACK: usize = 64 * 1024;
 /// plus [`MULTIPART_ENVELOPE_SLACK`].
 pub const JSON_ENVELOPE_BYTES: usize = 256;
 
-pub const DEFAULT_BIND_THREADS: usize = hike::DEFAULT_BIND_THREADS;
+/// Checkpoint-binding threads. The process does not read `PCOC_BIND_THREADS`.
+pub const DEFAULT_BIND_THREADS: usize = 6;
 pub const DEFAULT_INDEX_TIMEOUT_SECS: u64 = 5;
 pub const DEFAULT_ALLOWED_ORIGINS: &[&str] = &[];
 
@@ -38,7 +39,8 @@ pub const DEFAULT_MAX_JOBS: usize = 256;
 pub const DEFAULT_MAX_CONCURRENT: usize = 2;
 pub const DEFAULT_RATE_PER_MIN: u32 = 12;
 /// Shipped recommendation. The process reads this file when `policy` is omitted.
-pub const DEFAULT_POLICY_FILE: &str = "policy/gl-admit-v6.toml";
+/// SPEC §15.4. Relative to this crate, the repo policy tree.
+pub const DEFAULT_POLICY_FILE: &str = "../../policy/groundinglab-admission/gl-admit-v9.toml";
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -60,7 +62,7 @@ pub struct Config {
     /// Decision log directory. The process creates it. A v1.35 chain here is
     /// not loaded.
     pub log_dir: PathBuf,
-    /// The full policy table. The code default is `gl-admit-v6`.
+    /// The full policy table. The shipped file is `gl-admit-v9`.
     pub policy: AdmissionPolicy,
     /// Checkpoint binding threads. The process does not read `PCOC_BIND_THREADS`.
     pub bind_threads: usize,
@@ -198,7 +200,7 @@ impl Config {
     /// the integer `p/q` in the policy table.
     fn note_v1_migration(policy: &AdmissionPolicy) {
         eprintln!(
-            "admission-service policy: gl-admit-v1 float min_leg_rate is retired; active {} compares q·N ≥ p·S with p/q = {}/{}",
+            "admission-service policy: gl-admit-v1 float min_leg_rate is retired; active {} compares q·hike_legs ≥ p·hike_span with p/q = {}/{}",
             policy.policy_id, policy.leg_rate_floor.p, policy.leg_rate_floor.q
         );
     }
@@ -327,15 +329,18 @@ fn resolve_policy(file: &FileConfig, source: Option<&Path>) -> Result<AdmissionP
     if file.policy.is_some() && file.policy_table.is_some() {
         return Err("policy path and an inline [policy_table] are both set; use one".to_owned());
     }
-    let table = if let Some(inline) = &file.policy_table {
-        inline.clone()
-    } else {
-        let path = policy_path(file.policy.as_deref(), source)?;
-        let raw = fs::read_to_string(&path)
-            .map_err(|err| format!("could not read policy {}: {err}", path.display()))?;
-        toml::from_str(&raw)
-            .map_err(|err| format!("policy {} is not usable: {err}", path.display()))?
-    };
+    if let Some(inline) = &file.policy_table {
+        return policy_from_file(inline.clone(), file.max_concurrent);
+    }
+    let path = policy_path(file.policy.as_deref(), source)?;
+    let raw = fs::read_to_string(&path)
+        .map_err(|err| format!("could not read policy {}: {err}", path.display()))?;
+    if raw.contains("[levers]") {
+        return crate::levers::load(&raw, file.max_concurrent)
+            .map_err(|err| format!("policy {}: {err}", path.display()));
+    }
+    let table: PolicyFile = toml::from_str(&raw)
+        .map_err(|err| format!("policy {} is not usable: {err}", path.display()))?;
     policy_from_file(table, file.max_concurrent)
 }
 
@@ -498,7 +503,7 @@ mod tests {
         assert_eq!(cfg.max_object_bytes, DEFAULT_MAX_OBJECT_BYTES);
         assert_eq!(cfg.max_concurrent_verify, 2);
         assert_eq!(cfg.rate_per_min, 12);
-        assert_eq!(cfg.policy.policy_id, "gl-admit-v6");
+        assert_eq!(cfg.policy.policy_id, "gl-admit-v9");
         assert_eq!(cfg.policy.leg_rate_floor.p, 1);
         assert_eq!(cfg.policy.leg_rate_floor.q, 5);
         assert_eq!(cfg.policy.min_anchored_paths, 6);

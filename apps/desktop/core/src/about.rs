@@ -1,28 +1,25 @@
 //! What About shows (DESIGN-v2 section 7.7, US-9). The pin facts come from
 //! `build.rs`, which reads the workspace manifest and the lock file.
 
-pub const SPEC: &str = "Satoshi Hike v2.0";
+pub const SPEC: &str = "SDK 2.2";
 pub const SPEC_HARD_CUT: &str = "2026-10-08";
 pub const SPEC_SIGN_IN_LOCK: &str = "§15.1 locked 2026-10-10";
 pub const APP_ID: &str = "app.pcoc.Hike";
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
-pub const HIKE_VERSION: &str = env!("PCOC_HIKE_VERSION");
+pub const SDK_VERSION: &str = env!("PCOC_SDK_VERSION");
 /// `tag`, `rev`, or `path`.
 pub const PIN_KIND: &str = env!("PCOC_REF_PIN_KIND");
 pub const PIN: &str = env!("PCOC_REF_PIN");
 /// The commit Cargo.lock resolved a git pin to. `local` for a path or patched pin.
 pub const PIN_COMMIT: &str = env!("PCOC_REF_COMMIT");
-pub const OBJECT_KIND: &str = hike::KIND;
+pub const OBJECT_KIND: &str = pcoc::constants::KIND;
 
 pub const BITCOIN: &str = "mainnet";
 
-/// `hike 2.0.0-rc.2`: the Rust SDK crate and the version Cargo.lock resolved.
+/// `pcoc 2.2.0`: the Rust SDK crate and the version Cargo.lock resolved.
 pub fn crate_line() -> String {
-    format!("hike {HIKE_VERSION}")
+    format!("pcoc {SDK_VERSION}")
 }
-
-/// The SDK version this build uses, as shown on About.
-pub const SDK_VERSION: &str = HIKE_VERSION;
 
 /// The About row "PCOC SDK": the SDK version this build uses.
 pub fn sdk_line() -> &'static str {
@@ -55,7 +52,7 @@ pub fn pin_note() -> String {
     }
 }
 
-/// `git tag sdk-v2.0.0 …`, a commit pin, or the in-tree SDK (developer wording).
+/// A commit pin, or the in-tree SDK at `sdk/rust` (developer wording).
 pub fn pin_line() -> String {
     match PIN_KIND {
         "tag" => format!("git tag {PIN} of the Rust SDK, not branch main"),
@@ -77,11 +74,12 @@ fn short_rev(rev: &str) -> &str {
 
 /// Leading zero bits of the planting puzzle (P13.5).
 pub fn hashcash_bits() -> u32 {
-    hike::effective_bits()
+    pcoc::constants::HASHCASH_DIFFICULTY
 }
 
+/// Live produce does not dial. Phase C owns the header source.
 pub fn dns_seeds() -> String {
-    hike::MAINNET_DNS_SEEDS.join(", ")
+    crate::produce::live::LIVE_HEADER_SOURCE.to_owned()
 }
 
 #[cfg(test)]
@@ -91,11 +89,13 @@ mod tests {
     #[test]
     fn pin_is_the_in_tree_sdk() {
         assert_eq!(PIN_KIND, "path");
-        assert_eq!(PIN, "../../sdk/rust/hike");
+        assert_eq!(PIN, "../../sdk/rust/pcoc");
         assert_eq!(PIN_COMMIT, "local");
-        assert_eq!(pin_line(), "in-tree Rust SDK at ../../sdk/rust/hike");
-        assert_eq!(OBJECT_KIND, "satoshi-hike-v2.0-object");
-        assert_eq!(hike::MAINNET_DNS_SEEDS.len(), 7);
+        assert_eq!(pin_line(), "in-tree Rust SDK at ../../sdk/rust/pcoc");
+        assert_eq!(OBJECT_KIND, "v2.2-pcoc-object");
+        assert_eq!(SPEC, "SDK 2.2");
+        assert_eq!(hashcash_bits(), 21);
+        assert_eq!(dns_seeds(), "live header source is not in this build");
     }
 
     #[test]
@@ -117,7 +117,8 @@ mod tests {
     fn reports_the_sdk_version_from_sdk_version_file() {
         let want = include_str!("../../../../sdk/VERSION").trim();
         assert_eq!(SDK_VERSION, want);
-        assert_eq!(crate_line(), format!("hike {want}"));
+        assert_eq!(want, "2.2.0");
+        assert_eq!(crate_line(), format!("pcoc {want}"));
         assert_eq!(sdk_line(), want);
     }
 }

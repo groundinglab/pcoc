@@ -30,6 +30,7 @@ use crate::storage::{
     FileStore, PersistedBatch, StorageError, StoredInclusion, StoredIndexHeader, StoredIndexPlant,
     StoredPlant, StoredPortableIndex, StoredState,
 };
+use crate::header_source::TipTick;
 use crate::{decode_bitcoin_id, encode_bitcoin_id, encode_hash32, Hash32};
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -54,7 +55,7 @@ impl ChainTip {
     /// Copy Bitcoin header `nTime` off a gossip tick.
     ///
     /// Units are unix seconds, the header field as stored, including zero.
-    pub fn from_gossip_tick(tick: &hike::TipTick) -> Result<Self, String> {
+    pub fn from_gossip_tick(tick: &TipTick) -> Result<Self, String> {
         let height = u32::try_from(tick.height).map_err(|_| "tip height exceeds u32".to_owned())?;
         Ok(Self {
             hash: tick.hash,
@@ -3403,11 +3404,12 @@ mod tests {
     fn gossip_tick_ntime_is_header_seconds_and_observation_stays_separate() {
         let chain = Arc::new(FakeChain::default());
         let (mut clock, _temp) = open_at(chain, tip(1, None, 100));
-        let tick = hike::TipTick {
+        let tick = crate::header_source::TipTick {
             hash: [2; 32],
             height: 101,
             previous: Some([1; 32]),
             n_time: 1_700_000_050,
+            header: [0; 80],
         };
         let tip = ChainTip::from_gossip_tick(&tick).unwrap();
         assert_eq!(tip.time, Some(1_700_000_050));
@@ -3419,11 +3421,12 @@ mod tests {
         assert_ne!(observed, u64::from(tick.n_time));
         assert_ne!(observed, u64::from(tick.n_time) * 1000);
 
-        let epoch = ChainTip::from_gossip_tick(&hike::TipTick {
+        let epoch = ChainTip::from_gossip_tick(&crate::header_source::TipTick {
             hash: [3; 32],
             height: 102,
             previous: Some([2; 32]),
             n_time: 0,
+            header: [0; 80],
         })
         .unwrap();
         assert_eq!(epoch.time, Some(0));

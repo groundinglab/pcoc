@@ -17,7 +17,6 @@ path = "src/main.rs"
 
 [dependencies]
 axum = "0.8"
-hike = { git = "https://github.com/groundinglab/pcoc", tag = "ref-rust-v2.0.5" }
 hex = "0.4"
 base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
@@ -35,8 +34,9 @@ subtle = "=2.5.0"
 hyper-util = "=0.1.20"
 # 3.25+ can pull getrandom 0.4 (edition 2024). 3.24 still has TempDir::keep and getrandom 0.3.
 tempfile = "=3.24.0"
+# SPEC §13.1 Hashcash. The SDK has no header-source dependency.
+pcoc = { path = "../../sdk/rust/pcoc" }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 
 [dev-dependencies]
-hike-net = { git = "https://github.com/groundinglab/pcoc", tag = "ref-rust-v2.0.5" }

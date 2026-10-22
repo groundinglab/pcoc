@@ -38,11 +38,14 @@ fn public_commitment_script_has_no_alternate_framing() {
 }
 
 #[test]
-fn public_hashcash_difficulty_is_21_bits_and_bound_to_the_live_tip() {
+fn public_hashcash_difficulty_is_21_bits_and_bound_to_origin_and_header() {
     assert_eq!(HASHCASH_BITS, 21);
-    assert_eq!(HASHCASH_TAG, b"bari-hc-v1");
-    let live = hashcash::challenge_from_tip(&[0x11; 32]);
-    let other = hashcash::challenge_from_tip(&[0x12; 32]);
+    assert_eq!(HASHCASH_TAG, b"bari-hc-v2");
+    let origin = "https://bari.test";
+    let live_header = hashcash::assemble_header(&[0x11; 32], 1, hashcash::SYNTH_NBITS, 1);
+    let other_header = hashcash::assemble_header(&[0x12; 32], 1, hashcash::SYNTH_NBITS, 2);
+    let live = hashcash::challenge(origin, &hashcash::header_hash(&live_header));
+    let other = hashcash::challenge(origin, &hashcash::header_hash(&other_header));
     assert_ne!(live, other);
     let waypoint = [0x22; 32];
     let nonce = hashcash::solve(&live, &waypoint, 8);

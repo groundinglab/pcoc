@@ -583,7 +583,7 @@ impl App {
         let state = self.state.borrow();
         let now = state.now_ms();
         let quiet =
-            "No job running. Produce uses Bitcoin gossip and Bari. Verify uses the portable index.";
+            "No job running. live header source is not in this build. Verify uses the portable index.";
         let (dot, left, right): (Option<&str>, String, String) = match state.page {
             Page::Produce if state.produce.phase != Phase::Idle => (
                 Some("amber"),

@@ -7,6 +7,4 @@ description = "Published test vectors only. These keys sign conformance examples
 paths = [
   # Section 15.1 example: the fixed test key's secret_hex that signs the sign-in vector.
   '''spec/conformance/v2\.0/sign-in\.json''',
-  # NIP-06 published vector (sdk/rust/nip06).
-  '''sdk/rust/nip06/src/vectors-allowlist/.*''',
 ]

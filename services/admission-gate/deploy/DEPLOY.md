@@ -1,16 +1,16 @@
 # Deploy the admission gate
 
-One binary, one config file, a log directory the process creates. Satoshi Hike v2.0 only. This page is the whole install. Do not point `log_dir` at a v1.35 decision log.
+One binary, one config file, a log directory the process creates. Satoshi Hike 2.2 only. This page is the whole install. Do not point `log_dir` at an earlier decision log.
 
 ## Build
 
-The gate builds the Rust SDK from this repository by path (`sdk/rust/hike`), so the checkout must contain `sdk/rust` and `sdk/VERSION` as well as `services/admission-gate`. A sparse checkout needs at least:
+The gate builds the Rust SDK from this repository by path (`sdk/rust/pcoc`), so the checkout must contain `sdk/rust`, `sdk/VERSION`, `sdk/SPEC_PIN`, and `policy/groundinglab-admission/gl-admit-v9.toml` as well as `services/admission-gate`. A sparse checkout needs at least:
 
 ```bash
-git sparse-checkout set services/admission-gate sdk/rust   # cone mode also brings sdk/VERSION
+git sparse-checkout set services/admission-gate sdk policy
 ```
 
-Build from a clean checkout of a tag (`gate-v…` or `sdk-v…`), from `services/admission-gate/`, with git present so `commit` is the SHA (`COMMIT` overrides it):
+Build from a clean checkout of a tag (`gate-v…` or `sdk-rust-v2.2.x`), from `services/admission-gate/`, with git present so `commit` is the SHA (`COMMIT` overrides it):
 
 ```bash
 cargo build --locked --release
@@ -34,7 +34,7 @@ sudo chown pcoc:pcoc /var/lib/pcoc-admission
 
 Edit `/etc/pcoc-admission/gate.toml`. The gate binds `127.0.0.1:8787`. **`served_origins` is required and has no default**: it lists the exact site origins whose signed sign-ins this gate serves (groundinglab's file sets `served_origins = ["https://groundinglab.io"]`). A file without it does not start. It is separate from the CORS lists. The code default for `allowed_origins` is empty (loopback only). **A live groundinglab deploy needs `allowed_origins = ["https://groundinglab.io", "https://www.groundinglab.io"]`** in this file (the shipped `gate.toml` sets it; see also [env.example](env.example)); without it the website's sign-in requests are refused by CORS. To serve it publicly, put a reverse proxy of your choice in front of the loopback bind. Every key is optional. That file lists each key, its default, and what it does. The process reads that file only. The path is `--config` or `GATE_CONFIG`. It does not read `PCOC_BIND_THREADS` or any `GL_VERIFY_*` variable.
 
-`log_dir` is the public log. The process creates it. A relative `log_dir` is under `WorkingDirectory`. A chain that is not Satoshi Hike v2.0 is refused at startup and is not served. Leave the old log where it is.
+`log_dir` is the public log. The process creates it. A relative `log_dir` is under `WorkingDirectory`. A chain that is not Satoshi Hike 2.2 is refused at startup and is not served. Leave an earlier log where it is.
 
 ## Unit
 
@@ -56,7 +56,7 @@ A user unit drops `User=` and `Group=`, sets `WantedBy=default.target`, and uses
 curl -sS http://127.0.0.1:8787/v1/health
 ```
 
-`version` is the crate version, `commit` is the build SHA, `spec` is `Satoshi Hike v2.0`, `spec_kind` is `v2.0`, and `config` repeats the file with no secrets.
+`version` is the crate version, `commit` is the build SHA, `spec` is `Satoshi Hike 2.2`, `spec_kind` is `2.2`, and `config` repeats the file with no secrets.
 
 ## Upgrade
 
@@ -66,4 +66,4 @@ Build the new binary, replace the file in `ExecStart`, then `sudo systemctl rest
 
 `POST /v1/sign-in`, `POST /v1/verify`, `GET /v1/verify/{job_id}`, `GET /v1/health`, `GET /v1/policy`, `GET /latest.json`, `GET /log/{YYYY-MM-DD}.jsonl`, `GET /log/{YYYY-MM-DD}/{seq}`. Anything else, including `POST /v1/admit`, is HTTP 404. Bodies are in [WIRE.md](../WIRE.md).
 
-The groundinglab policy file is `policy/groundinglab-admission/gl-admit-v9.toml`. The process's `policy` config key is still set in code; that line is not changed here. The id is bound to a hash of the full table. Changing any value requires a new id. The process writes that binding to `{log_dir}/policy-bind.json` and exits before it listens when the same id is paired with a different table.
+The groundinglab policy file is `policy/groundinglab-admission/gl-admit-v9.toml`. The id is bound to a hash of the full table. Changing any value requires a new id. The process writes that binding to `{log_dir}/policy-bind.json` and exits before it listens when the same id is paired with a different table.

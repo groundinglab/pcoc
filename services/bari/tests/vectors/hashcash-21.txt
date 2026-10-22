@@ -1,7 +1,0 @@
-# Committed 21-bit Hashcash stamp. Tests verify this file. They do not mine it.
-# tip and waypoint are 32 bytes. nonce is the first u64 whose digest has 21 leading zero bits.
-# digest is SHA256(challenge || waypoint || nonce_le), challenge = SHA256("bari-hc-v1" || tip).
-tip 4141414141414141414141414141414141414141414141414141414141414141
-waypoint 4242424242424242424242424242424242424242424242424242424242424242
-nonce 1416417
-digest 00000536bbea4f6aed0bf0d1b968d8596818c2b1317b66e936c1eb0d98edcbf4

@@ -1,0 +1,4 @@
+# SPEC §11.1 / Rule I6. Release and test builds target the baseline ISA.
+# SHA-NI is selected at runtime by the SHA-256 crate, not by this flag.
+[build]
+rustflags = ["-C", "target-cpu=x86-64"]

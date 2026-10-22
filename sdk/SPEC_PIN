@@ -1,3 +1,4 @@
-# pack incomplete until the SDK phase
+# Satoshi Hike 2.2 with erratum 2. SHA-256 of spec/conformance/pack/manifest.json.
 tag=spec-2.2.0
-vector-sha256=be0aaa5e7841f878add4cdc6818f49d566b6662eb3ad668e90a35c2f43f21ab8
+erratum=2
+vector-sha256=ec704be3975d0e1af3eab9bb0f6d5ab7b6c6da5dd4b0d9b87988af54d0886a2c

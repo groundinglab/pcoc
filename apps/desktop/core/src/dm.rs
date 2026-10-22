@@ -139,10 +139,7 @@ pub struct PreparedDm {
 /// The npub of the object's `public_key`. Not a typed npub, and not the
 /// session key unless that key is the one in the object.
 pub fn recipient(object_bytes: &[u8]) -> Result<PublicKey, DmError> {
-    let raw = match hike::yielded_public_key(object_bytes) {
-        hike::YieldedKey::PublicKey(pk) => pk,
-        _ => return Err(DmError::NoPublicKey),
-    };
+    let raw = crate::object_key::public_key(object_bytes).ok_or(DmError::NoPublicKey)?;
     XOnlyPublicKey::from_slice(&raw).map_err(|_| DmError::NotACurvePoint)?;
     Ok(PublicKey(raw))
 }

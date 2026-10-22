@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # Path gate for ci.yml. Usage: changes.sh <base-sha|""> <head-sha>
-# Prints key=value lines (spec rust go java gate claims bari index desktop docs).
+# Prints key=value lines (spec rust go java c gate claims bari index desktop docs xverify).
 # Empty, all-zero or unknown base => run everything. spec/ or .github/ or any
 # unclassified path => run everything. spec/* already covers spec/conformance/.
 # A file reintroduced at repo-root conformance/ hits the unclassified arm.
-# A suite whose directory is absent is always false.
+# A suite whose directory is absent is always false. sdk/rust also builds the
+# gate and the desktop app. services/bari is a path dependency of the index.
 set -euo pipefail
 base="${1:-}"; head="${2:-HEAD}"
-keys=(spec rust go java gate claims bari index desktop docs)
-declare -A on dir=([spec]=spec [rust]=sdk/rust [go]=sdk/go [java]=sdk/java
+keys=(spec rust go java c gate claims bari index desktop docs xverify)
+declare -A on dir=([spec]=spec [rust]=sdk/rust [go]=sdk/go [java]=sdk/java [c]=sdk/c
   [gate]=services/admission-gate [claims]=services/admission-claims [bari]=services/bari [index]=services/index
-  [desktop]=apps/desktop [docs]=.)
+  [desktop]=apps/desktop [docs]=. [xverify]=sdk/conformance)
 for k in "${keys[@]}"; do on[$k]=false; done
 all=false
 if [[ -z "$base" || "$base" =~ ^0+$ ]] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
@@ -20,17 +21,18 @@ else
   for f in "${files[@]}"; do
     case "$f" in
       spec/*|.github/*) all=true ;;
-      sdk/rust/*) on[rust]=true; on[gate]=true; on[desktop]=true ;;  # gate and desktop build sdk/rust by path
-      sdk/go/*) on[go]=true ;;
-      sdk/java/*) on[java]=true ;;
-      sdk/*) on[rust]=true; on[go]=true; on[java]=true; on[gate]=true; on[desktop]=true ;;
+      sdk/rust/*) on[rust]=true; on[gate]=true; on[desktop]=true; on[xverify]=true ;;  # gate and desktop build sdk/rust by path
+      sdk/go/*) on[go]=true; on[xverify]=true ;;
+      sdk/java/*) on[java]=true; on[xverify]=true ;;
+      sdk/c/*) on[c]=true; on[xverify]=true ;;
+      sdk/*) on[rust]=true; on[go]=true; on[java]=true; on[c]=true; on[gate]=true; on[desktop]=true; on[xverify]=true ;;
       services/admission-gate/*) on[gate]=true ;;
       services/admission-claims/*) on[claims]=true ;;
-      services/bari/*) on[bari]=true ;;
+      services/bari/*) on[bari]=true; on[index]=true ;;
       services/index/*) on[index]=true ;;
       services/*.md|apps/*.md|docs/*|*.md|LICENSE) on[docs]=true ;;
       apps/desktop/*) on[desktop]=true ;;
-      .gitignore|.gitleaks.toml) ;;  # scans always run
+      .gitignore|.gitleaks.toml|.gitleaksignore) ;;  # scans always run
       *) all=true; echo "unclassified: $f -> full run" >&2 ;;
     esac
   done

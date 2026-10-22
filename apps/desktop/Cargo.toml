@@ -9,9 +9,10 @@ rust-version = "1.83"
 publish = false
 
 [workspace.dependencies]
-# The Rust SDK (Satoshi Hike v2.0), in-tree at sdk/rust; version in sdk/VERSION.
+# The Rust SDK 2.2, in-tree at sdk/rust. Package `pcoc` is 2.2.0.
 # About shows the resolved version and pin (core/build.rs reads Cargo.lock).
-hike = { path = "../../sdk/rust/hike" }
+pcoc = { path = "../../sdk/rust/pcoc" }
+pcoc-produce = { path = "../../sdk/rust/pcoc-produce" }
 
 base64 = "0.22"
 bech32 = "=0.9.1"

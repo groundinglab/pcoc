@@ -22,6 +22,8 @@ pub const CLASS_OPERATIONAL: &str = "operational";
 pub const CODE_BELOW_LEG_RATE: &str = "below_leg_rate";
 pub const CODE_BELOW_WAYPOINTS: &str = "below_waypoints";
 pub const CODE_EARLIER_VERSION: &str = "earlier_version";
+/// SPEC §15.4. Any kind other than `v2.2-pcoc-object`, from the fast phase.
+pub const CODE_UNKNOWN_KIND: &str = "unknown_kind";
 pub const CODE_UNREADABLE: &str = "unreadable";
 pub const CODE_NO_PUBLIC_KEY: &str = "no_public_key";
 pub const CODE_TOO_SHORT: &str = "too_short";
@@ -47,6 +49,7 @@ pub const INVENTORY: &[(&str, &str)] = &[
     (CODE_BELOW_LEG_RATE, CLASS_BELOW_POLICY),
     (CODE_BELOW_WAYPOINTS, CLASS_BELOW_POLICY),
     (CODE_EARLIER_VERSION, CLASS_INVALID),
+    (CODE_UNKNOWN_KIND, CLASS_INVALID),
     (CODE_UNREADABLE, CLASS_INVALID),
     (CODE_NO_PUBLIC_KEY, CLASS_INVALID),
     (CODE_TOO_SHORT, CLASS_INVALID),
@@ -89,6 +92,7 @@ pub fn code_of_note(note: &str) -> &'static str {
         "paths included is below the minimum" => CODE_PATHS_INCLUDED,
         note if note == INDEX_UNREAD_NOTE => CODE_INDEX_UNREAD,
         note if note == REFUSE_EARLIER || note == OUTCOME_EARLIER => CODE_EARLIER_VERSION,
+        "unknown_kind" => CODE_UNKNOWN_KIND,
         note if note == UNREADABLE_REASON => CODE_UNREADABLE,
         note if note == policy::NO_KEY_REASON => CODE_NO_PUBLIC_KEY,
         note if note == OUTCOME_TOO_SHORT => CODE_TOO_SHORT,
@@ -129,11 +133,6 @@ pub fn from_report(report: &Report, checks: &[PolicyCheck], policy: &AdmissionPo
         return reason;
     }
     match report {
-        Report::Earlier { .. } => Reason {
-            code: CODE_EARLIER_VERSION,
-            class: CLASS_INVALID,
-            line: policy::EARLIER_LINE.to_owned(),
-        },
         Report::Unreadable => Reason {
             code: CODE_UNREADABLE,
             class: CLASS_INVALID,
@@ -213,6 +212,7 @@ fn sentence(code: &str, measures: &Measures) -> String {
             "Invalid: the Bitcoin blocks it names do not match the public chain.".to_owned()
         }
         CODE_EARLIER_VERSION => policy::EARLIER_LINE.to_owned(),
+        CODE_UNKNOWN_KIND => "This object is not the v2.2 kind. The gate refuses it.".to_owned(),
         CODE_UNREADABLE => policy::UNREADABLE_LINE.to_owned(),
         CODE_NO_PUBLIC_KEY => policy::NO_KEY_LINE.to_owned(),
         CODE_TOO_SHORT => "The object is shorter than 32 bytes.".to_owned(),
@@ -242,7 +242,7 @@ fn sentence(code: &str, measures: &Measures) -> String {
 /// Website outcome for a locked sign-in after policy.
 ///
 /// `accepted` when the proof is sound and every policy check is met.
-/// `pending` when the bookends were not read and nothing else failed.
+/// `pending` when `hike_span` was not read and nothing else failed.
 /// Otherwise `rejected` stays the website token. The log uses [`Reason`].
 pub fn website_outcome(report: &Report, checks_met: bool, held: bool) -> &'static str {
     if held {
@@ -257,7 +257,7 @@ pub fn website_outcome(report: &Report, checks_met: bool, held: bool) -> &'stati
 fn proof_sound(report: &Report) -> bool {
     match report {
         Report::Read(measured) => measured.verifier_notes.is_empty() && !measured.earlier_version,
-        Report::Earlier { .. } | Report::Unreadable => false,
+        Report::Unreadable => false,
     }
 }
 

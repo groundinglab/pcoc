@@ -2,7 +2,7 @@
 
 | Item | Choice |
 |---|---|
-| Hashcash wire | `X-Bari-Hashcash-Nonce: <u64 decimal>` |
+| Hashcash wire | `X-Bari-Hashcash-Nonce: <u64 decimal>` and `X-Bari-Hashcash-Header: <160 lowercase hex>` |
 | Durable accept | append, then fsync, then 204 |
 | Soft max | off unless `BARI_POOL_SOFT_MAX` is set |
 | Index reads | not this process |
@@ -15,7 +15,7 @@ Hashcash is required on `POST /waypoint` only.
 | Surface | Code | Meaning |
 |---|---|---|
 | `POST /waypoint` | 204 | Appended to the live tip pool after fsync, or already held |
-| `POST /waypoint` | 400 | Body is not 32 raw bytes, or Hashcash is missing, invalid, or for the wrong tip |
+| `POST /waypoint` | 400 | Body is not 32 raw bytes, or Hashcash is missing, invalid, for another origin, or outside the current/before/after header window |
 | `POST /waypoint` | 415 | `Content-Type` is missing or not `application/octet-stream` |
 | `POST /waypoint` | 503 | Open pool reached `BARI_POOL_SOFT_MAX` |
 | `GET /path/{leaf}` | 200 | Canonical path body for a confirmed leaf. A repeat returns the same body |
@@ -25,12 +25,15 @@ Hashcash is required on `POST /waypoint` only.
 
 `GET /index` and `GET /index/{height}` are not routes of this process. A request for them on this router is 404. This process writes the files and does not serve them.
 
-Hashcash header: `X-Bari-Hashcash-Nonce: <u64 decimal>`.
+Hashcash headers: `X-Bari-Hashcash-Nonce` (shortest decimal, zero is `0`) and `X-Bari-Hashcash-Header` (160 lowercase hex digits, the 80 fee-header bytes).
 
 | Item | Value |
 |---|---|
-| Message | `SHA256(challenge ‖ waypoint ‖ nonce_le_u64)` |
-| Challenge | `SHA256(b"bari-hc-v1" ‖ tip_hash)` from the live tip |
+| `header_hash` | `SHA-256(SHA-256(fee header))`. One SHA-256 is not this value |
+| Challenge | `SHA-256("bari-hc-v2" ‖ bari_origin ‖ header_hash)` |
+| `bari_origin` | RFC 6454 §6.2 serialization of `BARI_PUBLIC_ORIGIN` |
+| Message | `SHA-256(challenge ‖ waypoint ‖ le64(nonce))` |
+| Window | Current tip, the previous tip, or (synthetic plane only) one header after, with synth `nBits` `0x207fffff` |
 | Difficulty | 21 leading zero bits. That is the one difficulty, shared with produce. `BARI_HASHCASH_BITS` is not read. |
 
 `204` means the waypoint was appended or was already held. It is not a promise that a path will be served. A confirmed path stays 200. The proof is checked against the live tip under the same lock as the append.

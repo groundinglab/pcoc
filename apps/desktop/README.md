@@ -4,11 +4,11 @@ PCOC Hike for Linux makes a PCOC, checks one, and signs in, on your own machine,
 
 A full hike is eighteen stages paced by Bitcoin blocks. That is hours, not a button press. The key stays on the machine. Verify reads the portable index (the live default is the public index). Anyone can bypass that index by checking Bitcoin. The app does not say pass or fail. Sign-in sends the object to a relying party. Accept, refuse, and revoke are that party's policy.
 
-**Mainnet only.** Start hike runs on Bitcoin mainnet and posts each waypoint to the public Bari from your real key. The app has no test plane and no test-plane switch. The app uses one application id. If the Flatpak build is already running, starting a second copy (for example `cargo run`) opens the running Flatpak window instead of a new one. Quit the Flatpak first to run the source build.
+**Live headers.** Start hike does not dial Bitcoin. This build returns `live header source is not in this build`. Phase C owns the live header source. The app uses one application id. If the Flatpak build is already running, starting a second copy (for example `cargo run`) opens the running Flatpak window instead of a new one. Quit the Flatpak first to run the source build.
 
 **Send to my phone.** On a finished hike, Send to my phone sends the `.cbor` to the object's own npub as one NIP-04 direct message (kind 4), encrypted with the nsec pasted in this session. It goes to relay.damus.io, relay.primal.net and nos.lol; one relay accepting is enough, and nos.lol refuses most objects for size. The phone app signed in with that npub offers it for approval. Making a PCOC never sends it by itself, and the send never touches the admission gate. The code is `core/src/dm.rs`.
 
-**SDK step in this build.** The app version is still 0.1.4, but the Rust SDK under it moved from `ref-rust-v2.0.5` to the in-tree `sdk/rust` (now 2.0.0-rc.2; rc.1 was `ref-rust-v2.0.6` plus an untrusted-input fix and an nsec fix). Since rc.1 it also has the section 14.1 recording fix, and rc.2 measures on through absent, mistyped and wrong-width fields: checking a malformed object now lists every violated condition and the later measurements. The release-candidate notes are not part of this tree.
+**SDK 2.2.** The app version is 0.1.4. The Rust SDK is the in-tree `sdk/rust` crate `pcoc` at version 2.2.0. The object kind this app checks is `v2.2-pcoc-object`. Any other kind is an unknown kind (Rule A5). A malformed object is still a section 14 record. A decode failure is not.
 
 Needs GTK 4.14+ and libadwaita 1.5+ (Ubuntu 24.04, Debian 13, Fedora 40 or newer). Rust 1.99.0 comes from `rust-toolchain.toml` in this folder.
 

@@ -59,28 +59,28 @@ pub fn build(app: &Rc<App>) -> gtk::Widget {
                 page.append(&c.root);
             }
             Outcome::Record {
-                presented: Presented::Earlier { kind },
+                presented: Presented::Unknown { kind_text },
                 bytes,
                 sha256,
                 ..
             } => {
                 let c = card(
                     "Object",
-                    &[kind.as_str()],
+                    &[kind_text.as_str()],
                     &[&format!("{} bytes", thousands(*bytes))],
                     on,
                 );
                 c.body.append(&mono(&tilde(&run.path)));
                 c.body.append(&mono(&pcoc_hike_core::hex::encode(sha256)));
                 c.body.append(&text(
-                    "Fail. This file is an earlier version. This app reads Satoshi Hike v2.0 PCOCs.",
+                    "Fail. This file is an unknown kind (Rule A5). This app checks kind v2.2-pcoc-object.",
                     &["amber", "lead"],
                 ));
                 let row = hbox(8);
-                row.append(&line("version", &["muted"]));
-                row.append(&token("earlier version"));
+                row.append(&line("kind", &["muted"]));
+                row.append(&token("unknown kind"));
                 c.body.append(&row);
-                learn(&c.body, &c.root, "Rule A5. An earlier-version object is a measurement, not a decode failure. The v2.0 stage matrix is not drawn for it.", on);
+                learn(&c.body, &c.root, "Rule A5. An unknown kind is a measurement, not a decode failure. The stage matrix is not drawn for it.", on);
                 page.append(&c.root);
             }
             Outcome::Record {

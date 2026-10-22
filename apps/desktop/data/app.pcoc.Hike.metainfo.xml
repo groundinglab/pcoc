@@ -4,12 +4,12 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>Apache-2.0</project_license>
   <name>PCOC Hike</name>
-  <summary>Produce, verify and sign in with Satoshi Hike v2.0 objects</summary>
+  <summary>Produce, verify and sign in with SDK 2.2 objects</summary>
   <description>
     <p>
-      PCOC Hike records a Satoshi Hike v2.0 object against the Bitcoin header
-      chain, shows the section 14 record for any object, and submits one
-      groundinglab sign-in. It includes the PCOC Rust SDK in-process.
+      PCOC Hike checks kind v2.2-pcoc-object with the in-tree Rust SDK
+      (sdk/rust, version 2.2.0), shows the section 14 record, and submits one
+      groundinglab sign-in. The live header source is not in this build.
     </p>
     <p>
       An nsec is pasted or generated for the session. It stays in memory and
@@ -38,7 +38,7 @@
     </release>
     <release version="0.1.1" date="2026-10-15">
       <description>
-        <p>Built on the Rust reference ref-rust-v2.0.4.</p>
+        <p>The desktop app includes the Rust SDK in-process.</p>
       </description>
     </release>
     <release version="0.1.0" date="2026-10-09">
