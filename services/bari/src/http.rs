@@ -6,7 +6,7 @@
 //! `GET /health` is the readiness probe. It is served with `/ops`.
 
 use crate::clock::{BariClock, ClockError, PostAccept, TransitionReport};
-use crate::hashcash::{self, HASHCASH_NONCE_HEADER};
+use crate::hashcash::{self, HASHCASH_HEADER_HEADER, HASHCASH_NONCE_HEADER};
 use crate::operator;
 use crate::ops;
 use crate::storage::StoredPortableIndex;
@@ -27,6 +27,8 @@ struct ServiceState {
     /// Leading zero bits `POST /waypoint` requires.
     /// [`BariService::new`] stores 21. Tests pass a lower count.
     hashcash_bits: u32,
+    /// SPEC §13.1 serialization of Bari's public origin.
+    origin: String,
     /// `BARI_OPS_FIXTURE=1`. The ops page is the fixture. The clock is unused.
     ops_fixture: bool,
     instance: String,
@@ -49,9 +51,6 @@ pub fn health_json(tip: u32) -> String {
     .to_string()
 }
 
-/// Producer retries this sentence. It is only a one-header tip mismatch.
-const TIP_MISMATCH_BODY: &str = "Hashcash proof invalid for live tip challenge";
-
 /// Producer stops on this sentence. The waypoint itself was rejected.
 const PROOF_REJECTED_BODY: &str = "X-Bari-Hashcash-Nonce rejected";
 
@@ -62,13 +61,23 @@ pub struct BariService {
 
 impl BariService {
     /// Production constructor. The Hashcash difficulty is 21 (SPEC P13.5).
-    pub fn new(clock: BariClock) -> Self {
-        Self::with_hashcash_bits(clock, hashcash::HASHCASH_BITS)
+    /// `origin` is Bari's public URL; it is stored as the §13.1 serialization.
+    pub fn new(clock: BariClock, origin: &str) -> Result<Self, String> {
+        let origin = hashcash::bari_origin(origin)?;
+        Ok(Self::with_hashcash_bits(
+            clock,
+            hashcash::HASHCASH_BITS,
+            origin,
+        ))
     }
 
-    /// In-process tests pass a difficulty in `1..=21`.
-    /// The `bari` binary calls [`Self::new`] and does not use this.
-    pub fn with_hashcash_bits(clock: BariClock, hashcash_bits: u32) -> Self {
+    /// In-process tests pass a difficulty in `1..=21` and an already
+    /// serialized origin. The `bari` binary calls [`Self::new`].
+    pub fn with_hashcash_bits(
+        clock: BariClock,
+        hashcash_bits: u32,
+        origin: impl Into<String>,
+    ) -> Self {
         assert!(
             (1..=hashcash::HASHCASH_BITS).contains(&hashcash_bits),
             "hashcash bits must be 1..=21"
@@ -87,6 +96,7 @@ impl BariService {
             state: Arc::new(Mutex::new(ServiceState {
                 clock,
                 hashcash_bits,
+                origin: origin.into(),
                 ops_fixture,
                 instance,
                 started: std::time::SystemTime::now(),
@@ -207,33 +217,39 @@ impl BariService {
         self.queue_len()
     }
 
-    /// Verify Hashcash against the live tip and append under one lock.
+    /// Verify Hashcash against the fee header and append under one lock.
     /// A tip poll cannot land between the proof check and the pool write.
     ///
-    /// A proof that matches the previous tip, and not the live tip, is a
-    /// one-header mismatch. Any other failed proof rejects the waypoint.
-    fn accept_paid(&self, waypoint: Hash32, nonce: u64) -> Result<PaidAccept, ClockError> {
+    /// The header must be current, the previous tip, or (on the synthetic
+    /// plane) one block after. A header outside that window is rejected.
+    fn accept_paid(
+        &self,
+        waypoint: Hash32,
+        nonce: u64,
+        header: &[u8; 80],
+    ) -> Result<PaidAccept, ClockError> {
         let mut state = self
             .state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let tip = state.clock.current_tip();
+        let network = state.clock.network().to_owned();
+        let window = hashcash::fee_window(header, &tip.hash, tip.previous_hash.as_ref(), &network);
+        if window == hashcash::FeeWindow::Outside {
+            return Ok(PaidAccept::Rejected);
+        }
         let bits = state.hashcash_bits;
-        let challenge = hashcash::challenge_from_tip(&tip.hash);
-        if hashcash::verify(&challenge, &waypoint, nonce, bits) {
-            return match state.clock.post_waypoint(waypoint)? {
-                PostAccept::Queued => Ok(PaidAccept::Appended),
-                PostAccept::Duplicate => Ok(PaidAccept::AlreadyHeld),
-                PostAccept::Full => Ok(PaidAccept::Full),
-            };
+        let origin = state.origin.clone();
+        let hash = hashcash::header_hash(header);
+        let challenge = hashcash::challenge(&origin, &hash);
+        if !hashcash::verify(&challenge, &waypoint, nonce, bits) {
+            return Ok(PaidAccept::Rejected);
         }
-        if let Some(previous) = tip.previous_hash {
-            let previous_challenge = hashcash::challenge_from_tip(&previous);
-            if hashcash::verify(&previous_challenge, &waypoint, nonce, bits) {
-                return Ok(PaidAccept::TipMismatch);
-            }
+        match state.clock.post_waypoint(waypoint)? {
+            PostAccept::Queued => Ok(PaidAccept::Appended),
+            PostAccept::Duplicate => Ok(PaidAccept::AlreadyHeld),
+            PostAccept::Full => Ok(PaidAccept::Full),
         }
-        Ok(PaidAccept::Rejected)
     }
 }
 
@@ -241,7 +257,6 @@ enum PaidAccept {
     Appended,
     AlreadyHeld,
     Full,
-    TipMismatch,
     Rejected,
 }
 
@@ -308,9 +323,9 @@ async fn submit_waypoint(State(service): State<BariService>, request: Request) -
         .get(&nonce_header)
         .and_then(|v| v.to_str().ok())
     {
-        Some(raw) => match raw.trim().parse::<u64>() {
-            Ok(n) => n,
-            Err(_) => {
+        Some(raw) => match hashcash::parse_nonce(raw) {
+            Some(n) => n,
+            None => {
                 log_waypoint(
                     &service,
                     false,
@@ -338,6 +353,30 @@ async fn submit_waypoint(State(service): State<BariService>, request: Request) -
             return (
                 StatusCode::BAD_REQUEST,
                 "X-Bari-Hashcash-Nonce header required",
+            )
+                .into_response();
+        }
+    };
+    let fee_header_name = HeaderName::from_static(HASHCASH_HEADER_HEADER);
+    let fee_header = match request
+        .headers()
+        .get(&fee_header_name)
+        .and_then(|value| value.to_str().ok())
+        .and_then(hashcash::parse_fee_header)
+    {
+        Some(header) => header,
+        None => {
+            log_waypoint(
+                &service,
+                false,
+                StatusCode::BAD_REQUEST,
+                "X-Bari-Hashcash-Header must be 160 lowercase hex digits",
+                None,
+                None,
+            );
+            return (
+                StatusCode::BAD_REQUEST,
+                "X-Bari-Hashcash-Header must be 160 lowercase hex digits",
             )
                 .into_response();
         }
@@ -373,7 +412,7 @@ async fn submit_waypoint(State(service): State<BariService>, request: Request) -
             .note_malformed();
         return (StatusCode::BAD_REQUEST, "body must be exactly 32 raw bytes").into_response();
     };
-    match service.accept_paid(waypoint, nonce) {
+    match service.accept_paid(waypoint, nonce, &fee_header) {
         Ok(PaidAccept::Appended) => {
             log_waypoint(
                 &service,
@@ -412,17 +451,6 @@ async fn submit_waypoint(State(service): State<BariService>, request: Request) -
                 Some(json!({ "soft_max": soft_max })),
             );
             StatusCode::SERVICE_UNAVAILABLE.into_response()
-        }
-        Ok(PaidAccept::TipMismatch) => {
-            log_waypoint(
-                &service,
-                false,
-                StatusCode::BAD_REQUEST,
-                TIP_MISMATCH_BODY,
-                Some(&waypoint),
-                None,
-            );
-            (StatusCode::BAD_REQUEST, TIP_MISMATCH_BODY).into_response()
         }
         Ok(PaidAccept::Rejected) => {
             log_waypoint(
@@ -722,6 +750,15 @@ mod tests {
 
     /// Low difficulty for in-process posts. Production `BariService::new` stays at 21.
     const TEST_BITS: u32 = 8;
+    const TEST_ORIGIN: &str = "https://bari.test";
+
+    fn stamp_header() -> [u8; 80] {
+        hashcash::assemble_header(&[0x11; 32], 1_700_000_100, hashcash::SYNTH_NBITS, 1)
+    }
+
+    fn stamp_hash() -> Hash32 {
+        hashcash::header_hash(&stamp_header())
+    }
 
     struct ControllableState {
         tip: ChainTip,
@@ -831,14 +868,14 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let chain = Arc::new(ControllableChain::new(tip));
         let clock = BariClock::open(chain.clone(), FileStore::open(temp.path()).unwrap()).unwrap();
-        let service = BariService::with_hashcash_bits(clock, TEST_BITS);
+        let service = BariService::with_hashcash_bits(clock, TEST_BITS, TEST_ORIGIN);
         let router = service.router();
         (service, router, chain, temp)
     }
 
     fn app() -> (BariService, Router) {
         let (service, router, _, temp) = app_at(ChainTip {
-            hash: [1; 32],
+            hash: stamp_hash(),
             previous_hash: None,
             height: 1,
             time: None,
@@ -847,9 +884,18 @@ mod tests {
         (service, router)
     }
 
-    fn paid_post(tip_hash: Hash32, bytes: Vec<u8>) -> axum::http::Request<axum::body::Body> {
+    fn paid_post(bytes: Vec<u8>) -> axum::http::Request<axum::body::Body> {
+        post_header(&stamp_header(), bytes, TEST_ORIGIN)
+    }
+
+    fn post_header(
+        header: &[u8; 80],
+        bytes: Vec<u8>,
+        origin: &str,
+    ) -> axum::http::Request<axum::body::Body> {
         let waypoint: Hash32 = bytes.as_slice().try_into().unwrap_or([0u8; 32]);
-        let challenge = hashcash::challenge_from_tip(&tip_hash);
+        let hash = hashcash::header_hash(header);
+        let challenge = hashcash::challenge(origin, &hash);
         let nonce = if bytes.len() == 32 {
             hashcash::solve(&challenge, &waypoint, TEST_BITS)
         } else {
@@ -858,12 +904,13 @@ mod tests {
         axum::http::Request::post("/waypoint")
             .header(header::CONTENT_TYPE, "application/octet-stream")
             .header("X-Bari-Hashcash-Nonce", nonce.to_string())
+            .header("X-Bari-Hashcash-Header", hex::encode(header))
             .body(axum::body::Body::from(bytes))
             .unwrap()
     }
 
     fn post_wp(bytes: Vec<u8>) -> axum::http::Request<axum::body::Body> {
-        paid_post([1; 32], bytes)
+        paid_post(bytes)
     }
 
     #[tokio::test]
@@ -917,7 +964,7 @@ mod tests {
     async fn soft_max_maps_to_503_when_enabled() {
         let temp = tempfile::tempdir().unwrap();
         let tip = ChainTip {
-            hash: [1; 32],
+            hash: stamp_hash(),
             previous_hash: None,
             height: 1,
             time: None,
@@ -931,14 +978,20 @@ mod tests {
         )
         .unwrap();
         // Fill soft max via clock (bypass hashcash); HTTP maps Full → 503.
-        assert_eq!(filled.post_waypoint([0x01; 32]).unwrap(), PostAccept::Queued);
-        assert_eq!(filled.post_waypoint([0x02; 32]).unwrap(), PostAccept::Queued);
-        let service = BariService::with_hashcash_bits(filled, TEST_BITS);
+        assert_eq!(
+            filled.post_waypoint([0x01; 32]).unwrap(),
+            PostAccept::Queued
+        );
+        assert_eq!(
+            filled.post_waypoint([0x02; 32]).unwrap(),
+            PostAccept::Queued
+        );
+        let service = BariService::with_hashcash_bits(filled, TEST_BITS, TEST_ORIGIN);
         let app = service.router();
         let mut extra = [0xff; 32];
         extra[0] = 7;
         assert_eq!(
-            app.oneshot(paid_post([1; 32], extra.to_vec()))
+            app.oneshot(paid_post(extra.to_vec()))
                 .await
                 .unwrap()
                 .status(),
@@ -962,7 +1015,7 @@ mod tests {
     #[tokio::test]
     async fn s04_s05_post_and_queue_tick_do_not_publish() {
         let (service, app, _chain, _temp) = app_at(ChainTip {
-            hash: [1; 32],
+            hash: stamp_hash(),
             previous_hash: None,
             height: 10,
             time: None,
@@ -970,7 +1023,7 @@ mod tests {
         let before = service.index_snapshot();
         assert_eq!(before.header.height, 10);
         app.clone()
-            .oneshot(paid_post([1; 32], vec![0x11; 32]))
+            .oneshot(paid_post(vec![0x11; 32]))
             .await
             .unwrap();
         assert_eq!(service.index_snapshot(), before);
@@ -1014,7 +1067,7 @@ mod tests {
     #[tokio::test]
     async fn s14_s16_http_serving_window() {
         let (service, app, chain, _temp) = app_at(ChainTip {
-            hash: [1; 32],
+            hash: stamp_hash(),
             previous_hash: None,
             height: 100,
             time: None,
@@ -1022,7 +1075,7 @@ mod tests {
         let leaf = [0x71; 32];
         assert_eq!(
             app.clone()
-                .oneshot(paid_post([1; 32], leaf.to_vec()))
+                .oneshot(paid_post(leaf.to_vec()))
                 .await
                 .unwrap()
                 .status(),
@@ -1181,7 +1234,7 @@ mod tests {
     #[tokio::test]
     async fn bari_still_retains_index_blobs_on_disk_without_serving_them() {
         let tip0 = ChainTip {
-            hash: [1; 32],
+            hash: stamp_hash(),
             previous_hash: None,
             height: 100,
             time: None,
@@ -1234,10 +1287,9 @@ mod tests {
             .body(axum::body::Body::from(vec![0x42; 32]))
             .unwrap();
         assert_eq!(router.clone().oneshot(bare).await.unwrap().status(), 400);
-        // Force fail: use nonce that we know fails by verifying
-        let tip = [1u8; 32];
+        let header = stamp_header();
         let wp = [0x44u8; 32];
-        let challenge = hashcash::challenge_from_tip(&tip);
+        let challenge = hashcash::challenge(TEST_ORIGIN, &hashcash::header_hash(&header));
         let mut bad_nonce = 0u64;
         while hashcash::verify(&challenge, &wp, bad_nonce, TEST_BITS) {
             bad_nonce += 1;
@@ -1245,41 +1297,35 @@ mod tests {
         let req = axum::http::Request::post("/waypoint")
             .header(header::CONTENT_TYPE, "application/octet-stream")
             .header("X-Bari-Hashcash-Nonce", bad_nonce.to_string())
+            .header("X-Bari-Hashcash-Header", hex::encode(header))
             .body(axum::body::Body::from(wp.to_vec()))
             .unwrap();
         assert_eq!(router.oneshot(req).await.unwrap().status(), 400);
     }
 
     #[tokio::test]
-    async fn hashcash_bound_to_a_different_tip_is_rejected() {
+    async fn hashcash_bound_to_a_different_header_is_rejected() {
         let (service, router) = app();
-        let live = hashcash::challenge_from_tip(&[1u8; 32]);
-        let stale = hashcash::challenge_from_tip(&[9u8; 32]);
+        let live_header = stamp_header();
+        let stale_header = hashcash::assemble_header(&[0x09; 32], 1, hashcash::SYNTH_NBITS, 9);
         let waypoint = [0x44u8; 32];
-        let nonce = hashcash::solve(&stale, &waypoint, TEST_BITS);
-        assert!(
-            !hashcash::verify(&live, &waypoint, nonce, TEST_BITS),
-            "a far tip must not also satisfy the live challenge"
-        );
-        let rejected = axum::http::Request::post("/waypoint")
-            .header(header::CONTENT_TYPE, "application/octet-stream")
-            .header("X-Bari-Hashcash-Nonce", nonce.to_string())
-            .body(axum::body::Body::from(waypoint.to_vec()))
+        let response = router
+            .clone()
+            .oneshot(post_header(&stale_header, waypoint.to_vec(), TEST_ORIGIN))
+            .await
             .unwrap();
-        let response = router.clone().oneshot(rejected).await.unwrap();
         assert_eq!(response.status(), 400);
         let text = response_text(response).await;
         assert_eq!(text, PROOF_REJECTED_BODY);
         assert_eq!(service.pool_len(), 0);
-        let accepted = axum::http::Request::post("/waypoint")
-            .header(header::CONTENT_TYPE, "application/octet-stream")
-            .header(
-                "X-Bari-Hashcash-Nonce",
-                hashcash::solve(&live, &waypoint, TEST_BITS).to_string(),
-            )
-            .body(axum::body::Body::from(waypoint.to_vec()))
-            .unwrap();
-        assert_eq!(router.oneshot(accepted).await.unwrap().status(), 204);
+        assert_eq!(
+            router
+                .oneshot(post_header(&live_header, waypoint.to_vec(), TEST_ORIGIN))
+                .await
+                .unwrap()
+                .status(),
+            204
+        );
         assert_eq!(service.pool_len(), 1);
     }
 
@@ -1294,7 +1340,7 @@ mod tests {
     #[tokio::test]
     async fn ops_logs_waypoint_accept_reject_and_path_serve() {
         let (service, app, chain, _temp) = app_at(ChainTip {
-            hash: [1; 32],
+            hash: stamp_hash(),
             previous_hash: None,
             height: 80,
             time: None,
@@ -1317,7 +1363,8 @@ mod tests {
 
         let leaf = [0x62; 32];
         let leaf_hex = encode_hash32(&leaf);
-        let challenge = hashcash::challenge_from_tip(&[1; 32]);
+        let header = stamp_header();
+        let challenge = hashcash::challenge(TEST_ORIGIN, &hashcash::header_hash(&header));
         let mut bad_nonce = 0u64;
         while hashcash::verify(&challenge, &leaf, bad_nonce, TEST_BITS) {
             bad_nonce += 1;
@@ -1325,6 +1372,7 @@ mod tests {
         let bad = axum::http::Request::post("/waypoint")
             .header(header::CONTENT_TYPE, "application/octet-stream")
             .header("X-Bari-Hashcash-Nonce", bad_nonce.to_string())
+            .header("X-Bari-Hashcash-Header", hex::encode(header))
             .body(axum::body::Body::from(leaf.to_vec()))
             .unwrap();
         assert_eq!(app.clone().oneshot(bad).await.unwrap().status(), 400);
@@ -1360,7 +1408,7 @@ mod tests {
 
         assert_eq!(
             app.clone()
-                .oneshot(paid_post([1; 32], leaf.to_vec()))
+                .oneshot(paid_post(leaf.to_vec()))
                 .await
                 .unwrap()
                 .status(),
@@ -1384,7 +1432,7 @@ mod tests {
 
         assert_eq!(
             app.clone()
-                .oneshot(paid_post([1; 32], leaf.to_vec()))
+                .oneshot(paid_post(leaf.to_vec()))
                 .await
                 .unwrap()
                 .status(),
@@ -1501,7 +1549,7 @@ mod tests {
     #[tokio::test]
     async fn missing_path_says_which_case_and_a_served_path_validates() {
         let (service, app, chain, _temp) = app_at(ChainTip {
-            hash: [1; 32],
+            hash: stamp_hash(),
             previous_hash: None,
             height: 100,
             time: None,
@@ -1528,7 +1576,7 @@ mod tests {
 
         assert_eq!(
             app.clone()
-                .oneshot(paid_post([1; 32], leaf.to_vec()))
+                .oneshot(paid_post(leaf.to_vec()))
                 .await
                 .unwrap()
                 .status(),
@@ -1609,7 +1657,7 @@ mod tests {
     #[tokio::test]
     async fn served_path_is_200_bytes_for_that_waypoint() {
         let (service, app, chain, _temp) = app_at(ChainTip {
-            hash: [1; 32],
+            hash: stamp_hash(),
             previous_hash: None,
             height: 50,
             time: None,
@@ -1617,7 +1665,7 @@ mod tests {
         let leaf = [0x83; 32];
         assert_eq!(
             app.clone()
-                .oneshot(paid_post([1; 32], leaf.to_vec()))
+                .oneshot(paid_post(leaf.to_vec()))
                 .await
                 .unwrap()
                 .status(),
@@ -1657,7 +1705,7 @@ mod tests {
     #[tokio::test]
     async fn get_path_returns_inclusion_height_txid_and_merkle_path() {
         let (service, app, chain, _temp) = app_at(ChainTip {
-            hash: [1; 32],
+            hash: stamp_hash(),
             previous_hash: None,
             height: 50,
             time: None,
@@ -1665,7 +1713,7 @@ mod tests {
         let leaf = [0x91; 32];
         assert_eq!(
             app.clone()
-                .oneshot(paid_post([1; 32], leaf.to_vec()))
+                .oneshot(paid_post(leaf.to_vec()))
                 .await
                 .unwrap()
                 .status(),
@@ -1709,55 +1757,45 @@ mod tests {
         assert_eq!(body.block_height, 52);
     }
 
+    /// SPEC §13.6: a header whose hash is the previous tip is accepted.
+    /// A header outside current/before/after is the plain proof rejection.
     #[tokio::test]
-    async fn waypoint_rejection_stops_and_one_header_mismatch_is_distinct() {
+    async fn before_header_is_accepted_and_an_outside_header_is_rejected() {
+        let before =
+            hashcash::assemble_header(&[0x21; 32], 1_700_000_000, hashcash::SYNTH_NBITS, 3);
+        let before_hash = hashcash::header_hash(&before);
         let (service, app, chain, _temp) = app_at(ChainTip {
-            hash: [2; 32],
-            previous_hash: Some([1; 32]),
+            hash: stamp_hash(),
+            previous_hash: Some(before_hash),
             height: 20,
             time: None,
         });
         let leaf = [0x84; 32];
         let short = app.clone().oneshot(post_wp(vec![0x11; 31])).await.unwrap();
         assert_eq!(short.status(), 400);
-        let short_body = response_text(short).await;
-        assert_eq!(short_body, "body must be exactly 32 raw bytes");
-        assert!(!short_body.contains(TIP_MISMATCH_BODY));
+        assert_eq!(
+            response_text(short).await,
+            "body must be exactly 32 raw bytes"
+        );
 
-        let previous = hashcash::challenge_from_tip(&[1; 32]);
-        let live = hashcash::challenge_from_tip(&[2; 32]);
-        let mismatch = hashcash::solve(&previous, &leaf, TEST_BITS);
-        assert!(!hashcash::verify(&live, &leaf, mismatch, TEST_BITS));
-        let mismatched = axum::http::Request::post("/waypoint")
-            .header(header::CONTENT_TYPE, "application/octet-stream")
-            .header("X-Bari-Hashcash-Nonce", mismatch.to_string())
-            .body(axum::body::Body::from(leaf.to_vec()))
+        let outside = hashcash::assemble_header(&[0x99; 32], 1, hashcash::SYNTH_NBITS, 9);
+        let response = app
+            .clone()
+            .oneshot(post_header(&outside, leaf.to_vec(), TEST_ORIGIN))
+            .await
             .unwrap();
-        let response = app.clone().oneshot(mismatched).await.unwrap();
         assert_eq!(response.status(), 400);
-        assert_eq!(response_text(response).await, TIP_MISMATCH_BODY);
-        assert_eq!(service.pool_len(), 0);
-
-        let garbage = axum::http::Request::post("/waypoint")
-            .header(header::CONTENT_TYPE, "application/octet-stream")
-            .header("X-Bari-Hashcash-Nonce", "0")
-            .body(axum::body::Body::from(leaf.to_vec()))
-            .unwrap();
-        if !hashcash::verify(&live, &leaf, 0, TEST_BITS)
-            && !hashcash::verify(&previous, &leaf, 0, TEST_BITS)
-        {
-            let response = app.clone().oneshot(garbage).await.unwrap();
-            assert_eq!(response.status(), 400);
-            assert_eq!(response_text(response).await, PROOF_REJECTED_BODY);
-        }
+        assert_eq!(response_text(response).await, PROOF_REJECTED_BODY);
         assert_eq!(service.pool_len(), 0);
         assert_eq!(chain.state.lock().unwrap().plants, 0);
 
+        let live = hashcash::challenge(TEST_ORIGIN, &stamp_hash());
         let weak = hashcash::solve(&live, &leaf, 1);
         if !hashcash::verify(&live, &leaf, weak, TEST_BITS) {
             let weak_post = axum::http::Request::post("/waypoint")
                 .header(header::CONTENT_TYPE, "application/octet-stream")
                 .header("X-Bari-Hashcash-Nonce", weak.to_string())
+                .header("X-Bari-Hashcash-Header", hex::encode(stamp_header()))
                 .body(axum::body::Body::from(leaf.to_vec()))
                 .unwrap();
             let response = app.clone().oneshot(weak_post).await.unwrap();
@@ -1765,23 +1803,33 @@ mod tests {
             assert_eq!(response_text(response).await, PROOF_REJECTED_BODY);
         }
         assert_eq!(service.pool_len(), 0);
+
+        assert_eq!(
+            app.oneshot(post_header(&before, leaf.to_vec(), TEST_ORIGIN))
+                .await
+                .unwrap()
+                .status(),
+            204
+        );
+        assert_eq!(service.pool_len(), 1);
     }
 
     #[tokio::test]
     async fn production_constructor_rejects_an_8_bit_stamp() {
         let temp = tempfile::tempdir().unwrap();
         let tip = ChainTip {
-            hash: [1; 32],
+            hash: stamp_hash(),
             previous_hash: None,
             height: 1,
             time: None,
         };
         let chain = Arc::new(ControllableChain::new(tip));
         let clock = BariClock::open(chain, FileStore::open(temp.path()).unwrap()).unwrap();
-        let service = BariService::new(clock);
+        let service = BariService::new(clock, TEST_ORIGIN).unwrap();
         let app = service.router();
         let waypoint = [0x42; 32];
-        let challenge = hashcash::challenge_from_tip(&[1; 32]);
+        let header = stamp_header();
+        let challenge = hashcash::challenge(TEST_ORIGIN, &hashcash::header_hash(&header));
         let nonce = hashcash::solve(&challenge, &waypoint, 8);
         assert!(hashcash::verify(&challenge, &waypoint, nonce, 8));
         assert!(!hashcash::verify(
@@ -1795,6 +1843,7 @@ mod tests {
                 axum::http::Request::post("/waypoint")
                     .header(header::CONTENT_TYPE, "application/octet-stream")
                     .header("X-Bari-Hashcash-Nonce", nonce.to_string())
+                    .header("X-Bari-Hashcash-Header", hex::encode(header))
                     .body(axum::body::Body::from(waypoint.to_vec()))
                     .unwrap(),
             )
@@ -1803,5 +1852,78 @@ mod tests {
         assert_eq!(response.status(), 400);
         assert_eq!(response_text(response).await, PROOF_REJECTED_BODY);
         assert_eq!(service.pool_len(), 0);
+    }
+
+    /// Candidate fee, solved at 21 bits, is accepted when the tip hash is that
+    /// header and the origin is the candidate origin. Another origin is refused.
+    #[tokio::test]
+    async fn candidate_fee_is_accepted_and_another_origin_is_refused() {
+        let fields = candidate_fields();
+        let origin = fields["hashcash.bari_origin"].clone();
+        let header = hashcash::parse_fee_header(&fields["hashcash.fee_header"]).unwrap();
+        let hash = hashcash::header_hash(&header);
+        let waypoint = hex::decode(&fields["hashcash.waypoint"]).unwrap();
+        let nonce = fields["hashcash.nonce"].clone();
+        let temp = tempfile::tempdir().unwrap();
+        let tip = ChainTip {
+            hash,
+            previous_hash: None,
+            height: 1,
+            time: None,
+        };
+        let chain = Arc::new(ControllableChain::new(tip));
+        let clock = BariClock::open(chain, FileStore::open(temp.path()).unwrap()).unwrap();
+        let service = BariService::new(clock, &origin).unwrap();
+        let app = service.router();
+        let wrong = BariService::with_hashcash_bits(
+            {
+                let temp = tempfile::tempdir().unwrap();
+                let chain = Arc::new(ControllableChain::new(tip));
+                let clock = BariClock::open(chain, FileStore::open(temp.path()).unwrap()).unwrap();
+                std::mem::forget(temp);
+                clock
+            },
+            hashcash::HASHCASH_BITS,
+            "https://other.example",
+        );
+        let refused = wrong
+            .router()
+            .oneshot(candidate_post(&header, &nonce, &waypoint))
+            .await
+            .unwrap();
+        assert_eq!(refused.status(), 400);
+        assert_eq!(response_text(refused).await, PROOF_REJECTED_BODY);
+        let accepted = app
+            .oneshot(candidate_post(&header, &nonce, &waypoint))
+            .await
+            .unwrap();
+        assert_eq!(accepted.status(), 204);
+        assert_eq!(service.pool_len(), 1);
+    }
+
+    fn candidate_post(
+        header: &[u8; 80],
+        nonce: &str,
+        waypoint: &[u8],
+    ) -> axum::http::Request<axum::body::Body> {
+        axum::http::Request::post("/waypoint")
+            .header(header::CONTENT_TYPE, "application/octet-stream")
+            .header("X-Bari-Hashcash-Nonce", nonce)
+            .header("X-Bari-Hashcash-Header", hex::encode(header))
+            .body(axum::body::Body::from(waypoint.to_vec()))
+            .unwrap()
+    }
+
+    fn candidate_fields() -> std::collections::HashMap<String, String> {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../sdk/rust/candidates/hashcash.txt");
+        let text = std::fs::read_to_string(path).unwrap();
+        text.lines()
+            .filter(|line| !line.is_empty() && !line.starts_with('#'))
+            .map(|line| {
+                let (key, value) = line.split_once('\t').unwrap();
+                (key.to_owned(), value.to_owned())
+            })
+            .collect()
     }
 }

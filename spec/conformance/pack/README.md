@@ -44,7 +44,7 @@ Each row is something SPEC §16 says the pack publishes, or a permanent negative
 | integer rate comparisons | missing | No vector. |
 | anchor comparisons | missing | The previous anchor files publish `object_hex` and a section 14 record. §16 says this pack publishes neither. |
 | thorough-round index draw | missing | No vector. §16 also says this pack does not publish `draw_bytes_hex`. |
-| Hashcash challenge and digest for a stated origin and fee header | missing | The Bari file `services/bari/tests/vectors/hashcash-21.txt` uses the prefix `bari-hc-v1` and binds a tip. §13.1 uses `bari-hc-v2`, the Bari origin, and the fee-header hash. |
+| Hashcash challenge and digest for a stated origin and fee header | missing | No generated vector. §13.1 binds the Bari origin and the double SHA-256 of the fee header. Not copied. |
 | Bari paid rule, current fee header | missing | No vector. |
 | Bari paid rule, before fee header | missing | No vector. |
 | Bari paid rule, after fee header | missing | No vector. |

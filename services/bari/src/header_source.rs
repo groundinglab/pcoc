@@ -6,9 +6,10 @@
 //! live network. It is not a pin to an older SDK.
 //!
 //! The synth wire is newline-delimited JSON, one tip per line:
-//! `{"hash","height","previous","n_time"}`. Hash and previous are natural-order
-//! hex. `n_time` is the header's unix seconds (SPEC §9 header time). Zero is a
-//! real time.
+//! `{"hash","height","previous","n_time","header"}`. Hash and previous are
+//! natural-order hex. `header` is the 80-byte header as 160 lowercase hex
+//! digits. `hash` is SHA-256d of that header. `n_time` is the header's unix
+//! seconds (SPEC §9 header time). Zero is a real time.
 
 use crate::{decode_bitcoin_id, Hash32};
 use serde_json::Value;
@@ -24,6 +25,8 @@ pub struct TipTick {
     pub height: u64,
     pub previous: Option<Hash32>,
     pub n_time: u32,
+    /// The 80-byte header whose SHA-256d is `hash`.
+    pub header: [u8; 80],
 }
 
 /// Which header wire this clock speaks.
@@ -43,7 +46,9 @@ pub struct HeaderError {
 
 enum ClockState {
     /// Live source. Every wait fails closed.
-    Closed { message: String },
+    Closed {
+        message: String,
+    },
     Synth(TcpStream),
 }
 
@@ -76,7 +81,9 @@ impl HeaderClock {
                             if std::time::Instant::now() > deadline {
                                 return Self {
                                     state: ClockState::Closed {
-                                        message: format!("synth peer {peer} did not accept: {error}"),
+                                        message: format!(
+                                            "synth peer {peer} did not accept: {error}"
+                                        ),
                                     },
                                 };
                             }
@@ -121,11 +128,19 @@ pub fn serve_synth(bind: &str, interval: Duration) -> Result<(), String> {
         let mut height = 100u64;
         let mut previous: Option<Hash32> = None;
         loop {
+            let n_time = 1_700_000_000u32.saturating_add(height as u32);
+            let header = crate::hashcash::assemble_header(
+                &previous.unwrap_or([0u8; 32]),
+                n_time,
+                crate::hashcash::SYNTH_NBITS,
+                height as u32,
+            );
             let tick = TipTick {
-                hash: tip_hash(height),
+                hash: crate::hashcash::header_hash(&header),
                 height,
                 previous,
-                n_time: 1_700_000_000u32.saturating_add(height as u32),
+                n_time,
+                header,
             };
             if write_tick(&mut stream, &tick).is_err() {
                 break;
@@ -138,25 +153,18 @@ pub fn serve_synth(bind: &str, interval: Duration) -> Result<(), String> {
     Ok(())
 }
 
-fn tip_hash(height: u64) -> Hash32 {
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(b"pcoc-bari-synth-tip-v1");
-    hasher.update(height.to_le_bytes());
-    hasher.finalize().into()
-}
-
 fn write_tick(stream: &mut TcpStream, tick: &TipTick) -> Result<(), ()> {
     let previous = match tick.previous {
         Some(hash) => format!("\"{}\"", hex::encode(hash)),
         None => "null".to_owned(),
     };
     let line = format!(
-        "{{\"hash\":\"{}\",\"height\":{},\"previous\":{},\"n_time\":{}}}\n",
+        "{{\"hash\":\"{}\",\"height\":{},\"previous\":{},\"n_time\":{},\"header\":\"{}\"}}\n",
         hex::encode(tick.hash),
         tick.height,
         previous,
-        tick.n_time
+        tick.n_time,
+        hex::encode(tick.header)
     );
     stream.write_all(line.as_bytes()).map_err(|_| ())?;
     stream.flush().map_err(|_| ())
@@ -201,9 +209,12 @@ fn parse_tick(line: &str) -> Result<TipTick, HeaderError> {
         message: format!("synth tip is not json: {error}"),
     })?;
     let hash = parse_hash(value.get("hash"))?;
-    let height = value.get("height").and_then(Value::as_u64).ok_or_else(|| HeaderError {
-        message: "synth tip has no height".to_owned(),
-    })?;
+    let height = value
+        .get("height")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| HeaderError {
+            message: "synth tip has no height".to_owned(),
+        })?;
     let previous = match value.get("previous") {
         None | Some(Value::Null) => None,
         Some(_) => Some(parse_hash(value.get("previous"))?),
@@ -215,11 +226,24 @@ fn parse_tick(line: &str) -> Result<TipTick, HeaderError> {
         .ok_or_else(|| HeaderError {
             message: "synth tip has no n_time".to_owned(),
         })?;
+    let header = value
+        .get("header")
+        .and_then(Value::as_str)
+        .and_then(crate::hashcash::parse_fee_header)
+        .ok_or_else(|| HeaderError {
+            message: "synth tip has no header".to_owned(),
+        })?;
+    if crate::hashcash::header_hash(&header) != hash {
+        return Err(HeaderError {
+            message: "synth tip hash is not the header hash".to_owned(),
+        });
+    }
     Ok(TipTick {
         hash,
         height,
         previous,
         n_time,
+        header,
     })
 }
 

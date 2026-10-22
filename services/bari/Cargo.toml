@@ -34,6 +34,8 @@ subtle = "=2.5.0"
 hyper-util = "=0.1.20"
 # 3.25+ can pull getrandom 0.4 (edition 2024). 3.24 still has TempDir::keep and getrandom 0.3.
 tempfile = "=3.24.0"
+# SPEC §13.1 Hashcash. The SDK has no header-source dependency.
+pcoc = { path = "../../sdk/rust/pcoc" }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 

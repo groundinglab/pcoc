@@ -1,6 +1,6 @@
-use pcoc_bari::header_source::{GossipNetwork, HeaderClock, TipTick};
 use pcoc_bari::bitcoin_rpc::{BitcoinRpc, BitcoinRpcConfig, RpcAuth, UtxoPolicy};
 use pcoc_bari::clock::{BariClock, ChainTip};
+use pcoc_bari::header_source::{GossipNetwork, HeaderClock, TipTick};
 use pcoc_bari::http::BariService;
 use pcoc_bari::operator::VERSION as BARI_VERSION;
 use pcoc_bari::storage::FileStore;
@@ -46,6 +46,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         return serve_ops_fixture().await;
     }
     let data_dir = required_path("BARI_DATA_DIR")?;
+    let origin = public_origin()?;
     let bind_address: SocketAddr = env::var("BARI_BIND_ADDR")
         .unwrap_or_else(|_| "127.0.0.1:38080".to_owned())
         .parse()?;
@@ -60,7 +61,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 BariClock::open_for_network_with_soft_max(backend, store, &network, soft_max)?;
             let initial_tip = clock.current_tip();
             let confirmation_window_tips = clock.confirmation_window_tips();
-            let service = BariService::new(clock);
+            let service = BariService::new(clock, &origin)?;
             let listener = tokio::net::TcpListener::bind(bind_address).await?;
             eprintln!(
                 "bari v{BARI_VERSION} network={} bind={} data={} tip_height={} tip_hash={} poll_ms={} hashcash_bits={} soft_max={:?} confirmation_window_tips={confirmation_window_tips} tip_source=rpc {fee_label}",
@@ -107,7 +108,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             )?;
             let initial_tip = clock.current_tip();
             let confirmation_window_tips = clock.confirmation_window_tips();
-            let service = BariService::new(clock);
+            let service = BariService::new(clock, &origin)?;
             let listener = tokio::net::TcpListener::bind(bind_address).await?;
             eprintln!(
                 "bari v{BARI_VERSION} network={} bind={} data={} tip_height={} tip_hash={} hashcash_bits={} soft_max={:?} confirmation_window_tips={confirmation_window_tips} tip_source=synth plant=synth-commit peer={}",
@@ -150,7 +151,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let clock = BariClock::open_at_supplied_tip(backend, store, tip, &network, soft_max)?;
             let initial_tip = clock.current_tip();
             let confirmation_window_tips = clock.confirmation_window_tips();
-            let service = BariService::new(clock);
+            let service = BariService::new(clock, &origin)?;
             let listener = tokio::net::TcpListener::bind(bind_address).await?;
             eprintln!(
                 "bari v{BARI_VERSION} network={} bind={} data={} tip_height={} tip_hash={} hashcash_bits={} soft_max={:?} confirmation_window_tips={confirmation_window_tips} tip_source=bitcoin-gossip plant=bitcoin-core peer={} {fee_label}",
@@ -175,6 +176,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     Ok(())
+}
+
+/// SPEC §13.1. Bari's own public origin, serialized before it is stored.
+fn public_origin() -> Result<String, Box<dyn std::error::Error>> {
+    let raw = env::var("BARI_PUBLIC_ORIGIN").map_err(|_| {
+        "BARI_PUBLIC_ORIGIN is required: the public http or https origin of this Bari"
+    })?;
+    Ok(pcoc_bari::hashcash::bari_origin(&raw)?.into())
 }
 
 fn ops_fixture_requested() -> bool {

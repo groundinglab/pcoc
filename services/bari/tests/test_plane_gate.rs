@@ -16,15 +16,15 @@ use std::time::{Duration, Instant};
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use pcoc_bari::header_source::{
-    judge_test_policy, live_plane_host, parse_index_document, serve_synth, GateJudgment, GateSkip,
-    GossipNetwork, HeaderClock, TestGateMeasurement, TipTick,
-};
 use pcoc_bari::clock::{
     BariClock, ChainBackend, ChainError, ChainPostCheck, ChainTip, PlantError, PlantReceipt,
     SkipReason,
 };
-use pcoc_bari::hashcash::{self, HASHCASH_NONCE_HEADER};
+use pcoc_bari::hashcash::{self, HASHCASH_HEADER_HEADER, HASHCASH_NONCE_HEADER};
+use pcoc_bari::header_source::{
+    judge_test_policy, live_plane_host, parse_index_document, serve_synth, GateJudgment, GateSkip,
+    GossipNetwork, HeaderClock, TestGateMeasurement, TipTick,
+};
 use pcoc_bari::http::BariService;
 use pcoc_bari::proof::CanonicalPathBody;
 use pcoc_bari::storage::{FileStore, StoredInclusion};
@@ -34,6 +34,7 @@ use tower::ServiceExt;
 
 /// Low difficulty for this in-process gate. Production `BariService::new` stays at 21.
 const BITS: u32 = 8;
+const ORIGIN: &str = "https://bari.test";
 
 struct CountingChain {
     included: Mutex<bool>,
@@ -135,7 +136,10 @@ fn spawn_synth() -> String {
     peer
 }
 
-async fn next_tips(mut headers: HeaderClock, after: Option<[u8; 32]>) -> (HeaderClock, Vec<TipTick>) {
+async fn next_tips(
+    mut headers: HeaderClock,
+    after: Option<[u8; 32]>,
+) -> (HeaderClock, Vec<TipTick>) {
     tokio::task::spawn_blocking(move || {
         headers
             .wait_tips_after(after)
@@ -146,13 +150,15 @@ async fn next_tips(mut headers: HeaderClock, after: Option<[u8; 32]>) -> (Header
     .expect("wait thread")
 }
 
-fn paid(tip: [u8; 32], leaf: [u8; 32]) -> Request<Body> {
-    let nonce = hashcash::solve(&hashcash::challenge_from_tip(&tip), &leaf, BITS);
+fn paid(header: &[u8; 80], leaf: [u8; 32]) -> Request<Body> {
+    let hash = hashcash::header_hash(header);
+    let nonce = hashcash::solve(&hashcash::challenge(ORIGIN, &hash), &leaf, BITS);
     Request::builder()
         .method("POST")
         .uri("/waypoint")
         .header("content-type", "application/octet-stream")
         .header(HASHCASH_NONCE_HEADER, nonce.to_string())
+        .header(HASHCASH_HEADER_HEADER, hex::encode(header))
         .body(Body::from(leaf.to_vec()))
         .unwrap()
 }
@@ -174,6 +180,7 @@ struct Opened {
     chain: std::sync::Arc<CountingChain>,
     headers: Option<HeaderClock>,
     tip_hash: [u8; 32],
+    tip_header: [u8; 80],
     _temp: tempfile::TempDir,
 }
 
@@ -183,6 +190,7 @@ async fn open_on_synth() -> Opened {
     let (headers, ticks) = next_tips(headers, None).await;
     let tick = ticks.first().expect("open tip");
     let tip_hash = tick.hash;
+    let tip_header = tick.header;
     let chain = std::sync::Arc::new(CountingChain::new());
     let temp = tempfile::tempdir().unwrap();
     let clock = BariClock::open_at_supplied_tip(
@@ -194,10 +202,11 @@ async fn open_on_synth() -> Opened {
     )
     .unwrap();
     Opened {
-        service: BariService::with_hashcash_bits(clock, BITS),
+        service: BariService::with_hashcash_bits(clock, BITS, ORIGIN),
         chain,
         headers: Some(headers),
         tip_hash,
+        tip_header,
         _temp: temp,
     }
 }
@@ -213,7 +222,7 @@ async fn take_tips(opened: &mut Opened, after: Option<[u8; 32]>) -> Vec<TipTick>
 async fn one_object_on_the_synth_tip_passes_the_test_gate() {
     let mut opened = open_on_synth().await;
     let leaf = [0x71; 32];
-    let posted = status_of(opened.service.router(), paid(opened.tip_hash, leaf)).await;
+    let posted = status_of(opened.service.router(), paid(&opened.tip_header, leaf)).await;
     assert_eq!(posted, StatusCode::NO_CONTENT);
 
     *opened.chain.included.lock().unwrap() = true;
@@ -271,10 +280,10 @@ async fn synth_commit_serves_the_path_without_bitcoin_core() {
         None,
     )
     .unwrap();
-    let service = BariService::with_hashcash_bits(clock, BITS);
+    let service = BariService::with_hashcash_bits(clock, BITS, ORIGIN);
     let leaf = [0x74; 32];
     assert_eq!(
-        status_of(service.router(), paid(opened.hash, leaf)).await,
+        status_of(service.router(), paid(&opened.header, leaf)).await,
         StatusCode::NO_CONTENT
     );
 
@@ -352,7 +361,7 @@ async fn skip_is_recorded_beside_the_gate() {
     let mut opened = open_on_synth().await;
     let leaf = [0x72; 32];
     assert_eq!(
-        status_of(opened.service.router(), paid(opened.tip_hash, leaf)).await,
+        status_of(opened.service.router(), paid(&opened.tip_header, leaf)).await,
         StatusCode::NO_CONTENT
     );
 
@@ -401,9 +410,9 @@ async fn skip_is_recorded_beside_the_gate() {
 async fn hashcash_for_a_different_tip_is_400_and_not_the_gate() {
     let opened = open_on_synth().await;
     let leaf = [0x73; 32];
-    let other = [0xEE; 32];
-    assert_ne!(other, opened.tip_hash);
-    let status = status_of(opened.service.router(), paid(other, leaf)).await;
+    let other = hashcash::assemble_header(&[0xEE; 32], 1, hashcash::SYNTH_NBITS, 9);
+    assert_ne!(hashcash::header_hash(&other), opened.tip_hash);
+    let status = status_of(opened.service.router(), paid(&other, leaf)).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(opened.chain.plants.load(Ordering::SeqCst), 0);
     assert_eq!(opened.chain.best_tip_calls.load(Ordering::SeqCst), 0);

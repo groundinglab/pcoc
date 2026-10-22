@@ -3409,6 +3409,7 @@ mod tests {
             height: 101,
             previous: Some([1; 32]),
             n_time: 1_700_000_050,
+            header: [0; 80],
         };
         let tip = ChainTip::from_gossip_tick(&tick).unwrap();
         assert_eq!(tip.time, Some(1_700_000_050));
@@ -3425,6 +3426,7 @@ mod tests {
             height: 102,
             previous: Some([2; 32]),
             n_time: 0,
+            header: [0; 80],
         })
         .unwrap();
         assert_eq!(epoch.time, Some(0));

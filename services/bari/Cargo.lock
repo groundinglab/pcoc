@@ -471,6 +471,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
+name = "pcoc"
+version = "2.2.0"
+dependencies = [
+ "cpufeatures",
+ "sha2",
+]
+
+[[package]]
 name = "pcoc-bari"
 version = "0.6.8"
 dependencies = [
@@ -480,6 +488,7 @@ dependencies = [
  "hex",
  "http-body-util",
  "hyper-util",
+ "pcoc",
  "serde",
  "serde_json",
  "sha2",
@@ -665,9 +674,9 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.10.9"
+version = "0.10.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
+checksum = "793db75ad2bcafc3ffa7c68b215fee268f537982cd901d132f89c6343f3a3dc8"
 dependencies = [
  "cfg-if",
  "cpufeatures",
