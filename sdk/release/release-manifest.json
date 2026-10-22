@@ -3,23 +3,23 @@
   "release": {
     "version": "2.2.0",
     "date": "2026-10-23",
-    "commit": "de802b2f0e85259789f35f6dbed57265e4bd274b",
+    "commit": "c295b8534ae827d529bc88134d8b06d43e32fcd0",
     "notes": "Parent of the commit that adds this file. Tags are not cut."
   },
   "spec": {
     "version": "2.2",
     "erratum": 2,
     "tag": "spec-2.2.0",
-    "url": "https://github.com/groundinglab/pcoc/blob/sdk22/integ-phaseA/spec/satoshi-hike-v2.2/SPEC.md",
-    "erratum_url": "https://github.com/groundinglab/pcoc/blob/spec/erratum-2/spec/satoshi-hike-v2.2/ERRATUM-2.md",
-    "pack_url": "https://github.com/groundinglab/pcoc/tree/sdk22/integ-phaseA/spec/conformance/pack",
+    "url": "https://github.com/groundinglab/pcoc/blob/spec-2.2.0/spec/satoshi-hike-v2.2/SPEC.md",
+    "erratum_url": "https://github.com/groundinglab/pcoc/blob/spec-2.2.0/spec/satoshi-hike-v2.2/ERRATUM-2.md",
+    "pack_url": "https://github.com/groundinglab/pcoc/tree/spec-2.2.0/spec/conformance/pack",
     "pack_manifest_sha256": "91ded57e5c05b7cb4cd74d313a51d83d2373fa86dc625df41faed9586e9032af",
     "pack_status": "complete"
   },
   "links": {
     "interop_evidence": "https://github.com/groundinglab/pcoc/tree/interop/evidence-2.2/spec/conformance/interop",
     "policy_page": "https://groundinglab.io/admission-gate/policy/",
-    "policy_file": "https://github.com/groundinglab/pcoc/blob/sdk22/gate-complete/policy/groundinglab-admission/gl-admit-v9.toml"
+    "policy_file": "https://github.com/groundinglab/pcoc/blob/spec-2.2.0/policy/groundinglab-admission/gl-admit-v9.toml"
   },
   "conformance": {
     "objects": {

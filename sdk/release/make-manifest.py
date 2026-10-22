@@ -71,16 +71,17 @@ def main() -> None:
             "version": "2.2",
             "erratum": 2,
             "tag": "spec-2.2.0",
-            "url": "https://github.com/groundinglab/pcoc/blob/sdk22/integ-phaseA/spec/satoshi-hike-v2.2/SPEC.md",
-            "erratum_url": "https://github.com/groundinglab/pcoc/blob/spec/erratum-2/spec/satoshi-hike-v2.2/ERRATUM-2.md",
-            "pack_url": "https://github.com/groundinglab/pcoc/tree/sdk22/integ-phaseA/spec/conformance/pack",
+            # Blob and tree links use the release tag. The old branch names are gone.
+            "url": "https://github.com/groundinglab/pcoc/blob/spec-2.2.0/spec/satoshi-hike-v2.2/SPEC.md",
+            "erratum_url": "https://github.com/groundinglab/pcoc/blob/spec-2.2.0/spec/satoshi-hike-v2.2/ERRATUM-2.md",
+            "pack_url": "https://github.com/groundinglab/pcoc/tree/spec-2.2.0/spec/conformance/pack",
             "pack_manifest_sha256": manifest_sha,
             "pack_status": json.loads((ROOT / "spec/conformance/pack/manifest.json").read_text())["status"],
         },
         "links": {
             "interop_evidence": "https://github.com/groundinglab/pcoc/tree/interop/evidence-2.2/spec/conformance/interop",
             "policy_page": "https://groundinglab.io/admission-gate/policy/",
-            "policy_file": "https://github.com/groundinglab/pcoc/blob/sdk22/gate-complete/policy/groundinglab-admission/gl-admit-v9.toml",
+            "policy_file": "https://github.com/groundinglab/pcoc/blob/spec-2.2.0/policy/groundinglab-admission/gl-admit-v9.toml",
         },
         "conformance": {
             "objects": {
