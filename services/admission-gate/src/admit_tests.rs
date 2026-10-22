@@ -1474,15 +1474,12 @@ fn each_loaded_lever_changes_what_the_gate_does() {
     assert!(signed.thorough.is_some(), "{:?}", chain(&door));
     release_slot(&door, &signed);
 
-    let absent = v9();
-    assert_eq!(
-        absent.verify_cap_per_door_session,
-        crate::levers::VERIFY_CAP_PER_DOOR_SESSION_AWAITING_POLICY
-    );
-    let door = open_door(absent, "http://127.0.0.1:9");
+    let loaded = v9();
+    assert_eq!(loaded.verify_cap_per_door_session, 3);
+    let n = loaded.verify_cap_per_door_session;
+    let door = open_door(loaded, "http://127.0.0.1:9");
     door.set_now_unix_s(Some(4_000));
     door.test_set_store_start(0);
-    let n = crate::levers::VERIFY_CAP_PER_DOOR_SESSION_AWAITING_POLICY;
     for i in 0..n {
         let mut nonce = [50u8; 32];
         nonce[0] = i as u8;
@@ -1495,6 +1492,35 @@ fn each_loaded_lever_changes_what_the_gate_does() {
     nonce[0] = n as u8;
     let body = signed_unknown(&secp, &keypair, &public, nonce, 4_100, 9);
     assert!(door.sign_in_locked(body).thorough.is_none());
+}
+
+/// The shipped policy file sets `verify_cap_per_door_session`, and load reads it.
+#[test]
+fn shipped_policy_reads_verify_cap_per_door_session() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../policy/groundinglab-admission/gl-admit-v9.toml");
+    let raw = std::fs::read_to_string(&path).unwrap();
+    let set = raw.lines().any(|line| {
+        let line = line.trim();
+        !line.starts_with('#') && line.starts_with("verify_cap_per_door_session")
+    });
+    assert!(set, "gl-admit-v9.toml does not set verify_cap_per_door_session");
+    let loaded = crate::levers::load(&raw, 2).expect("shipped policy");
+    assert_eq!(loaded.verify_cap_per_door_session, 3);
+    let four = raw.replace("verify_cap_per_door_session  = 3", "verify_cap_per_door_session  = 4");
+    assert_ne!(four, raw);
+    let loaded = crate::levers::load(&four, 2).expect("cap 4");
+    assert_eq!(loaded.verify_cap_per_door_session, 4);
+    let absent = raw
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("verify_cap_per_door_session"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let loaded = crate::levers::load(&absent, 2).expect("absent key");
+    assert_eq!(
+        loaded.verify_cap_per_door_session,
+        crate::levers::VERIFY_CAP_PER_DOOR_SESSION_AWAITING_POLICY
+    );
 }
 
 /// AC-G12. Rule I4 on a mock clock: restart, flush, two workers.

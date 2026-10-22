@@ -25,7 +25,7 @@ A policy sets the SPEC's §15.4 levers to values inside their ranges. It never c
 | `fast_accept_bound` | 2 s | policy | Earlier `default`-profile figure. |
 | `async_catch_budget` | 22.05 s | policy | Times the parallel checkpoint-digest pass. It does not include recomputing legs. |
 | `verify_cap_per_object` | unset | SPEC default | The earlier candidate was 1. Set it if compute abuse appears. |
-| `verify_cap_per_door_session` | unset | SPEC default | The earlier candidate was 3. |
+| `verify_cap_per_door_session` | 3 | policy | SPEC default is unset. This file sets 3. The gate reads the key. |
 | `fake_leg_ignore_seconds` | unset (no expiry) | SPEC default | A fake leg ignores that key at this gate permanently. |
 
 ## 2. Fixed by the SPEC, not set here

@@ -33,14 +33,12 @@ const REQUIRED: &[&str] = &[
     "async_catch_budget",
 ];
 
-/// SPEC §15.4 default of `verify_cap_per_door_session` is unset. gl-admit-v9
-/// leaves the key commented, so the file does not set it. Until that key is
-/// an explicit policy value, the gate reads this one constant and no other
-/// literal. Awaiting Christian's policy call. The one-line TOML change is
-/// `verify_cap_per_door_session = 3`.
+/// SPEC §15.4 default of `verify_cap_per_door_session` is unset. This constant
+/// applies only when the key is absent. `gl-admit-v9.toml` sets the key to 3,
+/// and `load` reads that value.
 pub const VERIFY_CAP_PER_DOOR_SESSION_AWAITING_POLICY: u64 = 3;
 
-/// The door-session cap from the file, or the one awaiting-policy constant.
+/// The door-session cap from the file. An absent key uses the constant above.
 pub fn door_session_cap(parsed: Option<u64>) -> u64 {
     parsed.unwrap_or(VERIFY_CAP_PER_DOOR_SESSION_AWAITING_POLICY)
 }
