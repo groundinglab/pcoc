@@ -52,8 +52,11 @@ type VerifyInput struct {
 // Verify measures in under SPEC §14.
 //
 // A malformed CBOR value returns the section 14 record whose shape_item is
-// exactly ["malformed cbor"]. A decode failure returns decFail true and no
-// record. An unknown kind returns the Rule A5 record.
+// exactly ["malformed cbor"]. Erratum 2 E01: a kind whose bytes are not
+// valid UTF-8 is that value, not Rule A5 and not a decode failure.
+// Erratum 2 E02 sets that record's path and count fields to not defined.
+// A decode failure returns decFail true and no record. An unknown kind
+// returns the Rule A5 record.
 func Verify(in VerifyInput) (record []byte, decFail bool) {
 	dr := DecodeObject(in.Object)
 	switch dr.Class {
@@ -110,6 +113,10 @@ func encodeRecord(p Profile, rb recordBody) []byte {
 	key("shape_item", jsonStringArray(rb.shapeItem))
 
 	if rb.malformed {
+		// Erratum 2 (E02). No stage was decoded and there is no path byte
+		// string, so path_state, plant, checkpoint counts, whole_hike_legs,
+		// and hike_legs are not defined. skip_list stays empty: skip is only
+		// an empty path byte string on a decoded stage (Rule A4.5).
 		key("headers", notDefHeaders())
 		key("seed_value", str("mismatch"))
 		key("checkpoints", notDefStages())
@@ -236,6 +243,9 @@ func notDefWaypoints() string {
 	return b.String()
 }
 
+// notDefPaths is the paths array for a malformed CBOR value (erratum 2 E02).
+// path_state and plant are not defined. skip and n/a belong to a decoded
+// empty path byte string, which this input is not.
 func notDefPaths() string {
 	var b strings.Builder
 	b.WriteByte('[')
@@ -246,7 +256,7 @@ func notDefPaths() string {
 		if g < 17 {
 			b.WriteString(`{"g":`)
 			b.WriteString(strconv.Itoa(g))
-			b.WriteString(`,"path_state":"skip","plant":"n/a","P_g":"not defined","height_P_g":"not defined","d_g":"not defined","claimed_block":"not defined"}`)
+			b.WriteString(`,"path_state":"not defined","plant":"not defined","P_g":"not defined","height_P_g":"not defined","d_g":"not defined","claimed_block":"not defined"}`)
 		} else {
 			b.WriteString(`{"g":17,"w17_path":"not defined","claimed_block":"not defined"}`)
 		}
@@ -544,16 +554,20 @@ func sixRunsRaw(rb recordBody) string {
 	return b.String()
 }
 
-func analysisRaw(rb recordBody, bare bool) string {
+// analysisRaw writes the analysis object. malformed is the erratum 2 (E02)
+// branch: there is no decoded stage, so the checkpoint counts,
+// whole_hike_legs, and hike_legs are not defined. The other branch records
+// the integer count, including zero for a decoded empty checkpoint list.
+func analysisRaw(rb recordBody, malformed bool) string {
 	var b strings.Builder
 	b.WriteString(`{"whole_hike_legs":`)
-	if bare {
-		b.WriteString("0")
+	if malformed {
+		b.WriteString(`"not defined"`)
 	} else {
 		b.WriteString(strconv.Itoa(rb.wholeLegs))
 	}
 	b.WriteString(`,"whole_hike_span":`)
-	if bare || rb.wholeSpan == "" {
+	if malformed || rb.wholeSpan == "" {
 		b.WriteString(`"not read"`)
 	} else {
 		b.WriteString(numOrStr(rb.wholeSpan))
@@ -566,14 +580,14 @@ func analysisRaw(rb recordBody, bare bool) string {
 		b.WriteString(`{"g":`)
 		b.WriteString(strconv.Itoa(g))
 		b.WriteString(`,"checkpoint_count":`)
-		if bare {
-			b.WriteByte('0')
+		if malformed {
+			b.WriteString(`"not defined"`)
 		} else {
 			b.WriteString(strconv.Itoa(rb.perCount[g]))
 		}
 		b.WriteString(`,"span":`)
 		sp := "not read"
-		if !bare && rb.perSpan[g] != "" {
+		if !malformed && rb.perSpan[g] != "" {
 			sp = rb.perSpan[g]
 		}
 		b.WriteString(numOrStr(sp))
@@ -581,19 +595,19 @@ func analysisRaw(rb recordBody, bare bool) string {
 	}
 	b.WriteString(`],"legs_outside":`)
 	lo := rb.legsOutside
-	if bare || lo == "" {
+	if malformed || lo == "" {
 		lo = "not defined"
 	}
 	b.WriteString(numOrStr(lo))
 	b.WriteString(`,"hike_legs":`)
-	if bare {
-		b.WriteByte('0')
+	if malformed {
+		b.WriteString(`"not defined"`)
 	} else {
 		b.WriteString(strconv.Itoa(rb.hikeLegs))
 	}
 	b.WriteString(`,"hike_span":`)
 	hs := rb.hikeSpan
-	if bare || hs == "" {
+	if malformed || hs == "" {
 		hs = "not read"
 	}
 	b.WriteString(numOrStr(hs))

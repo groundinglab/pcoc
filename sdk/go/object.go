@@ -102,6 +102,8 @@ type DecodeClass int
 
 const (
 	// ClassMalformed is not one definite-length CBOR data item.
+	// Erratum 2 E01: a kind value whose bytes are not valid UTF-8 is this
+	// class. It is not Rule A5 and it is not a decode failure.
 	// shape is mismatch and shape_item is exactly ["malformed cbor"].
 	ClassMalformed DecodeClass = iota
 	// ClassDecodeFailure is one well-formed data item that is not a map,
