@@ -1,0 +1,16 @@
+#!/bin/sh
+# CLI entry. candidates is the generator jar; every other command is the release jar.
+# UseSHA256Intrinsics is diagnostic. Unlocking it does not change its default (on).
+set -eu
+ROOT=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+if [ -z "${JAVA_HOME:-}" ]; then
+    echo "JAVA_HOME is not set" >&2
+    exit 1
+fi
+JAVA=$JAVA_HOME/bin/java
+FLAGS="-XX:+UnlockDiagnosticVMOptions -Xmx2g"
+if [ "${1:-}" = "candidates" ]; then
+    shift
+    exec "$JAVA" $FLAGS -jar "$ROOT/build/libs/pcoc-gen-2.2.0.jar" "$@"
+fi
+exec "$JAVA" $FLAGS -jar "$ROOT/build/libs/pcoc-2.2.0.jar" "$@"
