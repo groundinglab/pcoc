@@ -1,0 +1,11 @@
+[package]
+name = "pcoc"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+description = "Satoshi Hike 2.2 construction, encodings, and section 14 verifier"
+
+[dependencies]
+sha2 = "=0.10.8"
+cpufeatures = "0.2"
