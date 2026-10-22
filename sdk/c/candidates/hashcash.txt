@@ -1,0 +1,8 @@
+hashcash.bits	21
+hashcash.challenge	6714d0dd1bde62a94584d8942c415aafe5e4e486b6531612c2c4c3a239269e97
+hashcash.digest	0000020a1a86d896416fcad8d943a88d3f3bf32d4c8728135f13553954c2d3c4
+hashcash.digest_nonce0	583a276149cc3166e29017505ce80ce7ee154dd557801bb5434c150993174df6
+hashcash.fee_header_label	pcoc-pack-2.2/hashcash.fee-header
+hashcash.nonce	65820
+hashcash.origin_label	https://bari.example
+hashcash.waypoint_label	pcoc-pack-2.2/hashcash.waypoint

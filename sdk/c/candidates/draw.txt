@@ -1,0 +1,3 @@
+draw.legs.18.indices	17,2,11,7,13,3
+draw.legs.54.indices	31,39,32,40,30,29
+draw.legs.6.indices	1,2,3,4,0,5
