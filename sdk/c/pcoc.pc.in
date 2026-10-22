@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: pcoc
+Description: Satoshi Hike 2.2
+Version: 2.2.0
+Libs: -L${libdir} -lpcoc
+Cflags: -I${includedir}
