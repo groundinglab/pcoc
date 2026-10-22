@@ -41,7 +41,12 @@ func runCLI(t *testing.T, bin string, args ...string) (stdout, stderr string, co
 
 func TestACA7(t *testing.T) {
 	bin := pcocBin(t)
-	obj := filepath.Join(filepath.Dir(repoRoot(t)), "ref-round2", "C-grok", "objects", "O1-S1.cbor")
+	obj := filepath.Join(sdkDir(t), "objects", "O1-S1.cbor")
+	body := mustRead(t, obj)
+	sum := sha256Hex(body)
+	if sum != objectPins["O1-S1.cbor"] {
+		t.Fatalf("object O1-S1.cbor SHA-256 %s, pin %s", sum, objectPins["O1-S1.cbor"])
+	}
 
 	stdout, stderr, code := runCLI(t, bin, "verify", "--profile", "conformance-small", obj)
 	if code != 2 {

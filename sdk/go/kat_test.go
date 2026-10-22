@@ -9,6 +9,7 @@ import (
 )
 
 func TestSection74(t *testing.T) {
+	repoRoot(t)
 	le1 := Le64(1)
 	if hex.EncodeToString(le1) != "0100000000000000" {
 		t.Fatalf("le64(1) %x", le1)
@@ -45,6 +46,7 @@ func bytesRepeat(b byte, n int) []byte {
 }
 
 func TestFoldStep0(t *testing.T) {
+	repoRoot(t)
 	pk, _ := hex.DecodeString("f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9")
 	// seed_beacon = SHA-256("pcoc-pack-2.2/beacon/seed") is computed inside.
 	// Use the published D's opening state directly by filling from the beacon.
