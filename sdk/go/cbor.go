@@ -20,17 +20,17 @@ const (
 )
 
 type cborValue struct {
-	typ    cborType
-	uint   uint64
-	bytes  []byte // bytes or text, or the raw key encoding for sorting
-	array  []cborValue
-	pairs  []cborPair
+	typ   cborType
+	uint  uint64
+	bytes []byte // bytes or text, or the raw key encoding for sorting
+	array []cborValue
+	pairs []cborPair
 }
 
 type cborPair struct {
-	key   string
+	key    string
 	keyEnc []byte
-	val   cborValue
+	val    cborValue
 }
 
 func cborEncodeUint(x uint64) []byte {

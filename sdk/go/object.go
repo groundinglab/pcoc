@@ -28,18 +28,18 @@ type Stage struct {
 
 // Object is the hike object (SPEC §8).
 type Object struct {
-	Kind                 string
-	Fill                 string
-	SlotBytes            uint64
-	NSlots               uint64
-	SampleBytes          uint64
-	StepsPerLeg          uint64
-	PublicKey            []byte
-	SeedBeacon           []byte
-	Stages               []Stage
-	LastInterrupt        []byte
-	LastInterruptHeight  uint64
-	HasLastInterrupt     bool
+	Kind                   string
+	Fill                   string
+	SlotBytes              uint64
+	NSlots                 uint64
+	SampleBytes            uint64
+	StepsPerLeg            uint64
+	PublicKey              []byte
+	SeedBeacon             []byte
+	Stages                 []Stage
+	LastInterrupt          []byte
+	LastInterruptHeight    uint64
+	HasLastInterrupt       bool
 	HasLastInterruptHeight bool
 }
 

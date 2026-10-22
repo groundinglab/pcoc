@@ -531,5 +531,3 @@ func AnchorWindow(h, headerHeight int) string {
 	}
 	return "not anchored"
 }
-
-

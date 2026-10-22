@@ -4,10 +4,10 @@ package pcoc
 // terrain, before the first leg, and the step does not write it (SPEC §10,
 // §11.1). One terrain is not shared with another PCOC.
 type Terrain struct {
-	p      Profile
-	bytes  []byte
-	lanes  [4]uint64
-	seed   []byte
+	p     Profile
+	bytes []byte
+	lanes [4]uint64
+	seed  []byte
 }
 
 // FillTerrain is SPEC §10.4 dag2. Every terrain word depends on all 256 bits

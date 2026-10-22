@@ -601,4 +601,3 @@ func mtp(in VerifyInput, h uint64, beacon map[string]JSON) *uint64 {
 	v := times[len(times)/2]
 	return &v
 }
-

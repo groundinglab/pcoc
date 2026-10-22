@@ -18,15 +18,15 @@ const Fill = "dag2"
 // apply to that profile's SLOT_BYTES, TERRAIN_BYTES, and SAMPLE_BYTES (§6,
 // §16.1). These names are the section 6 evaluation.
 const (
-	SlotBytes     = 16384
-	WordsPerSlot  = 2048 // SLOT_BYTES / 8
-	TerrainBytes  = 268435456
-	NSlots        = 16384 // TERRAIN_BYTES / SLOT_BYTES
-	SampleBytes   = 1024
-	OffsetModulus = 268434433 // TERRAIN_BYTES - SAMPLE_BYTES + 1
-	StepsPerLeg   = 2000000
-	Stages        = 18
-	HashBytes     = 32
+	SlotBytes      = 16384
+	WordsPerSlot   = 2048 // SLOT_BYTES / 8
+	TerrainBytes   = 268435456
+	NSlots         = 16384 // TERRAIN_BYTES / SLOT_BYTES
+	SampleBytes    = 1024
+	OffsetModulus  = 268434433 // TERRAIN_BYTES - SAMPLE_BYTES + 1
+	StepsPerLeg    = 2000000
+	Stages         = 18
+	HashBytes      = 32
 	LegResultBytes = 8
 	PublicKeyBytes = 32
 	BeaconBytes    = 32

@@ -15,16 +15,16 @@ import (
 // HeaderOK is true only when header.hash and header.height follow section 9.
 // TimeOK is true only when header.time follows section 9.
 type IndexDoc struct {
-	HeaderOK   bool
+	HeaderOK    bool
 	HashNatural []byte // 32 bytes, display reversed once
 	HashDisplay string // lowercase display hex
-	Height     uint64
-	TimeOK     bool
-	Time       uint64
-	Network    string
-	HasNetwork bool
-	Plants     []Plant
-	Raw        []byte
+	Height      uint64
+	TimeOK      bool
+	Time        uint64
+	Network     string
+	HasNetwork  bool
+	Plants      []Plant
+	Raw         []byte
 }
 
 // Plant is one recorded plant (SPEC §14.3).
