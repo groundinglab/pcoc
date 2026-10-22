@@ -19,7 +19,7 @@ public final class Capture {
     }
 
     public static Capture run(String... args) throws Exception {
-        Path root = Path.of("").toAbsolutePath();
+        Path root = Repo.javaDir();
         Path jar = root.resolve("build/libs/pcoc-2.2.0.jar");
         if (!Files.isRegularFile(jar)) {
             throw new IllegalStateException("missing " + jar);

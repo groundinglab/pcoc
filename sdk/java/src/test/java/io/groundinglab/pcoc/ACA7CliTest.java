@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 public class ACA7CliTest {
     @Test
     public void usageAndExits() throws Exception {
+        Repo.root();
         Path tmp = Files.createTempDirectory("pcoc-cli");
         try {
             Capture none = Capture.run();

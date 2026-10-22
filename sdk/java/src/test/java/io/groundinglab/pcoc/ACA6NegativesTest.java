@@ -17,6 +17,7 @@ import io.groundinglab.pcoc.produce.Hike;
 public class ACA6NegativesTest {
     @Test
     public void valuesAndSixLeg() throws Exception {
+        Repo.root();
         Sha256 sha = new Sha256();
         Profile profile = Cases.s1();
         Hike.Result hike = Cases.run(profile, Cases.PK_A, Cases.legs(1));
