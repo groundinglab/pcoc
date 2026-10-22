@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 import io.groundinglab.pcoc.Anchor;
+import io.groundinglab.pcoc.Br1;
 import io.groundinglab.pcoc.Bytes;
 import io.groundinglab.pcoc.Checkpoint;
 import io.groundinglab.pcoc.Const;
@@ -40,6 +41,14 @@ public final class GenCandidates {
             "one_lane_flip", "all4_kernel", "squeezed_seed_terrain"
     };
 
+    /**
+     * 80-byte fee header for {@code after_live}. The first header, at the first {@code nTime}
+     * at or after 1233062596, whose SHA-256d meets the mainnet proof-of-work limit.
+     * A constant so regeneration does not search.
+     */
+    private static final String LIVE_AFTER_HEADER_HEX =
+            "0100000007fd9d1abc8d5b4c25c9f451e215c0c90b68b1a46917374e5274cbc6086327b051b29fc516c3c3aecac4a77c019cb535bde7a446cd0ae8e32afc61d094b7fd37c50a7f49ffff001d27167cb1";
+
     private GenCandidates() {}
 
     public static void main(String[] args) throws IOException {
@@ -60,7 +69,7 @@ public final class GenCandidates {
         Sha256 sha = new Sha256();
         Map<String, Lines> files = new LinkedHashMap<String, Lines>();
         String[] names = {"seed", "nl4", "terrain", "fold", "kat-small", "test-3leg", "prod", "wes",
-                "rate", "anchor", "draw", "unknown-kind", "hashcash", "negatives"};
+                "rate", "anchor", "draw", "unknown-kind", "hashcash", "negatives", "br1"};
         for (String n : names) {
             files.put(n, new Lines());
         }
@@ -90,6 +99,7 @@ public final class GenCandidates {
         draw(sha, files.get("draw"));
         unknown(files.get("unknown-kind"));
         hashcash(sha, files.get("hashcash"));
+        br1(sha, files.get("br1"));
 
         Profile prod = Profile.production();
         byte[] seed = Seed.derive(sha, Cases.PK_A, seedBeacon);
@@ -331,6 +341,133 @@ public final class GenCandidates {
         lines.add("hashcash.nonce", Long.toString(nonce));
         lines.add("hashcash.digest", Bytes.hex(digest));
         lines.add("hashcash.leading_zero_bits", Integer.toString(zeros));
+    }
+
+    private static void br1(Sha256 sha, Lines lines) {
+        String origin = "https://example.com";
+        byte[] waypoint = Cases.asciiHash(sha, "pcoc-pack-2.2/br1/waypoint");
+        byte[] prev11 = repeat(0x11);
+        byte[] tipHeader = Br1.assembleHeader(prev11, 1_700_000_000, Br1.SYNTH_NBITS, 4);
+        byte[] tipHash = Br1.headerHash(sha, tipHeader);
+        byte[] beforeHeader = Br1.assembleHeader(repeat(0x33), 1_700_000_001, Br1.SYNTH_NBITS, 5);
+        byte[] beforeHash = Br1.headerHash(sha, beforeHeader);
+        byte[] outsideHeader = Br1.assembleHeader(repeat(0x55), 1_700_000_002, Br1.SYNTH_NBITS, 9);
+        Br1.Tip testTip = new Br1.Tip(tipHash, prev11, 100, 1_700_000_000, Br1.SYNTH_NBITS, 0);
+        byte[] afterTest = headerWithPow(sha, tipHash, 1_700_000_010, Br1.SYNTH_NBITS);
+        byte[] reversedTip = Bytes.reverse(tipHash);
+        byte[] displayAfter = headerWithPow(sha, reversedTip, 1_700_000_011, Br1.SYNTH_NBITS);
+        byte[] wrongBitsTest = Br1.assembleHeader(tipHash, 1_700_000_012, 0x1d00ffff, 1);
+
+        byte[] liveHash = Cases.asciiHash(sha, "pcoc-pack-2.2/br1/live-tip");
+        byte[] livePrev = Cases.asciiHash(sha, "pcoc-pack-2.2/br1/live-prev");
+        Br1.Tip liveTip = new Br1.Tip(liveHash, livePrev, 2015, 1_233_061_996, 0x1d00ffff, 1_231_006_505);
+        byte[] liveHeader = Bytes.parseHex(LIVE_AFTER_HEADER_HEX);
+        if (liveHeader.length != 80 || !Arrays.equals(Arrays.copyOfRange(liveHeader, 4, 36), liveHash)) {
+            throw new IllegalStateException("live header prev is the tip hash");
+        }
+        if (Br1.requiredBits(liveTip, Br1.Plane.LIVE) != 0x1d00ffff) {
+            throw new IllegalStateException("historical retarget clamps to the pow limit");
+        }
+        byte[] wrongBitsLive = headerWithPow(sha, liveHash, 1_233_062_000, Br1.SYNTH_NBITS);
+
+        emit(sha, lines, "current", origin, origin, waypoint, tipHeader, testTip, Br1.Plane.TEST);
+        Br1.Tip beforeTip = new Br1.Tip(
+                testTip.hash, beforeHash, testTip.height, testTip.time, testTip.bits, testTip.periodFirstTime);
+        emit(sha, lines, "before", origin, origin, waypoint, beforeHeader, beforeTip, Br1.Plane.TEST);
+        emit(sha, lines, "after_test", origin, origin, waypoint, afterTest, testTip, Br1.Plane.TEST);
+        emit(sha, lines, "after_live_copy", origin, origin, waypoint, afterTest, testTip, Br1.Plane.LIVE);
+        emit(sha, lines, "after_live", origin, origin, waypoint, liveHeader, liveTip, Br1.Plane.LIVE);
+        emit(sha, lines, "outside", origin, origin, waypoint, outsideHeader, testTip, Br1.Plane.TEST);
+        emit(sha, lines, "wrong_origin", origin, "https://other.example", waypoint, tipHeader, testTip, Br1.Plane.TEST);
+        Br1.Tip displayCurrentTip = new Br1.Tip(
+                reversedTip, testTip.previous, testTip.height, testTip.time, testTip.bits, testTip.periodFirstTime);
+        emit(sha, lines, "display_current", origin, origin, waypoint, tipHeader, displayCurrentTip, Br1.Plane.TEST);
+        Br1.Tip displayBeforeTip = new Br1.Tip(
+                testTip.hash, Bytes.reverse(beforeHash), testTip.height, testTip.time, testTip.bits, testTip.periodFirstTime);
+        emit(sha, lines, "display_before", origin, origin, waypoint, beforeHeader, displayBeforeTip, Br1.Plane.TEST);
+        emit(sha, lines, "display_after", origin, origin, waypoint, displayAfter, testTip, Br1.Plane.TEST);
+        emit(sha, lines, "wrong_nbits_test", origin, origin, waypoint, wrongBitsTest, testTip, Br1.Plane.TEST);
+        emit(sha, lines, "wrong_nbits_live", origin, origin, waypoint, wrongBitsLive, liveTip, Br1.Plane.LIVE);
+    }
+
+    private static byte[] headerWithPow(Sha256 sha, byte[] previous, int time, int bits) {
+        Br1.Tip tip = new Br1.Tip(previous, new byte[32], 100, time, bits, 0);
+        Br1.Plane plane = bits == Br1.SYNTH_NBITS ? Br1.Plane.TEST : Br1.Plane.LIVE;
+        for (int nonce = 0; nonce < 4096; nonce++) {
+            byte[] header = Br1.assembleHeader(previous, time, bits, nonce);
+            if (Br1.window(sha, header, tip, plane) == Br1.Window.AFTER) {
+                return header;
+            }
+        }
+        throw new IllegalStateException("no proof-of-work header");
+    }
+
+    private static void emit(
+            Sha256 sha,
+            Lines lines,
+            String id,
+            String checkOrigin,
+            String solveOrigin,
+            byte[] waypoint,
+            byte[] header,
+            Br1.Tip tip,
+            Br1.Plane plane) {
+        byte[] hash = Br1.headerHash(sha, header);
+        byte[] challenge = Hashcash.challenge(sha, solveOrigin, hash);
+        long nonce = Hashcash.solve(sha, challenge, waypoint);
+        String nonceText = Long.toUnsignedString(nonce);
+        String headerHex = Bytes.hex(header);
+        int status = Br1.status(sha, waypoint, nonceText, headerHex, checkOrigin, tip, plane);
+        Br1.Window window = Br1.window(sha, header, tip, plane);
+        int expectStatus = 402;
+        if ("current".equals(id) || "before".equals(id) || "after_test".equals(id)
+                || "after_live".equals(id) || "after_live_copy".equals(id)) {
+            expectStatus = 204;
+        }
+        String expectWindow = "outside";
+        if ("current".equals(id) || "wrong_origin".equals(id)) {
+            expectWindow = "current";
+        } else if ("before".equals(id)) {
+            expectWindow = "before";
+        } else if ("after_test".equals(id) || "after_live".equals(id) || "after_live_copy".equals(id)) {
+            expectWindow = "after";
+        }
+        String windowText = "outside";
+        if (window == Br1.Window.CURRENT) {
+            windowText = "current";
+        } else if (window == Br1.Window.BEFORE) {
+            windowText = "before";
+        } else if (window == Br1.Window.AFTER) {
+            windowText = "after";
+        }
+        if (status != expectStatus) {
+            throw new IllegalStateException(id + " status " + status);
+        }
+        if (!windowText.equals(expectWindow)) {
+            throw new IllegalStateException(id + " window " + windowText);
+        }
+        String planeText = plane == Br1.Plane.TEST ? "test" : "live";
+        String p = "br1." + id;
+        lines.add(p + ".plane", planeText);
+        lines.add(p + ".origin", checkOrigin);
+        lines.add(p + ".solve_origin", solveOrigin);
+        lines.add(p + ".waypoint", Bytes.hex(waypoint));
+        lines.add(p + ".nonce", nonceText);
+        lines.add(p + ".fee_header", headerHex);
+        lines.add(p + ".tip_hash", Bytes.hex(tip.hash));
+        lines.add(p + ".tip_previous", Bytes.hex(tip.previous));
+        lines.add(p + ".tip_height", Integer.toUnsignedString(tip.height));
+        lines.add(p + ".tip_time", Integer.toUnsignedString(tip.time));
+        lines.add(p + ".tip_bits", String.format("%08x", tip.bits & 0xffffffffL));
+        lines.add(p + ".period_first_time", Integer.toUnsignedString(tip.periodFirstTime));
+        lines.add(p + ".window", windowText);
+        lines.add(p + ".status", Integer.toString(status));
+    }
+
+    private static byte[] repeat(int b) {
+        byte[] a = new byte[32];
+        Arrays.fill(a, (byte) b);
+        return a;
     }
 
     private static final class Lines {

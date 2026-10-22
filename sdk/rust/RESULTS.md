@@ -2,7 +2,7 @@
 
 CASES.md v2 candidates from `gen-candidates` (`sdk/rust/gen`). Keys and inputs follow CASES.md. No deviation from that file.
 
-The generator writes the 14 candidate files. It does not write this note. `header_hash` in `hashcash.txt` is SHA-256(SHA-256(fee header)), natural order, as CASES.md states for that key.
+The generator writes the candidate files, including `br1.txt`. It does not write this note. `header_hash` in `hashcash.txt` is SHA-256(SHA-256(fee header)), natural order, as CASES.md states for that key.
 
 ## SPEC questions
 

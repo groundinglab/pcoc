@@ -402,6 +402,8 @@ name = "pcoc"
 version = "2.2.0"
 dependencies = [
  "cpufeatures",
+ "secp256k1",
+ "serde_json",
  "sha2",
 ]
 

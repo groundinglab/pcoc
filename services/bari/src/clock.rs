@@ -22,6 +22,7 @@
 //! non-RBF trees may sit in the mempool at once. A broadcast is not replaced
 //! and is not sent again.
 
+use crate::header_source::TipTick;
 use crate::merkle::{MerkleError, MerkleTree};
 use crate::ops;
 use crate::pool::{self, ListedPool, PoolError, PoolState, PoolTipKey, PooledWaypoint, TipPool};
@@ -30,7 +31,6 @@ use crate::storage::{
     FileStore, PersistedBatch, StorageError, StoredInclusion, StoredIndexHeader, StoredIndexPlant,
     StoredPlant, StoredPortableIndex, StoredState,
 };
-use crate::header_source::TipTick;
 use crate::{decode_bitcoin_id, encode_bitcoin_id, encode_hash32, Hash32};
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -49,6 +49,13 @@ pub struct ChainTip {
     /// was not read. Zero is a real `nTime`. This is not Bari's wall-clock
     /// observation.
     pub time: Option<u64>,
+    /// Compact `nBits` of this header (bytes 72..76). Zero means the bits
+    /// were not read. Rule BR1 uses this on the live plane.
+    pub bits: u32,
+    /// `nTime` of the block at height `height - 2015`. The live-plane retarget
+    /// reads it only when `height + 1` is a multiple of 2016. Zero when this
+    /// tip is not that boundary, or when that header was not read.
+    pub period_first_time: u32,
 }
 
 impl ChainTip {
@@ -57,11 +64,16 @@ impl ChainTip {
     /// Units are unix seconds, the header field as stored, including zero.
     pub fn from_gossip_tick(tick: &TipTick) -> Result<Self, String> {
         let height = u32::try_from(tick.height).map_err(|_| "tip height exceeds u32".to_owned())?;
+        let bits = u32::from_le_bytes(tick.header[72..76].try_into().expect("nBits is 4 bytes"));
+        // A gossip tick does not carry the block 2015 back. The RPC tip read
+        // fills `period_first_time`. The live gossip source is not in this build.
         Ok(Self {
             hash: tick.hash,
             previous_hash: tick.previous,
             height,
             time: Some(u64::from(tick.n_time)),
+            bits,
+            period_first_time: 0,
         })
     }
 }
@@ -1758,6 +1770,8 @@ impl BariClock {
                     previous_hash: Some(pool.tip.hash),
                     height: stale[index + 1].tip.height,
                     time: None,
+                    bits: 0,
+                    period_first_time: 0,
                 }
             } else {
                 live_tip
@@ -1767,6 +1781,8 @@ impl BariClock {
                 previous_hash: None,
                 height: pool.tip.height,
                 time: None,
+                bits: 0,
+                period_first_time: 0,
             };
             let continuous = closed_tip.previous_hash == Some(opened.hash)
                 && closed_tip.height == opened.height.saturating_add(1);
@@ -2357,6 +2373,8 @@ impl BariClock {
             previous_hash: None,
             height: opened_tip_key.height,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         };
 
         // 1. Serving trees past the confirmation window → archive. Path HTTP off.
@@ -3337,6 +3355,8 @@ mod tests {
             previous_hash: previous.map(|value| [value; 32]),
             height,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         }
     }
 
@@ -3380,6 +3400,8 @@ mod tests {
             previous_hash: Some([1; 32]),
             height: 101,
             time: Some(1_700_000_000),
+            bits: 0,
+            period_first_time: 0,
         });
         clock.poll_once().unwrap().unwrap();
         let stored = clock.index_at_height(101).unwrap().unwrap();
@@ -5544,6 +5566,8 @@ mod tests {
             previous_hash: None,
             height: 101,
             time: Some(1_700_000_101),
+            bits: 0,
+            period_first_time: 0,
         });
         let mut clock = BariClock::open_for_network(
             chain.clone(),
@@ -5573,6 +5597,8 @@ mod tests {
             previous_hash: Some([1; 32]),
             height: 102,
             time: Some(1_700_000_102),
+            bits: 0,
+            period_first_time: 0,
         });
         clock.poll_once().unwrap().unwrap();
         let stamped = clock.index_at_height(102).unwrap().unwrap();

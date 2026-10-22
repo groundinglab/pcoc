@@ -3,6 +3,7 @@
     "README.md",
     "anchor.json",
     "blockhash-display.json",
+    "br1.json",
     "draw.json",
     "fold.json",
     "hashcash.json",
@@ -12,11 +13,13 @@
     "prod.json",
     "rate.json",
     "seed.json",
+    "sign-in-origins.json",
+    "sign-in.json",
     "terrain.json",
     "test-3leg.json",
     "unknown-kind.json",
     "wes.json"
   ],
   "pack": "pack-2.2.0",
-  "status": "incomplete"
+  "status": "complete"
 }

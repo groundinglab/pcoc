@@ -158,6 +158,77 @@ int pcoc_leading_zero_bits(const uint8_t digest[32]);
 int pcoc_hashcash_solve(const uint8_t challenge[32], const uint8_t waypoint[32], int bits,
                         uint64_t max_nonce, uint64_t *nonce_out);
 
+/* SPEC §13.6 Rule BR1. Paid waypoint.
+ * Block-hash comparisons are natural order (SPEC §9). A display-hex tip hash
+ * is reversed once by the caller; these functions do not reverse it. */
+#define PCOC_BR1_SYNTH_NBITS 0x207fffffu /* SPEC §9, test-plane required nBits */
+#define PCOC_BR1_POW_LIMIT_BITS 0x1d00ffffu /* Bitcoin mainnet powLimit */
+
+#define PCOC_BR1_PLANE_TEST 0
+#define PCOC_BR1_PLANE_LIVE 1
+
+#define PCOC_BR1_CURRENT 0
+#define PCOC_BR1_BEFORE 1
+#define PCOC_BR1_AFTER 2
+#define PCOC_BR1_OUTSIDE 3
+
+/* SPEC §13.6. Bari's tip. hash is SHA-256d of the tip header, natural order.
+ * previous is the 32 bytes at offset 4 of the tip header. bits and time are
+ * the tip nBits and nTime. period_first_time is the nTime at height - 2015,
+ * and is read only when (height + 1) is a multiple of 2016. */
+typedef struct pcoc_br1_tip {
+  uint8_t hash[32];
+  uint8_t previous[32];
+  uint32_t height;
+  uint32_t time;
+  uint32_t bits;
+  uint32_t period_first_time;
+} pcoc_br1_tip;
+
+/* SPEC §13.6. Nonce spelling (SPEC §13.1): shortest decimal u64, no sign,
+ * no leading zeros. Zero is "0". Returns 0 and writes *nonce, or -1. */
+int pcoc_br1_parse_nonce(const char *raw, uint64_t *nonce);
+
+/* SPEC §13.6. Fee-header spelling (SPEC §13.1): exactly 160 lowercase hex
+ * digits, byte 0 first. Uppercase is a reject. Returns 0, or -1. */
+int pcoc_br1_parse_fee_header(const char *raw, uint8_t out[80]);
+
+/* SPEC §13.6 header layout. Version u32le is 1 at offset 0. previous is
+ * natural order at offset 4. nTime is at 68, nBits at 72, nonce at 76.
+ * Multi-byte fields are little-endian. The merkle field is zero. */
+void pcoc_br1_assemble_header(const uint8_t previous[32], uint32_t n_time, uint32_t bits,
+                              uint32_t nonce, uint8_t out[80]);
+
+/* SPEC §9 and §13.6. Compact target an "after" header must carry.
+ * Test plane: PCOC_BR1_SYNTH_NBITS. Live plane: mainnet GetNextWorkRequired. */
+uint32_t pcoc_br1_required_bits(const pcoc_br1_tip *tip, int plane);
+
+/* SPEC §9 and §13.6. Bitcoin mainnet GetNextWorkRequired for the block after
+ * height. If (height + 1) % 2016 != 0, the result is tip_bits. Otherwise
+ * timespan = int64(tip_time) - int64(period_first_time), clamped to
+ * [1209600/4, 1209600*4]; new target = SetCompact(tip_bits) * span / 1209600,
+ * clamped to pow limit 0x1d00ffff, then GetCompact. Truncating 256-bit math.
+ * A negative or overflow compact fails proof-of-work. */
+uint32_t pcoc_br1_mainnet_next_bits(uint32_t height, uint32_t tip_bits, uint32_t tip_time,
+                                    uint32_t period_first_time);
+
+/* SPEC §13.6 Rule BR1 step 2, before the Hashcash check.
+ * A header that is not 80 bytes is PCOC_BR1_OUTSIDE.
+ * current if SHA256d(header) == tip hash;
+ * else before if SHA256d(header) == tip previous;
+ * else after if header[4:36] == tip hash, header nBits equals the plane's
+ * required compact, and SHA256d as a little-endian integer is <= the target
+ * that nBits encodes;
+ * else outside. */
+int pcoc_br1_window(const uint8_t *header, size_t header_len, const pcoc_br1_tip *tip, int plane);
+
+/* SPEC §13.6 Rule BR1. 204 only when the nonce and the fee header parse, the
+ * body is 32 bytes, the window is not outside, and the Hashcash digest for
+ * bari_origin has at least 21 leading zero bits. Otherwise 402. */
+uint16_t pcoc_br1_status(const uint8_t *body, size_t body_len, const char *nonce_decimal,
+                         const char *fee_header_hex, const char *bari_origin,
+                         const pcoc_br1_tip *tip, int plane);
+
 /* §14.6 six-leg draw from the OS CSPRNG. No byte-source parameter.
  * *status: 0 indices filled, 1 not defined (leg_total < 6), 2 not read. */
 int pcoc_six_leg_draw(uint64_t leg_total, uint64_t indices[6], int *status);

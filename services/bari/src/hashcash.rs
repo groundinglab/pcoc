@@ -1,7 +1,8 @@
-//! SPEC §13.1 Hashcash and §13.6 Rule BR1 window.
+//! SPEC §13.1 Hashcash and §13.6 Rule BR1.
 //!
-//! The puzzle is the Rust SDK (`pcoc::header_hash`, `pcoc::hashcash_challenge`,
-//! `pcoc::hashcash_digest`). This module does not keep a second copy.
+//! The puzzle and the paid-rule decision are the Rust SDK (`pcoc::br1_status`,
+//! `pcoc::header_hash`, `pcoc::hashcash_challenge`, `pcoc::hashcash_digest`).
+//! This module does not keep a second window.
 //!
 //! Wire: `X-Bari-Hashcash-Nonce` (shortest decimal) and
 //! `X-Bari-Hashcash-Header` (160 lowercase hex digits, the 80 fee-header bytes).
@@ -23,17 +24,8 @@ pub const HASHCASH_NONCE_HEADER: &str = "x-bari-hashcash-nonce";
 /// HTTP header name for the 80-byte fee header (canonical).
 pub const HASHCASH_HEADER_HEADER: &str = "x-bari-hashcash-header";
 
-/// Fixed synth `nBits`. SPEC §9.
-pub const SYNTH_NBITS: u32 = 0x207f_ffff;
-
-/// Where a fee header sits against Bari's tip. SPEC §13.6 Rule BR1.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FeeWindow {
-    Current,
-    Before,
-    After,
-    Outside,
-}
+/// Fixed synth `nBits`. SPEC §9. The value lives in the SDK.
+pub const SYNTH_NBITS: u32 = pcoc::br1::SYNTH_NBITS;
 
 /// RFC 6454 §6.2 serialization of `raw` (SPEC §13.1).
 ///
@@ -59,15 +51,9 @@ pub fn bari_origin(raw: &str) -> Result<String, String> {
 
 /// 80-byte header. Version is 1. `previous` is natural order at offset 4.
 /// `nTime` is at 68, `nBits` at 72, nonce at 76. All multi-byte fields are
-/// little-endian, the Bitcoin header layout.
+/// little-endian, the Bitcoin header layout. The layout is the SDK's.
 pub fn assemble_header(previous: &[u8; 32], n_time: u32, bits: u32, nonce: u32) -> [u8; 80] {
-    let mut header = [0u8; 80];
-    header[0..4].copy_from_slice(&1u32.to_le_bytes());
-    header[4..36].copy_from_slice(previous);
-    header[68..72].copy_from_slice(&n_time.to_le_bytes());
-    header[72..76].copy_from_slice(&bits.to_le_bytes());
-    header[76..80].copy_from_slice(&nonce.to_le_bytes());
-    header
+    pcoc::br1::assemble_header(previous, n_time, bits, nonce)
 }
 
 /// SHA-256d of an 80-byte header. One SHA-256 is not this value.
@@ -107,107 +93,54 @@ pub fn effective_bits() -> u32 {
     HASHCASH_BITS
 }
 
-/// Rule BR1 step 2. `current` and `before` use hashes Bari already holds.
-/// `after` on the test plane (`network == "synthetic"`) uses the fixed synth
-/// `nBits` and the little-endian proof-of-work check (SPEC §9). A live-plane
-/// retarget is not in this build, so `after` on any other network is `Outside`.
-pub fn fee_window(
-    header: &[u8; 80],
-    tip_hash: &Hash32,
-    previous_hash: Option<&Hash32>,
-    network: &str,
-) -> FeeWindow {
-    let hash = header_hash(header);
-    if hash == *tip_hash {
-        return FeeWindow::Current;
+/// SPEC §13.6. `204` when the SDK's Rule BR1 check accepts the post, `402` otherwise.
+///
+/// `bits` is [`HASHCASH_BITS`] on the `bari` binary, and that path returns
+/// `pcoc::br1_status` unchanged. In-process tests pass a lower count so they
+/// do not search 2^21 nonces. A lower count still uses the SDK window. It does
+/// not keep a second copy of the retarget.
+pub(crate) fn paid_rule(
+    body: &[u8],
+    nonce_decimal: &str,
+    fee_header_hex: &str,
+    bari_origin: &str,
+    tip: &pcoc::br1::Br1Tip,
+    plane: pcoc::br1::Br1Plane,
+    bits: u32,
+) -> u16 {
+    let status = pcoc::br1_status(body, nonce_decimal, fee_header_hex, bari_origin, tip, plane);
+    if status == 204 || bits == HASHCASH_BITS {
+        return status;
     }
-    if previous_hash.is_some_and(|previous| hash == *previous) {
-        return FeeWindow::Before;
+    let Some(header) = pcoc::br1::parse_fee_header(fee_header_hex) else {
+        return 402;
+    };
+    let Some(nonce) = pcoc::br1::parse_nonce(nonce_decimal) else {
+        return 402;
+    };
+    if body.len() != 32 {
+        return 402;
     }
-    let mut previous = [0u8; 32];
-    previous.copy_from_slice(&header[4..36]);
-    if previous == *tip_hash && network == "synthetic" && synth_after_pow(header) {
-        return FeeWindow::After;
+    if pcoc::br1_window(&header, tip, plane) == pcoc::br1::Br1Window::Outside {
+        return 402;
     }
-    FeeWindow::Outside
+    let mut waypoint = [0u8; 32];
+    waypoint.copy_from_slice(body);
+    let hash = header_hash(&header);
+    if !verify(&challenge(bari_origin, &hash), &waypoint, nonce, bits) {
+        return 402;
+    }
+    204
 }
 
 /// Shortest decimal, no sign, no leading zeros. Zero is `0`. SPEC §13.1.
 pub fn parse_nonce(raw: &str) -> Option<u64> {
-    if raw.is_empty() || !raw.bytes().all(|byte| byte.is_ascii_digit()) {
-        return None;
-    }
-    if raw.len() > 1 && raw.starts_with('0') {
-        return None;
-    }
-    raw.parse().ok()
+    pcoc::br1::parse_nonce(raw)
 }
 
 /// 160 lowercase hex digits, 80 bytes.
 pub fn parse_fee_header(raw: &str) -> Option<[u8; 80]> {
-    if raw.len() != 160
-        || !raw
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-    {
-        return None;
-    }
-    let bytes = hex::decode(raw).ok()?;
-    bytes.try_into().ok()
-}
-
-fn synth_after_pow(header: &[u8; 80]) -> bool {
-    let bits = u32::from_le_bytes(header[72..76].try_into().expect("4 bytes"));
-    bits == SYNTH_NBITS && pow_meets(header, bits)
-}
-
-/// `SHA-256d`, as a little-endian integer, is at most the target `bits` encodes.
-fn pow_meets(header: &[u8; 80], bits: u32) -> bool {
-    let hash = header_hash(header);
-    let target = compact_target(bits);
-    for index in (0..32).rev() {
-        if hash[index] < target[index] {
-            return true;
-        }
-        if hash[index] > target[index] {
-            return false;
-        }
-    }
-    true
-}
-
-/// Bitcoin compact target as a 32-byte little-endian integer.
-/// A target that does not fit in 256 bits is all `0xff` (the check still runs).
-fn compact_target(bits: u32) -> [u8; 32] {
-    let exponent = (bits >> 24) as usize;
-    let mantissa = bits & 0x007f_ffff;
-    let mut target = [0u8; 32];
-    if mantissa == 0 || (bits & 0x0080_0000) != 0 {
-        return target;
-    }
-    if exponent <= 3 {
-        let word = mantissa >> (8 * (3 - exponent));
-        target[0] = (word & 0xff) as u8;
-        if exponent > 1 {
-            target[1] = ((word >> 8) & 0xff) as u8;
-        }
-        if exponent > 2 {
-            target[2] = ((word >> 16) & 0xff) as u8;
-        }
-        return target;
-    }
-    let shift = exponent - 3;
-    if shift >= 32 {
-        return [0xff; 32];
-    }
-    let bytes = mantissa.to_le_bytes();
-    for (offset, byte) in bytes.iter().take(3).enumerate() {
-        let index = shift + offset;
-        if index < 32 {
-            target[index] = *byte;
-        }
-    }
-    target
+    pcoc::br1::parse_fee_header(raw)
 }
 
 #[cfg(test)]
@@ -304,41 +237,6 @@ mod tests {
         assert_eq!(parse_fee_header(&hex), Some(header));
         assert_eq!(parse_fee_header(&hex.to_ascii_uppercase()), None);
         assert_eq!(parse_fee_header(&hex[..159]), None);
-    }
-
-    #[test]
-    fn window_is_current_before_after_or_outside() {
-        let current = assemble_header(&[0x10; 32], 1_700_000_000, SYNTH_NBITS, 4);
-        let current_hash = header_hash(&current);
-        assert_eq!(
-            fee_window(&current, &current_hash, None, "signet"),
-            FeeWindow::Current
-        );
-        let before = assemble_header(&[0x10; 32], 1_700_000_000, SYNTH_NBITS, 5);
-        let before_hash = header_hash(&before);
-        assert_eq!(
-            fee_window(&before, &current_hash, Some(&before_hash), "signet"),
-            FeeWindow::Before
-        );
-        let mut after = None;
-        for nonce in 0..64u32 {
-            let header = assemble_header(&current_hash, 1_700_000_010, SYNTH_NBITS, nonce);
-            if fee_window(&header, &current_hash, None, "synthetic") == FeeWindow::After {
-                after = Some(header);
-                break;
-            }
-        }
-        let after = after.expect("synth nBits finds an after header");
-        assert_eq!(
-            fee_window(&after, &current_hash, None, "signet"),
-            FeeWindow::Outside,
-            "live-plane after is not checked in this build"
-        );
-        let outside = assemble_header(&[0x99; 32], 1, SYNTH_NBITS, 9);
-        assert_eq!(
-            fee_window(&outside, &current_hash, Some(&before_hash), "synthetic"),
-            FeeWindow::Outside
-        );
     }
 
     /// Every `hashcash.*` key in the SDK candidate file, through Bari's wrappers.

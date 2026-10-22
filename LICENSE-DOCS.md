@@ -10,4 +10,4 @@ Legal code: https://creativecommons.org/licenses/by/4.0/legalcode
 
 Code stays Apache-2.0. See [LICENSE](LICENSE).
 
-Conformance vector bytes are Apache-2.0. That is the rule in force. The bytes are under `spec/conformance/pack/`. `sdk/SPEC_PIN` records the SHA-256 of `spec/conformance/pack/manifest.json`. The pack is incomplete until the SDK phase. Prose beside those bytes stays CC BY 4.0. The byte-versus-prose split inside `spec/conformance/` is recorded in this file.
+Conformance vector bytes are Apache-2.0. That is the rule in force. The bytes are under `spec/conformance/pack/`. `sdk/SPEC_PIN` records the SHA-256 of `spec/conformance/pack/manifest.json`. The pack status is `complete`. Prose beside those bytes stays CC BY 4.0. The byte-versus-prose split inside `spec/conformance/` is recorded in this file.

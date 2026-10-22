@@ -19,6 +19,10 @@ pub const CANDIDATES: &[(&str, &str)] = &[
         "fe58c0b64263d11daa7dcbae7c6daa3e0b0daecb1084b44d47f6f2570da3811a",
     ),
     (
+        "br1.txt",
+        "76b36c948ae0f37ad9dffd0355db3e507f23fddedc203dde4d58d131b212fa99",
+    ),
+    (
         "draw.txt",
         "45821e7ed5d9bbb6b03c686dfc467c623203027a6adf5160414c4e4074a85e0c",
     ),
@@ -124,7 +128,7 @@ fn pinned_names(table: &[(&str, &str)]) -> Vec<String> {
 
 /// Committed candidate files, their SHA-256 pins, the PROD leg pin, and the object pins.
 pub fn assert_committed_pins(root: &Path) {
-    assert_eq!(CANDIDATES.len(), 14, "candidate pin count");
+    assert_eq!(CANDIDATES.len(), 15, "candidate pin count");
     assert_eq!(OBJECTS.len(), 3, "object pin count");
     let cand = root.join("sdk/rust/candidates");
     assert_eq!(

@@ -217,11 +217,11 @@ impl BariService {
         self.queue_len()
     }
 
-    /// Verify Hashcash against the fee header and append under one lock.
+    /// Verify the paid rule against the fee header and append under one lock.
     /// A tip poll cannot land between the proof check and the pool write.
     ///
-    /// The header must be current, the previous tip, or (on the synthetic
-    /// plane) one block after. A header outside that window is rejected.
+    /// The decision is the Rust SDK's Rule BR1 check. A header outside
+    /// current, before, or after is rejected.
     fn accept_paid(
         &self,
         waypoint: Hash32,
@@ -234,15 +234,20 @@ impl BariService {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let tip = state.clock.current_tip();
         let network = state.clock.network().to_owned();
-        let window = hashcash::fee_window(header, &tip.hash, tip.previous_hash.as_ref(), &network);
-        if window == hashcash::FeeWindow::Outside {
-            return Ok(PaidAccept::Rejected);
-        }
         let bits = state.hashcash_bits;
         let origin = state.origin.clone();
-        let hash = hashcash::header_hash(header);
-        let challenge = hashcash::challenge(&origin, &hash);
-        if !hashcash::verify(&challenge, &waypoint, nonce, bits) {
+        let (br1_tip, plane) = br1_view(&tip, &network);
+        let header_hex = hex::encode(header);
+        let status = hashcash::paid_rule(
+            &waypoint,
+            &nonce.to_string(),
+            &header_hex,
+            &origin,
+            &br1_tip,
+            plane,
+            bits,
+        );
+        if status != 204 {
             return Ok(PaidAccept::Rejected);
         }
         match state.clock.post_waypoint(waypoint)? {
@@ -251,6 +256,33 @@ impl BariService {
             PostAccept::Full => Ok(PaidAccept::Full),
         }
     }
+}
+
+/// SPEC §13.6. Tip fields the SDK compares, and which plane's `nBits` rule applies.
+///
+/// `synthetic` is the test plane. Every other network name is the live plane:
+/// the mainnet target, including a retarget. Hash fields stay natural order.
+fn br1_view(
+    tip: &crate::clock::ChainTip,
+    network: &str,
+) -> (pcoc::br1::Br1Tip, pcoc::br1::Br1Plane) {
+    let br1_tip = pcoc::br1::Br1Tip {
+        hash: tip.hash,
+        previous: tip.previous_hash.unwrap_or([0u8; 32]),
+        height: tip.height,
+        time: tip
+            .time
+            .and_then(|secs| u32::try_from(secs).ok())
+            .unwrap_or(0),
+        bits: tip.bits,
+        period_first_time: tip.period_first_time,
+    };
+    let plane = if network == crate::synth_commit::SYNTH_INDEX_NETWORK {
+        pcoc::br1::Br1Plane::Test
+    } else {
+        pcoc::br1::Br1Plane::Live
+    };
+    (br1_tip, plane)
 }
 
 enum PaidAccept {
@@ -456,12 +488,12 @@ async fn submit_waypoint(State(service): State<BariService>, request: Request) -
             log_waypoint(
                 &service,
                 false,
-                StatusCode::BAD_REQUEST,
+                StatusCode::PAYMENT_REQUIRED,
                 PROOF_REJECTED_BODY,
                 Some(&waypoint),
                 None,
             );
-            (StatusCode::BAD_REQUEST, PROOF_REJECTED_BODY).into_response()
+            (StatusCode::PAYMENT_REQUIRED, PROOF_REJECTED_BODY).into_response()
         }
         Err(error) => {
             log_waypoint(
@@ -879,6 +911,8 @@ mod tests {
             previous_hash: None,
             height: 1,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         std::mem::forget(temp);
         (service, router)
@@ -968,6 +1002,8 @@ mod tests {
             previous_hash: None,
             height: 1,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         };
         let chain = Arc::new(ControllableChain::new(tip));
         let mut filled = BariClock::open_at_tip_with_soft_max(
@@ -1019,6 +1055,8 @@ mod tests {
             previous_hash: None,
             height: 10,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         let before = service.index_snapshot();
         assert_eq!(before.header.height, 10);
@@ -1071,6 +1109,8 @@ mod tests {
             previous_hash: None,
             height: 100,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         let leaf = [0x71; 32];
         assert_eq!(
@@ -1102,6 +1142,8 @@ mod tests {
             previous_hash: Some([1; 32]),
             height: 101,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         service.poll_once().unwrap();
         // pending, not serving
@@ -1113,6 +1155,8 @@ mod tests {
             previous_hash: Some([2; 32]),
             height: 102,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         service.poll_once().unwrap();
         let snap = service.index_snapshot();
@@ -1128,6 +1172,8 @@ mod tests {
             previous_hash: Some([3; 32]),
             height: 103,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         service.poll_once().unwrap();
         assert_eq!(fetch(app.clone(), leaf).await, 200);
@@ -1136,6 +1182,8 @@ mod tests {
             previous_hash: Some([4; 32]),
             height: 104,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         service.poll_once().unwrap();
         assert_eq!(fetch(app.clone(), leaf).await, 200);
@@ -1144,6 +1192,8 @@ mod tests {
             previous_hash: Some([5; 32]),
             height: 105,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         service.poll_once().unwrap();
         assert_eq!(fetch(app.clone(), leaf).await, 200);
@@ -1238,6 +1288,8 @@ mod tests {
             previous_hash: None,
             height: 100,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         };
         let (service, app, chain, _temp) = app_at(tip0);
         chain.set_tip(ChainTip {
@@ -1245,6 +1297,8 @@ mod tests {
             previous_hash: Some([1; 32]),
             height: 101,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         service.poll_once().unwrap();
 
@@ -1300,7 +1354,7 @@ mod tests {
             .header("X-Bari-Hashcash-Header", hex::encode(header))
             .body(axum::body::Body::from(wp.to_vec()))
             .unwrap();
-        assert_eq!(router.oneshot(req).await.unwrap().status(), 400);
+        assert_eq!(router.oneshot(req).await.unwrap().status(), 402);
     }
 
     #[tokio::test]
@@ -1314,7 +1368,7 @@ mod tests {
             .oneshot(post_header(&stale_header, waypoint.to_vec(), TEST_ORIGIN))
             .await
             .unwrap();
-        assert_eq!(response.status(), 400);
+        assert_eq!(response.status(), 402);
         let text = response_text(response).await;
         assert_eq!(text, PROOF_REJECTED_BODY);
         assert_eq!(service.pool_len(), 0);
@@ -1344,6 +1398,8 @@ mod tests {
             previous_hash: None,
             height: 80,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         let wrong = axum::http::Request::post("/waypoint")
             .header(header::CONTENT_TYPE, "text/plain")
@@ -1375,11 +1431,11 @@ mod tests {
             .header("X-Bari-Hashcash-Header", hex::encode(header))
             .body(axum::body::Body::from(leaf.to_vec()))
             .unwrap();
-        assert_eq!(app.clone().oneshot(bad).await.unwrap().status(), 400);
+        assert_eq!(app.clone().oneshot(bad).await.unwrap().status(), 402);
         let rejected_proof = ops_for(crate::ops::WAYPOINT_REJECT, &leaf_hex);
         assert!(
             rejected_proof.iter().any(|line| {
-                line["status"] == 400
+                line["status"] == 402
                     && line["reason"] == PROOF_REJECTED_BODY
                     && line["waypoint"] == leaf_hex
             }),
@@ -1451,6 +1507,8 @@ mod tests {
             previous_hash: Some([1; 32]),
             height: 81,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         service.poll_once().unwrap();
         chain.set_included(true);
@@ -1459,6 +1517,8 @@ mod tests {
             previous_hash: Some([2; 32]),
             height: 82,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         service.poll_once().unwrap();
         let fetch = app
@@ -1485,6 +1545,8 @@ mod tests {
             previous_hash: Some([3; 32]),
             height: 83,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         service.poll_once().unwrap();
         assert_eq!(
@@ -1504,6 +1566,8 @@ mod tests {
             previous_hash: Some([4; 32]),
             height: 84,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         service.poll_once().unwrap();
         chain.set_tip(ChainTip {
@@ -1511,6 +1575,8 @@ mod tests {
             previous_hash: Some([5; 32]),
             height: 85,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         service.poll_once().unwrap();
         let archived = ops_for(crate::ops::PATH_ARCHIVE, &leaf_hex);
@@ -1553,6 +1619,8 @@ mod tests {
             previous_hash: None,
             height: 100,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         let leaf = [0x81; 32];
         let unknown = [0x82; 32];
@@ -1591,6 +1659,8 @@ mod tests {
             previous_hash: Some([1; 32]),
             height: 101,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         service.poll_once().unwrap();
         let (status, text) = miss(app.clone(), leaf).await;
@@ -1603,6 +1673,8 @@ mod tests {
             previous_hash: Some([2; 32]),
             height: 102,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         service.poll_once().unwrap();
         let (status, text) = miss(app.clone(), leaf).await;
@@ -1616,6 +1688,8 @@ mod tests {
             previous_hash: Some([3; 32]),
             height: 103,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         service.poll_once().unwrap();
         chain.set_tip(ChainTip {
@@ -1623,6 +1697,8 @@ mod tests {
             previous_hash: Some([4; 32]),
             height: 104,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         service.poll_once().unwrap();
         let (status, text) = miss(app.clone(), leaf).await;
@@ -1636,6 +1712,8 @@ mod tests {
             previous_hash: Some([5; 32]),
             height: 105,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         service.poll_once().unwrap();
         let response = app
@@ -1661,6 +1739,8 @@ mod tests {
             previous_hash: None,
             height: 50,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         let leaf = [0x83; 32];
         assert_eq!(
@@ -1676,6 +1756,8 @@ mod tests {
             previous_hash: Some([1; 32]),
             height: 51,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         service.poll_once().unwrap();
         chain.set_included(true);
@@ -1684,6 +1766,8 @@ mod tests {
             previous_hash: Some([2; 32]),
             height: 52,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         service.poll_once().unwrap();
         let response = app
@@ -1709,6 +1793,8 @@ mod tests {
             previous_hash: None,
             height: 50,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         let leaf = [0x91; 32];
         assert_eq!(
@@ -1724,6 +1810,8 @@ mod tests {
             previous_hash: Some([1; 32]),
             height: 51,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         service.poll_once().unwrap();
         chain.set_included(true);
@@ -1732,6 +1820,8 @@ mod tests {
             previous_hash: Some([2; 32]),
             height: 52,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         };
         chain.set_tip(inclusion);
         service.poll_once().unwrap();
@@ -1769,6 +1859,8 @@ mod tests {
             previous_hash: Some(before_hash),
             height: 20,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         });
         let leaf = [0x84; 32];
         let short = app.clone().oneshot(post_wp(vec![0x11; 31])).await.unwrap();
@@ -1784,7 +1876,7 @@ mod tests {
             .oneshot(post_header(&outside, leaf.to_vec(), TEST_ORIGIN))
             .await
             .unwrap();
-        assert_eq!(response.status(), 400);
+        assert_eq!(response.status(), 402);
         assert_eq!(response_text(response).await, PROOF_REJECTED_BODY);
         assert_eq!(service.pool_len(), 0);
         assert_eq!(chain.state.lock().unwrap().plants, 0);
@@ -1799,7 +1891,7 @@ mod tests {
                 .body(axum::body::Body::from(leaf.to_vec()))
                 .unwrap();
             let response = app.clone().oneshot(weak_post).await.unwrap();
-            assert_eq!(response.status(), 400);
+            assert_eq!(response.status(), 402);
             assert_eq!(response_text(response).await, PROOF_REJECTED_BODY);
         }
         assert_eq!(service.pool_len(), 0);
@@ -1822,6 +1914,8 @@ mod tests {
             previous_hash: None,
             height: 1,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         };
         let chain = Arc::new(ControllableChain::new(tip));
         let clock = BariClock::open(chain, FileStore::open(temp.path()).unwrap()).unwrap();
@@ -1849,7 +1943,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), 400);
+        assert_eq!(response.status(), 402);
         assert_eq!(response_text(response).await, PROOF_REJECTED_BODY);
         assert_eq!(service.pool_len(), 0);
     }
@@ -1870,6 +1964,8 @@ mod tests {
             previous_hash: None,
             height: 1,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         };
         let chain = Arc::new(ControllableChain::new(tip));
         let clock = BariClock::open(chain, FileStore::open(temp.path()).unwrap()).unwrap();
@@ -1891,7 +1987,7 @@ mod tests {
             .oneshot(candidate_post(&header, &nonce, &waypoint))
             .await
             .unwrap();
-        assert_eq!(refused.status(), 400);
+        assert_eq!(refused.status(), 402);
         assert_eq!(response_text(refused).await, PROOF_REJECTED_BODY);
         let accepted = app
             .oneshot(candidate_post(&header, &nonce, &waypoint))

@@ -17,7 +17,8 @@ Hashcash is required on `POST /waypoint` only.
 | Surface | Code | Meaning |
 |---|---|---|
 | `POST /waypoint` | 204 | Appended to the live tip pool after fsync, or already held |
-| `POST /waypoint` | 400 | Body is not 32 raw bytes, or Hashcash is missing, invalid, for another origin, or outside the current/before/after header window |
+| `POST /waypoint` | 402 | The paid rule refuses the post (SPEC §13.6). The body is `X-Bari-Hashcash-Nonce rejected` |
+| `POST /waypoint` | 400 | Body is not 32 raw bytes, or a Hashcash header is missing or not the wire spelling |
 | `POST /waypoint` | 415 | `Content-Type` is missing or not `application/octet-stream` |
 | `POST /waypoint` | 503 | Open pool reached `BARI_POOL_SOFT_MAX` |
 | `GET /path/{leaf}` | 200 | Canonical path body for a confirmed leaf. A repeat returns the same body |
@@ -35,7 +36,7 @@ Hashcash headers: `X-Bari-Hashcash-Nonce` (shortest decimal, zero is `0`) and `X
 | Challenge | `SHA-256("bari-hc-v2" ‖ bari_origin ‖ header_hash)` |
 | `bari_origin` | RFC 6454 §6.2 serialization of `BARI_PUBLIC_ORIGIN` |
 | Message | `SHA-256(challenge ‖ waypoint ‖ le64(nonce))` |
-| Window | Current tip, the previous tip, or (synthetic plane only) one header after, with synth `nBits` `0x207fffff` |
+| Window | Current tip, the previous tip, or one header after. The check is the Rust SDK's Rule BR1. Live plane: the Bitcoin mainnet target for the next height, including a retarget. Test plane (`synthetic`): synth `nBits` `0x207fffff` |
 | Difficulty | 21 leading zero bits. That is the one difficulty, shared with produce. `BARI_HASHCASH_BITS` is not read. |
 
 `204` means the waypoint was appended or was already held. It is not a promise that a path will be served. A confirmed path stays 200. The proof is checked against the live tip under the same lock as the append.
@@ -60,7 +61,7 @@ stderr, one JSON object per line, same stream as the `tip height=` line. Always 
 | Event | Level | When | Fields |
 |---|---|---|---|
 | `bari.ops.waypoint.accept` | info | `POST /waypoint` returns 204 | `status` 204, `reason` `appended` or `already held`, `waypoint`, `tip_height`, `tip_hash` |
-| `bari.ops.waypoint.reject` | warn | `POST /waypoint` returns 400, 415, 500, or 503 | `status`, `reason` (the response text, or the README meaning of 503), `waypoint` when the body was 32 bytes, `tip_height`, `tip_hash`. 503 also has `soft_max`. A body that is not 32 bytes also has `body_len` |
+| `bari.ops.waypoint.reject` | warn | `POST /waypoint` returns 400, 402, 415, 500, or 503 | `status`, `reason` (the response text, or the README meaning of 503), `waypoint` when the body was 32 bytes, `tip_height`, `tip_hash`. 503 also has `soft_max`. A body that is not 32 bytes also has `body_len` |
 | `bari.ops.open_pool.admit` | info | A waypoint is appended to the open pool | `waypoint`, `leaf_count`, `leaf_ids` (the whole pool), `tip_height`, `tip_hash`. A duplicate 204 does not emit this |
 | `bari.ops.seal` | info | A pool is sealed | Non-empty: `tree_size`, `leaves`, `root`, `batch_sequence`, opened and closed tip. Empty: `empty` true, `leaf_count` 0, `leaves` `[]`, `durable_event` `pool_empty_handoff` or `pool_empty_seal`. Empty has no `tree_size` |
 | `bari.ops.seal.decision` | info, or warn when `decision` is `defer` | One line per seal decision, including an empty handoff | `decision_height` (block D), `decision_block` (Bitcoin display hex), `next_block_min_sat_vb` (mempool next-block minimum), `node_estimate_sat_vb` (`estimatesmartfee` 1 economical; null when that call fails), `fee_cap_sat_vb`, `bid_sat_vb`, `decision` (`plant`, `defer`, or `empty`), `leaf_count`, `leaves`, `dropped_leaf_count` (0), `dropped_leaves` (`[]`). On the test plane the fee rates are null. This is not `bari.ops.seal` |

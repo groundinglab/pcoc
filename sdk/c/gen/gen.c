@@ -145,8 +145,249 @@ static void load_beacons(uint8_t seed_beacon[32], uint8_t beacons[19][32], uint6
   }
 }
 
+/* First header, at the first nTime at or after 1233062596, whose SHA-256d meets
+ * the mainnet pow limit. A constant so regeneration does not search. */
+static const char LIVE_AFTER_HEADER_HEX[] =
+    "0100000007fd9d1abc8d5b4c25c9f451e215c0c90b68b1a46917374e5274cbc6086327b051b29fc516c3c3aecac4a77"
+    "c019cb535bde7a446cd0ae8e32afc61d094b7fd37c50a7f49ffff001d27167cb1";
+
+static void add_s(buf *b, const char *key, const char *val) {
+  char line[256];
+  int n = snprintf(line, sizeof(line), "%s\t%s\n", key, val);
+  if (n < 0 || n >= (int)sizeof(line)) {
+    fprintf(stderr, "gen: br1 line\n");
+    exit(1);
+  }
+  badd(b, line);
+}
+
+static void add_hex(buf *b, const char *key, const uint8_t *p, size_t n) {
+  char hx[161];
+  hex_out(p, n, hx);
+  add_s(b, key, hx);
+}
+
+static void reverse32(uint8_t p[32]) {
+  for (int i = 0; i < 16; i++) {
+    uint8_t t = p[i];
+    p[i] = p[31 - i];
+    p[31 - i] = t;
+  }
+}
+
+static const char *br1_window_s(int w) {
+  if (w == PCOC_BR1_CURRENT) return "current";
+  if (w == PCOC_BR1_BEFORE) return "before";
+  if (w == PCOC_BR1_AFTER) return "after";
+  return "outside";
+}
+
+static int br1_expect_status(const char *id) {
+  if (strcmp(id, "current") == 0 || strcmp(id, "before") == 0 || strcmp(id, "after_test") == 0 ||
+      strcmp(id, "after_live") == 0 || strcmp(id, "after_live_copy") == 0) {
+    return 204;
+  }
+  return 402;
+}
+
+static const char *br1_expect_window(const char *id) {
+  if (strcmp(id, "current") == 0 || strcmp(id, "wrong_origin") == 0) return "current";
+  if (strcmp(id, "before") == 0) return "before";
+  if (strcmp(id, "after_test") == 0 || strcmp(id, "after_live") == 0 ||
+      strcmp(id, "after_live_copy") == 0) {
+    return "after";
+  }
+  return "outside";
+}
+
+static int header_with_pow(const uint8_t previous[32], uint32_t time, uint32_t bits, uint8_t out[80]) {
+  pcoc_br1_tip tip;
+  memset(&tip, 0, sizeof(tip));
+  memcpy(tip.hash, previous, 32);
+  tip.height = 100;
+  tip.time = time;
+  tip.bits = bits;
+  int plane = (bits == PCOC_BR1_SYNTH_NBITS) ? PCOC_BR1_PLANE_TEST : PCOC_BR1_PLANE_LIVE;
+  for (uint32_t nonce = 0; nonce < 4096u; nonce++) {
+    pcoc_br1_assemble_header(previous, time, bits, nonce, out);
+    if (pcoc_br1_window(out, 80, &tip, plane) == PCOC_BR1_AFTER) return 0;
+  }
+  fprintf(stderr, "gen: no proof-of-work header\n");
+  return -1;
+}
+
+static int emit_at(buf *b, const char *id, const char *check_origin, const char *solve_origin,
+                   const uint8_t waypoint[32], const uint8_t header[80], const pcoc_br1_tip *tip,
+                   int plane) {
+  uint8_t hash[32], challenge[32];
+  pcoc_sha256d_80(header, hash);
+  pcoc_hashcash_challenge(solve_origin, strlen(solve_origin), hash, challenge);
+  uint64_t nonce = 0;
+  if (pcoc_hashcash_solve(challenge, waypoint, (int)PCOC_HASHCASH_BITS, UINT64_MAX, &nonce) != 0) {
+    fprintf(stderr, "gen: br1 nonce %s\n", id);
+    return -1;
+  }
+  char nonce_s[32], header_hex[161], key[80], num[32];
+  snprintf(nonce_s, sizeof(nonce_s), "%llu", (unsigned long long)nonce);
+  hex_out(header, 80, header_hex);
+  unsigned status = pcoc_br1_status(waypoint, 32, nonce_s, header_hex, check_origin, tip, plane);
+  const char *window = br1_window_s(pcoc_br1_window(header, 80, tip, plane));
+  if (status != (unsigned)br1_expect_status(id) || strcmp(window, br1_expect_window(id)) != 0) {
+    fprintf(stderr, "gen: br1 %s status %u window %s\n", id, status, window);
+    return -1;
+  }
+  const char *plane_s = (plane == PCOC_BR1_PLANE_LIVE) ? "live" : "test";
+  snprintf(key, sizeof(key), "br1.%s.plane", id);
+  add_s(b, key, plane_s);
+  snprintf(key, sizeof(key), "br1.%s.origin", id);
+  add_s(b, key, check_origin);
+  snprintf(key, sizeof(key), "br1.%s.solve_origin", id);
+  add_s(b, key, solve_origin);
+  snprintf(key, sizeof(key), "br1.%s.waypoint", id);
+  add_hex(b, key, waypoint, 32);
+  snprintf(key, sizeof(key), "br1.%s.nonce", id);
+  add_s(b, key, nonce_s);
+  snprintf(key, sizeof(key), "br1.%s.fee_header", id);
+  add_s(b, key, header_hex);
+  snprintf(key, sizeof(key), "br1.%s.tip_hash", id);
+  add_hex(b, key, tip->hash, 32);
+  snprintf(key, sizeof(key), "br1.%s.tip_previous", id);
+  add_hex(b, key, tip->previous, 32);
+  snprintf(key, sizeof(key), "br1.%s.tip_height", id);
+  snprintf(num, sizeof(num), "%u", (unsigned)tip->height);
+  add_s(b, key, num);
+  snprintf(key, sizeof(key), "br1.%s.tip_time", id);
+  snprintf(num, sizeof(num), "%u", (unsigned)tip->time);
+  add_s(b, key, num);
+  snprintf(key, sizeof(key), "br1.%s.tip_bits", id);
+  snprintf(num, sizeof(num), "%08x", (unsigned)tip->bits);
+  add_s(b, key, num);
+  snprintf(key, sizeof(key), "br1.%s.period_first_time", id);
+  snprintf(num, sizeof(num), "%u", (unsigned)tip->period_first_time);
+  add_s(b, key, num);
+  snprintf(key, sizeof(key), "br1.%s.window", id);
+  add_s(b, key, window);
+  snprintf(key, sizeof(key), "br1.%s.status", id);
+  snprintf(num, sizeof(num), "%u", status);
+  add_s(b, key, num);
+  return 0;
+}
+
+static int emit_br1(buf *b, const char *id, const char *origin, const uint8_t waypoint[32],
+                    const uint8_t header[80], const pcoc_br1_tip *tip, int plane) {
+  return emit_at(b, id, origin, origin, waypoint, header, tip, plane);
+}
+
+static int write_br1(const char *dir) {
+  if (sizeof(LIVE_AFTER_HEADER_HEX) != 161) {
+    fprintf(stderr, "gen: live header hex length\n");
+    return -1;
+  }
+  uint32_t hist = pcoc_br1_mainnet_next_bits(2015u, 0x1d00ffffu, 1233061996u, 1231006505u);
+  uint32_t hard =
+      pcoc_br1_mainnet_next_bits(2015u, 0x1d00ffffu, 1231006505u + 302400u, 1231006505u);
+  if (hist != 0x1d00ffffu || hard != 0x1c3fffc0u) {
+    fprintf(stderr, "gen: retarget %08x %08x\n", hist, hard);
+    return -1;
+  }
+  const char *origin = "https://example.com";
+  uint8_t waypoint[32];
+  named_hash("pcoc-pack-2.2/br1/waypoint", waypoint);
+  uint8_t prev11[32], prev33[32], prev55[32];
+  memset(prev11, 0x11, 32);
+  memset(prev33, 0x33, 32);
+  memset(prev55, 0x55, 32);
+  uint8_t tip_header[80], before_header[80], outside_header[80];
+  pcoc_br1_assemble_header(prev11, 1700000000u, PCOC_BR1_SYNTH_NBITS, 4, tip_header);
+  pcoc_br1_assemble_header(prev33, 1700000001u, PCOC_BR1_SYNTH_NBITS, 5, before_header);
+  pcoc_br1_assemble_header(prev55, 1700000002u, PCOC_BR1_SYNTH_NBITS, 9, outside_header);
+  uint8_t tip_hash[32], before_hash[32];
+  pcoc_sha256d_80(tip_header, tip_hash);
+  pcoc_sha256d_80(before_header, before_hash);
+  pcoc_br1_tip test_tip;
+  memset(&test_tip, 0, sizeof(test_tip));
+  memcpy(test_tip.hash, tip_hash, 32);
+  memset(test_tip.previous, 0x11, 32);
+  test_tip.height = 100;
+  test_tip.time = 1700000000u;
+  test_tip.bits = PCOC_BR1_SYNTH_NBITS;
+  uint8_t after_test[80], reversed_tip[32], display_after[80], wrong_bits_test[80];
+  if (header_with_pow(tip_hash, 1700000010u, PCOC_BR1_SYNTH_NBITS, after_test) != 0) return -1;
+  memcpy(reversed_tip, tip_hash, 32);
+  reverse32(reversed_tip);
+  if (header_with_pow(reversed_tip, 1700000011u, PCOC_BR1_SYNTH_NBITS, display_after) != 0) return -1;
+  pcoc_br1_assemble_header(tip_hash, 1700000012u, PCOC_BR1_POW_LIMIT_BITS, 1, wrong_bits_test);
+
+  uint8_t live_hash[32], live_prev[32];
+  named_hash("pcoc-pack-2.2/br1/live-tip", live_hash);
+  named_hash("pcoc-pack-2.2/br1/live-prev", live_prev);
+  pcoc_br1_tip live_tip;
+  memset(&live_tip, 0, sizeof(live_tip));
+  memcpy(live_tip.hash, live_hash, 32);
+  memcpy(live_tip.previous, live_prev, 32);
+  live_tip.height = 2015;
+  live_tip.time = 1233061996u;
+  live_tip.bits = PCOC_BR1_POW_LIMIT_BITS;
+  live_tip.period_first_time = 1231006505u;
+  uint8_t live_header[80], wrong_bits_live[80];
+  if (pcoc_br1_parse_fee_header(LIVE_AFTER_HEADER_HEX, live_header) != 0) return -1;
+  if (memcmp(live_header + 4, live_hash, 32) != 0) {
+    fprintf(stderr, "gen: live header prev is not the tip hash\n");
+    return -1;
+  }
+  if (pcoc_br1_required_bits(&live_tip, PCOC_BR1_PLANE_LIVE) != PCOC_BR1_POW_LIMIT_BITS) {
+    fprintf(stderr, "gen: historical retarget\n");
+    return -1;
+  }
+  if (header_with_pow(live_hash, 1233062000u, PCOC_BR1_SYNTH_NBITS, wrong_bits_live) != 0) return -1;
+
+  buf b = {0};
+  pcoc_br1_tip before_tip = test_tip;
+  memcpy(before_tip.previous, before_hash, 32);
+  pcoc_br1_tip display_current_tip = test_tip;
+  memcpy(display_current_tip.hash, reversed_tip, 32);
+  pcoc_br1_tip display_before_tip = test_tip;
+  uint8_t reversed_before[32];
+  memcpy(reversed_before, before_hash, 32);
+  reverse32(reversed_before);
+  memcpy(display_before_tip.previous, reversed_before, 32);
+
+  int rc = 0;
+  if (emit_br1(&b, "current", origin, waypoint, tip_header, &test_tip, PCOC_BR1_PLANE_TEST) != 0 ||
+      emit_br1(&b, "before", origin, waypoint, before_header, &before_tip, PCOC_BR1_PLANE_TEST) != 0 ||
+      emit_br1(&b, "after_test", origin, waypoint, after_test, &test_tip, PCOC_BR1_PLANE_TEST) != 0 ||
+      emit_br1(&b, "after_live_copy", origin, waypoint, after_test, &test_tip, PCOC_BR1_PLANE_LIVE) !=
+          0 ||
+      emit_br1(&b, "after_live", origin, waypoint, live_header, &live_tip, PCOC_BR1_PLANE_LIVE) != 0 ||
+      emit_br1(&b, "outside", origin, waypoint, outside_header, &test_tip, PCOC_BR1_PLANE_TEST) != 0 ||
+      emit_at(&b, "wrong_origin", origin, "https://other.example", waypoint, tip_header, &test_tip,
+              PCOC_BR1_PLANE_TEST) != 0 ||
+      emit_br1(&b, "display_current", origin, waypoint, tip_header, &display_current_tip,
+               PCOC_BR1_PLANE_TEST) != 0 ||
+      emit_br1(&b, "display_before", origin, waypoint, before_header, &display_before_tip,
+               PCOC_BR1_PLANE_TEST) != 0 ||
+      emit_br1(&b, "display_after", origin, waypoint, display_after, &test_tip, PCOC_BR1_PLANE_TEST) !=
+          0 ||
+      emit_br1(&b, "wrong_nbits_test", origin, waypoint, wrong_bits_test, &test_tip,
+               PCOC_BR1_PLANE_TEST) != 0 ||
+      emit_br1(&b, "wrong_nbits_live", origin, waypoint, wrong_bits_live, &live_tip,
+               PCOC_BR1_PLANE_LIVE) != 0) {
+    rc = -1;
+  }
+  if (rc != 0) {
+    free(b.s);
+    return -1;
+  }
+  char path[512];
+  snprintf(path, sizeof(path), "%s/br1.txt", dir);
+  write_sorted(path, b.s);
+  free(b.s);
+  return 0;
+}
+
 int main(int argc, char **argv) {
   const char *dir = argc > 1 ? argv[1] : "candidates";
+  if (write_br1(dir) != 0) return 1;
   uint8_t pkA[32], pkB[32];
   unhex(PK_A, pkA, 32);
   unhex(PK_B, pkB, 32);

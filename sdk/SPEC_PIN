@@ -1,4 +1,4 @@
 # Satoshi Hike 2.2 with erratum 2. SHA-256 of spec/conformance/pack/manifest.json.
 tag=spec-2.2.0
 erratum=2
-vector-sha256=ec704be3975d0e1af3eab9bb0f6d5ab7b6c6da5dd4b0d9b87988af54d0886a2c
+vector-sha256=91ded57e5c05b7cb4cd74d313a51d83d2373fa86dc625df41faed9586e9032af

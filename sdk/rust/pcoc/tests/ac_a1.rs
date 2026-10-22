@@ -4,6 +4,11 @@
 //! The integration branch also changes consumers, the other language SDKs,
 //! and CI. A lock that those paths must stay untouched belonged to the
 //! Rust-only branch. It is not the check that the Rust tree is new.
+//!
+//! The check was met once the 2.2 Rust SDK reached main. It returns before
+//! the per-file walk when `origin/main` already contains that tree, and when
+//! `origin/main..HEAD` is empty (this checkout is main, or the branch is
+//! already merged).
 
 #[path = "../../support/repo.rs"]
 mod repo_mod;
@@ -50,18 +55,37 @@ const REPLACED_ON_MAIN: &[&str] = &[
     "sdk/rust/README.md",
 ];
 
+/// Crate manifest the pre-2.2 tree did not have. The workspace files in
+/// `REPLACED_ON_MAIN` existed on that tree, so they do not mark 2.2.
+const SDK_22_MARKER: &str = "sdk/rust/pcoc/Cargo.toml";
+
 #[test]
 fn files_added_on_this_branch() {
     let repo = repo();
+    let marker_ref = format!("origin/main:{SDK_22_MARKER}");
+    let marker = git(&repo, &["cat-file", "-e", &marker_ref]);
+    if marker.status.success() {
+        eprintln!(
+            "AC-A1: origin/main already contains the 2.2 Rust SDK ({SDK_22_MARKER}); skipping the per-file check"
+        );
+        return;
+    }
+    let out = git(&repo, &["rev-list", "--reverse", "origin/main..HEAD"]);
+    assert!(out.status.success());
+    let text = String::from_utf8(out.stdout).unwrap();
+    let Some(first) = text
+        .lines()
+        .next()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+    else {
+        eprintln!("AC-A1: origin/main..HEAD is empty; skipping the per-file check");
+        return;
+    };
     let mut files = Vec::new();
     walk(&repo.join("sdk/rust"), &mut files);
     assert!(!files.is_empty());
-    let first = {
-        let out = git(&repo, &["rev-list", "--reverse", "origin/main..HEAD"]);
-        assert!(out.status.success());
-        let text = String::from_utf8(out.stdout).unwrap();
-        text.lines().next().unwrap().trim().to_string()
-    };
     for file in &files {
         let rel = file
             .strip_prefix(&repo)

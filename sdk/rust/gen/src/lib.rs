@@ -1,6 +1,7 @@
 //! CASES.md v2 candidate files. Deterministic. No networking.
 #![deny(unsafe_code)]
 
+mod br1cand;
 mod negatives;
 
 use pcoc::checkpoint::checkpoint;
@@ -21,16 +22,16 @@ use std::path::{Path, PathBuf};
 const PK_A: &str = "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9";
 const PK_B: &str = "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659";
 
-struct Lines {
+pub(crate) struct Lines {
     rows: Vec<(String, String)>,
 }
 
 impl Lines {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self { rows: Vec::new() }
     }
 
-    fn add(&mut self, key: impl Into<String>, value: impl Into<String>) {
+    pub(crate) fn add(&mut self, key: impl Into<String>, value: impl Into<String>) {
         let key = key.into();
         let value = value.into();
         assert!(!key.is_empty());
@@ -38,7 +39,7 @@ impl Lines {
         self.rows.push((key, value));
     }
 
-    fn hex(&mut self, key: impl Into<String>, bytes: &[u8]) {
+    pub(crate) fn hex(&mut self, key: impl Into<String>, bytes: &[u8]) {
         self.add(key, hex_encode(bytes));
     }
 
@@ -46,7 +47,7 @@ impl Lines {
         self.add(key, format!("{n:016x}"));
     }
 
-    fn finish(mut self) -> String {
+    pub(crate) fn finish(mut self) -> String {
         self.rows.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
         for w in self.rows.windows(2) {
             assert!(w[0].0.as_bytes() < w[1].0.as_bytes(), "duplicate {}", w[0].0);
@@ -112,7 +113,7 @@ fn write_file(dir: &Path, name: &str, body: String) -> Result<(), String> {
     std::fs::write(&path, body).map_err(|e| format!("write {}: {e}", path.display()))
 }
 
-/// Write the 14 CASES.md files into `dir`. Stops if any negative equals honest.
+/// Write the candidate files into `dir`. Stops if any negative equals honest.
 pub fn write_candidates(dir: &Path) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("mkdir: {e}"))?;
     let pk_a = pk(PK_A);
@@ -125,6 +126,7 @@ pub fn write_candidates(dir: &Path) -> Result<(), String> {
     write_file(dir, "anchor.txt", anchor_lines())?;
     write_file(dir, "draw.txt", draw_lines())?;
     write_file(dir, "hashcash.txt", hashcash_lines())?;
+    write_file(dir, "br1.txt", br1cand::lines())?;
 
     let s1 = Profile::conformance_small(32, 64, 65_536, 100).expect("S1");
     let (terrain, d, lane) = terrain_from_seed(&pk_a, &seed_beacon, &s1);

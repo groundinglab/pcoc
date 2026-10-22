@@ -26,7 +26,7 @@ Bari timestamps waypoints by sealing each tip's pool into one Bitcoin transactio
 
 The synth plane is in this crate (`header_source`). A live Bitcoin header source is not in this build (SPEC §9, Phase C). The process fails closed if `BARI_TIP_SOURCE=bitcoin-gossip` is asked to follow live headers. Nothing here is deployed from this change.
 
-Hashcash is `bari-hc-v2` (SPEC §13.1). `BARI_PUBLIC_ORIGIN` is this process's public origin, serialized as RFC 6454 §6.2 and mixed into the challenge. The fee header arrives in `X-Bari-Hashcash-Header`. A header for another origin is refused. A live-plane "after" header (the next block, including a retarget) is refused in this build: Bari does not yet apply the Bitcoin consensus target. The synthetic plane still accepts an "after" header at `nBits` `0x207fffff`.
+Hashcash is `bari-hc-v2` (SPEC §13.1). `BARI_PUBLIC_ORIGIN` is this process's public origin, serialized as RFC 6454 §6.2 and mixed into the challenge. The fee header arrives in `X-Bari-Hashcash-Header`. A header for another origin is refused. The paid rule is the Rust SDK's Rule BR1 check. A live-plane "after" header uses the Bitcoin mainnet target for the next height, including a retarget at a 2016-block boundary. The synthetic plane uses the fixed `nBits` `0x207fffff`.
 
 ## More
 

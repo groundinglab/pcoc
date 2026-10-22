@@ -8,7 +8,7 @@ What is specified, what has been measured, and what is open. This page is not th
 |---|---|---|
 | Satoshi Hike 2.2 | the specification | [spec/satoshi-hike-v2.2/SPEC.md](spec/satoshi-hike-v2.2/SPEC.md) |
 | Tag `spec-2.2.0` | cut by the maintainers on the merge commit | `sdk/SPEC_PIN` |
-| Pack `pack-2.2.0` | incomplete until the SDK phase | [spec/conformance/pack/](spec/conformance/pack/) |
+| Pack `pack-2.2.0` | complete | [spec/conformance/pack/](spec/conformance/pack/) |
 | groundinglab policy | policy, not the specification | [policy/groundinglab-admission/](policy/groundinglab-admission/) |
 
 ## Measured

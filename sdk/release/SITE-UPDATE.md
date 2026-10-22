@@ -1,4 +1,6 @@
-# Site update for SDK 2.2.0 (generated 2026-10-23 ACDT from release-manifest.json a3ef7ffa455a347743d8c07fa69c5e701a3b8db20abbe1c225335e2b8857da87)
+# Site update for SDK 2.2.0 (generated 2026-10-23 ACDT from release-manifest.json dc9cecb1a2be17548de90841e42275d816b96c7ec2c2e7d20f89d81355126489)
+
+The pack is complete. BR1 vectors and the sign-in wire are in it. Manifest `pack_status` is `complete`.
 
 ## Apply on a preview branch, then Christian reviews the preview
 
@@ -19,5 +21,4 @@
 - apps/, guides/ (#42–43): desktop and Android builds on SDK 2.2.0
 - verify/ (#1–7): a 2.2 PCOC from reference system 1
 - pcoc-at-scale, by-audience (#40–41): no timing run, so no new legs/s
-- Bari paid-rule vectors and sign-in wire: not in the pack; manifest `pack_status` is `incomplete`
 - Performance table: `performance` is an empty list
