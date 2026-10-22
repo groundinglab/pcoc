@@ -1,5 +1,7 @@
-# CI for groundinglab/pcoc. Self-hosted runners only (labels pcoc-heavy and pcoc-pub).
-# Never GitHub-hosted. Jobs never run for fork PRs (fork guard in every job + runner pre-job hook).
+# CI for groundinglab/pcoc. Heavy suites run on the self-hosted dax pool (label pcoc-heavy,
+# local persistent caches). Light checks run on standard GitHub-hosted ubuntu-latest, which is
+# free for this public repo (Christian, 23 Oct 2026). Jobs never run for fork PRs (fork guard in
+# every job + runner pre-job hook on the self-hosted pool).
 # `ci-ok` is the single check to require. Suites are path-gated by .github/scripts/changes.sh;
 # a suite whose directory does not exist yet is skipped.
 name: ci
@@ -14,17 +16,19 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # One live run per PR (or per ref for pushes); a newer push cancels the older PR run.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
+  CARGO_BUILD_JOBS: "4"
 
 jobs:
   changes:
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, linux, pcoc-pub]
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       spec: ${{ steps.gate.outputs.spec }}
@@ -60,7 +64,7 @@ jobs:
   spec:
     needs: changes
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && needs.changes.outputs.spec == 'true'
-    runs-on: [self-hosted, linux, pcoc-pub]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -76,12 +80,18 @@ jobs:
         run: cargo test -p pcoc --test ac_a3 --locked -- --test-threads=6
 
   sdk:
-    # Rust workspace tests, plus Go, Java and C when that 2.2 tree is present.
-    # A language whose directory or 2.2 entry point is absent is skipped.
+    # One leg per language, in parallel on the heavy pool. A language whose
+    # directory or 2.2 entry point is absent is skipped. Same path gate as before:
+    # any spec or SDK change runs all four legs.
     needs: changes
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.spec == 'true' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.go == 'true' || needs.changes.outputs.java == 'true' || needs.changes.outputs.c == 'true')
+    strategy:
+      fail-fast: false
+      matrix:
+        lang: [rust, go, java, c]
+    name: sdk (${{ matrix.lang }})
     runs-on: [self-hosted, linux, pcoc-heavy]
-    timeout-minutes: 45
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -89,54 +99,59 @@ jobs:
           fetch-depth: 0
       - name: sparse worktree (full clone, cone mode, no partial filter)
         run: git sparse-checkout set spec sdk
-      - id: langs
+      - id: on
+        env:
+          LANG_KEY: ${{ matrix.lang }}
         run: |
-          echo "go=$([[ -d sdk/go/cmd/pcoc ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          echo "java=$([[ -d sdk/java/check ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          echo "c=$([[ -d sdk/c ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          echo "rust=$([[ -d sdk/rust ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: steps.langs.outputs.rust == 'true'
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            sdk/rust/target
-          key: sdk-rust-${{ runner.os }}-${{ hashFiles('sdk/rust/Cargo.lock', 'sdk/rust/rust-toolchain.toml') }}
-          restore-keys: sdk-rust-${{ runner.os }}-
+          case "$LANG_KEY" in
+            rust) d=sdk/rust ;;
+            go) d=sdk/go/cmd/pcoc ;;
+            java) d=sdk/java/check ;;
+            c) d=sdk/c ;;
+          esac
+          echo "run=$([[ -d $d ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - name: local cache dirs (runner-provided; in-tree fallback)
+        if: steps.on.outputs.run == 'true'
+        run: |
+          # dax runners set PCOC_TARGET_ROOT to a per-runner persistent volume. Cargo build
+          # dirs are never shared between concurrent jobs.
+          if [[ -n "${PCOC_TARGET_ROOT:-}" ]]; then
+            echo "CARGO_TARGET_DIR=$PCOC_TARGET_ROOT/sdk-rust" >> "$GITHUB_ENV"
+            echo "PCOC_NEGATIVES_TARGET=$PCOC_TARGET_ROOT/sdk-rust-negatives" >> "$GITHUB_ENV"
+          fi
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: steps.langs.outputs.go == 'true'
+        if: steps.on.outputs.run == 'true' && matrix.lang == 'go'
         with:
           go-version-file: sdk/go/go.mod
-          cache: false # no third-party modules (no go.sum)
+          cache: false # no third-party modules (no go.sum); GOCACHE is a runner volume
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-        if: steps.langs.outputs.java == 'true'
+        if: steps.on.outputs.run == 'true' && matrix.lang == 'java'
         with:
           distribution: temurin
           java-version: "21"
       - name: Rust workspace
-        if: steps.langs.outputs.rust == 'true'
+        if: steps.on.outputs.run == 'true' && matrix.lang == 'rust'
         working-directory: sdk/rust
         run: |
           # Release profile: the suite regenerates the production-size candidates
           # and object (sdk/rust/README.md); the debug profile overruns the job timeout.
-          cargo test --workspace --locked --release -- --test-threads=6
+          cargo test --workspace --locked --release -- --test-threads=4
           for script in check/*.sh; do
             [ -f "$script" ] || continue
             bash "$script"
           done
       - name: Go
-        if: steps.langs.outputs.go == 'true'
+        if: steps.on.outputs.run == 'true' && matrix.lang == 'go'
         working-directory: sdk/go
         run: go test ./...
       - name: Java
-        if: steps.langs.outputs.java == 'true'
+        if: steps.on.outputs.run == 'true' && matrix.lang == 'java'
         working-directory: sdk/java
         run: ./gradlew test
       - name: C
-        if: steps.langs.outputs.c == 'true'
+        if: steps.on.outputs.run == 'true' && matrix.lang == 'c'
         working-directory: sdk/c
-        run: make check
+        run: make -j4 check
 
   services:
     needs: changes
@@ -151,7 +166,7 @@ jobs:
           - { key: index, dir: services/index }
     name: service (${{ matrix.key }})
     runs-on: [self-hosted, linux, pcoc-heavy]
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - name: gate
         id: on
@@ -180,14 +195,13 @@ jobs:
             *) git sparse-checkout set ${{ matrix.dir }} ;;
           esac
       - if: steps.on.outputs.run == 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            ${{ matrix.dir }}/target
-          key: svc-${{ matrix.key }}-${{ runner.os }}-${{ hashFiles(format('{0}/Cargo.lock', matrix.dir)) }}
-          restore-keys: svc-${{ matrix.key }}-${{ runner.os }}-
+        name: local cache dirs (runner-provided; in-tree fallback)
+        env:
+          KEY: ${{ matrix.key }}
+        run: |
+          if [[ -n "${PCOC_TARGET_ROOT:-}" ]]; then
+            echo "CARGO_TARGET_DIR=$PCOC_TARGET_ROOT/svc-$KEY" >> "$GITHUB_ENV"
+          fi
       - if: steps.on.outputs.run == 'true'
         name: cargo test
         working-directory: ${{ matrix.dir }}
@@ -200,7 +214,7 @@ jobs:
     needs: changes
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && needs.changes.outputs.desktop == 'true'
     runs-on: [self-hosted, linux, pcoc-heavy]
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -209,14 +223,11 @@ jobs:
         run: git sparse-checkout set apps/desktop spec/conformance sdk/rust
       - name: GTK dev packages (preinstalled on the runner image; no sudo on self-hosted)
         run: pkg-config --modversion gtk4 libadwaita-1 || echo "::warning::gtk4/libadwaita dev packages missing on this runner image"
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            apps/desktop/target
-          key: desktop-${{ runner.os }}-${{ hashFiles('apps/desktop/Cargo.lock') }}
-          restore-keys: desktop-${{ runner.os }}-
+      - name: local cache dirs (runner-provided; in-tree fallback)
+        run: |
+          if [[ -n "${PCOC_TARGET_ROOT:-}" ]]; then
+            echo "CARGO_TARGET_DIR=$PCOC_TARGET_ROOT/desktop" >> "$GITHUB_ENV"
+          fi
       - name: cargo test core
         working-directory: apps/desktop
         env:
@@ -226,7 +237,7 @@ jobs:
   docs:
     needs: changes
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && needs.changes.outputs.docs == 'true'
-    runs-on: [self-hosted, linux, pcoc-pub]
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -237,7 +248,7 @@ jobs:
 
   gitleaks:
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, linux, pcoc-pub]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -256,7 +267,7 @@ jobs:
   g1:
     # Fork PRs get no secrets, so G1 cannot run there; ci-ok accepts a skip only in that case.
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, linux, pcoc-pub]
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -282,7 +293,7 @@ jobs:
     needs: changes
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.xverify == 'true' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule')
     runs-on: [self-hosted, linux, pcoc-heavy]
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -303,7 +314,7 @@ jobs:
 
   retired-term:
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, linux, pcoc-pub]
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -322,7 +333,7 @@ jobs:
   ci-ok:
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     needs: [changes, spec, sdk, services, desktop, docs, gitleaks, g1, retired-term, xverify]
-    runs-on: [self-hosted, linux, pcoc-pub]
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
