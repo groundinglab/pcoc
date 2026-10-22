@@ -1,5 +1,7 @@
 # Service status
 
+> **Do not deploy this tree over the live v2.0 service.** This branch is Satoshi Hike 2.2. The process refuses a live plane unless `allow_2_2_live = true`. That opt-in defaults to off and is not set anywhere in this repo.
+
 Admission gate service, crate `pcoc-admission` 0.5.4. This page is the service's status. Evidence and withdrawn claims are in [EVIDENCE.md](EVIDENCE.md). Policy is in [POLICY.md](../../policy/groundinglab-admission/POLICY.md). The wire is in [WIRE.md](WIRE.md).
 
 ## Implemented
@@ -10,7 +12,7 @@ Admission gate service, crate `pcoc-admission` 0.5.4. This page is the service's
 - The policy file is the source of truth. The groundinglab policy is [gl-admit-v9.toml](../../policy/groundinglab-admission/gl-admit-v9.toml). `config.rs` still has a policy path of its own; that line is listed with the code references. Unknown keys are an error. `policy-bind.json` binds the id to a hash of the full table.
 - The leg-rate comparison is SPEC §15.4 Rule B2 on `(hike_legs, hike_span)` from the §14 analysis record: `hike_span` > 0 and `q · hike_legs ≥ p · hike_span`. The comparison is the Rust SDK `leg_rate_floor`. `hike_span` ≤ 0 is `refuse`. `hike_span` `not read` is `held`. Bookend `N` and `S` are still shown and drive no admission comparison (Rule B6). Anchored waypoints are counted among `W_1` … `W_16`; no specific waypoint is required. The too-few refusal line carries the count (`N of 16 anchored, need 6`).
 - A fast phase issues `provisional` before thorough. A settled miss, including too few anchored waypoints, does not build terrain. A `hike_span` of `not read` is held. The website outcome for that hold stays the locked `pending` token.
-- Thorough draws three runs of six distinct legs, commits the draw before walking, stops at the first mismatch, then recomputes the Rule A4.3 digests. A mismatch revokes the grant and bans the public key. A pending draw file is reused on restart.
+- Thorough draws `6 · thorough_rounds` legs from the OS CSPRNG, commits the draw before walking, and recomputes each drawn leg at production: the leg result and the checkpoint built from that recomputed leg result. A mismatch revokes the grant and bans the public key. A pending draw file is reused on restart.
 - `GET /v1/policy` returns the full table plus `source` `recommendation, not specification`. `/v1/health` echoes the policy id.
 
 ## Not on the website wire

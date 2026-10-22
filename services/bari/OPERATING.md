@@ -1,3 +1,5 @@
+> **Do not deploy this tree over the live v2.0 service.** This branch is Satoshi Hike 2.2 and must not replace the live v2.0 service.
+
 ## Pool handoff
 
 | Item | Choice |
