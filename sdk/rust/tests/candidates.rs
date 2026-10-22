@@ -25,6 +25,7 @@ const FILES: &[&str] = &[
     "unknown-kind.txt",
     "hashcash.txt",
     "negatives.txt",
+    "bari.txt",
 ];
 
 fn committed() -> PathBuf {

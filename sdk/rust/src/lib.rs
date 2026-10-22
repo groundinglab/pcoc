@@ -1,6 +1,7 @@
 //! Satoshi Hike 2.2 core. Behaviour is `spec/satoshi-hike-v2.2/SPEC.md`.
 #![forbid(unsafe_code)]
 
+pub mod bari_rule;
 pub mod cbor;
 pub mod checkpoint;
 pub mod compare;

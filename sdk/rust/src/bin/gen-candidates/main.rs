@@ -1,6 +1,7 @@
 //! Candidate vectors for CASES.md. Deterministic. No networking.
 #![forbid(unsafe_code)]
 
+mod bari;
 mod negatives;
 
 use pcoc_sdk::checkpoint::checkpoint;
@@ -157,6 +158,7 @@ fn main() {
     write_draw(&out);
     write_unknown(&out);
     write_hashcash(&out);
+    bari::write_bari(&out);
 
     let s1 = Profile::conformance_small(32, 64, 65536, 100).expect("S1");
     note("S1 terrain fill start");
@@ -241,7 +243,7 @@ fn main() {
     neg.add("negatives.PROD.pk_A.partial_slot_read_2047.matches_honest", "false");
     neg.write(out.join("negatives.txt"));
     drop(terrain);
-    note("gen-candidates wrote 14 files");
+    note("gen-candidates wrote 15 files");
 }
 
 fn write_seed(out: &PathBuf, pk_a: &[u8; 32], pk_b: &[u8; 32], seed_beacon: &[u8; 32]) {
