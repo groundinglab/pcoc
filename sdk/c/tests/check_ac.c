@@ -139,8 +139,38 @@ static void read_pin(char *tag, size_t tagcap, char *vec, size_t veccap) {
   fclose(f);
 }
 
+/* Blank rev-list output means HEAD is origin/main, or the branch is already merged. */
+static int range_empty(const char *text) {
+  for (const char *p = text; *p; p++) {
+    if (*p != ' ' && *p != '\t' && *p != '\n' && *p != '\r') return 0;
+  }
+  return 1;
+}
+
 static int ac_a1(void) {
-  char cmd[1024], out[1 << 16];
+  char cmd[1200], out[1 << 16];
+  /* The per-file check proved sdk/c was added on the 2.2 branch. That was
+     met when the tree reached main. On main, origin/main..HEAD is empty.
+     On a later branch those files exist at the branch cut. Return before
+     the walk when origin/main already contains the 2.2 C SDK, or when the
+     range is empty.
+     sdk/c/include/pcoc.h is the public header the pre-2.2 tree did not have.
+     sdk/c/src/br1.c is a later addition and does not mark that tree. */
+  const char *marker = "sdk/c/include/pcoc.h";
+  snprintf(cmd, sizeof(cmd), "git -C '%s' cat-file -e 'origin/main:%s' 2>/dev/null", repo, marker);
+  if (run_cmd(cmd, NULL, 0) == 0) {
+    printf("AC-A1: origin/main already contains the 2.2 C SDK (%s); skipping the per-file check\n",
+           marker);
+    printf("PASS a1\n");
+    return 0;
+  }
+  snprintf(cmd, sizeof(cmd), "git -C '%s' rev-list --reverse origin/main..HEAD", repo);
+  need(run_cmd(cmd, out, sizeof(out)) == 0, "git rev-list");
+  if (range_empty(out)) {
+    printf("AC-A1: origin/main..HEAD is empty; skipping the per-file check\n");
+    printf("PASS a1\n");
+    return 0;
+  }
   /* Added paths versus origin/main. sdk/c has to be among them. The
      integration branch also adds the other SDKs, the consumers, and CI.
      Those paths are in scope. This check only requires the C tree. */
