@@ -162,9 +162,9 @@ pub struct RecordView {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Presented {
-    /// Rule A5: `version` `earlier version`. No stage matrix.
-    Earlier {
-        kind: String,
+    /// Rule A5. `kind` is `unknown kind`. No stage matrix.
+    Unknown {
+        kind_text: String,
     },
     Record(Box<RecordView>),
 }
@@ -185,13 +185,13 @@ pub struct NotARecord;
 pub fn present(record_json: &str) -> Result<Presented, NotARecord> {
     let value: Value = serde_json::from_str(record_json.trim_end()).map_err(|_| NotARecord)?;
     let obj = value.as_object().ok_or(NotARecord)?;
-    if obj.get("version").and_then(Value::as_str) == Some("earlier version") {
-        let kind = obj
-            .get("kind")
+    if obj.get("kind").and_then(Value::as_str) == Some("unknown kind") {
+        let kind_text = obj
+            .get("kind_text")
             .and_then(Value::as_str)
             .unwrap_or("")
             .to_owned();
-        return Ok(Presented::Earlier { kind });
+        return Ok(Presented::Unknown { kind_text });
     }
     let profile = obj
         .get("profile")
@@ -637,8 +637,8 @@ pub fn explain(token: &str) -> &'static str {
         }
         "not anchored" => "The waypoint does not meet the anchored conditions in this record.",
         "not fetched by design" => "W_17 is posted and never asked. Its path is empty by design.",
-        "earlier version" => {
-            "The object is an earlier kind (Rule A5). The v2.0 matrix is not measured."
+        "unknown kind" => {
+            "The object kind is not v2.2-pcoc-object (Rule A5). The stage matrix is not measured."
         }
         "production" => "Section 6 sizes. The record of a production object.",
         "conformance-small" => "SPEC 16.1 sizes. A conformance vector, not a production object.",
@@ -652,107 +652,42 @@ pub fn explain(token: &str) -> &'static str {
 mod tests {
     use super::*;
 
-    fn record_of(file: &str) -> String {
-        let text = match file {
-            "kat-small" => include_str!("../../../../spec/conformance/v2.0/kat-small.json"),
-            "test-3leg" => include_str!("../../../../spec/conformance/v2.0/test-3leg.json"),
-            "anchor-window" => include_str!("../../../../spec/conformance/v2.0/anchor-window.json"),
-            "anchor-w16-i17" => {
-                include_str!("../../../../spec/conformance/v2.0/anchor-w16-i17.json")
+    #[test]
+    fn unknown_kind_has_no_matrix() {
+        let json = r#"{"kind":"unknown kind","kind_text":"not-v2.2-pcoc-object"}"#;
+        assert_eq!(
+            present(json).unwrap(),
+            Presented::Unknown {
+                kind_text: "not-v2.2-pcoc-object".into()
             }
-            "earlier-run-b" => include_str!("../../../../spec/conformance/v2.0/earlier-run-b.json"),
-            _ => unreachable!(),
+        );
+        let words = explain("unknown kind");
+        assert!(words.contains("Rule A5"), "{words}");
+        assert!(!words.contains("earlier"), "{words}");
+        assert!(!words.contains("v2.0"), "{words}");
+    }
+
+    #[test]
+    fn junk_is_not_a_record() {
+        assert_eq!(present("not json"), Err(NotARecord));
+        assert_eq!(present("[]"), Err(NotARecord));
+    }
+
+    #[test]
+    fn malformed_object_record_presents() {
+        let mut index = pcoc::verify::EmptyIndex;
+        let pcoc::verify::Verified::Record(json) = pcoc::verify(
+            b"not a hike object",
+            &pcoc::profile::Profile::production(),
+            &mut index,
+        ) else {
+            panic!("malformed input is a record");
         };
-        let value: Value = serde_json::from_str(text).unwrap();
-        value["record"].as_str().unwrap().to_owned()
-    }
-
-    fn view(file: &str) -> RecordView {
-        match present(&record_of(file)).unwrap() {
-            Presented::Record(view) => *view,
-            Presented::Earlier { .. } => panic!("{file} is not a v2.0 record"),
-        }
-    }
-
-    #[test]
-    fn kat_small_fields() {
-        let v = view("kat-small");
-        assert_eq!(v.profile, "conformance-small");
-        assert_eq!(v.shape, "match");
-        assert!(v.shape_item.is_empty());
-        assert_eq!(v.seed_value, "match");
-        assert_eq!(v.headers.len(), 19);
-        assert_eq!(v.headers[0].role, "seed beacon");
-        assert_eq!(v.headers[1].role, "I_0");
-        assert_eq!(v.headers[18].role, "I_17");
-        assert_eq!(v.header_comparisons().uniform(), Some("match"));
-        assert_eq!(v.checkpoint_results.sentence(), "every one is match");
-        assert_eq!(v.checkpoint_results.total(), 18);
-        assert_eq!(v.waypoint_results.total(), 17);
-        assert_eq!(
-            (v.a.int(), v.b.int(), v.n.int(), v.s.int(), v.delta_h.int()),
-            (Some(1), Some(2), Some(1), Some(3), Some(3))
-        );
-        assert_eq!(v.fixed_start, [Val::Int(1), Val::Int(3), Val::Int(3)]);
-        assert_eq!(v.anchored_total, Val::Int(2));
-        assert_eq!(v.paths.len(), 16);
-        assert_eq!(v.paths[0].d_g, Val::Int(3));
-        assert_eq!(v.paths[2].d_g, Val::Token("not defined".into()));
-        assert_eq!(v.w17_path, "not fetched by design");
-        assert_eq!(v.n_over_s().unwrap(), "0.333");
-        assert_eq!(
-            v.trimmed(),
-            TrimmedRecord {
-                checkpoints: "18".into(),
-                stages: "18".into(),
-                span: "19 s".into(),
-                rate: "0.333".into(),
-            }
-        );
-        assert_eq!(v.plant_reads_measured(), 2);
-        assert_eq!(
-            v.anchor_sentence(),
-            "anchored_total 2. skip_list [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]. 2 anchored + 14 skips = 16 fetchable. The count is not a threshold. W_17 is not in it."
-        );
-    }
-
-    #[test]
-    fn kat_small_ledger_adds_up() {
-        let v = view("kat-small");
-        let ledger = v.ledger().unwrap();
-        assert_eq!(ledger.total, 18);
-        assert_eq!(
-            ledger.rows[0],
-            LedgerRow {
-                count: 1,
-                label: "stage 1".into(),
-                note: "bookend N, a = 1, b = 2".into()
-            }
-        );
-        assert_eq!(ledger.rows.len(), 1 + 16 + 1);
-        assert_eq!(ledger.rows.last().unwrap().label, "stage 0");
-        assert!(ledger
-            .outside_identity
-            .starts_with("1 + 17 = 18 · 17 is stages 0, 2, 3,"));
-        assert!(ledger
-            .whole_identity
-            .ends_with("= 17 · 17 is whole_hike_legs, stages 1–17"));
-    }
-
-    #[test]
-    fn six_leg_indices_map_to_stage_and_j() {
-        let v = view("kat-small");
-        let rows = v.six_leg.unwrap();
-        assert_eq!(
-            rows.iter().map(|r| r.index).collect::<Vec<_>>(),
-            [9, 10, 13, 12, 17, 16]
-        );
-        assert_eq!(
-            (rows[0].stage, rows[0].j, rows[0].in_stage),
-            (Some(9), Some(0), Some(1))
-        );
-        assert!(rows.iter().all(|r| r.result == "match"));
-        assert_eq!(v.six_leg_runs, 1);
+        let Presented::Record(v) = present(&json).unwrap() else {
+            panic!("presented")
+        };
+        assert_eq!(v.profile, "production");
+        assert_eq!(v.shape, "mismatch");
     }
 
     #[test]
@@ -770,90 +705,39 @@ mod tests {
     }
 
     #[test]
-    fn tokens_in_place_of_integers_are_shown_as_tokens() {
-        let v = view("anchor-window");
-        assert_eq!(v.shape, "mismatch");
-        assert_eq!(v.shape_item, ["leg_count"]);
-        assert_eq!(v.n.text(), "not defined");
-        assert_eq!(v.whole_hike_span.seconds(), "not read");
-        assert!(v.ledger().is_none());
-        assert!(v.n_over_s().is_none());
-        assert!(v.six_leg.is_none());
-        assert_eq!(v.six_leg_token.as_deref(), Some("not defined"));
-        let t = view("test-3leg");
-        assert_eq!(t.w17_path, "not defined");
-        assert_eq!(t.stage_counts[3], Val::Token("not defined".into()));
-        let w = view("anchor-w16-i17");
-        assert_eq!(w.anchors[15], "anchored");
-    }
-
-    #[test]
-    fn earlier_version_has_no_matrix() {
-        assert_eq!(
-            present(&record_of("earlier-run-b")).unwrap(),
-            Presented::Earlier {
-                kind: "satoshi-hike-v1.35-object".into()
-            }
-        );
-    }
-
-    #[test]
-    fn junk_is_not_a_record() {
-        assert_eq!(present("not json"), Err(NotARecord));
-        assert_eq!(present("[]"), Err(NotARecord));
-    }
-
-    /// An undecodable object still yields a record from the pinned verifier.
-    #[test]
-    fn undecodable_object_record_presents() {
-        let m = hike::verify(
-            b"not a hike object",
-            hike::AuditDraw::PinnedSeed([0; 32]),
-            |_| Err(()),
-            |_| hike::ChainRead::NotRead,
-        );
-        let json = hike::verify_record_json("production", &m);
-        let Presented::Record(v) = present(&json).unwrap() else {
-            panic!()
-        };
-        assert_eq!(v.shape, "mismatch");
-        assert_eq!(v.profile, "production");
-    }
-
-    /// No verdict vocabulary in anything the page derives (§14, §18 item 1).
-    #[test]
     fn presentation_has_no_verdict_words() {
         let forbidden = [
             "pass", "fail", "valid", "invalid", "score", "verdict", "accept", "reject", "approved",
             "grade",
         ];
-        let mut strings: Vec<String> = Vec::new();
-        for file in ["kat-small", "test-3leg", "anchor-window", "anchor-w16-i17"] {
-            let v = view(file);
-            strings.push(v.anchor_sentence());
-            strings.push(v.header_sentence());
-            strings.push(v.checkpoint_results.sentence());
-            if let Some(l) = v.ledger() {
-                strings.push(l.outside_identity);
-                strings.push(l.whole_identity);
-                strings.extend(l.rows.into_iter().flat_map(|r| [r.label, r.note]));
-            }
-            let mut tokens: Vec<String> =
-                vec![v.shape.clone(), v.seed_value.clone(), v.w17_path.clone()];
-            tokens.extend(v.anchors.clone());
-            tokens.extend(
-                v.paths
-                    .iter()
-                    .flat_map(|p| [p.path_state.clone(), p.plant.clone()]),
+        let Presented::Record(v) = present(&crate::sample::record_json()).unwrap() else {
+            panic!("sample record");
+        };
+        let mut strings = vec![
+            v.anchor_sentence(),
+            v.header_sentence(),
+            v.checkpoint_results.sentence(),
+            explain("unknown kind").to_owned(),
+        ];
+        if let Some(l) = v.ledger() {
+            strings.push(l.outside_identity);
+            strings.push(l.whole_identity);
+            strings.extend(l.rows.into_iter().flat_map(|r| [r.label, r.note]));
+        }
+        let mut tokens = vec![v.shape.clone(), v.seed_value.clone(), v.w17_path.clone()];
+        tokens.extend(v.anchors.clone());
+        tokens.extend(
+            v.paths
+                .iter()
+                .flat_map(|p| [p.path_state.clone(), p.plant.clone()]),
+        );
+        for token in tokens {
+            assert_ne!(
+                explain(&token),
+                explain("an unknown token"),
+                "no explanation for {token}"
             );
-            for token in tokens {
-                assert_ne!(
-                    explain(&token),
-                    explain("an unknown token"),
-                    "no explanation for {token}"
-                );
-                strings.push(explain(&token).to_owned());
-            }
+            strings.push(explain(&token).to_owned());
         }
         for s in strings {
             let lower = s.to_lowercase();

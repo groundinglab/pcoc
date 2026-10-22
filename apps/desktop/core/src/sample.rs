@@ -259,10 +259,10 @@ pub fn record_json() -> String {
         .collect();
     let record = json!({
         "profile": "production",
-        "sample_bytes": hike::SAMPLE_BYTES,
-        "slot_bytes": hike::SLOT_BYTES,
+        "sample_bytes": pcoc::constants::SAMPLE_BYTES,
+        "slot_bytes": pcoc::constants::SLOT_BYTES,
         "terrain_bytes": crate::produce::TERRAIN_BYTES,
-        "steps_per_leg": hike::STEPS_PER_LEG,
+        "steps_per_leg": pcoc::constants::STEPS_PER_LEG,
         "shape": "match",
         "shape_item": [],
         "headers": headers,
@@ -337,7 +337,7 @@ pub fn library_rows(moment_f: bool) -> Vec<(String, String)> {
             "6 Oct 21:31 UTC · 3,212 legs".into(),
         ),
         ("alice-hike-1004.cbor".into(), "opened · other npub".into()),
-        ("run-b-stages18.cbor".into(), "earlier version".into()),
+        ("run-b-stages18.cbor".into(), "unknown kind".into()),
     ]
 }
 

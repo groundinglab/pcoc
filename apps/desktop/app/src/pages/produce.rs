@@ -6,8 +6,8 @@ use crate::state::{Page, State};
 use crate::ui::App;
 use crate::widgets::{self, button, card, hbox, learn, line, mono, text, vbox};
 use gtk::prelude::*;
-use pcoc_hike_core::endpoints;
 use pcoc_hike_core::format::{clock, clock_hm, duration_hm, duration_hms, thousands, tilde};
+use pcoc_hike_core::produce::live::LIVE_HEADER_SOURCE;
 use pcoc_hike_core::produce::cells::{Cell, Row};
 use pcoc_hike_core::produce::events::AskOutcome;
 use pcoc_hike_core::produce::model::{Phase, ProduceView, WaypointChip, READING_THE_TIP};
@@ -57,10 +57,8 @@ pub fn build(app: &Rc<App>) -> gtk::Widget {
         Phase::Failed(_) => {
             page.set_widget_name("produce-setup");
             if let Some(message) = failed {
-                page.append(&text(
-                    &format!("The hike stopped: {message}. No object was written."),
-                    &["lead"],
-                ));
+                page.append(&text(&message, &["lead"]));
+                page.append(&text("No object was written.", &["muted"]));
             }
             page.append(&idle(app));
         }
@@ -188,7 +186,7 @@ fn idle(app: &Rc<App>) -> gtk::Widget {
     let c = card(
         "New hike",
         &["§13"],
-        &["Bitcoin mainnet only · posts to the public Bari · no test plane"],
+        &[LIVE_HEADER_SOURCE],
         on,
     );
     c.body.append(&nsec_block(app, key_error.as_deref()));
@@ -203,9 +201,8 @@ fn idle(app: &Rc<App>) -> gtk::Widget {
         &c.body,
         &c.root,
         &format!(
-            "The pinned hike crate runs in this process on Bitcoin mainnet only. The app has no test plane. It holds {} MiB of terrain for the run, posts each waypoint W_1…W_17 to {} with a Hashcash planting puzzle, and asks for paths at H+2, H+3 and H+4. Each run is a new folder under the data folder. The object is written only after the run returns. Stop or quit writes no object.",
-            TERRAIN_BYTES >> 20,
-            endpoints::BARI
+            "{LIVE_HEADER_SOURCE}. Start hike does not dial Bitcoin and writes no object. Phase C owns the live header source. A full production terrain is {} MiB. Kind is v2.2-pcoc-object.",
+            TERRAIN_BYTES >> 20
         ),
         on,
     );
@@ -976,7 +973,7 @@ fn gossip_panel(app: &Rc<App>) -> gtk::Widget {
     learn(
         &c.body,
         &c.root,
-        "The seed is the tip the peers already have. Later headers arrive by gossip and interrupt the hike. This panel does not read the index.",
+        "live header source is not in this build. This panel does not dial peers and does not read the index.",
         on,
     );
     c.root.upcast()

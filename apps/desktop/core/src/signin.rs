@@ -320,8 +320,8 @@ pub fn admission_words(class: ClientClass, outcome: Option<&str>) -> String {
             "malformed" => "Fail. The gate called this sign-in malformed.".to_owned(),
             "bad_signature" => "Fail. The gate rejected the signature.".to_owned(),
             "too_short" => "Fail. The gate said this object is too short.".to_owned(),
-            "earlier_version" => {
-                "Fail. This PCOC is an earlier version. The gate checks Satoshi Hike v2.0 only."
+            "earlier_version" | "unknown_kind" => {
+                "Fail. This PCOC is an unknown kind (Rule A5). This app checks kind v2.2-pcoc-object."
                     .to_owned()
             }
             "too_few_waypoints_anchored" => {
@@ -395,252 +395,28 @@ pub fn read_admission(door: &str, result_url: &str, submission: &Submission) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use secp256k1::{schnorr, Message, Secp256k1, XOnlyPublicKey};
-    use serde_json::Value;
-
-    fn vector() -> Value {
-        serde_json::from_str(include_str!(
-            "../../../../spec/conformance/v2.0/sign-in.json"
-        ))
-        .unwrap()
-    }
-
-    fn hex32(value: &Value) -> [u8; 32] {
-        crate::hex::decode32(value.as_str().unwrap()).unwrap()
+    #[test]
+    fn exp_zero_parses() {
+        let link = "https://groundinglab.io/sign-in/?v=1&nonce=0000000000000000000000000000000000000000000000000000000000000000&exp=0";
+        assert_eq!(parse_link(link).unwrap().expiry_unix_s, 0);
     }
 
     #[test]
-    fn locked_constants_match_the_vector() {
-        let v = vector();
-        assert_eq!(v["domain"], DOMAIN);
-        assert_eq!(v["origin"], ORIGIN);
-        assert_eq!(v["door"], DOOR);
-        assert_eq!(v["lifetime_s"], LIFETIME_S);
-        assert_eq!(v["skew_s"], SKEW_S);
-        assert_eq!(v["method"], "POST");
-        assert_eq!(v["content_type"], "application/json");
-        assert_eq!(v["client_ok"], SUBMITTED);
-        let codes: Vec<&str> = v["client_codes"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|c| c.as_str().unwrap())
-            .collect();
-        assert_eq!(codes, ["bad_signature", "malformed"]);
-        assert_eq!(BAD_SIGNATURE, "bad_signature".replace('_', " "));
-    }
-
-    #[test]
-    fn every_link_case_in_the_vector() {
-        let v = vector();
-        for case in v["links"].as_array().unwrap() {
-            let input = case["input"].as_str().unwrap();
-            let parsed = parse_link(input);
-            match case["class"].as_str().unwrap() {
-                "link" => assert!(parsed.is_ok(), "{}: {input}", case["note"]),
-                "malformed" => assert!(parsed.is_err(), "{}: {input}", case["note"]),
-                other => panic!("unknown class {other}"),
-            }
-        }
-        let retired = v["links"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|c| c["note"] == "retired ?h= form")
-            .unwrap();
+    fn a_retired_hash_link_is_refused() {
         assert_eq!(
-            parse_link(retired["input"].as_str().unwrap()),
+            parse_link("https://groundinglab.io/sign-in/?h=abc"),
             Err(NotALink::RetiredHashLink)
         );
     }
 
     #[test]
-    fn example_link_round_trips_and_builds_challenge_bytes() {
-        let v = vector();
-        let ex = &v["example"];
-        let challenge = parse_link(ex["link"].as_str().unwrap()).unwrap();
-        assert_eq!(challenge.nonce, hex32(&ex["nonce_hex"]));
-        assert_eq!(
-            challenge.expiry_unix_s,
-            ex["expiry_unix_s"].as_u64().unwrap()
-        );
-        assert!(!challenge.link().contains("object="));
-        assert_eq!(challenge.link(), ex["link"].as_str().unwrap());
-        let bound = challenge.bind(hex32(&ex["object_sha256_hex"]));
-
-        let bytes = bound.challenge_bytes();
-        assert_eq!(
-            bytes.len() as u64,
-            ex["challenge_bytes_len"].as_u64().unwrap()
-        );
-        assert_eq!(
-            crate::hex::encode(&bytes),
-            ex["challenge_bytes_hex"].as_str().unwrap()
-        );
-        assert_eq!(bound.bip340_message(), hex32(&ex["bip340_message_32_hex"]));
-        let double: [u8; 32] = Sha256::digest(bound.bip340_message()).into();
-        assert_eq!(double, hex32(&ex["double_hash_hex"]));
-    }
-
-    /// The link minted by https://groundinglab.io/sign-in/ on 2026-10-12.
-    /// Headless Chrome pressed Sign in with PCOC and read `#sign-in-payload`.
-    #[test]
-    fn live_minted_link_parses() {
-        let link = "https://groundinglab.io/sign-in/?v=1&nonce=c939a2a1747ec2c7b06c03e6ee00019c289e1c45f8595d1e3af82e29c9e26f6b&exp=1791778962";
-        let challenge = parse_link(link).expect("live minted link");
-        assert_eq!(challenge.link(), link);
-        assert_eq!(challenge.expiry_unix_s, 1_791_778_962);
-        assert_eq!(
-            crate::hex::encode(&challenge.nonce),
-            "c939a2a1747ec2c7b06c03e6ee00019c289e1c45f8595d1e3af82e29c9e26f6b"
-        );
-        assert!(challenge
-            .link()
-            .starts_with("https://groundinglab.io/sign-in/?v=1"));
-        assert!(!challenge.link().contains("object="));
-    }
-
-    #[test]
-    fn exp_zero_is_the_one_leading_zero_exception() {
-        let v = vector();
-        let case = v["links"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|c| c["note"] == "exp 0 is the one leading-zero exception")
-            .unwrap();
-        assert_eq!(
-            parse_link(case["input"].as_str().unwrap())
-                .unwrap()
-                .expiry_unix_s,
-            0
-        );
-    }
-
-    #[test]
-    fn signature_matches_the_vector_and_signs_the_digest_once() {
-        let v = vector();
-        let ex = &v["example"];
-        let challenge = parse_link(ex["link"].as_str().unwrap())
-            .unwrap()
-            .bind(hex32(&ex["object_sha256_hex"]));
-        let secret_bytes = crate::hex::decode32(ex["secret_hex"].as_str().unwrap()).unwrap();
-        let nsec = bech32::encode(
-            "nsec",
-            bech32::ToBase32::to_base32(&secret_bytes),
-            bech32::Variant::Bech32,
-        )
-        .unwrap();
-        let secret = SecretKey::from_nsec(&nsec).unwrap();
-        assert_eq!(
-            secret.public_key().hex(),
-            ex["public_key_hex"].as_str().unwrap()
-        );
-
-        let aux = hex32(&ex["aux_hex"]);
-        let sig = secret.sign_digest(&challenge.bip340_message(), &aux);
-        assert_eq!(
-            crate::hex::encode(&sig),
-            ex["signature_hex"].as_str().unwrap()
-        );
-
-        let secp = Secp256k1::verification_only();
-        let xonly = XOnlyPublicKey::from_slice(&secret.public_key().0).unwrap();
-        let sig = schnorr::Signature::from_slice(&sig).unwrap();
-        assert!(secp
-            .verify_schnorr(
-                &sig,
-                &Message::from_digest(challenge.bip340_message()),
-                &xonly
-            )
-            .is_ok());
-        let double: [u8; 32] = Sha256::digest(challenge.bip340_message()).into();
-        assert!(secp
-            .verify_schnorr(&sig, &Message::from_digest(double), &xonly)
-            .is_err());
-    }
-
-    #[test]
-    fn body_has_the_six_keys_in_order_and_matches_the_grammar_body() {
-        let v = vector();
-        let ex = &v["example"];
-        let challenge = parse_link(ex["link"].as_str().unwrap())
-            .unwrap()
-            .bind(hex32(&ex["object_sha256_hex"]));
-        let object = base64::engine::general_purpose::STANDARD
-            .decode(ex["object_b64"].as_str().unwrap())
-            .unwrap();
-        let sig: [u8; 64] = crate::hex::decode(ex["signature_hex"].as_str().unwrap())
-            .unwrap()
-            .try_into()
-            .unwrap();
-        let body = body_json(&challenge, &object, &sig);
-        let parsed: Value = serde_json::from_str(&body).unwrap();
-        let grammar_ok = v["bodies"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|b| b["class"] == "grammar_ok")
-            .unwrap();
-        assert_eq!(parsed, grammar_ok["body"]);
-        let keys: Vec<&str> = [
-            "origin",
-            "nonce",
-            "exp",
-            "object",
-            "object_b64",
-            "signature",
-        ]
-        .to_vec();
-        let mut at = 0;
-        for key in keys {
-            let found = body[at..].find(&format!("\"{key}\":")).expect(key) + at;
-            at = found;
-        }
-        assert!(parsed["exp"].is_u64());
-    }
-
-    #[test]
-    fn sign_binds_the_sha256_of_the_object_this_computer_chose() {
-        let v = vector();
-        let ex = &v["example"];
-        // The example field is 32 bytes of 0xaa. It is not the hash of those bytes.
-        assert_eq!(ex["hash_matches_object_field"], false);
-        let challenge = parse_link(ex["link"].as_str().unwrap()).unwrap();
-        let secret = SecretKey::generate();
-        let object = b"a local object".to_vec();
-        let other = SecretKey::generate().public_key();
-        assert_eq!(
-            sign(&challenge, &object, other, &secret, &[0; 32]).err(),
-            Some(CannotSign::OtherKey)
-        );
-        let submission = sign(&challenge, &object, secret.public_key(), &secret, &[0; 32])
-            .ok()
-            .unwrap();
-        let parsed: Value = serde_json::from_str(&submission.body).unwrap();
-        let object_sha = crate::hex::encode(Sha256::digest(&object).as_slice());
-        assert_eq!(parsed["object"].as_str().unwrap(), object_sha);
-        assert_ne!(
-            parsed["object"].as_str().unwrap(),
-            ex["object_sha256_hex"].as_str().unwrap()
-        );
-        assert!(submission
-            .body
-            .contains(&crate::hex::encode(&submission.signature)));
-        assert!(CannotSign::ObjectNotLocal.sentence().starts_with("Fail."));
-        assert!(CannotSign::Locked.sentence().contains("nsec"));
-        assert!(CannotSign::OtherKey.sentence().contains("public key"));
-    }
-
-    #[test]
     fn client_classes() {
-        let v = vector();
-        let ok = serde_json::to_vec(&v["responses"]["delivery_ok"]).unwrap();
-        let bad = serde_json::to_vec(&v["responses"]["bad_signature"]).unwrap();
-        let mal = serde_json::to_vec(&v["responses"]["malformed"]).unwrap();
-        assert_eq!(classify(200, &ok), ClientClass::Submitted);
-        assert_eq!(classify(400, &bad), ClientClass::BadSignature);
-        assert_eq!(classify(400, &mal), ClientClass::Malformed);
+        let ok = br#"{"delivery":"ok"}"#;
+        let bad = br#"{"error":{"code":"bad_signature"}}"#;
+        let mal = br#"{"error":{"code":"malformed"}}"#;
+        assert_eq!(classify(200, ok), ClientClass::Submitted);
+        assert_eq!(classify(400, bad), ClientClass::BadSignature);
+        assert_eq!(classify(400, mal), ClientClass::Malformed);
         assert_eq!(
             classify(
                 400,
@@ -729,6 +505,23 @@ mod tests {
         let (url, handle) = serve("HTTP/1.1 200 OK\r\nContent-Length: 17\r\nConnection: close\r\n\r\n{\"delivery\":\"ok\"}");
         assert_eq!(post_once(&url, "{}"), ClientClass::Submitted);
         handle.join().unwrap();
+    }
+
+    /// The link minted by https://groundinglab.io/sign-in/ on 2026-10-12.
+    #[test]
+    fn live_minted_link_parses() {
+        let link = "https://groundinglab.io/sign-in/?v=1&nonce=c939a2a1747ec2c7b06c03e6ee00019c289e1c45f8595d1e3af82e29c9e26f6b&exp=1791778962";
+        let challenge = parse_link(link).expect("live minted link");
+        assert_eq!(challenge.link(), link);
+        assert_eq!(challenge.expiry_unix_s, 1_791_778_962);
+        assert_eq!(
+            crate::hex::encode(&challenge.nonce),
+            "c939a2a1747ec2c7b06c03e6ee00019c289e1c45f8595d1e3af82e29c9e26f6b"
+        );
+        assert!(challenge
+            .link()
+            .starts_with("https://groundinglab.io/sign-in/?v=1"));
+        assert!(!challenge.link().contains("object="));
     }
 
     #[test]

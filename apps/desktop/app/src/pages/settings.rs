@@ -194,7 +194,7 @@ fn network(app: &Rc<App>, on: bool) -> gtk::Widget {
     }
     c.body.append(&setting(
         "Gossip peer override",
-        "Empty uses the Bitcoin Core mainnet DNS seeds, port 8333.",
+        "live header source is not in this build. A named peer is stored and is not dialed.",
         &peer,
     ));
     c.body
@@ -218,13 +218,13 @@ fn network(app: &Rc<App>, on: bool) -> gtk::Widget {
     c.body.append(&endpoint("Index", endpoints::INDEX));
     c.body.append(&endpoint("Verify", endpoints::VERIFY));
     c.body.append(&text(
-        "These four endpoints are set in one place. Produce posts waypoints to Bari. Verify reads the index. Sign-in and test admission use the admission gate. The verify host is the public verifier.",
+        "These four endpoints are set in one place. Verify reads the index. Sign-in and test admission use the admission gate. The verify host is the public verifier. live header source is not in this build.",
         &["muted", "small"],
     ));
     learn(
         &c.body,
         &c.root,
-        "A named peer replaces the DNS seeds for the produce gossip clock. It does not change the record format or any endpoint.",
+        "live header source is not in this build. A named peer is remembered for a later header source. This build does not dial it.",
         on,
     );
     c.root.upcast()

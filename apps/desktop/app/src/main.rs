@@ -175,7 +175,7 @@ mod sample {
             98_310,
             [0x41; 32],
             1_790_900_000,
-            Kind::Earlier("satoshi-hike-v1.35-object".into()),
+            Kind::Unknown("not-v2.2-pcoc-object".into()),
             None,
             None,
         ));

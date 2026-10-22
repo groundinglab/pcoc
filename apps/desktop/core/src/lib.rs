@@ -9,6 +9,7 @@ pub mod endpoints;
 pub mod format;
 pub mod hex;
 pub mod keys;
+mod object_key;
 pub mod library;
 pub mod produce;
 pub mod record;
