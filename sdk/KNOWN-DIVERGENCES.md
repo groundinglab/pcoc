@@ -71,7 +71,7 @@ The rc.1 tags (c9b160ea) have every bug below. They are fixed on `sdk/phase-a` a
 | 3. `decoded_hike` returns `Err` on trailing bytes | was `Ok` | n/a | n/a | Rust test `decoded_hike_refuses_trailing_bytes` |
 | 4. `Cbor.Problem.getMessage()` returns `.issue` | n/a | n/a | was `null` | Java `V2Pack.rc2Break` |
 
-Changes 1 and 2 also change SPEC wording (§14.1 row 1 and §18 item 9). That wording, with a vector, is drafted for the next spec tag (v2.0.6, after the SPEC_PIN tag); see [CHANGES.md](CHANGES.md). Until that tag exists the vectors are SDK cross-check cases.
+Changes 1 and 2 also touch SPEC wording. The specification is [SPEC.md](../spec/satoshi-hike-v2.2/SPEC.md). Until the pack publishes vectors for these cases, they stay SDK cross-check cases.
 
 ## Fixed after rc.1 (before rc.2)
 

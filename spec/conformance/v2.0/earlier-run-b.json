@@ -1,7 +1,0 @@
-{
-  "id": "earlier-run-b",
-  "object": "spec/conformance/v2.0/earlier-kind.cbor",
-  "object_hex": "a1646b696e6478197361746f7368692d68696b652d76312e33352d6f626a656374",
-  "record": "{\"version\":\"earlier version\",\"kind\":\"satoshi-hike-v1.35-object\"}\n",
-  "sha256": "4ee78e523fb1a8e23bc7d5e0e7ef1a31fd0bd2ce5114361fe45d40ac3533a29e"
-}

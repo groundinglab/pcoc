@@ -1,6 +1,6 @@
 # PCOC
 
-**Early prototype.** Specification: Satoshi Hike v2.0 (`spec-v2.0.5`). Website: https://groundinglab.io
+**Early prototype.** Specification: Satoshi Hike 2.2 (`spec-2.2.0`, cut by the maintainers on the merge commit). Website: https://groundinglab.io
 
 A PCOC (production-constrained observable commitment) is a self-issued identifier backed by a resource commitment, not a payment. You make it on your own device by holding memory through a hike, the timed making process, paced by Bitcoin blocks. The result is the PCOC object (the specification's hike object): the bytes you keep and present, holding your public key and the record of the hike. Anyone can check the PCOC object cheaply, without trusting you or us. The design aims to give bulk making no discount: copying the PCOC object is cheap, but a new public key means a new hike.
 
@@ -18,9 +18,9 @@ A PCOC is self-issued: you create it on your own device from your own key, with 
 
 ## Three separate steps
 
-1. **Create (the hike).** Your computer fills a block of memory fixed by your public key and a Bitcoin block, then works through it in legs of two million steps, each ending in a leg result. Bitcoin blocks pace the stages: Satoshi Hike v2.0 records eighteen. The cost is your own device's work. Bitcoin only timestamps it: Bari records each tip's pooled waypoints in one Bitcoin transaction. Bitcoin's proof-of-work does not secure a PCOC or pay for it.
+1. **Create (the hike).** Your computer fills a block of memory fixed by your public key and a Bitcoin block, then works through it in legs of two million steps, each ending in a leg result. Bitcoin blocks pace the stages: Satoshi Hike 2.2 records eighteen. The cost is your own device's work. Bitcoin only timestamps it: Bari records each tip's pooled waypoints in one Bitcoin transaction. Bitcoin's proof-of-work does not secure a PCOC or pay for it.
 2. **Check (verify).** A verifier recomputes from the PCOC object and the public index and records measurements: `match`, `mismatch`, `present`, `skip`, `not defined`, `not read`, `not fetched by design`, `n/a`, `anchored`, `not anchored`, and `earlier version`. It never says pass or fail. The index stands in for Bitcoin; anyone can bypass it by checking Bitcoin directly.
-3. **Admit (policy).** Accept, refuse, and revoke are each relying party's own decisions. groundinglab's Admission Gate is one configured instance. Its policy is a recommendation ([services/admission-gate/POLICY.md](services/admission-gate/POLICY.md)); the specification sets no threshold value. Policy can change without changing the PCOC object.
+3. **Admit (policy).** Accept, refuse, and revoke are each relying party's own decisions. groundinglab's Admission Gate is one configured instance. Its policy is [policy/groundinglab-admission/POLICY.md](policy/groundinglab-admission/POLICY.md); the specification sets no lever value. Policy can change without changing the PCOC object.
 
 The Bitcoin tip (the newest block's hash and height) is the shared public tick that paces the staged work. That is the whole of its role: not a fee, not a confirmation count, and not an archive of the chain. The hike is the quantity of work.
 
@@ -43,7 +43,7 @@ The specification and the conformance vectors are the core deliverable. The poin
 | Layer | Folder | Role |
 |---|---|---|
 | Specification | [spec/](spec/) | The complete, normative definition of how a PCOC is made and checked |
-| Conformance | [spec/conformance/](spec/conformance/v2.0/) | Shared vectors: what a Part A implementation must reproduce |
+| Conformance | [spec/conformance/pack/](spec/conformance/pack/) | The one pack. Incomplete until the SDK phase |
 | SDKs | [sdk/](sdk/) | Rust, Go, and Java SDKs, tested against the shared vectors and cross-checked against each other. The specification wins if they disagree |
 | Services | [services/](services/) | Bari (the plant), the index (its own reader), and the Admission Gate, built on the Rust SDK |
 | Apps | [apps/](apps/) | Desktop demonstrator, and an Android demonstrator described in [apps/android](apps/android/) |
@@ -65,7 +65,7 @@ git clone https://github.com/groundinglab/pcoc.git
 cd pcoc
 ```
 
-Don't use `--depth 1`. The test harness compares the conformance vectors with the specification's git tag (`spec-v2.0.5`), and a shallow clone has no tags, so the first check fails. If you already have a shallow clone, run `git fetch --tags`.
+Don't use `--depth 1`. `sdk/SPEC_PIN` names `spec-2.2.0`. The maintainers cut that tag on the merge commit. The pin check looks that tag up in the clone, and a shallow clone has no tags. If you already have a shallow clone, run `git fetch --tags`.
 
 ### 2. Install the tools
 
@@ -87,7 +87,7 @@ Without a default, those folders stop with "rustup could not choose a version of
 
 ### 3. Run the tests
 
-An SDK (software development kit) is the library you add to your own app or service to make or check a PCOC. The conformance vectors are the shared test cases in [spec/conformance/v2.0/](spec/conformance/v2.0/): exact bytes that every implementation must reproduce. One script tests all three SDKs against them, and against each other:
+An SDK (software development kit) is the library you add to your own app or service to make or check a PCOC. The conformance pack is [spec/conformance/pack/](spec/conformance/pack/). It is incomplete until the SDK phase. One script tests all three SDKs against them, and against each other:
 
 ```sh
 bash sdk/test.sh
@@ -148,7 +148,7 @@ To produce one in code, the produce examples in [sdk/examples/](sdk/examples/) r
 
 | Folder | What is in it | Test it with |
 |---|---|---|
-| [spec/](spec/) | The Satoshi Hike v2.0 specification and its conformance vectors | `python3 spec/conformance/tools/ring1_checks.py` |
+| [spec/](spec/) | The Satoshi Hike 2.2 specification and its conformance pack | `python3 spec/conformance/tools/ring1_checks.py` |
 | [sdk/](sdk/) | The Rust, Go and Java SDKs, runnable examples in each language, and the harness tools | `bash sdk/test.sh` |
 | [services/](services/) | Bari (the anchoring service), the index, the Admission Gate, the claims service, and a Cloudflare Worker. Each builds alone | `cargo test --locked --release` in each Rust service; `node --test test/` in `cf-claims-worker` |
 | [apps/](apps/) | The desktop app (Linux), and notes and checks for the Android app | `cargo test --locked -p pcoc-hike-core` in `apps/desktop` |
@@ -171,7 +171,7 @@ The index is its own component ([services/index](services/index/)). Three ways t
 
 - **Check one:** https://groundinglab.io/verify
 - **Make one:** [desktop app](apps/desktop/)
-- **Build one:** [spec](spec/) → [conformance](spec/conformance/v2.0/) → [SDKs](sdk/)
+- **Build one:** [spec](spec/) → [conformance](spec/conformance/pack/) → [SDKs](sdk/)
 - **Read why:** [briefs](docs/briefs/README.md) and [rationale](docs/README.md)
 - **What is measured:** [STATUS](STATUS.md)
 - **Contribute / report a vulnerability:** [CONTRIBUTING](CONTRIBUTING.md) · [SECURITY](SECURITY.md)

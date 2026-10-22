@@ -1,12 +1,12 @@
 # Evidence status (Admission Gate)
 
-This note records evidence and withdrawn claims. It is not the service status ([STATUS.md](STATUS.md)), not policy ([POLICY.md](POLICY.md)), and does not change the wire ([WIRE.md](WIRE.md)).
+This note records evidence and withdrawn claims. It is not the service status ([STATUS.md](STATUS.md)), not policy ([POLICY.md](../../policy/groundinglab-admission/POLICY.md)), and does not change the wire ([WIRE.md](WIRE.md)).
 
 ## Produce and verify measured evidence
 
-**Not fully closed.** Measured produce and verify cost for Satoshi Hike v2.0 on bare metal, timed against the released `satoshi-hike-verify`, is a follow-up. This item is not waived, and it is not treated as unmeasured.
+**Not fully closed.** Measured produce and verify cost on bare metal, timed against the released `satoshi-hike-verify`, is a follow-up. This item is not waived, and it is not treated as unmeasured.
 
-The construction is Satoshi Hike v2.0 (`spec/satoshi-hike-v2.0/` in this repository). The programs are `satoshi-hike-produce` and `satoshi-hike-verify` under `sdk/rust/`.
+The specification is [SPEC.md](../../spec/satoshi-hike-v2.2/SPEC.md). The programs are `satoshi-hike-produce` and `satoshi-hike-verify` under `sdk/rust/`.
 
 ## Killed slogans
 

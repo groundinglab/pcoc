@@ -79,4 +79,4 @@ All of these are defaults you can override in config. If you leave one unset, yo
 
 ## The spec
 
-SPEC §15.1 lets any operator run an admission service for its own origin and compares origins exactly. `https://groundinglab.io` is the example deployment. Vectors for a second origin are in `spec/conformance/v2.0/sign-in-origins.json`, added by a separate spec PR.
+SPEC §15.1 lets any operator run an admission service for its own origin and compares origins exactly. `https://groundinglab.io` is the example deployment. SPEC §15.1 names `spec/conformance/pack/sign-in-origins.json` for a second origin. That file is not in the pack yet.
