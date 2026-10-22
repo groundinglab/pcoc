@@ -30,10 +30,7 @@ pub enum FastDecision {
 
 /// `true` when the fast phase's kind check is Rule A5.
 pub fn is_unknown_kind(object: &[u8]) -> bool {
-    matches!(
-        kind_precheck(object),
-        Some(Precheck::UnknownKind(_))
-    )
+    matches!(kind_precheck(object), Some(Precheck::UnknownKind(_)))
 }
 
 /// Run the fast phase. The index reader is accepted so the door can pass its
@@ -101,23 +98,42 @@ fn refuse(reason: &str, line: &str, record: &str) -> FastDecision {
 }
 
 /// Measured numbers for a fast-phase log line, read off its record.
-/// `None` when the record holds none of `N`, `S`, or `anchored_total`.
+///
+/// `legs` and `span_s` are `analysis.hike_legs` and `analysis.hike_span`.
+/// They are the Rule B2 pair. Bookend `N` and `S` are copied as `bookend_n`
+/// and `bookend_s` and are not the rate. `None` when the record holds none
+/// of those fields and no `anchored_total`.
 pub fn fast_measures(record: &str) -> Option<serde_json::Value> {
     let value = serde_json::from_str::<serde_json::Value>(record).ok()?;
-    let legs = value.get("N").and_then(|item| item.as_u64());
-    let span_s = value.get("S").and_then(|item| item.as_u64());
+    let analysis = value.get("analysis");
+    let legs = analysis
+        .and_then(|item| item.get("hike_legs"))
+        .and_then(|item| item.as_i64());
+    let span_s = analysis
+        .and_then(|item| item.get("hike_span"))
+        .and_then(|item| item.as_i64());
+    let bookend_n = value.get("N").and_then(|item| item.as_i64());
+    let bookend_s = value.get("S").and_then(|item| item.as_i64());
     let anchored = value.get("anchored_total").and_then(|item| item.as_u64());
-    if legs.is_none() && span_s.is_none() && anchored.is_none() {
+    if legs.is_none()
+        && span_s.is_none()
+        && bookend_n.is_none()
+        && bookend_s.is_none()
+        && anchored.is_none()
+    {
         return None;
     }
+    // Display only. Admission uses `pcoc::leg_rate_floor`, not this quotient.
     let leg_rate = match (legs, span_s) {
-        (Some(n), Some(s)) if s > 0 => Some(n as f64 / s as f64),
+        (Some(n), Some(s)) if n >= 0 && s > 0 => Some(n as f64 / s as f64),
         _ => None,
     };
     Some(serde_json::json!({
         "legs": legs,
         "span_s": span_s,
         "leg_rate": leg_rate,
+        "bookend_n": bookend_n,
+        "bookend_s": bookend_s,
         "anchored": anchored,
         "anchored_span": crate::policy::ANCHORED_SPAN,
     }))

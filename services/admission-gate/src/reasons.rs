@@ -242,7 +242,7 @@ fn sentence(code: &str, measures: &Measures) -> String {
 /// Website outcome for a locked sign-in after policy.
 ///
 /// `accepted` when the proof is sound and every policy check is met.
-/// `pending` when the bookends were not read and nothing else failed.
+/// `pending` when `hike_span` was not read and nothing else failed.
 /// Otherwise `rejected` stays the website token. The log uses [`Reason`].
 pub fn website_outcome(report: &Report, checks_met: bool, held: bool) -> &'static str {
     if held {

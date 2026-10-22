@@ -1,14 +1,14 @@
 //! SPEC section 15.1 **Origin**: the signed origin is the requesting site's
 //! own origin, compared exactly.
 //!
-//! Loads the pinned `tests/vectors/sign-in-origins.json` (a copy of
-//! `spec/conformance/v2.0/sign-in-origins.json`). Each case is a challenge
-//! signed with BIP-340 (aux all zero) over that case's origin. The check
-//! runs the Gate's own origin rule with the served list set to the vector's
-//! `served`, so it tests the rule a gate built for `https://example.com`
-//! applies. A gate serves the origins in its config key `served_origins`.
+//! Loads the pinned `tests/vectors/sign-in-origins.json`. The 2.2 pack does
+//! not publish that file. Each case is a challenge signed with BIP-340 (aux
+//! all zero) over that case's origin. The check runs the Gate's own origin
+//! rule with the served list set to the vector's `served`, so it tests the
+//! rule a gate built for `https://example.com` applies. A gate serves the
+//! origins in its config key `served_origins`.
 //!
-//! Regenerate both copies with `PCOC_REGEN_SIGNIN_ORIGINS=1 cargo test --test signin_origins`.
+//! Regenerate the gate copy with `PCOC_REGEN_SIGNIN_ORIGINS=1 cargo test --test signin_origins`.
 
 #![forbid(unsafe_code)]
 
@@ -120,9 +120,6 @@ fn signin_origin_vectors() {
         let built = build();
         let text = serde_json::to_string_pretty(&built).unwrap() + "\n";
         std::fs::write(vector_path(), &text).unwrap();
-        let spec = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../spec/conformance/v2.0/sign-in-origins.json");
-        std::fs::write(spec, &text).unwrap();
     }
     let stored: Value =
         serde_json::from_str(&std::fs::read_to_string(vector_path()).unwrap()).unwrap();

@@ -66,7 +66,7 @@ fn ac1_measures_hold_no_threshold() {
     assert!(!text.contains("threshold"));
 }
 
-/// A configured p/q is applied. 1/5 refuses N=19 over S=100 (0.19) and admits N=20.
+/// A configured p/q is applied. 1/5 refuses 19 hike legs over a span of 100 and admits 20.
 /// Five anchored of sixteen refuses. Six admits.
 #[test]
 fn ac2_configured_floor_is_enforced() {

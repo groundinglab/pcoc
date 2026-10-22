@@ -858,12 +858,11 @@ impl Door {
             Ok(Report::Read(measured)) => Some(measured.measures.clone()),
             _ => None,
         };
-        if let Some(measures) = &measured {
-            self.rows.note_bookends(
-                &job.nonce,
-                measures.legs.map(|n| n as i64),
-                measures.span_s.map(|n| n as i64),
-            );
+        // Website `legs` / `span_s` are bookend N/S (Rule B6). They are not
+        // the Rule B2 pair that `policy_checks` and `judge` compare.
+        if let Ok(Report::Read(measured)) = &report {
+            let (legs, span_s) = bookends_from_record(&measured.record);
+            self.rows.note_bookends(&job.nonce, legs, span_s);
         }
         let checks = measured
             .as_ref()
@@ -1434,4 +1433,3 @@ fn show_log(error: LogError) -> String {
         LogError::NotThisLineage(message) | LogError::Unusable(message) => message,
     }
 }
-

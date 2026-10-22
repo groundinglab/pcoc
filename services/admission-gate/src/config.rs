@@ -200,7 +200,7 @@ impl Config {
     /// the integer `p/q` in the policy table.
     fn note_v1_migration(policy: &AdmissionPolicy) {
         eprintln!(
-            "admission-service policy: gl-admit-v1 float min_leg_rate is retired; active {} compares q·N ≥ p·S with p/q = {}/{}",
+            "admission-service policy: gl-admit-v1 float min_leg_rate is retired; active {} compares q·hike_legs ≥ p·hike_span with p/q = {}/{}",
             policy.policy_id, policy.leg_rate_floor.p, policy.leg_rate_floor.q
         );
     }

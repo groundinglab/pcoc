@@ -1,23 +1,25 @@
 //! Gate policy. The verifier reports measurements. This module judges them.
 //!
-//! `policy_id` names one exact table for its whole life. The table is the
-//! keys in `policy/gl-admit-v6.toml`. A change of any value is a new id.
-//! The rate compares the bookend pair `(N, S)` from the section 14 record
-//! as integers: `q·N ≥ p·S`. The waypoint count compares `anchored_total`
-//! among `W_1` … `W_16`. Neither number is a measurement.
+//! `policy_id` names one exact table for its whole life. A change of any
+//! value is a new id. The admission rate is SPEC §15.4 Rule B2 on
+//! `(hike_legs, hike_span)` from the §14 `analysis` object. The comparison
+//! is `pcoc::leg_rate_floor` (`sdk/rust/pcoc/src/compare.rs`). Bookend `N`
+//! and `S` are measurements. They drive no admission comparison (Rule B6).
+//! The waypoint count compares `anchored_total` among `W_1` … `W_16`.
 //!
 //! v1 history: through gate 0.4.1 the code default was `gl-admit-v1`, a float
 //! `min_leg_rate` of 0.25 leg/s and `min_waypoints` 6 of 18. That float and
 //! the named floors (`strict` 7/20, `default` 1/4, `lenient` 1/8) are gone.
 //! Those three fractions stay informative examples in spec §15.5. They are
-//! not a policy key. The code default is now `gl-admit-v6`.
+//! not a policy key. The code default is `gl-admit-v9`.
 //!
-//! When `N` is `not defined` from the object's own bytes, whatever `S` is,
-//! the refusal is immediate (`bookends_not_defined`). A pure `not read` pair,
-//! with no other verifier note, is `held`. `held` is not a refusal and is not
-//! a decision-log event. A `not read` pair that arrives with another verifier
-//! note is still a refusal: the other note wins. An object the verifier
-//! reports as an earlier version is refused as `earlier_version`.
+//! `hike_span` ≤ 0 is `refuse`. It is not `held`, and it does not meet the
+//! floor. A numeric shortfall is `refuse`. `hike_span` `not read` (or an
+//! analysis block that does not carry it) is not a comparison: with no other
+//! verifier note the state is `held`; another note is still a refusal and
+//! that note wins. Bookend `N` `not defined` is not, by itself, an admission
+//! refuse. An object the verifier reports as an earlier version is refused
+//! as `earlier_version`.
 
 use crate::canon;
 use crate::verifier::{Measured, Report, EARLIER_VERSION_NOTE};
@@ -26,18 +28,15 @@ use serde_json::Value;
 
 pub const REFUSE_EARLIER: &str = "earlier_version";
 pub const REFUSE_LEG_RATE: &str = "leg_rate_floor";
-/// `N` is the section 14 token `not defined`. The object's own bytes settled
-/// that side, whatever `S` is. Rule B0 and Rule B2 refuse it at once. This is
-/// not the floor.
+/// Kept for the reason inventory. Rule B0 does not refuse admission because
+/// bookend `N` is `not defined`, so the judge does not emit this code.
 pub const REFUSE_BOOKENDS: &str = "bookends_not_defined";
 pub const BOOKENDS_LINE: &str = "N and S are not defined.";
 
-/// A bookend pair that is not two numbers, and `N` is not `not defined`,
-/// when another verifier note is already a refusal.
-///
-/// A pure `not read` pair is [`Judgment::Held`], not this reason. The website
-/// outcome for that hold stays the locked `pending` token. See STOP-AND-REPORT
-/// in the build notes: adding a `held` website token would change §15.1.
+/// Kept for the reason inventory. A pure `hike_span` `not read` is
+/// [`Judgment::Held`], not this reason. The website outcome for that hold
+/// stays the locked `pending` token. The judge does not emit this code:
+/// another verifier note refuses on that note alone.
 pub const REFUSE_BOOKENDS_NOT_READ: &str = "bookends_not_read";
 pub const BOOKENDS_NOT_READ_LINE: &str =
     "The bookend headers were not read from the index. Submit again.";
@@ -90,9 +89,10 @@ fn floor_words(p: u64, q: u64) -> String {
     )
 }
 
-/// Too-slow sentence with the measured bookends `N` legs in `S` seconds and
-/// the configured floor `p/q`, e.g. `Too slow: 1499 legs in 9557 s = 0.157
-/// legs/s (6.4 s per leg); this gate needs at least 0.2 legs/s (one leg every 5 s).`
+/// Too-slow sentence with the measured hike pair, `hike_legs` checkpoints in
+/// `hike_span` seconds, and the configured floor `p/q`. Example: `Too slow:
+/// 1499 legs in 9557 s = 0.157 legs/s (6.4 s per leg); this gate needs at
+/// least 0.2 legs/s (one leg every 5 s).`
 pub fn leg_rate_line(n: i128, s: i128, p: u64, q: u64) -> String {
     let need = floor_words(p, q);
     if n > 0 && s > 0 {
@@ -107,7 +107,7 @@ pub fn leg_rate_line(n: i128, s: i128, p: u64, q: u64) -> String {
     }
 }
 
-/// Too-slow sentence when the bookends were not measured as numbers.
+/// Too-slow sentence when the hike pair was not measured as two numbers.
 pub fn leg_rate_floor_line(p: u64, q: u64) -> String {
     format!("Too slow; {}.", floor_words(p, q))
 }
@@ -151,7 +151,8 @@ pub fn parse_policy_id(raw: &str) -> Result<String, String> {
     Ok(id.to_owned())
 }
 
-/// Integer leg-rate floor `p/q`. Meets when `q·N ≥ p·S`.
+/// Integer leg-rate floor `p/q`. Meets when `hike_span` > 0 and
+/// `q · hike_legs ≥ p · hike_span` (SPEC §15.4 Rule B2).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RateFloor {
     pub p: u64,
@@ -357,13 +358,16 @@ pub fn policy_checks(
 ) -> Vec<PolicyCheck> {
     let mut checks = Vec::new();
     if let (Some(n), Some(s)) = (measures.legs, measures.span_s) {
+        // `Measures.legs` / `span_s` are the hike pair when the verifier
+        // filled them. Bookend `N`/`S` are not this check. `span_s` is `u64`,
+        // so a negative span is judged from the record in [`judge`].
         checks.push(PolicyCheck {
             field: "leg_rate",
             min: serde_json::json!({
                 "p": policy.leg_rate_floor.p,
                 "q": policy.leg_rate_floor.q,
             }),
-            met: !bookend_below_floor(
+            met: rate_meets(
                 i128::from(n),
                 i128::from(s),
                 policy.leg_rate_floor.p,
@@ -410,68 +414,65 @@ pub enum Judgment {
         /// Empty of a record, this is `{}` for a fast refusal that has none.
         record: String,
     },
-    /// A pure bookend `not read`. Not a refusal. Not a decision-log event.
+    /// `hike_span` is `not read`. Not a refusal. Not a decision-log event.
     Held {
         /// Section 14 record bytes, including the trailing newline.
         record: String,
     },
 }
 
-/// Rule B2. The pair is below the floor when `q·N ≥ p·S` does not hold.
-///
-/// Compared in `u128` so a large pair does not wrap. `S` of 0 meets the
-/// floor when `N` is not negative: `q·N ≥ 0`. A negative side, or a product
-/// that does not fit in `u128`, is below the floor.
-pub fn bookend_below_floor(n: i128, s: i128, p: u64, q: u64) -> bool {
-    let (Ok(n), Ok(s)) = (u128::try_from(n), u128::try_from(s)) else {
-        return true;
-    };
-    match (u128::from(q).checked_mul(n), u128::from(p).checked_mul(s)) {
-        (Some(left), Some(right)) => left < right,
-        _ => true,
-    }
+/// SPEC §14 `hike_span` is a JSON number in ±(2^53−1). A wider integer is not
+/// that measurement. The caller refuses it; it does not hold.
+const SPEC_JSON_INT_MAX: i128 = (1i128 << 53) - 1;
+
+/// Rule B2 via the SDK. `meets` only when `hike_span` > 0 and
+/// `q · hike_legs ≥ p · hike_span`. `hike_span` ≤ 0 is `refuse`.
+fn rate_meets(hike_legs: i128, hike_span: i128, p: u64, q: u64) -> bool {
+    pcoc::leg_rate_floor(hike_legs, hike_span, i128::from(p), i128::from(q)) == "meets"
 }
 
-enum Bookend {
-    /// `N` is `not defined`. The object's own bytes settled that side.
-    NotDefined,
-    Numeric {
-        n: i128,
-        s: i128,
-    },
-    /// `not read`, one side only, or any other non-numeric pair. No comparison.
-    /// `N` is not the token `not defined`.
+enum HikeRate {
+    /// `hike_span` is absent or the token `not read`. No comparison.
     NotRead,
+    /// Integers for [`pcoc::leg_rate_floor`]. A non-integer span that is not
+    /// `not read`, and a non-integer `hike_legs` beside a positive span, are
+    /// passed as values the SDK refuses (span 0, or 0 legs).
+    Compare { legs: i128, span: i128 },
 }
 
-/// Read `N` and `S` from the record text. The text is not rewritten.
-fn bookend_pair(record: &str) -> Bookend {
+/// Read `analysis.hike_legs` and `analysis.hike_span`. Bookend `N` and `S`
+/// are not read. The record text is not rewritten.
+fn hike_rate(record: &str) -> HikeRate {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(record) else {
-        return Bookend::NotRead;
+        return HikeRate::NotRead;
     };
-    if matches!(
-        value.get("N"),
-        Some(serde_json::Value::String(n)) if n == "not defined"
-    ) {
-        return Bookend::NotDefined;
-    }
-    match (value.get("N"), value.get("S")) {
-        (Some(n), Some(s)) => match (json_i128(n), json_i128(s)) {
-            (Some(n), Some(s)) => Bookend::Numeric { n, s },
-            _ => Bookend::NotRead,
-        },
-        _ => Bookend::NotRead,
+    let Some(analysis) = value.get("analysis") else {
+        return HikeRate::NotRead;
+    };
+    match analysis.get("hike_span") {
+        None => HikeRate::NotRead,
+        Some(Value::String(token)) if token == "not read" => HikeRate::NotRead,
+        Some(span_value) => {
+            let span = spec_int(span_value).unwrap_or(0);
+            let legs = analysis.get("hike_legs").and_then(spec_int).unwrap_or(0);
+            HikeRate::Compare { legs, span }
+        }
     }
 }
 
-fn json_i128(value: &Value) -> Option<i128> {
-    if let Some(number) = value.as_i64() {
-        return Some(i128::from(number));
+/// An integer JSON number inside ±(2^53−1). Anything else is not a §14 span.
+fn spec_int(value: &Value) -> Option<i128> {
+    let number = if let Some(number) = value.as_i64() {
+        i128::from(number)
+    } else if let Some(number) = value.as_u64() {
+        i128::from(number)
+    } else {
+        return None;
+    };
+    if number.abs() > SPEC_JSON_INT_MAX {
+        return None;
     }
-    if let Some(number) = value.as_u64() {
-        return Some(i128::from(number));
-    }
-    None
+    Some(number)
 }
 
 pub fn judge(report: &Report, floor_p: u64, floor_q: u64) -> Judgment {
@@ -498,7 +499,7 @@ fn judge_measured(measured: &Measured, floor_p: u64, floor_q: u64) -> Judgment {
             record,
         };
     }
-    // Rule A5. The kind is the reason. Bookends are not read on another kind.
+    // Rule A5. The kind is the reason. The hike pair is not read on another kind.
     if measured
         .verifier_notes
         .iter()
@@ -515,33 +516,25 @@ fn judge_measured(measured: &Measured, floor_p: u64, floor_q: u64) -> Judgment {
         .iter()
         .map(|note| (*note).to_owned())
         .collect();
-    match bookend_pair(&record) {
-        Bookend::NotDefined => {
-            reasons.insert(0, REFUSE_BOOKENDS.to_owned());
-            return Judgment::Refuse {
-                reasons,
-                line: BOOKENDS_LINE.to_owned(),
-                record,
-            };
-        }
-        Bookend::Numeric { n, s } if bookend_below_floor(n, s, floor_p, floor_q) => {
+    match hike_rate(&record) {
+        HikeRate::Compare { legs, span } if !rate_meets(legs, span, floor_p, floor_q) => {
             reasons.insert(0, REFUSE_LEG_RATE.to_owned());
             return Judgment::Refuse {
                 reasons,
-                line: leg_rate_line(n, s, floor_p, floor_q),
+                line: leg_rate_line(legs, span, floor_p, floor_q),
                 record,
             };
         }
-        Bookend::Numeric { .. } => {}
+        HikeRate::Compare { .. } => {}
         // A pure `not read` is held. Another verifier note is still a refusal.
-        Bookend::NotRead => {
+        HikeRate::NotRead => {
             if reasons.is_empty() {
                 return Judgment::Held { record };
             }
-            reasons.insert(0, REFUSE_BOOKENDS_NOT_READ.to_owned());
+            let line = reasons.join(" ");
             return Judgment::Refuse {
                 reasons,
-                line: BOOKENDS_NOT_READ_LINE.to_owned(),
+                line,
                 record,
             };
         }
@@ -595,29 +588,27 @@ mod tests {
     }
 
     /// Key order is the caller's. The judgment returns those bytes.
-    fn pair_record(n: &str, s: &str) -> String {
-        format!("{{\"profile\":\"production\",\"shape\":\"match\",\"N\":{n},\"S\":{s}}}\n")
+    /// Bookend `N`/`S` are on the record and are not the comparison.
+    fn hike_record(legs: &str, span: &str) -> String {
+        format!(
+            "{{\"profile\":\"production\",\"shape\":\"match\",\"N\":0,\"S\":0,\"analysis\":{{\"hike_legs\":{legs},\"hike_span\":{span}}}}}\n"
+        )
     }
 
     #[test]
     fn a_configured_fraction_is_the_floor() {
-        // 1/5: one leg every five seconds. Equality meets it.
-        assert!(!bookend_below_floor(1, 5, 1, 5));
-        assert!(bookend_below_floor(1, 6, 1, 5));
-        assert!(!bookend_below_floor(2, 5, 1, 5));
-        assert!(!bookend_below_floor(1, 0, 1, 5));
-        assert!(bookend_below_floor(0, 5, 1, 5));
+        // 1/5: one leg every five seconds. Equality meets it. Span 0 refuses.
+        assert!(rate_meets(1, 5, 1, 5));
+        assert!(!rate_meets(1, 6, 1, 5));
+        assert!(rate_meets(2, 5, 1, 5));
+        assert!(!rate_meets(1, 0, 1, 5));
+        assert!(!rate_meets(0, 5, 1, 5));
+        assert!(!rate_meets(1, -1, 1, 5));
         // The same function applies a caller-chosen p/q. 7/20 is not a default.
-        assert!(bookend_below_floor(1, 4, 7, 20));
-        assert!(!bookend_below_floor(7, 20, 7, 20));
-    }
-
-    #[test]
-    fn the_product_is_compared_in_u128() {
-        let n = i128::from(u64::MAX);
-        let s = i128::from(u64::MAX);
-        assert!(!bookend_below_floor(n, s, 1, 5));
-        assert!(bookend_below_floor(1, s, u64::MAX, 5));
+        assert!(!rate_meets(1, 4, 7, 20));
+        assert!(rate_meets(7, 20, 7, 20));
+        assert_eq!(pcoc::leg_rate_floor(1, 5, 1, 5), "meets");
+        assert_eq!(pcoc::leg_rate_floor(1, 0, 1, 5), "refuse");
     }
 
     #[test]
@@ -645,7 +636,7 @@ mod tests {
 
     #[test]
     fn a_numeric_pair_under_the_floor_is_refused() {
-        let record = pair_record("1", "6");
+        let record = hike_record("1", "6");
         let judgment = judge_measured(&measured(&record, &[]), 1, 5);
         assert_eq!(
             judgment,
@@ -660,8 +651,8 @@ mod tests {
     }
 
     #[test]
-    fn a_configured_pq_is_applied_to_the_bookend_pair() {
-        let meets = pair_record("1", "5");
+    fn a_configured_pq_is_applied_to_the_hike_pair() {
+        let meets = hike_record("1", "5");
         assert!(matches!(
             judge_measured(&measured(&meets, &[]), 1, 5),
             Judgment::Admit { record } if record == meets
@@ -676,83 +667,87 @@ mod tests {
                 assert_eq!(line, leg_rate_line(1, 5, 1, 4));
                 assert_eq!(record, meets);
             }
-            other => panic!("1/4 should refuse N=1 S=5, got {other:?}"),
+            other => panic!("1/4 should refuse 1 leg in 5 s, got {other:?}"),
         }
-        let wide = pair_record("1", "8");
+        let wide = hike_record("1", "8");
         assert!(matches!(
             judge_measured(&measured(&wide, &[]), 1, 8),
             Judgment::Admit { .. }
         ));
-        match judge_measured(&measured(&pair_record("1", "9"), &[]), 1, 8) {
+        match judge_measured(&measured(&hike_record("1", "9"), &[]), 1, 8) {
             Judgment::Refuse { reasons, line, .. } => {
                 assert_eq!(reasons, vec!["leg_rate_floor".to_owned()]);
                 assert_eq!(line, leg_rate_line(1, 9, 1, 8));
             }
-            other => panic!("1/8 should refuse N=1 S=9, got {other:?}"),
+            other => panic!("1/8 should refuse 1 leg in 9 s, got {other:?}"),
         }
     }
 
     #[test]
-    fn an_object_settled_not_defined_pair_is_refused_without_a_floor_sentence() {
-        let record = pair_record("\"not defined\"", "\"not defined\"");
+    fn bookend_not_defined_does_not_refuse_when_the_hike_pair_meets() {
+        // Bookend tokens sit on the record. Rule B0 does not refuse them.
+        // A verifier note still refuses, and it does not become bookends_not_defined.
+        let record = "{\"profile\":\"production\",\"N\":\"not defined\",\"S\":\"not defined\",\"analysis\":{\"hike_legs\":5,\"hike_span\":5}}\n";
+        assert!(matches!(
+            judge_measured(&measured(&record, &[]), 1, 5),
+            Judgment::Admit { .. }
+        ));
         match judge_measured(&measured(&record, &["shape is false"]), 1, 5) {
             Judgment::Refuse {
                 reasons,
                 line,
                 record: stored,
             } => {
-                assert_eq!(
-                    reasons,
-                    vec![
-                        "bookends_not_defined".to_owned(),
-                        "shape is false".to_owned()
-                    ]
-                );
-                assert_eq!(line, BOOKENDS_LINE);
+                assert_eq!(reasons, vec!["shape is false".to_owned()]);
+                assert_eq!(line, "shape is false");
                 assert!(!line.contains("1/5"));
-                assert!(!line.contains("leg per second"));
+                assert!(!reasons
+                    .iter()
+                    .any(|reason| reason == "bookends_not_defined"));
                 assert_eq!(stored, record);
             }
-            other => panic!("expected an immediate refusal, got {other:?}"),
+            other => panic!("expected the verifier note, got {other:?}"),
         }
     }
 
     #[test]
-    fn a_not_read_pair_is_held() {
-        for (n, s) in [("\"not read\"", "\"not read\""), ("4", "\"not read\"")] {
-            let record = pair_record(n, s);
+    fn a_not_read_span_is_held() {
+        for span in ["\"not read\"", "null"] {
+            let record = if span == "null" {
+                "{\"profile\":\"production\",\"analysis\":{\"hike_legs\":4}}\n".to_owned()
+            } else {
+                hike_record("4", span)
+            };
             match judge_measured(&measured(&record, &[]), 1, 5) {
                 Judgment::Held { record: stored } => {
-                    assert_eq!(stored, record, "{n},{s}");
-                    assert!(!stored.contains("bookends_not_read"), "{n},{s}");
+                    assert_eq!(stored, record, "{span}");
+                    assert!(!stored.contains("bookends_not_read"), "{span}");
                 }
-                other => panic!("expected held for {n},{s}, got {other:?}"),
+                other => panic!("expected held for span {span}, got {other:?}"),
             }
         }
     }
 
     #[test]
-    fn n_not_defined_with_s_not_read_is_refused_at_once() {
-        let mixed = pair_record("\"not defined\"", "\"not read\"");
-        match judge_measured(&measured(&mixed, &[]), 7, 20) {
-            Judgment::Refuse {
-                reasons,
-                line,
-                record,
-            } => {
-                assert_eq!(reasons, vec!["bookends_not_defined".to_owned()]);
-                assert_eq!(line, BOOKENDS_LINE);
-                assert!(!line.contains("7/20"));
-                assert!(!line.contains("leg per second"));
+    fn bookend_not_defined_with_span_not_read_is_held() {
+        // SPEC Rule B0: bookend N not defined is not an admission refuse.
+        // hike_span not read is held.
+        let mixed = "{\"profile\":\"production\",\"N\":\"not defined\",\"S\":\"not read\",\"analysis\":{\"hike_legs\":\"not defined\",\"hike_span\":\"not read\"}}\n";
+        match judge_measured(&measured(mixed, &[]), 7, 20) {
+            Judgment::Held { record } => {
                 assert_eq!(record, mixed);
+                assert!(
+                    !record.contains("bookends_not_defined")
+                        || record.contains("\"N\":\"not defined\"")
+                );
             }
-            other => panic!("expected an immediate refusal, got {other:?}"),
+            other => panic!("expected held, got {other:?}"),
         }
     }
 
     #[test]
     fn a_floor_refusal_keeps_the_other_notes() {
-        let record = pair_record("0", "5");
+        let record = hike_record("0", "5");
         match judge_measured(&measured(&record, &["shape is false"]), 1, 5) {
             Judgment::Refuse {
                 reasons,
