@@ -2,12 +2,49 @@ package negatives
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/groundinglab/pcoc/sdk/go/v2"
 	"github.com/groundinglab/pcoc/sdk/go/v2/internal/fold"
 	"github.com/groundinglab/pcoc/sdk/go/v2/produce"
 )
+
+// repoRoot walks up from this test file to the directory that holds both
+// sdk/VERSION and spec/. A missing root is a failure, not a skip.
+func repoRoot(t *testing.T) {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot locate the repository: runtime.Caller failed")
+	}
+	start := filepath.Dir(file)
+	if st, err := os.Stat(start); err != nil || !st.IsDir() {
+		wd, werr := os.Getwd()
+		if werr != nil {
+			t.Fatalf("cannot locate the repository: %s is not a directory (%v) and the working directory is unavailable (%v)", start, err, werr)
+		}
+		start = wd
+	}
+	dir := start
+	for i := 0; i < 16; i++ {
+		ver := filepath.Join(dir, "sdk", "VERSION")
+		spec := filepath.Join(dir, "spec")
+		stV, errV := os.Stat(ver)
+		stS, errS := os.Stat(spec)
+		if errV == nil && errS == nil && !stV.IsDir() && stS.IsDir() {
+			return
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	t.Fatalf("cannot locate the repository: no directory at or above %s holds both sdk/VERSION and spec/", start)
+}
 
 // ERRATUM-1 reference table for the S1 fixture (ERRATUM-1.md L720–L734).
 // The test computes each value; these literals are only the check.
@@ -43,6 +80,7 @@ var erratumTerrains = map[string]string{
 // mismatches. A leg on each terrain negative, from the honest seed, differs
 // from the honest leg.
 func TestACA6(t *testing.T) {
+	repoRoot(t)
 	pkA := mustHex(t, "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9")
 	pkB := mustHex(t, "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659")
 	p := pcoc.Profile{Name: "conformance-small", SlotBytes: 64, SampleBytes: 32, TerrainBytes: 65536, StepsPerLeg: 100}
