@@ -77,7 +77,7 @@ Don't use `--depth 1`. `sdk/SPEC_PIN` names `spec-2.2.0`. The maintainers cut th
 | JDK | 21 or newer | the Java SDK |
 | GTK and libadwaita | GTK 4.14+, libadwaita 1.5+ | the desktop app only ([apps/desktop](apps/desktop/)) |
 
-`sdk/rust/`, `sdk/examples/rust/`, `services/admission-gate/` and `apps/desktop/` each pin Rust 1.99.0 in a `rust-toolchain.toml`, and rustup installs it on the first `cargo` command there. The other services (`services/bari/`, `services/index/` and `services/admission-claims/`) have no pin yet, so give rustup a default as well:
+`sdk/rust/`, `services/admission-gate/` and `apps/desktop/` each pin Rust 1.99.0 in a `rust-toolchain.toml`, and rustup installs it on the first `cargo` command there. The other services (`services/bari/`, `services/index/` and `services/admission-claims/`) have no pin yet, so give rustup a default as well:
 
 ```sh
 rustup default 1.99.0
@@ -87,13 +87,22 @@ Without a default, those folders stop with "rustup could not choose a version of
 
 ### 3. Run the tests
 
-An SDK (software development kit) is the library you add to your own app or service to make or check a PCOC. The conformance pack is [spec/conformance/pack/](spec/conformance/pack/). It is incomplete until the SDK phase. One script tests all three SDKs against them, and against each other:
+An SDK (software development kit) is the library you add to your own app or service to make or check a PCOC. The conformance pack is [spec/conformance/pack/](spec/conformance/pack/). The Rust SDK is the workspace at `sdk/rust/`:
 
 ```sh
-bash sdk/test.sh
+cd sdk/rust
+cargo test -p pcoc --test ac_a3 --locked
+cargo test --workspace --locked
+bash check/negatives.sh
 ```
 
-It runs seven steps (version pins, Rust, Go, Java, a cross-check of the three verifiers, the examples, and the docs) and ends with `sdk/test.sh: PASS`. On an 8-core machine it took about four minutes, most of it compiling Rust and the cross-check. [sdk/README.md](sdk/README.md#one-harness) describes each step.
+Go, Java and C test themselves when that 2.2 tree is in the checkout. While `sdk/go/cmd/pcoc`, `sdk/java/check` or `sdk/c` is absent, that language is skipped:
+
+```sh
+(cd sdk/go && go test ./...)
+(cd sdk/java && ./gradlew test)
+(cd sdk/c && make check)
+```
 
 To run only the specification's own checks (section 6 constants, sign-in wire vectors, links and the vector manifest hash):
 
@@ -119,37 +128,34 @@ cargo test --locked -p pcoc-hike-core
 
 To verify is to measure a PCOC against Bitcoin's public block record, read through an index (a read-only copy of the block data a verifier needs, one entry per block height). The verifier writes a measurement record: JSON, with values such as `match` and `anchored`. It never says pass or fail; deciding who gets in is a service's policy.
 
-Download the PCOC object that groundinglab made, build the Rust verify program, and run it:
+Download the PCOC object that groundinglab made, build the Rust `pcoc` program, and run it:
 
 ```sh
 curl -fsSLO https://groundinglab.io/verify/groundinglab.pcoc.cbor
-(cd sdk/rust && cargo build --locked --release -p satoshi-hike-verify)
-sdk/rust/target/release/satoshi-hike-verify --input groundinglab.pcoc.cbor --profile live > record.json
+(cd sdk/rust && cargo build --locked --release -p pcoc-cli)
+sdk/rust/target/release/pcoc verify --profile production --input groundinglab.pcoc.cbor > record.json
 ```
 
-`--profile live` reads the hosted index at `https://index.groundinglab.io`. To use your own index, add `--index-url URL` (see [Run it yourself](#run-it-yourself)). The check took under a minute here, and `record.json` started with `{"profile":"production","shape":"match",...`.
-
-The same check as a short program, which also applies the specification's section 15 refusals the way a gate does:
-
-```sh
-cd sdk/examples/rust
-cargo run --locked --release --bin live -- ../../../groundinglab.pcoc.cbor
-```
-
-It prints the record and then `clear: no section 15 refusal and no held read`. The [verify page](https://groundinglab.io/verify/) does the same check in a browser.
+This build's `pcoc verify` does not read a live index. A live header source is Phase C. The [verify page](https://groundinglab.io/verify/) is a separate deploy.
 
 ### 5. Make a PCOC
 
 Making a PCOC takes 18 Bitcoin blocks, typically around three hours, but it varies. The desktop app makes one on your own machine with your own key, with Bitcoin's live blocks as the clock. Build and run steps are in [apps/desktop/README.md](apps/desktop/README.md), and the plain-language guide is [Make a PCOC](https://groundinglab.io/make/). The Android app is built from [groundinglab/primal-pcoc](https://github.com/groundinglab/primal-pcoc).
 
-To produce one in code, the produce examples in [sdk/examples/](sdk/examples/) run offline at the small test sizes and finish in under a second.
+To produce one offline on the scripted rig:
+
+```sh
+sdk/rust/target/release/pcoc produce --rig --case s1 --public-key HEX --out object.cbor
+```
+
+`pcoc produce` without `--rig` stops. A live header source is not in this build.
 
 ## Repository map
 
 | Folder | What is in it | Test it with |
 |---|---|---|
 | [spec/](spec/) | The Satoshi Hike 2.2 specification and its conformance pack | `python3 spec/conformance/tools/ring1_checks.py` |
-| [sdk/](sdk/) | The Rust, Go and Java SDKs, runnable examples in each language, and the harness tools | `bash sdk/test.sh` |
+| [sdk/](sdk/) | The 2.2 SDKs. Rust is `sdk/rust`. Go, Java and C land on their own branches | `cargo test --workspace --locked` in `sdk/rust`; `bash sdk/rust/check/negatives.sh` |
 | [services/](services/) | Bari (the anchoring service), the index, the Admission Gate, the claims service, and a Cloudflare Worker. Each builds alone | `cargo test --locked --release` in each Rust service; `node --test test/` in `cf-claims-worker` |
 | [apps/](apps/) | The desktop app (Linux), and notes and checks for the Android app | `cargo test --locked -p pcoc-hike-core` in `apps/desktop` |
 | [docs/](docs/README.md) | Plain-language briefs, rationale, architecture and integration notes. Explanatory, not normative | |

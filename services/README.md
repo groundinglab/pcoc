@@ -22,7 +22,7 @@ The gate monitor page has no code in this repository.
 
 ## Layout
 
-Each Rust folder is its own crate with its own `Cargo.toml`, `Cargo.lock` and `deploy/` (a systemd unit and an `env.example`). `cf-claims-worker/` is a JavaScript Worker with `wrangler.jsonc`. There is no shared workspace: each service builds and tests alone from a checkout of only its own directory, and pins its dependencies by git tag in this repository.
+Each Rust folder is its own crate with its own `Cargo.toml`, `Cargo.lock` and `deploy/` (a systemd unit and an `env.example`). `cf-claims-worker/` is a JavaScript Worker with `wrangler.jsonc`. There is no shared workspace. Bari builds from its own directory. The index also checks out `services/bari` and depends on it by path. The gate also checks out `sdk/rust` and `policy/groundinglab-admission`, and depends on the Rust SDK crate `pcoc` by path. Claims has no SDK dependency.
 
 ```bash
 cd services/<service>
@@ -34,9 +34,9 @@ Every service binds to loopback by default. To serve one publicly, put a reverse
 
 | Folder | Process | Default bind | Depends on | Release tag |
 |---|---|---|---|---|
-| [`bari/`](bari/) | `bari` (crate `pcoc-bari`) | `127.0.0.1:38080` | `hike`, `hike-net` @ `ref-rust-v2.0.5` | `bari-v0.6.8` |
-| [`index/`](index/) | `pcoc-index` | `127.0.0.1:38081` | `pcoc-bari` @ `bari-v0.6.7` (`hike` @ `ref-rust-v2.0.4`) | `index-v0.1.4` |
-| [`admission-gate/`](admission-gate/) | `admission-service` (crate `pcoc-admission`) | `127.0.0.1:8787` | `hike` from the in-tree Rust SDK, by path (`sdk/rust/hike`; version in `sdk/VERSION`) | `gate-v0.5.4` |
+| [`bari/`](bari/) | `bari` (crate `pcoc-bari`) | `127.0.0.1:38080` | in-repo header source; live header source is not in this build | `bari-v0.6.8` |
+| [`index/`](index/) | `pcoc-index` | `127.0.0.1:38081` | `pcoc-bari` by path (`../bari`) | `index-v0.1.4` |
+| [`admission-gate/`](admission-gate/) | `admission-service` (crate `pcoc-admission`) | `127.0.0.1:8787` | `pcoc` from the in-tree Rust SDK, by path (`sdk/rust/pcoc`; version in `sdk/VERSION`) | `gate-v0.5.6` |
 | [`admission-claims/`](admission-claims/) | `admission-claims` (crate 0.1.0) | `127.0.0.1:8793` | none in this repository (reads the gate at `127.0.0.1:8787` by default) | none yet |
 
 Release tags are `<service>-v<x.y.z>` and point at the commit that ships that release. The table's Release tag column is the release that matches the working tree.
@@ -47,13 +47,13 @@ Release tags are `<service>-v<x.y.z>` and point at the commit that ships that re
 
 ## Index
 
-[index/](index/) is its own service. It serves the portable-index files: `GET /index` (tip), `GET /index/{height}`, and `GET /index/since` (NDJSON catch-up). Bari can write those files. `pcoc-index rebuild` can write them from a public block API, or from a pruned node, with no plant and no wallet RPC. The verifier's checkpoint measurement reads `GET {index-url}/index/{beacon_height}`. On the live profile an omitted URL means `https://index.groundinglab.io`. That host is opt-in. See [index/README.md](index/README.md).
+[index/](index/) is its own service. It serves the portable-index files: `GET /index` (tip), `GET /index/{height}`, and `GET /index/since` (NDJSON catch-up). Bari can write those files. `pcoc-index rebuild` can write them from a public block API, or from a pruned node, with no plant and no wallet RPC. A verifier may read `GET {index-url}/index/{beacon_height}`. `https://index.groundinglab.io` is opt-in. This tree's `pcoc verify` does not dial a live index. See [index/README.md](index/README.md).
 
 ## Admission Gate
 
 [admission-gate/](admission-gate/) is the admission gate service. groundinglab runs one configured instance of it. It checks a Satoshi Hike object and reads one TOML config file. Thresholds come from the configured policy ([policy/groundinglab-admission/](../policy/groundinglab-admission/)).
 
-- `POST /v1/sign-in` is the sign-in door. The body is the §15.1 six-field object. The website reads `GET /v1/sign-in/result/{nonce}`. A v1.35 object is refused as `earlier_version`.
+- `POST /v1/sign-in` is the sign-in door. The body is the §15.1 six-field object. The website reads `GET /v1/sign-in/result/{nonce}`. Any kind other than `v2.2-pcoc-object` is `unknown_kind` from the fast phase. The website token is `rejected`.
 - `POST /v1/verify` measures an object. It does not check a signature and does not admit.
 - `GET /latest.json` and `GET /log/{YYYY-MM-DD}.jsonl` are the public decision log.
 - `GET /v1/health` reports version, commit, the Rust SDK version it was built with (`sdk`), spec kind and the config.

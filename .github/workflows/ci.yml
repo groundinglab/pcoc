@@ -31,6 +31,7 @@ jobs:
       rust: ${{ steps.gate.outputs.rust }}
       go: ${{ steps.gate.outputs.go }}
       java: ${{ steps.gate.outputs.java }}
+      c: ${{ steps.gate.outputs.c }}
       gate: ${{ steps.gate.outputs.gate }}
       claims: ${{ steps.gate.outputs.claims }}
       bari: ${{ steps.gate.outputs.bari }}
@@ -64,31 +65,37 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # full history and tags: sdk/tools/check_spec_pin.py checks the SPEC_PIN tag's tree
           fetch-depth: 0
       - name: sparse worktree (full clone, cone mode, no partial filter)
-        run: git sparse-checkout set spec sdk/tools
+        run: git sparse-checkout set spec sdk
       - name: ring 1 checks (section 6, sign-in wire, links, manifest hash)
         run: python3 spec/conformance/tools/ring1_checks.py
       - name: spec pin
-        run: python3 sdk/tools/check_spec_pin.py
+        working-directory: sdk/rust
+        run: cargo test -p pcoc --test ac_a3 --locked -- --test-threads=6
 
   sdk:
-    # One harness for the SDKs: sdk/test.sh runs the spec pin check, Rust, Go and
-    # Java unit tests and conformance packs, and the Rust/Go/Java verify cross-check.
+    # Rust workspace tests, plus Go, Java and C when that 2.2 tree is present.
+    # A language whose directory or 2.2 entry point is absent is skipped.
     needs: changes
-    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.spec == 'true' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.go == 'true' || needs.changes.outputs.java == 'true')
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.spec == 'true' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.go == 'true' || needs.changes.outputs.java == 'true' || needs.changes.outputs.c == 'true')
     runs-on: [self-hosted, linux, pcoc-heavy]
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # full history and tags: sdk/tools/check_spec_pin.py checks the SPEC_PIN tag's tree
           fetch-depth: 0
       - name: sparse worktree (full clone, cone mode, no partial filter)
         run: git sparse-checkout set spec sdk
+      - id: langs
+        run: |
+          echo "go=$([[ -d sdk/go/cmd/pcoc ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "java=$([[ -d sdk/java/check ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "c=$([[ -d sdk/c ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "rust=$([[ -d sdk/rust ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.langs.outputs.rust == 'true'
         with:
           path: |
             ~/.cargo/registry
@@ -97,15 +104,36 @@ jobs:
           key: sdk-rust-${{ runner.os }}-${{ hashFiles('sdk/rust/Cargo.lock', 'sdk/rust/rust-toolchain.toml') }}
           restore-keys: sdk-rust-${{ runner.os }}-
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: steps.langs.outputs.go == 'true'
         with:
           go-version-file: sdk/go/go.mod
           cache: false # no third-party modules (no go.sum)
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        if: steps.langs.outputs.java == 'true'
         with:
           distribution: temurin
           java-version: "21"
-      - name: sdk/test.sh (unit, conformance vectors, Rust/Go/Java cross-check)
-        run: bash sdk/test.sh
+      - name: Rust workspace
+        if: steps.langs.outputs.rust == 'true'
+        working-directory: sdk/rust
+        run: |
+          cargo test --workspace --locked -- --test-threads=6
+          for script in check/*.sh; do
+            [ -f "$script" ] || continue
+            bash "$script"
+          done
+      - name: Go
+        if: steps.langs.outputs.go == 'true'
+        working-directory: sdk/go
+        run: go test ./...
+      - name: Java
+        if: steps.langs.outputs.java == 'true'
+        working-directory: sdk/java
+        run: ./gradlew test
+      - name: C
+        if: steps.langs.outputs.c == 'true'
+        working-directory: sdk/c
+        run: make check
 
   services:
     needs: changes
@@ -135,8 +163,15 @@ jobs:
           persist-credentials: false
       - if: steps.on.outputs.run == 'true'
         name: sparse worktree (full clone, cone mode, no partial filter)
-        # gate and desktop build the Rust SDK by path (sdk/rust). Cone mode also brings the files directly under sdk/ (sdk/VERSION).
-        run: git sparse-checkout set ${{ matrix.dir }} sdk/rust
+        # The gate builds sdk/rust by path and reads the §15.4 policy file.
+        # The index builds services/bari by path. Cone mode on sdk/rust also
+        # brings the files directly under sdk/ (VERSION, SPEC_PIN).
+        run: |
+          case "${{ matrix.key }}" in
+            gate) git sparse-checkout set services/admission-gate sdk/rust policy ;;
+            index) git sparse-checkout set services/index services/bari ;;
+            *) git sparse-checkout set ${{ matrix.dir }} ;;
+          esac
       - if: steps.on.outputs.run == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
