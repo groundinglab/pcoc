@@ -1,0 +1,17 @@
+[package]
+name = "pcoc-sdk"
+version = "2.2.0"
+edition = "2021"
+description = "Satoshi Hike 2.2 core"
+publish = false
+
+[dependencies]
+sha2 = "=0.10.8"
+
+[[bin]]
+name = "gen-candidates"
+path = "src/bin/gen-candidates/main.rs"
+
+[[bin]]
+name = "pcoc-verify"
+path = "src/bin/pcoc-verify.rs"
