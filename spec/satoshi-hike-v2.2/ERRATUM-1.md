@@ -107,7 +107,7 @@ ALL FROZEN SECTIONS IDENTICAL. No hunk in `SPEC.diff` falls inside L683–L1251.
 - `squeezed_seed_terrain`: the section 10.4 fill with each of the four lanes replaced by the one 64-bit value `P[0] XOR P[1] XOR P[2] XOR P[3]`, the squeeze that section 10.2 forbids. Terrain negative.
 ```
 
-**Why:** L2067 names eight negatives it never defines, yet L2065 makes reproducing every negative a conformance condition, so nobody can conform as written. Round 1: 7 of the 8 named-only negatives split across the six builds (DIFF-6WAY R4); `prefold_hoist` had 5 values in 6 builds. Four builds published an honest terrain digest as `f3_shared_terrain`, and C/B2 published honest or near-honest legs as `cached_leg` (hence the generator-stops clause). `prefold_hoist` follows the per-slot-summary reading that Rust, C and Java chose independently (C-S18; L830 forbids a per-slot summary by name; F2 wording). `final_stage_hoist` is the L822 hoist that Go and B1 both built as their `prefold_hoist` (C-S9). The `f3` note answers Rust Q10 (C-S19). Other seven definitions: the CoS proposal; agreement in round 1 was partial_slot_read 3/6, partial_slot_read_2047 4/5, one_lane_flip 4/6, all4_kernel 4/6, squeezed 2/6, f3 1/6, cached_leg 1/6. CoS reference values for every entry are in ref/neg_values.out.
+**Why:** L2067 names eight negatives it never defines, yet L2065 makes reproducing every negative a conformance condition, so nobody can conform as written. Round 1: 7 of the 8 named-only negatives split across the six builds (DIFF-6WAY R4); `prefold_hoist` had 5 values in 6 builds. Four builds published an honest terrain digest as `f3_shared_terrain`, and C/B2 published honest or near-honest legs as `cached_leg` (hence the generator-stops clause). `prefold_hoist` follows the per-slot-summary reading that Rust, C and Java chose independently (C-S18; L830 forbids a per-slot summary by name; F2 wording). `final_stage_hoist` is the L822 hoist that Go and B1 both built as their `prefold_hoist` (C-S9). The `f3` note answers Rust Q10 (C-S19). Other seven definitions: the erratum author's proposal; agreement in round 1 was partial_slot_read 3/6, partial_slot_read_2047 4/5, one_lane_flip 4/6, all4_kernel 4/6, squeezed 2/6, f3 1/6, cached_leg 1/6. Reference values for every entry are in ref/neg_values.out.
 
 ### E02. C-S9: §19 row F3
 
@@ -254,7 +254,7 @@ because fewer than 6 leaves `six_leg` `not defined`. The draw count stays 6.
 because fewer than 6 leaves `six_leg` `not defined`. The Rule A4.4 draw count stays 6. The thorough-round draw vector is the section 15.5 draw and draws `D` indices (**Thorough rounds**, below).
 ```
 
-**Why:** Rust (Q4) read “The draw count stays 6” as fixing every pack draw at 6 and so emitted no thorough draw; no GB core emitted the thorough draw L2065 lists. B1 was the only build that did.
+**Why:** Rust (Q4) read “The draw count stays 6” as fixing every pack draw at 6 and so emitted no thorough draw; no high-effort core build emitted the thorough draw L2065 lists. B1 was the only build that did.
 
 ### E09. C-S3: §16.1 (new paragraph **Thorough rounds**)
 
@@ -275,7 +275,7 @@ because fewer than 6 leaves `six_leg` `not defined`. The Rule A4.4 draw count st
 **Thorough rounds.** The thorough-round index draw vector states its own `thorough_rounds`, as vector fixture metadata like `legs_per_stage`. That value is not a policy value, it is not read from section 15.4, and it sets no policy. The vector draws `D = 6 · thorough_rounds` indices under section 15.5 from its own byte source (**Draw bytes**, below), read from the first byte. A vector that publishes both a six-leg draw and a thorough draw, or draws for more than one leg total, reads each draw from the first byte of its byte source. No draw continues where another stopped.
 ```
 
-**Why:** `D = 6 · thorough_rounds` depends on a §15.4 lever, so a pack vector would otherwise depend on a policy value (the F13 separation). No GB core emitted the thorough draw (Java Q16, C and Go treat `thorough_rounds` as admission-only); C continued one byte stream across the 6/18/54 draws where the other five restarted at `b_0` (CoS `ref/draw_ref.py` reproduces both readings exactly).
+**Why:** `D = 6 · thorough_rounds` depends on a §15.4 lever, so a pack vector would otherwise depend on a policy value (the F13 separation). No high-effort core build emitted the thorough draw (Java Q16, C and Go treat `thorough_rounds` as admission-only); C continued one byte stream across the 6/18/54 draws where the other five restarted at `b_0` (the reference script `ref/draw_ref.py` reproduces both readings exactly).
 
 ### E10. C-S7: §16.1 (new paragraph **Anchor comparison**)
 
@@ -296,7 +296,7 @@ No draw continues where another stopped.
 **Anchor comparison.** The integer anchor vector gives a stored stage height `H` and a candidate inclusion height. Its answer is `anchored` when the inclusion height is `H` plus one of `ANCHOR_WINDOW_OFFSETS`, and `not anchored` otherwise, as if that header were an interrupt stored on the object and its plant comparison were `match`. It does not test those two conditions. Rule A4.5 still requires both on a real object. The integer anchor vector is not the anchor-window vector of sections 9 and 14.4, which is a full object.
 ```
 
-**Why:** Rule A4.5 makes `anchored` also need a stored interrupt and plant `match`; the integer vector in L2065 has neither, so a careful build could answer `not anchored` everywhere. All four GB cores raised it and all six builds chose the window-only reading (7/7 agree). The paragraph writes that reading down and keeps the full-object anchor-window vector distinct.
+**Why:** Rule A4.5 makes `anchored` also need a stored interrupt and plant `match`; the integer vector in L2065 has neither, so a careful build could answer `not anchored` everywhere. All four high-effort core builds raised it and all six builds chose the window-only reading (7/7 agree). The paragraph writes that reading down and keeps the full-object anchor-window vector distinct.
 
 ### E11. C-S4, C-S3, C-S17: §16.1 Draw bytes
 
@@ -699,7 +699,7 @@ It is `mismatch` when the read is a successful header read under section 9 and e
 
 ## Dropped and not taken
 
-- **C-S8 (slot 0 wording, §10.4 L788): dropped.** All six builds produced identical terrain at S1, S2 and PROD with slot 0 unmixed, and no build raised it in the GB round (status SUPPORTED). The edit would sit inside §10, which stays byte-identical.
+- **C-S8 (slot 0 wording, §10.4 L788): dropped.** All six builds produced identical terrain at S1, S2 and PROD with slot 0 unmixed, and no build raised it in the high-effort round (status SUPPORTED). The edit would sit inside §10, which stays byte-identical.
 - **C-S14 option B (define `header.previous_hash`): not taken.** It would change §9 body rules and MTP outcomes on indexes that carry the member, which is normative (2.3). Option A is applied as E26.
 - **C-S9 / C-S18 alternatives.** Java's `pre + mix64(S)` per-slot-summary combination is not pinned; C's `pre XOR S` is queued as the optional sibling `prefold_hoist_xor` (2.3-QUEUE Q03). Every variant is already forbidden by §11.1 L830 (“a per-slot summary … does not satisfy the load”).
 
@@ -712,9 +712,9 @@ It is `mismatch` when the read is a successful header read under section 9 and e
 
 Each has exact old/new text against this erratum's SPEC.md, applied by `tools/queue.py` to `2.3-queue/SPEC-2.3-candidate.md`.
 
-## Reference values (CoS, from SPEC text; for checking builds, never for CASES)
+## Reference values (from SPEC text; for checking builds, never for CASES)
 
-`ref/neg_values.py` computes all 13 negatives exactly as E01 words them (S1, `pk_A`, CASES-v2 seed beacon). Every value differs from honest, all 13 are pairwise distinct, `final_stage_hoist` equals an XOR accumulator of `mix64(word(w) XOR S)` as E01 states, and the S1 leg first revisits slot 101 at step 34 (first read at step 20), so `cached_leg` is well defined there. `prefold_hoist` equals Rust's round-1 value and `final_stage_hoist` equals Go's and B1's; the other eleven equal the round-1 CoS references.
+`ref/neg_values.py` computes all 13 negatives exactly as E01 words them (S1, `pk_A`, CASES-v2 seed beacon). Every value differs from honest, all 13 are pairwise distinct, `final_stage_hoist` equals an XOR accumulator of `mix64(word(w) XOR S)` as E01 states, and the S1 leg first revisits slot 101 at step 34 (first read at step 20), so `cached_leg` is well defined there. `prefold_hoist` equals Rust's round-1 value and `final_stage_hoist` equals Go's and B1's; the other eleven equal the round-1 reference values.
 
 ```text
 honest.legs_le_hex	4c9a6a98574cbd31
