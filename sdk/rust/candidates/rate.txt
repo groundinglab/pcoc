@@ -1,0 +1,45 @@
+rate.hike_legs.0.hike_span.1.p.1.q.4	refuse
+rate.hike_legs.0.hike_span.1.p.1.q.5	refuse
+rate.hike_legs.0.hike_span.1.p.7.q.20	refuse
+rate.hike_legs.0.hike_span.300.p.1.q.4	refuse
+rate.hike_legs.0.hike_span.300.p.1.q.5	refuse
+rate.hike_legs.0.hike_span.300.p.7.q.20	refuse
+rate.hike_legs.0.hike_span.3600.p.1.q.4	refuse
+rate.hike_legs.0.hike_span.3600.p.1.q.5	refuse
+rate.hike_legs.0.hike_span.3600.p.7.q.20	refuse
+rate.hike_legs.1.hike_span.1.p.1.q.4	meets the floor
+rate.hike_legs.1.hike_span.1.p.1.q.5	meets the floor
+rate.hike_legs.1.hike_span.1.p.7.q.20	meets the floor
+rate.hike_legs.1.hike_span.300.p.1.q.4	refuse
+rate.hike_legs.1.hike_span.300.p.1.q.5	refuse
+rate.hike_legs.1.hike_span.300.p.7.q.20	refuse
+rate.hike_legs.1.hike_span.3600.p.1.q.4	refuse
+rate.hike_legs.1.hike_span.3600.p.1.q.5	refuse
+rate.hike_legs.1.hike_span.3600.p.7.q.20	refuse
+rate.hike_legs.1000.hike_span.1.p.1.q.4	meets the floor
+rate.hike_legs.1000.hike_span.1.p.1.q.5	meets the floor
+rate.hike_legs.1000.hike_span.1.p.7.q.20	meets the floor
+rate.hike_legs.1000.hike_span.300.p.1.q.4	meets the floor
+rate.hike_legs.1000.hike_span.300.p.1.q.5	meets the floor
+rate.hike_legs.1000.hike_span.300.p.7.q.20	meets the floor
+rate.hike_legs.1000.hike_span.3600.p.1.q.4	meets the floor
+rate.hike_legs.1000.hike_span.3600.p.1.q.5	meets the floor
+rate.hike_legs.1000.hike_span.3600.p.7.q.20	refuse
+rate.hike_legs.5.hike_span.1.p.1.q.4	meets the floor
+rate.hike_legs.5.hike_span.1.p.1.q.5	meets the floor
+rate.hike_legs.5.hike_span.1.p.7.q.20	meets the floor
+rate.hike_legs.5.hike_span.300.p.1.q.4	refuse
+rate.hike_legs.5.hike_span.300.p.1.q.5	refuse
+rate.hike_legs.5.hike_span.300.p.7.q.20	refuse
+rate.hike_legs.5.hike_span.3600.p.1.q.4	refuse
+rate.hike_legs.5.hike_span.3600.p.1.q.5	refuse
+rate.hike_legs.5.hike_span.3600.p.7.q.20	refuse
+rate.hike_legs.6.hike_span.1.p.1.q.4	meets the floor
+rate.hike_legs.6.hike_span.1.p.1.q.5	meets the floor
+rate.hike_legs.6.hike_span.1.p.7.q.20	meets the floor
+rate.hike_legs.6.hike_span.300.p.1.q.4	refuse
+rate.hike_legs.6.hike_span.300.p.1.q.5	refuse
+rate.hike_legs.6.hike_span.300.p.7.q.20	refuse
+rate.hike_legs.6.hike_span.3600.p.1.q.4	refuse
+rate.hike_legs.6.hike_span.3600.p.1.q.5	refuse
+rate.hike_legs.6.hike_span.3600.p.7.q.20	refuse

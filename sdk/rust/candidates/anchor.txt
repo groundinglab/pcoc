@@ -1,0 +1,7 @@
+anchor.H.100.header_height.100	not anchored
+anchor.H.100.header_height.101	not anchored
+anchor.H.100.header_height.102	anchored
+anchor.H.100.header_height.103	anchored
+anchor.H.100.header_height.104	anchored
+anchor.H.100.header_height.105	not anchored
+anchor.H.100.header_height.106	not anchored

@@ -1,0 +1,10 @@
+hashcash.challenge	4284847f89790951f5eca6a6d3f7052bf986ecb9597383638bbb47adcb375353
+hashcash.difficulty	21
+hashcash.digest	000006c7527cda01397e27bfb2fcfc5abd2c456eadfdfdf26831047c7074c8a2
+hashcash.header_hash	2a607ce2d0675d6462344a407bd901b9b24fbf501e4e6ee03125b7efc2e645d8
+hashcash.header_hash_name	pcoc-pack-2.2/hashcash/header_hash
+hashcash.nonce	1073395
+hashcash.origin	https://bari.example
+hashcash.origin_label	https://bari.example
+hashcash.waypoint	76c7a4a699009dd5c52b91ad9b8454282b8020ea86b208c1c57ea0311a7e2c28
+hashcash.waypoint_name	pcoc-pack-2.2/hashcash/waypoint
