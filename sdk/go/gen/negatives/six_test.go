@@ -5,11 +5,43 @@ import (
 	"testing"
 
 	"github.com/groundinglab/pcoc/sdk/go/v2"
+	"github.com/groundinglab/pcoc/sdk/go/v2/internal/fold"
 	"github.com/groundinglab/pcoc/sdk/go/v2/produce"
 )
 
-// TestACA6 builds an object from each leg negative and checks the six-leg
-// measurement. The honest S1 object matches. Each negative object mismatches.
+// ERRATUM-1 reference table for the S1 fixture (ERRATUM-1.md L720–L734).
+// The test computes each value; these literals are only the check.
+// Honest leg is L720. Honest terrain digest is L721. The thirteen
+// negatives are L722–L734.
+const (
+	erratumHonestLeg     = "4c9a6a98574cbd31"                                                 // ERRATUM-1 L720
+	erratumHonestTerrain = "366e6d1d27adb715d5c96c64e6b9d881e1701a0151e6e08d49df08d2996bd97f" // ERRATUM-1 L721
+)
+
+var erratumLegs = map[string]string{
+	"slot_summary_fold":      "b87ce6fc485dd57c", // ERRATUM-1 L722
+	"xor_accumulator_fold":   "346188d2d8cf98e8", // ERRATUM-1 L723
+	"xor_w_fold":             "73a4c7fbd105aae1", // ERRATUM-1 L724
+	"s_plus_w_fold":          "07262df2d90e8ecb", // ERRATUM-1 L725
+	"prefold_hoist":          "a652562037b465fc", // ERRATUM-1 L726
+	"final_stage_hoist":      "b1808c8d3927a7d1", // ERRATUM-1 L727
+	"partial_slot_read":      "e1ae647ee5a5d7c5", // ERRATUM-1 L728
+	"partial_slot_read_2047": "738755dabac824ab", // ERRATUM-1 L729
+	"f3_shared_terrain":      "a73019b8a2c43cd1", // ERRATUM-1 L730
+	"cached_leg":             "3b715e2a251a44d9", // ERRATUM-1 L731
+}
+
+var erratumTerrains = map[string]string{
+	"one_lane_flip":         "5c3eaeb82045b81036d39bc59d0390b738951b0ba7fbadda118388d0e3070608", // ERRATUM-1 L732
+	"all4_kernel":           "2d7410d07dc6b0e3f8659345a546f5570499a4c423d3d6f6f1df18f53a5cbb6e", // ERRATUM-1 L733
+	"squeezed_seed_terrain": "ed0fc97468d0bc1675729776307ee35b9f9a03e2b5f6a671bd7afabf068e5c22", // ERRATUM-1 L734
+}
+
+// TestACA6 computes the thirteen permanent negatives for the S1 fixture and
+// checks them against the ERRATUM-1 reference table. The honest S1 object
+// matches the six-leg check. An object built from each leg negative
+// mismatches. A leg on each terrain negative, from the honest seed, differs
+// from the honest leg.
 func TestACA6(t *testing.T) {
 	pkA := mustHex(t, "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9")
 	pkB := mustHex(t, "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659")
@@ -24,9 +56,17 @@ func TestACA6(t *testing.T) {
 		t.Fatal(err)
 	}
 	honest := pcoc.LegResult(tA, tA.Seed())
-	want := "4c9a6a98574cbd31"
+	want := erratumHonestLeg
 	if hexOf(pcoc.Le64(honest)) != want {
 		t.Fatalf("honest %s", hexOf(pcoc.Le64(honest)))
+	}
+	honestTerrain := hexOf(TerrainSHA256(tA.Bytes()))
+	if honestTerrain != erratumHonestTerrain {
+		t.Fatalf("honest terrain %s", honestTerrain)
+	}
+	// The terrain walk below is the same leg as pcoc.LegResult.
+	if legOnTerrain(p, tA.Bytes(), tA.Seed()) != honest {
+		t.Fatal("legOnTerrain disagrees with LegResult")
 	}
 	seen := map[string]struct{}{want: {}}
 
@@ -67,6 +107,9 @@ func TestACA6(t *testing.T) {
 			leg = LegResult(tA, tA.Seed(), p.StepsPerLeg, steps[name])
 		}
 		hx := hexOf(pcoc.Le64(leg))
+		if hx != erratumLegs[name] {
+			t.Fatalf("%s legs_le_hex %s, ERRATUM-1 %s", name, hx, erratumLegs[name])
+		}
 		if hx == want {
 			t.Fatalf("%s equals honest", name)
 		}
@@ -93,6 +136,52 @@ func TestACA6(t *testing.T) {
 	if len(seen) != 11 {
 		t.Fatalf("distinct %d", len(seen))
 	}
+
+	lanes := tA.Lanes()
+	fills := map[string][]byte{
+		"one_lane_flip":         FillOneLane(p, lanes),
+		"all4_kernel":           FillAll4(p, lanes),
+		"squeezed_seed_terrain": FillSqueezed(p, lanes),
+	}
+	seenTerrain := map[string]struct{}{}
+	for _, name := range TerrainNames {
+		hx := hexOf(TerrainSHA256(fills[name]))
+		if hx != erratumTerrains[name] {
+			t.Fatalf("%s terrain_sha256 %s, ERRATUM-1 %s", name, hx, erratumTerrains[name])
+		}
+		// A terrain negative cannot be the honest terrain.
+		if hx == honestTerrain {
+			t.Fatalf("%s terrain equals honest", name)
+		}
+		if _, dup := seenTerrain[hx]; dup {
+			t.Fatalf("%s terrain duplicate %s", name, hx)
+		}
+		seenTerrain[hx] = struct{}{}
+		// The honest seed, walked on this terrain, is not the honest leg.
+		leg := legOnTerrain(p, fills[name], tA.Seed())
+		if hexOf(pcoc.Le64(leg)) == want {
+			t.Fatalf("%s leg on terrain equals honest", name)
+		}
+	}
+	if len(seenTerrain) != 3 {
+		t.Fatalf("terrain distinct %d", len(seenTerrain))
+	}
+}
+
+// legOnTerrain is the section 11.1 leg on terrain bytes, from seed.
+// FillOneLane, FillAll4, and FillSqueezed return the byte string; Terrain's
+// fields are unexported, so the walk uses fold.Scalar and the seal directly.
+// Every step reads the whole slot. Nothing is reused across terrains.
+func legOnTerrain(p pcoc.Profile, terrain, seed []byte) uint64 {
+	s := pcoc.U64le(seed[:8])
+	nSlots := p.NSlots()
+	slotBytes := p.SlotBytes
+	for n := 0; n < p.StepsPerLeg; n++ {
+		i := int(s % uint64(nSlots))
+		base := i * slotBytes
+		s = pcoc.SealState(fold.Scalar(terrain[base:base+slotBytes], s))
+	}
+	return s
 }
 
 // objectWithLeg walks the S1 schedule with step in place of the section 11.1
