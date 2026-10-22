@@ -8,6 +8,7 @@ pub mod constants;
 pub mod draw;
 pub mod hash;
 pub mod hashcash;
+pub mod headers;
 pub mod hexutil;
 pub mod hike;
 pub mod indexdoc;
