@@ -1,0 +1,3 @@
+prod.PROD.pk_A.stage0.leg0.checkpoint	4fa854e2421aa429f3d4b7be236261eb022a234d844dac27bee879c26eff2193
+prod.PROD.pk_A.stage0.leg0.legs_le_hex	88a04ac5beacb8a7
+prod.PROD.pk_A.terrain	60b1f689c39be2689487b680cca7ae9d58ec47a286f864c5eb05bc07fc6ffc04
