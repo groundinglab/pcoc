@@ -1,2 +1,3 @@
-tag=spec-v2.0.5
-vector-sha256=8b8ad8902fa782d57cace5858375132b0ee85bcc36bbf597fc5b2330caee7523
+# pack incomplete until the SDK phase
+tag=spec-2.2.0
+vector-sha256=be0aaa5e7841f878add4cdc6818f49d566b6662eb3ad668e90a35c2f43f21ab8
