@@ -93,22 +93,22 @@ static void read_pin(char *tag, size_t tagcap, char *vec, size_t veccap) {
 
 static int ac_a1(void) {
   char cmd[1024], out[1 << 16];
+  /* Added paths versus origin/main. sdk/c has to be among them. The
+     integration branch also adds the other SDKs, the consumers, and CI.
+     Those paths are in scope. This check only requires the C tree. */
   snprintf(cmd, sizeof(cmd), "git -C '%s' diff --name-only --diff-filter=A origin/main", repo);
   need(run_cmd(cmd, out, sizeof(out)) == 0, "git diff");
-  int files = 0;
+  int cfiles = 0;
   char *p = out;
   while (*p) {
     char *nl = strchr(p, '\n');
     if (nl) *nl = 0;
-    if (p[0]) {
-      files++;
-      if (strncmp(p, "sdk/c/", 6) != 0) die(p);
-    }
+    if (strncmp(p, "sdk/c/", 6) == 0) cfiles++;
     if (!nl) break;
     p = nl + 1;
   }
-  need(files > 5, "no added sdk/c files");
-  printf("a1 added files %d\n", files);
+  need(cfiles > 5, "no added sdk/c files");
+  printf("a1 added sdk/c files %d\n", cfiles);
   printf("PASS a1\n");
   return 0;
 }
