@@ -36,7 +36,7 @@ candidates: build/pcoc-gen
 	mkdir -p candidates
 	nice -n 10 ./build/pcoc-gen candidates
 
-check: build/check_ac build/pcoc build/pcoc-gen
+check: build/check_ac build/pcoc build/pcoc-gen build/libpcoc.so
 	nice -n 10 ./build/check_ac $(AC)
 
 clean:
