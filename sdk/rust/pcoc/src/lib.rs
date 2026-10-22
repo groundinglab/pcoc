@@ -8,6 +8,7 @@ pub mod checkpoint;
 pub mod compare;
 pub mod constants;
 pub mod draw;
+pub mod fast_record;
 pub mod hash;
 pub mod hashcash;
 pub mod hexutil;
@@ -121,6 +122,9 @@ pub use draw::thorough_draw;
 
 /// SPEC Rule B2. Integer rate comparison. `meets` or `refuse`.
 pub use compare::leg_rate_floor;
+
+/// SPEC §14 fast-phase hike pair. No terrain fill and no leg.
+pub use fast_record::{hike_legs, hike_span, mtp_at};
 
 /// SPEC §16.1 Anchor comparison. Integer window only.
 pub use compare::anchor_window;
