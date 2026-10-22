@@ -3,7 +3,7 @@
 **23 Oct 2026 (ACDT).** 3 clarifications to `spec/satoshi-hike-v2.2/SPEC.md` (main 7b40353, after erratum 1), in 4 edits. Christian approved the content on 23 Oct at 01:11 ACDT (option A for the malformed record; White Hat's D2 wording for vectorisation). None of them changes the bytes of any valid object, any vector, or any accept/reject outcome. Paths below to `sdk/conformance/` name the cross-verify gate on the Phase A integration branch (draft PR #78); it is not on main yet.
 
 **Base and result**
-- Base: pcoc `main` 7b40353, `spec/satoshi-hike-v2.2/SPEC.md`, sha256 `8e591ea02e7c73ac3d1a4e61602f25baaae88cabdc482240d310d2629dfa5889` (2197 lines).
+- Base: pcoc `main` 7b40353, `spec/satoshi-hike-v2.2/SPEC.md`, sha256 `2ae522f7034bb7adbc9a78e2e685631cb5f2c059d9f88200ba7c504b0f492956` (2201 lines).
 - Result: this branch's `spec/satoshi-hike-v2.2/SPEC.md`, sha256 `2ae522f7034bb7adbc9a78e2e685631cb5f2c059d9f88200ba7c504b0f492956` (2201 lines).
 - Every edit below is an exact string operation: an anchor that occurs exactly once in main, with text inserted after it (E01–E03) or a new subsection inserted before the `## 18. Verify CLI` heading (E04). Line numbers are main's (L…) and the erratum's (E-L…).
 - The SPEC stays a standalone v2.2 document. No edit mentions a previous version.
@@ -147,5 +147,5 @@ The record that `verify <file>` (no other arguments, `production` constants) pri
 
 ## Open points noticed while drafting (not proposed)
 
-1. **Invalid UTF-8 in a map key.** E01 covers the `kind` value only. A key whose bytes are not UTF-8 names no section 8 field, so today it falls under `field set` or the field-absent rule; whether it is malformed CBOR is left to 2.3.
+1. **Invalid UTF-8 in a map key.** E01 covers the `kind` value only, as approved. All four SDKs already read every major-type-3 string whose bytes are not valid UTF-8, map keys included, as a malformed CBOR value (their `RESULTS.md` notes), but the cross-verify gate tests only the `kind` value. Widening E01 to every text string would be one more clarification of the same kind; it is left for Christian's call (or 2.3).
 2. **Erratum 1 open point 3** (an empty input is a `malformed cbor` record, not exit 1) is unchanged; E02 now fixes every field of that record.
