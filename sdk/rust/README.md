@@ -139,7 +139,7 @@ fn main() {
 
 ```sh
 cd sdk/examples/rust
-cargo run --release --bin pcoc-quickstart -- ../../../spec/conformance/v2.0
+cargo run --release --bin pcoc-quickstart -- ../../../spec/conformance/pack
 ```
 
 <!-- output: quickstart -->
@@ -190,7 +190,7 @@ if hike::admit(&m) {
 ```
 
 Notes:
-- **`admit` and `failure_facts`.** They apply the section 15 invariant refusals only: earlier object kind, shape, checkpoint mismatch, seed value, plant mismatch, successor, and the six legs. They apply **no threshold**. A gate adds its own policy on top, such as a leg-rate floor or a minimum number of anchored paths. groundinglab's argued default is [POLICY.md](../../services/admission-gate/POLICY.md), a recommendation and not part of the spec. The [admission gate](../../services/admission-gate/) is a complete service built this way.
+- **`admit` and `failure_facts`.** They apply the section 15 invariant refusals only: earlier object kind, shape, checkpoint mismatch, seed value, plant mismatch, successor, and the six legs. They apply **no threshold**. A gate adds its own policy on top, such as a leg-rate floor or a minimum number of anchored paths. groundinglab's policy is [POLICY.md](../../policy/groundinglab-admission/POLICY.md), and it is not part of the spec. The [admission gate](../../services/admission-gate/) is a complete service built this way.
 - **The index.** `https://index.groundinglab.io` is the public [pcoc-index](../../services/index/). It serves `GET /index/<height>` for the mainnet heights it retains, and answers **404** for any other height. The heights inside the `conformance-small` vectors (for example 1004) are not mainnet heights. Run on `kat-small`, this example therefore records every header read as `not read`, and the shape as `mismatch` (`constant`), because a small-profile object fails production sizes. Use a real production object.
 
 ## Produce
@@ -217,7 +217,7 @@ let object: Vec<u8> = hike::produce_with_settlement_sized(
 ```
 
 ```sh
-cargo run --release --bin produce -- ../../../spec/conformance/v2.0 2>/dev/null
+cargo run --release --bin produce -- ../../../spec/conformance/pack 2>/dev/null
 ```
 
 <!-- output: produce -->
@@ -299,7 +299,7 @@ Related produce APIs:
 - Functions: `fill_terrain[_sized]`, `production_seed`, `leg_result[_sized]`, `checkpoint_sized`, `successor_waypoint[_sized]`, `terrain_sample_sized`, `draw_distinct` and `effective_bits`.
 - The section 6 constants: `KIND`, `STAGES`, `STEPS_PER_LEG`, `SAMPLE_BYTES`, …, `ANCHOR_WINDOW_OFFSETS`.
 
-**Admission (section 15).** `admit(&Measurements) -> bool` returns true when there is no refusal and no held read. `failure_facts(&Measurements) -> Vec<&'static str>` names the refusals, and is empty when the record is clear or held. The informative §15.5 example floors are policy values, not SDK constants (rc.2): they live in `spec/conformance/v2.0/constants.json`.
+**Admission (section 15).** `admit(&Measurements) -> bool` returns true when there is no refusal and no held read. `failure_facts(&Measurements) -> Vec<&'static str>` names the refusals, and is empty when the record is clear or held. Lever values are policy, not SDK constants (rc.2). groundinglab's policy is `policy/groundinglab-admission/gl-admit-v9.toml`.
 
 **Events and reports.**
 - `verify_events` turns one observation into `VerifyEvent`s: the object, then the six checks in section 14 order.
@@ -361,15 +361,7 @@ The programs exit 1 only when no top-level CBOR map decodes (`hike::top_level_ma
 
 ## Conformance vectors
 
-`spec/conformance/v2.0/` is the source of truth ([what each file is](../../spec/conformance/v2.0/README.md)). `hike/tests/conformance_v2.rs` reproduces every vector byte for byte. With `PCOC_REGEN_V2=1`, and only in a spec change, it rewrites them instead:
-
-```sh
-# from the repository root
-PCOC_REGEN_V2=1 cargo test --manifest-path sdk/rust/hike/Cargo.toml --test conformance_v2 -- --exact conformance_v2_pack
-git diff --exit-code spec/conformance/v2.0
-```
-
-The pack's own README still names the pre-move path `reference/rust/hike/Cargo.toml` in its regenerate commands, and its `stage0-start.json` paragraph repeats the `sign-in-origins.json` sentence. That file is covered by the `SPEC_PIN` hash, so both fixes wait for the next spec release; the command above is the current one. [../SPEC_PIN](../SPEC_PIN) holds the spec tag and the vector hash.
+`spec/conformance/pack/` is the pack ([what it publishes and what is missing](../../spec/conformance/pack/README.md)). `hike/tests/conformance_v2.rs` still reads and, with `PCOC_REGEN_V2=1`, writes the removed pack path. That test is not edited here. [../SPEC_PIN](../SPEC_PIN) holds the spec tag and the SHA-256 of the pack manifest.
 
 ## Test
 

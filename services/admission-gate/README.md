@@ -5,14 +5,14 @@ The admission gate is a standalone service built on the Rust SDK (`sdk/rust`, ve
 Three layers stay separate:
 
 - **Specification** defines measurements and the admission model. It sets no threshold values.
-- **Policy** chooses values. [POLICY.md](POLICY.md) is the companion. groundinglab's recommended policy is `gl-admit-v6`, a recommendation, not authority. This build's code default is `gl-admit-v6`. Choose your own.
+- **Policy** chooses values. The groundinglab policy is [policy/groundinglab-admission/](../../policy/groundinglab-admission/). It does not change a SPEC rule. This build's code still has its own default policy id. That id is listed with the code references and is not changed here. Choose your own.
 - **Operations** is a deployed instance's own config. groundinglab's instance config is private and is not in this repository.
 
 groundinglab runs one configured instance ("the groundinglab Admission Gate"). While it is the only public gate, its public page states its live policy.
 
 Service status: [STATUS.md](STATUS.md). Evidence: [EVIDENCE.md](EVIDENCE.md).
 
-The admission gate (`admission-service`, crate `pcoc-admission`) checks a Satoshi Hike v2.0 object. It reads one config file. It does not run v1.35 verify and it does not load a v1.35 profile.
+The admission gate (`admission-service`, crate `pcoc-admission`) checks a Satoshi Hike object. It reads one config file. It does not run v1.35 verify and it does not load a v1.35 profile.
 
 Install is [deploy/DEPLOY.md](deploy/DEPLOY.md) (systemd unit, `env.example`, `gate.toml`). Request and response bodies are [WIRE.md](WIRE.md).
 
@@ -46,7 +46,7 @@ GET  /v1/health            -> version, commit, sdk, spec, spec_kind, config
 
 The reference verifier is `linked_measure` in `src/verifier.rs`. It calls `hike::verify_with_bind_threads` from the Rust SDK crate. Index reads are one shot. An earlier kind is that crate's Rule A5. Policy then judges the measurements.
 
-Policy values come from the policy file, not from the specification. This build reads `policy/gl-admit-v6.toml` or an inline `policy_table`. A change of any value needs a new id. The code default is `gl-admit-v6` (one leg per 5 seconds, at least 6 anchored waypoints anywhere among `W_1` … `W_16`, counted). See [POLICY.md](POLICY.md). The verifier writes `measures`. The gate writes `policy_id` and `policy_checks`. A refusal carries one `reason_code` and a class. `bitcoin_tip_height` is null when unknown. Public health does not show `log_dir` or `config_path`. Health echoes the policy id.
+Policy values come from the policy file, not from the specification. The groundinglab policy is [gl-admit-v9.toml](../../policy/groundinglab-admission/gl-admit-v9.toml). A change of any value needs a new id. The code still names a removed policy file; that line is listed with the code references and is not changed here. See [POLICY.md](../../policy/groundinglab-admission/POLICY.md). The verifier writes `measures`. The gate writes `policy_id` and `policy_checks`. A refusal carries one `reason_code` and a class. `bitcoin_tip_height` is null when unknown. Public health does not show `log_dir` or `config_path`. Health echoes the policy id.
 
 The public log starts empty. The process creates `log_dir`. A chain that is not Satoshi Hike v2.0 is not opened and not served.
 

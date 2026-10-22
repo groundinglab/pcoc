@@ -97,7 +97,7 @@ func main() {
 
 ```sh
 cd sdk/examples/go
-go run . ../../../spec/conformance/v2.0
+go run . ../../../spec/conformance/pack
 ```
 
 <!-- output: quickstart -->
@@ -148,7 +148,7 @@ os.Stdout.Write(record.Marshal())
 
 **The public index.** `https://index.groundinglab.io` serves `GET /index/<height>` only for the mainnet heights it retains; any other height gets 404. The `conformance-small` vectors use small, non-mainnet heights, so on a vector object every read is `not read`. Use a real production object.
 
-**Gating.** This SDK has no section 15 helper; only Rust has one (`hike::admit` / `hike::failure_facts`). A Go gate reads the record's fields and applies the section 15 invariant refusals itself: `Shape`, the `checkpoints` comparison, `seed_value`, plant, successor, and six legs (spec section 15). Then it applies its own thresholds. groundinglab's argued default is [POLICY.md](../../services/admission-gate/POLICY.md), a recommendation and not part of the spec. Writing that is new code; the SDK does not provide it.
+**Gating.** This SDK has no section 15 helper; only Rust has one (`hike::admit` / `hike::failure_facts`). A Go gate reads the record's fields and applies the section 15 invariant refusals itself: `Shape`, the `checkpoints` comparison, `seed_value`, plant, successor, and six legs (spec section 15). Then it applies its own thresholds. groundinglab's policy is [POLICY.md](../../policy/groundinglab-admission/POLICY.md), and it is not part of the spec. Writing that is new code; the SDK does not provide it.
 
 ## Produce
 
@@ -169,7 +169,7 @@ if err != nil {
 ```
 
 ```sh
-go run ./produce ../../../spec/conformance/v2.0
+go run ./produce ../../../spec/conformance/pack
 ```
 
 <!-- output: produce -->
@@ -268,7 +268,7 @@ The programs exit 1 only when no top-level CBOR map decodes: the file cannot be 
 
 ## Conformance vectors
 
-`spec/conformance/v2.0/` is the source of truth ([what each file is](../../spec/conformance/v2.0/README.md)). This SDK does not generate the vectors. `conformance/v2_test.go` and the package tests read them in place, and compare the record byte for byte. [../SPEC_PIN](../SPEC_PIN) holds the spec tag and the vector hash.
+`spec/conformance/pack/` is the pack ([what it publishes and what is missing](../../spec/conformance/pack/README.md)). This SDK does not generate the vectors. `conformance/v2_test.go` and the package tests still read the removed pack path, and those lines are not edited here. [../SPEC_PIN](../SPEC_PIN) holds the spec tag and the SHA-256 of the pack manifest.
 
 ## Test
 

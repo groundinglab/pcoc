@@ -5,7 +5,7 @@ These processes are built on the Rust reference, plus one Cloudflare Worker. The
 ## Specification, policy, operations
 
 - **Specification** (`spec/`) defines measurements and the admission service model. It may discuss thresholds but never sets a threshold value.
-- **Policy** chooses values. The admission gate's companion, [admission-gate/POLICY.md](admission-gate/POLICY.md), holds groundinglab's argued default (`gl-admit-v6`). It is a recommendation, not authority. Anyone may choose their own, and a policy id encodes its values.
+- **Policy** chooses values. The groundinglab policy is [policy/groundinglab-admission/](../policy/groundinglab-admission/). It does not change a SPEC rule. Anyone may choose their own, and a policy id encodes its values.
 - **Operations** is a deployed instance's own config: hosts, origins, the active policy, secrets. groundinglab's is private and is not in this repository. Files here that name groundinglab hosts (`deploy/`, `wrangler.jsonc`) are examples of one deployment.
 
 ## What is here
@@ -51,7 +51,7 @@ Release tags are `<service>-v<x.y.z>` and point at the commit that ships that re
 
 ## Admission Gate
 
-[admission-gate/](admission-gate/) is the admission gate service. groundinglab runs one configured instance of it. It checks a Satoshi Hike v2.0 object and reads one TOML config file. Thresholds come from the configured policy ([POLICY.md](admission-gate/POLICY.md)).
+[admission-gate/](admission-gate/) is the admission gate service. groundinglab runs one configured instance of it. It checks a Satoshi Hike object and reads one TOML config file. Thresholds come from the configured policy ([policy/groundinglab-admission/](../policy/groundinglab-admission/)).
 
 - `POST /v1/sign-in` is the sign-in door. The body is the §15.1 six-field object. The website reads `GET /v1/sign-in/result/{nonce}`. A v1.35 object is refused as `earlier_version`.
 - `POST /v1/verify` measures an object. It does not check a signature and does not admit.

@@ -27,6 +27,5 @@ Bari timestamps waypoints by sealing each tip's pool into one Bitcoin transactio
 ## More
 
 - [OPERATING.md](OPERATING.md) — the HTTP table, the operator page, and the fixture command
-- [pool-handoff/REQUIREMENTS.md](pool-handoff/REQUIREMENTS.md)
 - [deploy/bari.service](deploy/bari.service)
 - [deploy/env.example](deploy/env.example)

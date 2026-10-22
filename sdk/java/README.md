@@ -94,7 +94,7 @@ From the repository root, building into a temporary directory:
 ```sh
 OUT=$(mktemp -d)
 javac --release 21 -d "$OUT" $(find sdk/java/src -name '*.java') sdk/examples/java/Quickstart.java
-java -cp "$OUT" Quickstart spec/conformance/v2.0
+java -cp "$OUT" Quickstart spec/conformance/pack
 ```
 
 <!-- output: quickstart -->
@@ -138,7 +138,7 @@ System.out.print(record); // never null: undecodable or non-map input gets the [
 
 **The public index.** `https://index.groundinglab.io` serves `GET /index/<height>` only for the mainnet heights it retains, and answers 404 for any other height. The `conformance-small` vectors use small, non-mainnet heights, so on a vector object every read is `not read`. Use a real production object.
 
-**Gating.** This SDK has no section 15 helper; only Rust has one (`hike::admit` / `hike::failure_facts`). A Java gate reads the record's fields and applies the section 15 invariant refusals itself: shape, the checkpoint comparison, seed value, plant, successor, and six legs (spec section 15). Then it applies its own thresholds. groundinglab's argued default is [POLICY.md](../../services/admission-gate/POLICY.md), a recommendation and not part of the spec. Writing that is new code; the SDK does not provide it.
+**Gating.** This SDK has no section 15 helper; only Rust has one (`hike::admit` / `hike::failure_facts`). A Java gate reads the record's fields and applies the section 15 invariant refusals itself: shape, the checkpoint comparison, seed value, plant, successor, and six legs (spec section 15). Then it applies its own thresholds. groundinglab's policy is [POLICY.md](../../policy/groundinglab-admission/POLICY.md), and it is not part of the spec. Writing that is new code; the SDK does not provide it.
 
 ## Produce
 
@@ -158,7 +158,7 @@ Drive.Result result = Drive.run(publicKey, Profile.CONFORMANCE_SMALL_V2, tips); 
 ```
 
 ```sh
-java -cp "$OUT" ProduceExample spec/conformance/v2.0   # after compiling ProduceExample.java like Quickstart.java
+java -cp "$OUT" ProduceExample spec/conformance/pack   # after compiling ProduceExample.java like Quickstart.java
 ```
 
 <!-- output: produce -->
@@ -268,7 +268,7 @@ The programs exit 1 only when no top-level CBOR map decodes: the file cannot be 
 
 ## Conformance vectors
 
-`spec/conformance/v2.0/` is the source of truth ([what each file is](../../spec/conformance/v2.0/README.md)). This SDK does not generate the vectors. `pcoc.conformance.V2Pack` reads them in place and compares the record byte for byte, and `pcoc.hike.Spec6Pins` checks the section 6 constants. [../SPEC_PIN](../SPEC_PIN) holds the spec tag and the vector hash.
+`spec/conformance/pack/` is the pack ([what it publishes and what is missing](../../spec/conformance/pack/README.md)). This SDK does not generate the vectors. `pcoc.conformance.V2Pack` still reads the removed pack path, and that line is not edited here. [../SPEC_PIN](../SPEC_PIN) holds the spec tag and the SHA-256 of the pack manifest.
 
 ## Test
 
