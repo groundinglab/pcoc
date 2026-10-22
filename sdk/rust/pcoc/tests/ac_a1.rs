@@ -1,11 +1,15 @@
 //! AC-A1. Every file under `sdk/rust/` is added on this branch.
 //! The test does not read `sdk/go` or `sdk/java`.
 
+#[path = "../../support/repo.rs"]
+mod repo_mod;
+
+use repo_mod::repo_root;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn repo() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
+    repo_root()
 }
 
 fn git(repo: &Path, args: &[&str]) -> std::process::Output {
@@ -34,12 +38,12 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// Workspace paths the removed tree also used. The layout requires these names.
-/// Each one on this branch is a different blob from `origin/main`.
+/// Paths the removed tree also used. Each blob on this branch differs from `origin/main`.
 const REPLACED_ON_MAIN: &[&str] = &[
     "sdk/rust/Cargo.toml",
     "sdk/rust/Cargo.lock",
     "sdk/rust/rust-toolchain.toml",
+    "sdk/rust/README.md",
 ];
 
 #[test]
@@ -55,10 +59,17 @@ fn files_added_on_this_branch() {
         text.lines().next().unwrap().trim().to_string()
     };
     for file in &files {
-        let rel = file.strip_prefix(&repo).unwrap().to_string_lossy().replace('\\', "/");
+        let rel = file
+            .strip_prefix(&repo)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
         let at_cut = format!("{first}:{rel}");
         let cut = git(&repo, &["cat-file", "-e", &at_cut]);
-        assert!(!cut.status.success(), "{rel} exists at the branch cut {first}");
+        assert!(
+            !cut.status.success(),
+            "{rel} exists at the branch cut {first}"
+        );
         let on_main = format!("origin/main:{rel}");
         let main = git(&repo, &["cat-file", "-e", &on_main]);
         if main.status.success() {
@@ -111,7 +122,9 @@ fn step_is_only_in_step_rs() {
         let text = std::fs::read_to_string(&file).unwrap();
         let defines = text.lines().any(|l| {
             let t = l.trim_start();
-            t.starts_with("fn step(") || t.starts_with("pub fn step(") || t.starts_with("pub(crate) fn step(")
+            t.starts_with("fn step(")
+                || t.starts_with("pub fn step(")
+                || t.starts_with("pub(crate) fn step(")
         });
         if defines {
             hits.push(file);

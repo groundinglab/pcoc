@@ -1,46 +1,26 @@
-//! AC-A5. Candidates match the round-2 files. The scripted rig writes O1–O3.
+//! AC-A5. Regenerated candidates match the committed files and the pinned
+//! SHA-256 values. Produced objects match the pinned objects. Each object verifies.
+
+#[path = "../../support/repo.rs"]
+mod repo;
+#[path = "../../support/round2.rs"]
+mod round2;
 
 use pcoc::hash::sha256;
 use pcoc::hashcash::header_hash;
 use pcoc::hexutil::hex_encode;
 use pcoc_produce::{encode_produced, produce_on_rig, Case, ProduceOutcome};
-use std::path::{Path, PathBuf};
+use repo::repo_root;
+use round2::{
+    assert_committed_pins, assert_objects_verify, assert_regenerated_candidates, OBJECTS,
+};
+use std::path::Path;
 use std::sync::atomic::AtomicBool;
-
-const FILES: [&str; 14] = [
-    "seed.txt",
-    "nl4.txt",
-    "terrain.txt",
-    "fold.txt",
-    "kat-small.txt",
-    "test-3leg.txt",
-    "prod.txt",
-    "wes.txt",
-    "rate.txt",
-    "anchor.txt",
-    "draw.txt",
-    "unknown-kind.txt",
-    "hashcash.txt",
-    "negatives.txt",
-];
 
 const PK: &str = "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9";
 
 fn read(path: &Path) -> Vec<u8> {
     std::fs::read(path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()))
-}
-
-fn find_up(start: &Path, rel: &str) -> Option<PathBuf> {
-    let mut dir = start.to_path_buf();
-    loop {
-        let candidate = dir.join(rel);
-        if candidate.is_dir() {
-            return Some(candidate);
-        }
-        if !dir.pop() {
-            return None;
-        }
-    }
 }
 
 fn produce(case: Case) -> Vec<u8> {
@@ -56,35 +36,9 @@ fn produce(case: Case) -> Vec<u8> {
 
 #[test]
 fn candidates_and_objects() {
-    let gen_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let committed = gen_dir.join("../candidates");
-    let scratch = std::env::temp_dir().join(format!("pcoc-ac-a5-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&scratch);
-    std::fs::create_dir_all(&scratch).unwrap();
-    pcoc_gen::write_candidates(&scratch).unwrap();
-    let again = scratch.join("again");
-    pcoc_gen::write_candidates(&again).unwrap();
-    for name in FILES {
-        let got = read(&scratch.join(name));
-        assert_eq!(got, read(&again.join(name)), "rerun {name}");
-        assert_eq!(got, read(&committed.join(name)), "committed {name}");
-    }
-    if let Some(reference) = find_up(&gen_dir, "ref-round2/C-grok/candidates") {
-        for name in FILES {
-            assert_eq!(
-                read(&scratch.join(name)),
-                read(&reference.join(name)),
-                "reference {name}"
-            );
-        }
-    }
-    let before = FILES.map(|n| read(&committed.join(n)));
-    pcoc_gen::write_candidates(&committed).unwrap();
-    for (name, prior) in FILES.iter().zip(before) {
-        assert_eq!(read(&committed.join(name)), prior, "in place {name}");
-    }
-    let prod = String::from_utf8(read(&committed.join("prod.txt"))).unwrap();
-    assert!(prod.contains("prod.PROD.stage.0.leg.0.legs_le_hex\t88a04ac5beacb8a7\n"));
+    let root = repo_root();
+    assert_committed_pins(&root);
+    let committed = root.join("sdk/rust/candidates");
 
     let mut fee = Vec::new();
     fee.extend_from_slice(&sha256(b"pcoc-pack-2.2/hashcash/fee_header/0"));
@@ -97,16 +51,19 @@ fn candidates_and_objects() {
     assert!(hashcash.contains(&format!("hashcash.header_hash\t{twice}\n")));
     assert!(!hashcash.contains(&format!("hashcash.header_hash\t{once}\n")));
 
-    let objects = gen_dir.join("../objects");
-    let pins = [
-        (Case::S1, "O1-S1.cbor", "800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246"),
-        (Case::S2, "O2-S2.cbor", "6bfc769b831b62de86165d290b8cb8b4fc872d7759183ebbad4c0ab94c0be5e0"),
-        (Case::Prod, "O3-PROD.cbor", "b16ecdaa13ad6df28ae62ba84e653b90cbcc3b163af90b62a0db836ff6f3bea7"),
-    ];
-    for (case, name, pin) in pins {
+    assert_regenerated_candidates(&root, |dir| {
+        pcoc_gen::write_candidates(dir).unwrap_or_else(|e| panic!("regenerate candidates: {e}"));
+    });
+
+    let objects = root.join("sdk/rust/objects");
+    for (case, name, pin) in [
+        (Case::S1, OBJECTS[0].0, OBJECTS[0].1),
+        (Case::S2, OBJECTS[1].0, OBJECTS[1].1),
+        (Case::Prod, OBJECTS[2].0, OBJECTS[2].1),
+    ] {
         let bytes = produce(case);
-        assert_eq!(hex_encode(&sha256(&bytes)), pin, "{name}");
+        assert_eq!(hex_encode(&sha256(&bytes)), pin, "object pin {name}");
         assert_eq!(bytes, read(&objects.join(name)), "{name} committed bytes");
     }
-    let _ = std::fs::remove_dir_all(&scratch);
+    assert_objects_verify(&root);
 }

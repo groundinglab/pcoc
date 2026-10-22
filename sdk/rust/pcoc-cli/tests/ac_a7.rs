@@ -1,5 +1,9 @@
 //! AC-A7. Verify CLI: the section 14 record, and exit codes from section 18.
 
+#[path = "../../support/repo.rs"]
+mod repo;
+
+use repo::repo_root;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
@@ -112,6 +116,7 @@ fn s1_args(path: &str) -> Vec<String> {
 
 #[test]
 fn verify_cli() {
+    let root = repo_root();
     let empty = temp_bytes("empty", b"");
     let empty_s = empty.to_str().unwrap();
     let run = pcoc(&["verify", empty_s]);
@@ -206,7 +211,7 @@ fn verify_cli() {
     forbid(&rule.out);
     forbid(&rule.err);
 
-    let o1 = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../objects/O1-S1.cbor");
+    let o1 = root.join("sdk/rust/objects/O1-S1.cbor");
     let o1s = o1.to_str().unwrap();
     let mut args = s1_args(o1s);
     let owned: Vec<&str> = args.iter().map(String::as_str).collect();

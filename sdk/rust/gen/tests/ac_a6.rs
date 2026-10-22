@@ -1,6 +1,9 @@
 //! AC-A6. The 13 permanent negatives match erratum 1, and a stored leg negative
 //! makes the six-leg check `mismatch` at the injected index 0.
 
+#[path = "../../support/repo.rs"]
+mod repo;
+
 use pcoc::hash::sha256;
 use pcoc::hexutil::{hex_decode_exact, hex_encode};
 use pcoc::profile::Profile;
@@ -47,6 +50,7 @@ fn six_results(record: &str) -> Vec<String> {
 
 #[test]
 fn negatives_and_six_leg() {
+    let _root = repo::repo_root();
     let pk_a: [u8; 32] = hex_decode_exact(PK_A).unwrap();
     let pk_b: [u8; 32] = hex_decode_exact(PK_B).unwrap();
     let beacon = sha256(b"pcoc-pack-2.2/beacon/seed");
