@@ -1,0 +1,9 @@
+[package]
+name = "xverify-rust"
+version = "2.2.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+pcoc = { path = "../../rust/pcoc" }
+pcoc-testing = { path = "../../rust/pcoc-testing" }
