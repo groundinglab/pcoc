@@ -326,6 +326,13 @@ public final class Verify {
         for (int g = 1; g <= 17; g++) {
             paths[g - 1] = pathOf(sha, reads, stages, lastInterrupt, lastHeight, g, headers, issuedMiss);
             if (g <= 16) {
+                // Erratum 2 (E02). A malformed CBOR value has no path byte string.
+                // path_state and plant are not defined. skip is only an empty path
+                // on a decoded stage (Rule A4.5), so this g is not a skip_list entry.
+                if (malformed) {
+                    paths[g - 1].pathState = "not defined";
+                    paths[g - 1].plant = "not defined";
+                }
                 anchorTok[g - 1] = paths[g - 1].anchor;
                 if ("anchored".equals(paths[g - 1].anchor)) {
                     anchored++;
@@ -346,7 +353,7 @@ public final class Verify {
 
         Six six = sixLeg(sha, profile, terrain, seed, stages, draw);
 
-        String analysis = analysis(stages, headers, reads, lastHeight, book);
+        String analysis = analysis(stages, headers, reads, lastHeight, book, malformed);
 
         Json.Obj rec = new Json.Obj();
         rec.add("profile", Json.quote(profile.name));
@@ -835,14 +842,17 @@ public final class Verify {
         return got == stored ? "match" : "mismatch";
     }
 
-    private static String analysis(Stage[] stages, HeaderM[] headers, Reads reads, Long lastHeight, Book book) {
+    private static String analysis(Stage[] stages, HeaderM[] headers, Reads reads, Long lastHeight, Book book,
+                                   boolean malformed) {
         Long whole = sum(stages, 1, 17);
         Long hike = sum(stages, 0, 17);
         Json.Arr per = new Json.Arr();
         for (int g = 0; g < Const.STAGES; g++) {
             Json.Obj o = new Json.Obj();
             o.add("g", Integer.toString(g));
-            if (stages[g].checkpoints == null) {
+            // Erratum 2 (E02). A missing stage is not a count of zero, and a
+            // malformed CBOR value has no checkpoint list to count.
+            if (malformed || stages[g].checkpoints == null) {
                 o.add("checkpoint_count", Json.quote("not defined"));
             } else {
                 o.add("checkpoint_count", Integer.toString(stages[g].checkpoints.length));
@@ -853,11 +863,11 @@ public final class Verify {
         String wholeSpan = subT(headers[18], headers[1]);
         String hikeSpan = mtpSpan(reads, headers, lastHeight);
         Json.Obj o = new Json.Obj();
-        o.add("whole_hike_legs", whole == null ? Json.quote("not defined") : Long.toString(whole));
+        o.add("whole_hike_legs", malformed || whole == null ? Json.quote("not defined") : Long.toString(whole));
         o.add("whole_hike_span", wholeSpan);
         o.add("per_stage", per.build());
         o.add("legs_outside", book.legsOutside);
-        o.add("hike_legs", hike == null ? Json.quote("not defined") : Long.toString(hike));
+        o.add("hike_legs", malformed || hike == null ? Json.quote("not defined") : Long.toString(hike));
         o.add("hike_span", hikeSpan);
         return o.build();
     }
