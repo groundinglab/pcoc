@@ -5,11 +5,15 @@
 //! and CI. A lock that those paths must stay untouched belonged to the
 //! Rust-only branch. It is not the check that the Rust tree is new.
 
+#[path = "../../support/repo.rs"]
+mod repo_mod;
+
+use repo_mod::repo_root;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn repo() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
+    repo_root()
 }
 
 fn git(repo: &Path, args: &[&str]) -> std::process::Output {
@@ -38,12 +42,12 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// Workspace paths the removed tree also used. The layout requires these names.
-/// Each one on this branch is a different blob from `origin/main`.
+/// Paths the removed tree also used. Each blob on this branch differs from `origin/main`.
 const REPLACED_ON_MAIN: &[&str] = &[
     "sdk/rust/Cargo.toml",
     "sdk/rust/Cargo.lock",
     "sdk/rust/rust-toolchain.toml",
+    "sdk/rust/README.md",
 ];
 
 #[test]

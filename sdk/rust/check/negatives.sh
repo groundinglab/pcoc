@@ -5,7 +5,8 @@
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
-export CARGO_BUILD_JOBS=6
+# Default 4. A caller that already set the cap keeps it.
+export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-4}"
 export CARGO_TARGET_DIR="${PCOC_NEGATIVES_TARGET:-/tmp/pcoc-rust-negatives-target}"
 
 nice -n 10 cargo build -p pcoc -p pcoc-cli --release >/tmp/pcoc-negatives-build.log

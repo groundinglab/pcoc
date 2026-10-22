@@ -1,14 +1,17 @@
 //! AC-A9 library half. The CLI half is `pcoc-cli` test `ac_a9`.
 
-use std::path::PathBuf;
+#[path = "../../support/repo.rs"]
+mod repo;
+
+use repo::repo_root;
 
 #[test]
 fn version_constant_equals_version_file() {
-    let sdk = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let file = std::fs::read_to_string(sdk.join("VERSION")).unwrap();
+    let root = repo_root();
+    let file = std::fs::read_to_string(root.join("sdk/VERSION")).unwrap();
     assert_eq!(file.trim(), pcoc::VERSION);
     assert_eq!(pcoc::version(), "2.2.0");
-    let pin_text = std::fs::read_to_string(sdk.join("SPEC_PIN")).unwrap();
+    let pin_text = std::fs::read_to_string(root.join("sdk/SPEC_PIN")).unwrap();
     let pin = pcoc::pin::read_pin(&pin_text).unwrap();
     let info = pcoc::build_info();
     assert_eq!(info.version, "2.2.0");
