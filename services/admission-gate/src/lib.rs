@@ -23,6 +23,7 @@ pub mod levers;
 pub mod log;
 pub mod policy;
 pub mod ratelimit;
+pub mod reads;
 pub mod reasons;
 pub mod signin_row;
 pub mod thorough;
@@ -34,3 +35,6 @@ pub use config::Config;
 pub use door::Door;
 pub use http::Service;
 pub use verifier::{reference_linked, SPEC_KIND, SPEC_NAME};
+
+#[cfg(test)]
+mod admit_tests;

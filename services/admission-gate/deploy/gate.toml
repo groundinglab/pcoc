@@ -65,9 +65,10 @@ allowed_origins = ["https://groundinglab.io", "https://www.groundinglab.io"]
 extra_origins = []
 
 # Admission policy file, relative to this file. SPEC §15.4 levers.
-# An inline [policy_table] is the other form. The two cannot both be set.
+# The path is required. There is no inline table and no build-tree fallback.
 # An unknown lever name, a wrong type, or an out-of-range value refuses
 # the whole file.
+# allow_2_2_live is not set. This file must not replace the live v2.0 service.
 #
 # v1 → v4: gate 0.4.1 read policy_id, a float min_leg_rate, and min_waypoints,
 # and a named leg_rate_floor (strict / default / lenient) for a resumed

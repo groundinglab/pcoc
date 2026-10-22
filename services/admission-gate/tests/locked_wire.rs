@@ -56,12 +56,22 @@ impl Drop for Lab {
     }
 }
 
+fn pin_clock(door: &Door, now: u64) {
+    door.set_now_unix_s(Some(now));
+    // The fixture epoch is this lab's process clock. A store start taken
+    // from the wall clock is later than 2026-10-10, so every in-window
+    // challenge of that epoch would be a restart replay. Start 0 keeps
+    // those challenges (including one issued at now + 60 - lifetime) on
+    // the accepted side of the third comparison.
+    door.test_set_store_start(0);
+}
+
 fn lab_at(now: u64) -> Lab {
     let dir = scratch("door");
     let cfg = Config::for_tests(dir.clone(), "http://127.0.0.1:9");
     let service = Service::open(cfg).expect("gate");
     let door = service.door();
-    door.set_now_unix_s(Some(now));
+    pin_clock(&door, now);
     Lab {
         router: service.router(),
         door,
@@ -761,7 +771,7 @@ async fn oversize_writes_rejected_without_consuming() {
     cfg.max_object_bytes = 8;
     let service = Service::open(cfg).expect("gate");
     let door = service.door();
-    door.set_now_unix_s(Some(NOW_2026_10_10));
+    pin_clock(&door, NOW_2026_10_10);
     let lab = Lab {
         router: service.router(),
         door,
@@ -834,7 +844,7 @@ async fn the_rate_limit_is_delivery_ok_and_does_not_consume() {
     cfg.rate_per_min = 1;
     let service = Service::open(cfg).expect("gate");
     let door = service.door();
-    door.set_now_unix_s(Some(NOW_2026_10_10));
+    pin_clock(&door, NOW_2026_10_10);
     let lab = Lab {
         router: service.router(),
         door,
@@ -873,8 +883,8 @@ fn locked_body(body: &Value) -> pcoc_admission::wire::LockedBody {
 /// key, not the signed site origin. Banned resubmits up to the global cap
 /// leave the slots free, and a following legitimate sign-in from the same
 /// origin is taken.
-#[test]
-fn a_banned_resubmit_takes_no_pending_slot() {
+#[tokio::test]
+async fn a_banned_resubmit_takes_no_pending_slot() {
     let lab = lab();
     let exp = NOW_2026_10_10 + 60;
     let mut banned = Signed::fresh(Vec::new(), exp);
@@ -912,7 +922,7 @@ async fn a_gate_serves_its_configured_origin_only() {
     cfg.served_origins = vec!["https://site.example".to_owned()];
     let service = Service::open(cfg).expect("gate");
     let door = service.door();
-    door.set_now_unix_s(Some(NOW_2026_10_10));
+    pin_clock(&door, NOW_2026_10_10);
     let lab = Lab {
         router: service.router(),
         door,

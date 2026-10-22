@@ -17,7 +17,8 @@ fn pack(name: &str) -> Value {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../spec/conformance/pack")
         .join(name);
-    let text = std::fs::read_to_string(&path).unwrap_or_else(|err| panic!("{}: {err}", path.display()));
+    let text =
+        std::fs::read_to_string(&path).unwrap_or_else(|err| panic!("{}: {err}", path.display()));
     serde_json::from_str(&text).unwrap_or_else(|err| panic!("{}: {err}", path.display()))
 }
 
@@ -84,7 +85,10 @@ fn pack_sign_in_matches_the_gate_parser() {
         doc["responses"]["bad_signature"],
         serde_json::json!({"error": {"code": "bad_signature"}})
     );
-    assert_eq!(doc["responses"]["delivery_ok"], serde_json::json!({"delivery": "ok"}));
+    assert_eq!(
+        doc["responses"]["delivery_ok"],
+        serde_json::json!({"delivery": "ok"})
+    );
 
     for item in doc["links"].as_array().unwrap() {
         let input = item["input"].as_str().unwrap();
@@ -102,20 +106,40 @@ fn pack_sign_in_matches_the_gate_parser() {
     let object = hex32("object", example["object_sha256_hex"].as_str().unwrap());
     let exp = example["expiry_unix_s"].as_u64().unwrap();
     let bytes = wire::challenge_bytes(origin, &nonce, exp, &object);
-    assert_eq!(bytes.len(), example["challenge_bytes_len"].as_u64().unwrap() as usize);
-    assert_eq!(hex::encode(&bytes), example["challenge_bytes_hex"].as_str().unwrap());
+    assert_eq!(
+        bytes.len(),
+        example["challenge_bytes_len"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        hex::encode(&bytes),
+        example["challenge_bytes_hex"].as_str().unwrap()
+    );
     let message = wire::bip340_message(origin, &nonce, exp, &object);
-    assert_eq!(hex::encode(message), example["bip340_message_32_hex"].as_str().unwrap());
+    assert_eq!(
+        hex::encode(message),
+        example["bip340_message_32_hex"].as_str().unwrap()
+    );
     let twice = Sha256::digest(message);
-    assert_eq!(hex::encode(twice), example["double_hash_hex"].as_str().unwrap());
-    assert_ne!(hex::encode(twice), example["bip340_message_32_hex"].as_str().unwrap());
+    assert_eq!(
+        hex::encode(twice),
+        example["double_hash_hex"].as_str().unwrap()
+    );
+    assert_ne!(
+        hex::encode(twice),
+        example["bip340_message_32_hex"].as_str().unwrap()
+    );
 
-    let secret = SecretKey::from_slice(&hex::decode(example["secret_hex"].as_str().unwrap()).unwrap()).unwrap();
+    let secret =
+        SecretKey::from_slice(&hex::decode(example["secret_hex"].as_str().unwrap()).unwrap())
+            .unwrap();
     let secp = Secp256k1::new();
     let keypair = Keypair::from_secret_key(&secp, &secret);
     let (public, parity) = keypair.x_only_public_key();
     assert_eq!(parity, Parity::Even);
-    assert_eq!(hex::encode(public.serialize()), example["public_key_hex"].as_str().unwrap());
+    assert_eq!(
+        hex::encode(public.serialize()),
+        example["public_key_hex"].as_str().unwrap()
+    );
     let sig = hex::decode(example["signature_hex"].as_str().unwrap()).unwrap();
     let sig: [u8; 64] = sig.try_into().unwrap();
     assert!(wire::verify_signature(&public.serialize(), &message, &sig));
@@ -125,7 +149,10 @@ fn pack_sign_in_matches_the_gate_parser() {
     let raw = base64::engine::general_purpose::STANDARD
         .decode(example["object_b64"].as_str().unwrap())
         .unwrap();
-    assert_eq!(hex::encode(Sha256::digest(&raw)), example["file_of_0xaa_sha256"].as_str().unwrap());
+    assert_eq!(
+        hex::encode(Sha256::digest(&raw)),
+        example["file_of_0xaa_sha256"].as_str().unwrap()
+    );
     assert_ne!(example["file_of_0xaa_sha256"], example["object_sha256_hex"]);
 
     let lifetime = doc["lifetime_s"].as_u64().unwrap();
@@ -139,15 +166,21 @@ fn pack_sign_in_matches_the_gate_parser() {
             let exp = u128::from(exp);
             now < exp + u128::from(skew) && exp <= now + u128::from(lifetime) + u128::from(skew)
         };
-        assert_eq!(wire::window_accepts(now, exp), accept, "now {now} exp {exp}");
+        assert_eq!(
+            wire::window_accepts(now, exp, lifetime, skew, 0),
+            accept,
+            "now {now} exp {exp}"
+        );
         assert_eq!(got, accept);
     }
     let now = example["window_now_2026_10_10"].as_u64().unwrap();
     assert_eq!(
-        wire::window_accepts(now, exp),
-        example["window_accepts_example_at_2026_10_10"].as_bool().unwrap()
+        wire::window_accepts(now, exp, lifetime, skew, 0),
+        example["window_accepts_example_at_2026_10_10"]
+            .as_bool()
+            .unwrap()
     );
-    assert!(!wire::window_accepts(now, exp));
+    assert!(!wire::window_accepts(now, exp, lifetime, skew, 0));
 
     for item in doc["bodies"].as_array().unwrap() {
         let class = item["class"].as_str().unwrap();
@@ -178,10 +211,17 @@ fn pack_sign_in_origins_match_the_gate() {
     for case in doc["cases"].as_array().unwrap() {
         let origin = case["origin"].as_str().unwrap();
         let bytes = wire::challenge_bytes(origin, &nonce, exp, &object);
-        assert_eq!(hex::encode(&bytes), case["challenge_bytes_hex"].as_str().unwrap(), "{origin}");
+        assert_eq!(
+            hex::encode(&bytes),
+            case["challenge_bytes_hex"].as_str().unwrap(),
+            "{origin}"
+        );
         assert_eq!(bytes.len(), 93 + origin.len());
         let message = wire::bip340_message(origin, &nonce, exp, &object);
-        assert_eq!(hex::encode(message), case["bip340_message_32_hex"].as_str().unwrap());
+        assert_eq!(
+            hex::encode(message),
+            case["bip340_message_32_hex"].as_str().unwrap()
+        );
         let sig: [u8; 64] = hex::decode(case["signature_hex"].as_str().unwrap())
             .unwrap()
             .try_into()

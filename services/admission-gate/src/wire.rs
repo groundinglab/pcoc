@@ -22,10 +22,6 @@ pub fn origin_served<S: AsRef<str>>(served: &[S], origin: &str) -> bool {
         .any(|candidate| candidate.as_ref().as_bytes() == origin.as_bytes())
 }
 pub const DOMAIN: &[u8] = b"pcoc-gate-signin-v1";
-pub const LIFETIME_S: u64 = 120;
-pub const SKEW_S: u64 = 5;
-/// A settled result row stays readable this long after it leaves `pending`.
-pub const RESULT_KEEP_S: u64 = 600;
 
 pub const OUTCOME_PENDING: &str = "pending";
 pub const OUTCOME_ACCEPTED: &str = "accepted";
@@ -89,11 +85,22 @@ pub enum LockedParse {
     },
 }
 
-/// `now < exp + skew` and `exp <= now + lifetime + skew`, in wide integers.
-pub fn window_accepts(now: u64, exp: u64) -> bool {
-    let now = u128::from(now);
-    let exp = u128::from(exp);
-    now < exp + u128::from(SKEW_S) && exp <= now + u128::from(LIFETIME_S) + u128::from(SKEW_S)
+/// SPEC §15.1. Three comparisons, in wide integers so a short `exp` does not wrap:
+/// `now < exp + skew`, `exp <= now + lifetime + skew`, and
+/// `exp − lifetime >= nonce_store_start + skew`.
+pub fn window_accepts(
+    now: u64,
+    exp: u64,
+    lifetime_s: u64,
+    skew_s: u64,
+    store_start_unix_s: u64,
+) -> bool {
+    let now = i128::from(now);
+    let exp = i128::from(exp);
+    let lifetime = i128::from(lifetime_s);
+    let skew = i128::from(skew_s);
+    let start = i128::from(store_start_unix_s);
+    now < exp + skew && exp <= now + lifetime + skew && exp - lifetime >= start + skew
 }
 
 pub fn challenge_bytes(origin: &str, nonce: &[u8; 32], exp: u64, object: &[u8; 32]) -> Vec<u8> {
@@ -303,8 +310,11 @@ mod tests {
         let object = [0xaa; 32];
         let bytes = challenge_bytes("https://groundinglab.io", &nonce, 1_893_456_000, &object);
         assert_eq!(bytes.len(), 116);
-        assert!(window_accepts(1_000_000, 1_000_120));
-        assert!(!window_accepts(1_000_000, 1_000_126));
-        assert!(!window_accepts(1_793_159_040, 1_893_456_000));
+        assert!(window_accepts(1_000_000, 1_000_120, 120, 5, 0));
+        assert!(!window_accepts(1_000_000, 1_000_126, 120, 5, 0));
+        assert!(!window_accepts(1_793_159_040, 1_893_456_000, 120, 5, 0));
+        // Issued at store_start + skew passes. One second earlier does not.
+        assert!(window_accepts(1_125, 1_125, 120, 5, 1_000));
+        assert!(!window_accepts(1_124, 1_124, 120, 5, 1_000));
     }
 }

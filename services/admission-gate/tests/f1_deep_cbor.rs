@@ -57,14 +57,20 @@ fn nested_object(depth: usize) -> Vec<u8> {
     obj
 }
 
-fn signin_json(object: &[u8]) -> String {
+fn signin_json(object: &[u8], lifetime_s: u64, skew_s: u64) -> String {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    // Issue time is `exp - lifetime`. The nonce store started when the
+    // process opened, at or before `now`. `exp = now + lifetime + skew`
+    // is issued at `now + skew`, which meets
+    // `exp - lifetime >= store_start + skew`, and still meets
+    // `exp <= now + lifetime + skew`.
+    let exp = now.saturating_add(lifetime_s).saturating_add(skew_s);
     format!(
         r#"{{"origin":"{}","nonce":"{}","exp":{},"object":"{}","object_b64":"{}","signature":"{}"}}"#,
         // TEST_SERVED_ORIGIN used by Config::for_tests
         "https://groundinglab.io",
         "aa".repeat(32),
-        now + 60,
+        exp,
         sha256_hex(object),
         b64(object),
         "00".repeat(64),
@@ -96,8 +102,10 @@ async fn a_deeply_nested_signin_object_is_malformed_and_the_gate_survives() {
     let dir = scratch("deep");
     let cfg = Config::for_tests(dir.clone(), "http://127.0.0.1:9");
     let service = Service::open(cfg).expect("gate");
-    // Pin now via the signed body's exp window instead of the clock (real serve
-    // uses the wall clock), so exp = now+60 is inside the window.
+    let lifetime_s = service.door().policy().challenge_lifetime_seconds;
+    let skew_s = service.door().policy().challenge_clock_skew_seconds;
+    // The serve uses the wall clock. The expiry is issued at now + skew so
+    // the third window comparison (restart replay) lets the body reach step 6.
     let app = service
         .router()
         .into_make_service_with_connect_info::<std::net::SocketAddr>();
@@ -110,7 +118,7 @@ async fn a_deeply_nested_signin_object_is_malformed_and_the_gate_survives() {
 
     // ~200 KB object (under the 2 MiB object cap), far past any sane depth cap.
     let deep = nested_object(200_000);
-    let body = signin_json(&deep);
+    let body = signin_json(&deep, lifetime_s, skew_s);
     let line = tokio::task::spawn_blocking(move || post_signin(addr, &body))
         .await
         .unwrap();
@@ -125,7 +133,7 @@ async fn a_deeply_nested_signin_object_is_malformed_and_the_gate_survives() {
 
     // Survival probe: the server still answers after the deep POST.
     let shallow = nested_object(4);
-    let body2 = signin_json(&shallow);
+    let body2 = signin_json(&shallow, lifetime_s, skew_s);
     let line2 = tokio::task::spawn_blocking(move || post_signin(addr, &body2))
         .await
         .unwrap()

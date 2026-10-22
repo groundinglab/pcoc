@@ -25,6 +25,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     let path = config_path()?;
     let cfg = Config::load(&path)?;
+    pcoc_admission::config::refuse_live_replacement(&cfg.plane, cfg.allow_2_2_live)?;
     let bind = cfg.bind;
     let service = Service::open(cfg)?;
     let cfg = service.config().clone();

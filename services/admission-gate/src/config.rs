@@ -1,11 +1,13 @@
 //! One config file. The process does not read `GL_VERIFY_*`.
 //!
-//! Every key but `served_origins` is optional. An omitted key uses the
-//! default documented in `deploy/DEPLOY.md`. `served_origins` has no default:
-//! a file without it is a startup error. Unknown keys are an error, so a retired flag cannot
+//! Every key but `served_origins` and `policy` is optional. An omitted key
+//! uses the default documented in `deploy/DEPLOY.md`. `served_origins` has no
+//! default: a file without it is a startup error. `policy` is a path, relative
+//! to this file, of a SPEC §15.4 policy file. There is no inline table and no
+//! build-tree fallback. Unknown keys are an error, so a retired flag cannot
 //! be turned back on by leaving it in the file.
 
-use crate::policy::{self, AdmissionPolicy, RateFloor};
+use crate::policy::AdmissionPolicy;
 use serde::Deserialize;
 use std::fs;
 use std::net::SocketAddr;
@@ -38,9 +40,6 @@ pub const DEFAULT_JOB_RETENTION_SECS: u64 = 3600;
 pub const DEFAULT_MAX_JOBS: usize = 256;
 pub const DEFAULT_MAX_CONCURRENT: usize = 2;
 pub const DEFAULT_RATE_PER_MIN: u32 = 12;
-/// Shipped recommendation. The process reads this file when `policy` is omitted.
-/// SPEC §15.4. Relative to this crate, the repo policy tree.
-pub const DEFAULT_POLICY_FILE: &str = "../../policy/groundinglab-admission/gl-admit-v9.toml";
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -69,6 +68,12 @@ pub struct Config {
     /// One-shot index read. A timeout, a 5xx, or a refused connection is not retried.
     pub index_timeout: Duration,
     pub config_path: Option<PathBuf>,
+    /// `test` or `live`. Empty means `live`. A live plane does not start
+    /// unless [`Self::allow_2_2_live`] is set.
+    pub plane: String,
+    /// Opt in to running this 2.2 build where a live v2.0 service would be
+    /// replaced. Defaults off. Nothing in the repo sets it.
+    pub allow_2_2_live: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -89,14 +94,16 @@ struct FileConfig {
     extra_origins: Vec<String>,
     bind_threads: usize,
     index_timeout_secs: u64,
-    /// Path of a policy file, relative to this config file. When omitted, and
-    /// [`Self::policy_table`] is also omitted, the process reads
-    /// `policy/gl-admit-v6.toml` beside this file.
+    /// Path of a SPEC §15.4 policy file, relative to this config file.
+    /// Required. There is no inline table and no build-tree fallback.
     policy: Option<String>,
-    /// Inline policy table. The keys are those of `gl-admit-v6.toml`.
-    /// Unknown keys are an error. Mutually exclusive with [`Self::policy`].
-    #[serde(default, rename = "policy_table")]
-    policy_table: Option<PolicyFile>,
+    /// `test` starts without the live-replacement opt-in. Empty means `live`.
+    #[serde(default)]
+    plane: String,
+    /// Explicit opt-in. Default false. Do not set this to replace the live
+    /// v2.0 admission service.
+    #[serde(default)]
+    allow_2_2_live: bool,
 }
 
 impl Default for FileConfig {
@@ -120,59 +127,10 @@ impl Default for FileConfig {
             bind_threads: DEFAULT_BIND_THREADS,
             index_timeout_secs: DEFAULT_INDEX_TIMEOUT_SECS,
             policy: None,
-            policy_table: None,
+            plane: String::new(),
+            allow_2_2_live: false,
         }
     }
-}
-
-/// The keys of `policy/gl-admit-v6.toml`. Unknown keys are an error.
-///
-/// `min_leg_rate` is not a key. Gate 0.4.1 read that float. A log line at
-/// startup records the move from that float to this integer floor.
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct PolicyFile {
-    policy_id: String,
-    leg_rate_floor: RateFloorFile,
-    min_anchored_paths: u64,
-    /// Optional. gl-admit-v6 omits both: only the count matters.
-    #[serde(default)]
-    require_first_anchored: Option<u64>,
-    #[serde(default)]
-    require_last_anchored: Option<u64>,
-    thorough_six_leg_runs: u64,
-    thorough_early_stop: bool,
-    provisional: String,
-    held_on_not_read: bool,
-    ban_key_on_fake_leg: bool,
-    draw_commitment: String,
-    /// Optional. The shipped file omits these. The code default fills them.
-    #[serde(default)]
-    reverify_max_attempts: Option<u64>,
-    #[serde(default)]
-    max_held_blocks: Option<u64>,
-    #[serde(default)]
-    pending_per_source: Option<u64>,
-    #[serde(default)]
-    pending_global: Option<u64>,
-    #[serde(default)]
-    verify_cap_per_door_session: Option<u64>,
-    /// `[index]`, gl-admit-v7 on. Optional; gl-admit-v6 omits it.
-    #[serde(default)]
-    index: Option<IndexPolicyFile>,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct IndexPolicyFile {
-    expected_network: String,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RateFloorFile {
-    p: u64,
-    q: u64,
 }
 
 impl Config {
@@ -224,6 +182,7 @@ impl Config {
         if file.index_timeout_secs == 0 {
             return Err("index_timeout_secs must be at least 1".to_owned());
         }
+        let served_origins = parse_served_origins(file.served_origins.clone())?;
         let policy = resolve_policy(&file, source.as_deref())?;
         Self::note_v1_migration(&policy);
         let bind = file
@@ -239,7 +198,6 @@ impl Config {
                 Some(trimmed)
             }
         });
-        let served_origins = parse_served_origins(file.served_origins)?;
         let extra_origins = normalize_origins(file.extra_origins);
         let allowed_origins = normalize_origins(file.allowed_origins);
         Ok(Self {
@@ -259,6 +217,12 @@ impl Config {
             bind_threads: file.bind_threads,
             index_timeout: Duration::from_secs(file.index_timeout_secs),
             config_path: source,
+            plane: if file.plane.is_empty() {
+                "live".to_owned()
+            } else {
+                file.plane
+            },
+            allow_2_2_live: file.allow_2_2_live,
         })
     }
 
@@ -267,22 +231,45 @@ impl Config {
     }
 
     /// A config for tests: empty temp log, limiter off, the given index
-    /// origin, and [`TEST_SERVED_ORIGIN`] as the one served origin. Every
-    /// other key is its file default. A deploy never uses this.
+    /// origin, and [`TEST_SERVED_ORIGIN`] as the one served origin. The
+    /// policy is [`AdmissionPolicy::default`], which matches gl-admit-v9.
+    /// The plane is `test`. A deploy never uses this, and it does not read
+    /// a policy file from the build tree.
     pub fn for_tests(log_dir: PathBuf, index_url: &str) -> Self {
-        let file = FileConfig {
-            served_origins: Some(vec![TEST_SERVED_ORIGIN.to_owned()]),
-            ..FileConfig::default()
-        };
-        let cfg = Self::from_file(file, None).expect("test config");
         Self {
+            bind: DEFAULT_BIND.parse().expect("default bind"),
+            served_origins: vec![TEST_SERVED_ORIGIN.to_owned()],
+            allowed_origins: Vec::new(),
+            extra_origins: Vec::new(),
+            max_object_bytes: DEFAULT_MAX_OBJECT_BYTES,
+            job_retention: Duration::from_secs(DEFAULT_JOB_RETENTION_SECS),
+            max_jobs: DEFAULT_MAX_JOBS,
+            max_concurrent_verify: DEFAULT_MAX_CONCURRENT,
             rate_per_min: 0,
+            client_ip_header: None,
             index_url: index_url.to_owned(),
             log_dir,
+            policy: AdmissionPolicy::default(),
+            bind_threads: DEFAULT_BIND_THREADS,
             index_timeout: Duration::from_secs(1),
-            ..cfg
+            config_path: None,
+            plane: "test".to_owned(),
+            allow_2_2_live: false,
         }
     }
+}
+
+/// Startup refusal outside the test plane. A live plane replaces nothing
+/// unless `allow_2_2_live` is set. The message names the live v2.0 service.
+pub fn refuse_live_replacement(plane: &str, allow_2_2_live: bool) -> Result<(), String> {
+    let plane = if plane.is_empty() { "live" } else { plane };
+    if plane != "test" && !allow_2_2_live {
+        return Err(
+            "refusing to start: this build must not replace the live v2.0 admission service (set plane = \"test\", or allow_2_2_live = true to opt in)"
+                .to_owned(),
+        );
+    }
+    Ok(())
 }
 
 /// Served origin of [`Config::for_tests`]. The signed test vectors use it.
@@ -326,131 +313,20 @@ fn normalize_origins(origins: Vec<String>) -> Vec<String> {
 }
 
 fn resolve_policy(file: &FileConfig, source: Option<&Path>) -> Result<AdmissionPolicy, String> {
-    if file.policy.is_some() && file.policy_table.is_some() {
-        return Err("policy path and an inline [policy_table] are both set; use one".to_owned());
+    let Some(named) = file.policy.as_deref() else {
+        return Err("policy path is required".to_owned());
+    };
+    if named.is_empty() {
+        return Err("policy path is required".to_owned());
     }
-    if let Some(inline) = &file.policy_table {
-        return policy_from_file(inline.clone(), file.max_concurrent);
-    }
-    let path = policy_path(file.policy.as_deref(), source)?;
+    let Some(source) = source.and_then(|path| path.parent()) else {
+        return Err("policy path is required".to_owned());
+    };
+    let path = source.join(named);
     let raw = fs::read_to_string(&path)
         .map_err(|err| format!("could not read policy {}: {err}", path.display()))?;
-    if raw.contains("[levers]") {
-        return crate::levers::load(&raw, file.max_concurrent)
-            .map_err(|err| format!("policy {}: {err}", path.display()));
-    }
-    let table: PolicyFile = toml::from_str(&raw)
-        .map_err(|err| format!("policy {} is not usable: {err}", path.display()))?;
-    policy_from_file(table, file.max_concurrent)
-}
-
-fn policy_path(named: Option<&str>, source: Option<&Path>) -> Result<PathBuf, String> {
-    let relative = named.unwrap_or(DEFAULT_POLICY_FILE);
-    let shipped = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(relative);
-    if let Some(source) = source {
-        if let Some(parent) = source.parent() {
-            let beside = parent.join(relative);
-            // A deploy names the file. An omitted key uses the shipped table
-            // when the config file's directory has no copy of its own.
-            if named.is_some() || beside.is_file() {
-                return Ok(beside);
-            }
-            if shipped.is_file() {
-                return Ok(shipped);
-            }
-            return Ok(beside);
-        }
-    }
-    Ok(shipped)
-}
-
-fn policy_from_file(file: PolicyFile, max_concurrent: usize) -> Result<AdmissionPolicy, String> {
-    let policy_id = policy::parse_policy_id(&file.policy_id)?;
-    if file.leg_rate_floor.p == 0 || file.leg_rate_floor.q == 0 {
-        return Err("leg_rate_floor p and q must each be at least 1".to_owned());
-    }
-    if file.min_anchored_paths > policy::ANCHORED_SPAN {
-        return Err(format!(
-            "min_anchored_paths must be at most {}",
-            policy::ANCHORED_SPAN
-        ));
-    }
-    for (key, value) in [
-        ("require_first_anchored", file.require_first_anchored),
-        ("require_last_anchored", file.require_last_anchored),
-    ] {
-        if let Some(index) = value {
-            if index == 0 || index > policy::ANCHORED_SPAN {
-                return Err(format!("{key} must be a waypoint index from 1 through 16"));
-            }
-        }
-    }
-    if let (Some(first), Some(last)) = (file.require_first_anchored, file.require_last_anchored) {
-        if first > last {
-            return Err("require_first_anchored must be at most require_last_anchored".to_owned());
-        }
-    }
-    if file.thorough_six_leg_runs == 0 {
-        return Err("thorough_six_leg_runs must be at least 1".to_owned());
-    }
-    if file.provisional != "on" && file.provisional != "off" {
-        return Err("provisional must be \"on\" or \"off\"".to_owned());
-    }
-    let reverify_max_attempts = file.reverify_max_attempts.unwrap_or(3);
-    let max_held_blocks = file.max_held_blocks.unwrap_or(6);
-    if reverify_max_attempts == 0 || max_held_blocks == 0 {
-        return Err("reverify_max_attempts and max_held_blocks must each be at least 1".to_owned());
-    }
-    let pending_per_source = file
-        .pending_per_source
-        .unwrap_or(policy::DEFAULT_PENDING_PER_SOURCE);
-    let pending_global = file
-        .pending_global
-        .unwrap_or((max_concurrent as u64).saturating_mul(policy::DEFAULT_PENDING_GLOBAL_FACTOR));
-    if pending_per_source == 0 || pending_global == 0 {
-        return Err("pending caps must each be at least 1".to_owned());
-    }
-    let index = match file.index {
-        Some(index) => {
-            if !policy::NETWORKS.contains(&index.expected_network.as_str()) {
-                return Err(format!(
-                    "index.expected_network {:?} must be one of {:?}",
-                    index.expected_network,
-                    policy::NETWORKS
-                ));
-            }
-            Some(policy::IndexPolicy {
-                expected_network: index.expected_network,
-            })
-        }
-        None => None,
-    };
-    let verify_cap_per_door_session = file.verify_cap_per_door_session.unwrap_or(3);
-    if verify_cap_per_door_session == 0 {
-        return Err("verify_cap_per_door_session must be at least 1".to_owned());
-    }
-    Ok(AdmissionPolicy {
-        policy_id,
-        leg_rate_floor: RateFloor {
-            p: file.leg_rate_floor.p,
-            q: file.leg_rate_floor.q,
-        },
-        min_anchored_paths: file.min_anchored_paths,
-        require_first_anchored: file.require_first_anchored,
-        require_last_anchored: file.require_last_anchored,
-        thorough_six_leg_runs: file.thorough_six_leg_runs,
-        thorough_early_stop: file.thorough_early_stop,
-        provisional: file.provisional,
-        held_on_not_read: file.held_on_not_read,
-        ban_key_on_fake_leg: file.ban_key_on_fake_leg,
-        draw_commitment: file.draw_commitment,
-        reverify_max_attempts,
-        max_held_blocks,
-        pending_per_source,
-        pending_global,
-        verify_cap_per_door_session,
-        index,
-    })
+    crate::levers::load(&raw, file.max_concurrent)
+        .map_err(|err| format!("policy {}: {err}", path.display()))
 }
 
 /// Absolute `http` or `https` URL, no trailing slash.
@@ -485,13 +361,28 @@ pub fn parse_index_url(raw: &str) -> Result<String, String> {
 mod tests {
     use super::*;
 
-    /// File defaults plus the one required key.
+    /// Documented defaults. Built here, not loaded through a missing policy path.
     fn defaults() -> Config {
-        let file = FileConfig {
-            served_origins: Some(vec!["https://site.example".to_owned()]),
-            ..FileConfig::default()
-        };
-        Config::from_file(file, None).unwrap()
+        Config {
+            bind: "127.0.0.1:8787".parse().unwrap(),
+            served_origins: vec!["https://site.example".to_owned()],
+            allowed_origins: Vec::new(),
+            extra_origins: Vec::new(),
+            max_object_bytes: DEFAULT_MAX_OBJECT_BYTES,
+            job_retention: Duration::from_secs(DEFAULT_JOB_RETENTION_SECS),
+            max_jobs: DEFAULT_MAX_JOBS,
+            max_concurrent_verify: DEFAULT_MAX_CONCURRENT,
+            rate_per_min: DEFAULT_RATE_PER_MIN,
+            client_ip_header: None,
+            index_url: DEFAULT_INDEX_URL.to_owned(),
+            log_dir: PathBuf::from(DEFAULT_LOG_DIR),
+            policy: AdmissionPolicy::default(),
+            bind_threads: DEFAULT_BIND_THREADS,
+            index_timeout: Duration::from_secs(DEFAULT_INDEX_TIMEOUT_SECS),
+            config_path: None,
+            plane: "live".to_owned(),
+            allow_2_2_live: false,
+        }
     }
 
     #[test]
@@ -534,7 +425,7 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_file_is_an_error_and_served_origins_alone_uses_defaults() {
+    fn an_empty_file_is_an_error_and_a_missing_policy_path_is_a_startup_error() {
         let dir = std::env::temp_dir().join(format!(
             "pcoc-gate-cfg-{}-{}",
             std::process::id(),
@@ -549,10 +440,8 @@ mod tests {
         let error = Config::load(&path).unwrap_err();
         assert!(error.contains("served_origins is required"), "{error}");
         fs::write(&path, "served_origins = [\"https://site.example\"]\n").unwrap();
-        let cfg = Config::load(&path).unwrap();
-        assert_eq!(cfg.bind, defaults().bind);
-        assert_eq!(cfg.policy.leg_rate_floor.q, 5);
-        assert_eq!(cfg.served_origins, vec!["https://site.example".to_owned()]);
+        let error = Config::load(&path).unwrap_err();
+        assert!(error.contains("policy path is required"), "{error}");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -598,6 +487,8 @@ mod tests {
             cfg.served_origins,
             vec!["https://groundinglab.io".to_owned()]
         );
+        assert_eq!(cfg.plane, "live");
+        assert!(!cfg.allow_2_2_live);
     }
 
     /// Defect 26 (gate review r2, finding 26). `served_origins` is required,
@@ -616,29 +507,40 @@ mod tests {
             let error = load_text(&format!("served_origins = [{bad:?}]\n")).unwrap_err();
             assert!(error.contains("exact http(s) origin"), "{bad}: {error}");
         }
-        let cfg = load_text("served_origins = [\"https://site.example\"]\n").unwrap();
+        let cfg = load_with_policy("served_origins = [\"https://site.example\"]\n").unwrap();
         assert_eq!(cfg.served_origins, vec!["https://site.example".to_owned()]);
         assert!(cfg.allowed_origins.is_empty(), "served is not CORS");
     }
 
     #[test]
     fn a_configured_fraction_is_applied() {
-        let cfg = load_text(
+        let cfg = load_policy_file(
             r#"
             served_origins = ["https://site.example"]
-            [policy_table]
+            policy = "custom.toml"
+            "#,
+            r#"
+            spec = "2.2"
             policy_id = "gl-admit-v9"
-            leg_rate_floor = { p = 7, q = 20 }
+            [levers]
             min_anchored_paths = 8
-            require_first_anchored = 1
-            require_last_anchored = 14
-            thorough_six_leg_runs = 2
-            thorough_early_stop = false
+            leg_rate_floor = { p = 7, q = 20 }
+            submission_deadline_blocks = 4
+            held_retry_seconds = 30
+            thorough_rounds = 2
+            challenge_lifetime_seconds = 60
+            challenge_clock_skew_seconds = 2
+            result_retention_seconds = 90
+            reverify_max_attempts = 2
+            max_held_blocks = 4
             provisional = "off"
-            held_on_not_read = false
-            ban_key_on_fake_leg = false
+            fast_accept_bound = 1
+            async_catch_budget = 3
+            [policy_rules]
+            expected_network = "main"
             draw_commitment = "sha256(draw || salt), revealed with the result"
             "#,
+            "custom.toml",
         )
         .unwrap();
         assert_eq!(cfg.policy.policy_id, "gl-admit-v9");
@@ -647,23 +549,17 @@ mod tests {
             (7, 20)
         );
         assert_eq!(cfg.policy.min_anchored_paths, 8);
-        assert_eq!(cfg.policy.require_last_anchored, Some(14));
         assert_eq!(cfg.policy.thorough_six_leg_runs, 2);
-        assert!(!cfg.policy.thorough_early_stop);
         assert!(!cfg.policy.provisional_on());
-        assert!(!cfg.policy.ban_key_on_fake_leg);
+        assert_eq!(cfg.policy.submission_deadline_blocks, 4);
+        assert_eq!(cfg.policy.held_retry_seconds, 30);
+        assert_eq!(cfg.policy.challenge_lifetime_seconds, 60);
+        assert!(cfg.policy.thorough_early_stop);
+        assert!(cfg.policy.require_first_anchored.is_none());
     }
 
     fn load_text(body: &str) -> Result<Config, String> {
-        let dir = std::env::temp_dir().join(format!(
-            "pcoc-gate-cfg-text-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        fs::create_dir_all(&dir).unwrap();
+        let dir = temp_dir("text");
         let path = dir.join("gate.toml");
         fs::write(&path, body).unwrap();
         let loaded = Config::load(&path);
@@ -671,10 +567,46 @@ mod tests {
         loaded
     }
 
+    fn load_with_policy(body: &str) -> Result<Config, String> {
+        let v9 = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../policy/groundinglab-admission/gl-admit-v9.toml");
+        let raw = fs::read_to_string(v9).unwrap();
+        let mut gate = body.to_owned();
+        if !gate.contains("policy") {
+            gate.push_str("policy = \"policy.toml\"\n");
+        }
+        load_policy_file(&gate, &raw, "policy.toml")
+    }
+
+    fn load_policy_file(gate: &str, policy: &str, policy_name: &str) -> Result<Config, String> {
+        let dir = temp_dir("policy");
+        fs::write(dir.join(policy_name), policy).unwrap();
+        let path = dir.join("gate.toml");
+        fs::write(&path, gate).unwrap();
+        let loaded = Config::load(&path);
+        let _ = fs::remove_dir_all(&dir);
+        loaded
+    }
+
+    fn temp_dir(label: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "pcoc-gate-cfg-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
     #[test]
     fn an_empty_origin_list_does_not_restore_the_public_sites() {
-        let cfg = load_text("served_origins = [\"https://site.example\"]\nallowed_origins = []\n")
-            .unwrap();
+        let cfg = load_with_policy(
+            "served_origins = [\"https://site.example\"]\nallowed_origins = []\n",
+        )
+        .unwrap();
         assert!(cfg.allowed_origins.is_empty());
     }
 
@@ -690,25 +622,22 @@ mod tests {
 
     #[test]
     fn an_unknown_policy_key_is_rejected() {
-        let error = load_text(
-            r#"
-            [policy_table]
-            policy_id = "gl-admit-v5"
-            leg_rate_floor = { p = 1, q = 5 }
-            min_anchored_paths = 6
-            require_first_anchored = 1
-            require_last_anchored = 16
-            thorough_six_leg_runs = 3
-            thorough_early_stop = true
-            provisional = "on"
-            held_on_not_read = true
-            ban_key_on_fake_leg = true
-            draw_commitment = "x"
-            surprise = 1
-            "#,
+        let error = load_policy_file(
+            "served_origins = [\"https://site.example\"]\npolicy = \"bad.toml\"\n",
+            "spec = \"2.2\"\npolicy_id = \"gl-admit-v9\"\n[levers]\nsurprise = 1\n",
+            "bad.toml",
         )
         .unwrap_err();
         assert!(error.contains("surprise"), "{error}");
+    }
+
+    #[test]
+    fn a_live_plane_refuses_to_replace_the_live_service() {
+        let error = refuse_live_replacement("live", false).unwrap_err();
+        assert!(error.contains("live v2.0 admission service"), "{error}");
+        assert!(refuse_live_replacement("test", false).is_ok());
+        assert!(refuse_live_replacement("live", true).is_ok());
+        assert!(refuse_live_replacement("", false).is_err());
     }
 
     #[test]

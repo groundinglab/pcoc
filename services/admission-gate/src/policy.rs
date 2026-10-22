@@ -59,10 +59,10 @@ pub const REFUSE_HELD_BOUND: &str = "held_bound";
 /// and shows a `reason` string that contains a space. This sentence is that
 /// line. It is not "could not be read".
 pub const EARLIER_LINE: &str =
-    "This object is an earlier version. This gate checks Satoshi Hike v2.0 only.";
+    "This object is an earlier version. This gate checks Satoshi Hike 2.2 only.";
 
 pub const UNREADABLE_REASON: &str = "unreadable";
-pub const UNREADABLE_LINE: &str = "This file is not a Satoshi Hike v2.0 object.";
+pub const UNREADABLE_LINE: &str = "This file is not a Satoshi Hike 2.2 object.";
 
 pub const NO_KEY_REASON: &str = "no_public_key";
 pub const NO_KEY_LINE: &str = "This object has no public key the gate can check.";
@@ -249,6 +249,23 @@ pub struct AdmissionPolicy {
     /// `None` means `max_concurrent × 2`, filled when the config is built.
     pub pending_global: u64,
     pub verify_cap_per_door_session: u64,
+    /// SPEC §15.4 `K`. `tip − last_beacon > K` is Rule B10.
+    pub submission_deadline_blocks: u64,
+    /// Seconds between held retries. Read from the policy file.
+    pub held_retry_seconds: u64,
+    /// `fast_accept_bound` as integer milliseconds.
+    pub fast_accept_bound_ms: u64,
+    /// `async_catch_budget` as integer milliseconds.
+    pub async_catch_budget_ms: u64,
+    /// Unset when the policy omits the key (SPEC default unset).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verify_cap_per_object: Option<u64>,
+    /// Unset when the policy omits the key. A ban then has no expiry.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fake_leg_ignore_seconds: Option<u64>,
+    pub challenge_lifetime_seconds: u64,
+    pub challenge_clock_skew_seconds: u64,
+    pub result_retention_seconds: u64,
     /// `[index]` (gl-admit-v7 on). Absent in gl-admit-v6 and earlier, and
     /// then not serialized, so their bind hash and policy document stay the same.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -273,7 +290,16 @@ impl Default for AdmissionPolicy {
             max_held_blocks: 6,
             pending_per_source: DEFAULT_PENDING_PER_SOURCE,
             pending_global: 4,
-            verify_cap_per_door_session: 3,
+            verify_cap_per_door_session: crate::levers::door_session_cap(None),
+            submission_deadline_blocks: 3,
+            held_retry_seconds: 600,
+            fast_accept_bound_ms: 2_000,
+            async_catch_budget_ms: 22_050,
+            verify_cap_per_object: None,
+            fake_leg_ignore_seconds: None,
+            challenge_lifetime_seconds: 120,
+            challenge_clock_skew_seconds: 5,
+            result_retention_seconds: 600,
             index: Some(IndexPolicy {
                 expected_network: "main".to_owned(),
             }),

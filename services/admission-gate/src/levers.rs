@@ -33,6 +33,16 @@ const REQUIRED: &[&str] = &[
     "async_catch_budget",
 ];
 
+/// SPEC §15.4 default of `verify_cap_per_door_session` is unset. This constant
+/// applies only when the key is absent. `gl-admit-v9.toml` sets the key to 3,
+/// and `load` reads that value.
+pub const VERIFY_CAP_PER_DOOR_SESSION_AWAITING_POLICY: u64 = 3;
+
+/// The door-session cap from the file. An absent key uses the constant above.
+pub fn door_session_cap(parsed: Option<u64>) -> u64 {
+    parsed.unwrap_or(VERIFY_CAP_PER_DOOR_SESSION_AWAITING_POLICY)
+}
+
 /// Load a §15.4 file. `max_concurrent` fills the gate's pending-global cap,
 /// which is not a lever.
 pub fn load(raw: &str, max_concurrent: usize) -> Result<AdmissionPolicy, String> {
@@ -43,6 +53,12 @@ pub fn load(raw: &str, max_concurrent: usize) -> Result<AdmissionPolicy, String>
         .ok_or_else(|| "policy spec must be the string \"2.2\"".to_owned())?;
     if spec != "2.2" {
         return Err(format!("policy spec {spec:?} is not \"2.2\""));
+    }
+    let pin = pcoc::build_info().spec_tag;
+    if !spec_matches_pin(spec, &pin) {
+        return Err(format!(
+            "policy spec {spec:?} is not the SDK pin {pin}"
+        ));
     }
     let policy_id = root
         .get("policy_id")
@@ -72,8 +88,8 @@ pub fn load(raw: &str, max_concurrent: usize) -> Result<AdmissionPolicy, String>
         16,
     )?;
     let (p, q) = floor(levers.get("leg_rate_floor"))?;
-    let _submission_deadline = int_range(levers, "submission_deadline_blocks", 3, 0, 6)?;
-    let _held_retry = int_at_least(levers, "held_retry_seconds", 600, 1)?;
+    let submission_deadline_blocks = int_range(levers, "submission_deadline_blocks", 3, 0, 6)?;
+    let held_retry_seconds = int_at_least(levers, "held_retry_seconds", 600, 1)?;
     let reverify_max_attempts = int_at_least(levers, "reverify_max_attempts", 0, 1)?;
     let max_held_blocks = int_at_least(levers, "max_held_blocks", 0, 1)?;
     let thorough_rounds = int_at_least(levers, "thorough_rounds", 3, 1)?;
@@ -82,14 +98,14 @@ pub fn load(raw: &str, max_concurrent: usize) -> Result<AdmissionPolicy, String>
         Some(_) => return Err("provisional has the wrong type".to_owned()),
         None => return Err("lever provisional is absent and has no default".to_owned()),
     };
-    let _fast_ms = positive_seconds(levers, "fast_accept_bound")?;
-    let _async_ms = positive_seconds(levers, "async_catch_budget")?;
-    let _verify_object = optional_unset_int(levers, "verify_cap_per_object")?;
+    let fast_accept_bound_ms = positive_seconds(levers, "fast_accept_bound")?;
+    let async_catch_budget_ms = positive_seconds(levers, "async_catch_budget")?;
+    let verify_cap_per_object = optional_unset_int(levers, "verify_cap_per_object")?;
     let verify_session = optional_unset_int(levers, "verify_cap_per_door_session")?;
-    let _fake = optional_unset_int(levers, "fake_leg_ignore_seconds")?;
-    let _challenge = int_at_least(levers, "challenge_lifetime_seconds", 120, 1)?;
-    let _skew = int_at_least(levers, "challenge_clock_skew_seconds", 5, 0)?;
-    let _retain = int_at_least(levers, "result_retention_seconds", 600, 0)?;
+    let fake_leg_ignore_seconds = optional_unset_int(levers, "fake_leg_ignore_seconds")?;
+    let challenge_lifetime_seconds = int_at_least(levers, "challenge_lifetime_seconds", 120, 1)?;
+    let challenge_clock_skew_seconds = int_at_least(levers, "challenge_clock_skew_seconds", 5, 0)?;
+    let result_retention_seconds = int_at_least(levers, "result_retention_seconds", 600, 0)?;
     let draw_commitment = root
         .get("policy_rules")
         .and_then(|table| table.get("draw_commitment"))
@@ -123,9 +139,23 @@ pub fn load(raw: &str, max_concurrent: usize) -> Result<AdmissionPolicy, String>
         max_held_blocks,
         pending_per_source: policy::DEFAULT_PENDING_PER_SOURCE,
         pending_global,
-        verify_cap_per_door_session: verify_session.unwrap_or(3),
+        verify_cap_per_door_session: door_session_cap(verify_session),
+        submission_deadline_blocks,
+        held_retry_seconds,
+        fast_accept_bound_ms,
+        async_catch_budget_ms,
+        verify_cap_per_object,
+        fake_leg_ignore_seconds,
+        challenge_lifetime_seconds,
+        challenge_clock_skew_seconds,
+        result_retention_seconds,
         index: expected.map(|expected_network| IndexPolicy { expected_network }),
     })
+}
+
+/// `spec` is `"2.2"` and that is the version named by the SDK pin tag.
+fn spec_matches_pin(spec: &str, tag: &str) -> bool {
+    spec == "2.2" && (tag == "spec-2.2" || tag.starts_with("spec-2.2."))
 }
 
 fn int_range(
@@ -200,7 +230,9 @@ fn positive_seconds(
         toml::Value::Integer(n) => *n as f64,
         toml::Value::Float(n) => {
             if !fraction_digits_ok(*n) {
-                return Err(format!("{key} has the wrong type"));
+                return Err(format!(
+                    "{key} has more than 3 fractional digits"
+                ));
             }
             *n
         }

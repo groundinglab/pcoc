@@ -45,13 +45,15 @@ fn amp(size: usize) -> Vec<u8> {
     out
 }
 
-fn signin_json(object: &[u8]) -> String {
+fn signin_json(object: &[u8], lifetime_s: u64, skew_s: u64) -> String {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    // Issued at now + skew: past the nonce-store start, inside the lifetime.
+    let exp = now.saturating_add(lifetime_s).saturating_add(skew_s);
     format!(
         r#"{{"origin":"{}","nonce":"{}","exp":{},"object":"{}","object_b64":"{}","signature":"{}"}}"#,
         "https://groundinglab.io",
         "aa".repeat(32),
-        now + 60,
+        exp,
         sha256_hex(object),
         b64(object),
         "00".repeat(64),
@@ -92,6 +94,8 @@ async fn a_nested_count_does_not_presize_and_the_gate_survives() {
     let dir = scratch("amp");
     let cfg = Config::for_tests(dir.clone(), "http://127.0.0.1:9");
     let service = Service::open(cfg).expect("gate");
+    let lifetime_s = service.door().policy().challenge_lifetime_seconds;
+    let skew_s = service.door().policy().challenge_clock_skew_seconds;
     let app = service
         .router()
         .into_make_service_with_connect_info::<std::net::SocketAddr>();
@@ -106,7 +110,7 @@ async fn a_nested_count_does_not_presize_and_the_gate_survives() {
     // Largest object the JSON sign-in body can carry: base64 of 2 MiB plus the
     // six fields is 108 bytes over the transport limit, so this is 2 MiB − 80.
     let object = amp(2_097_072);
-    let body = signin_json(&object);
+    let body = signin_json(&object, lifetime_s, skew_s);
     let line = tokio::task::spawn_blocking(move || post_signin(addr, &body))
         .await
         .unwrap()
@@ -123,7 +127,7 @@ async fn a_nested_count_does_not_presize_and_the_gate_survives() {
     assert!(grew < 256 * 1024, "VmHWM grew {grew} KiB");
 
     let again = amp(4096);
-    let body2 = signin_json(&again);
+    let body2 = signin_json(&again, lifetime_s, skew_s);
     let line2 = tokio::task::spawn_blocking(move || post_signin(addr, &body2))
         .await
         .unwrap()

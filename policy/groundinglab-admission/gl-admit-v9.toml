@@ -30,9 +30,9 @@ provisional                  = "on"
 fast_accept_bound            = 2                  # seconds (SPEC 15.4 encoding: integer ms = round(x*1000))
 async_catch_budget           = 22.05              # seconds, at most 3 fractional digits
 
-# SPEC default "unset", kept unset by leaving the keys absent. Earlier candidates were 1 and 3.
+# SPEC default "unset" for the two keys that stay absent. The door-session cap is set.
 # verify_cap_per_object       = 1
-# verify_cap_per_door_session = 3
+verify_cap_per_door_session  = 3
 # fake_leg_ignore_seconds unset: the fake-leg ignore has no expiry.
 
 [policy_rules]

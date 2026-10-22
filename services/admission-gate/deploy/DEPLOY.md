@@ -1,5 +1,7 @@
 # Deploy the admission gate
 
+> **Do not deploy this tree over the live v2.0 service.** This branch is Satoshi Hike 2.2. The process refuses a live plane unless `allow_2_2_live = true`. That opt-in defaults to off and is not set anywhere in this repo.
+
 One binary, one config file, a log directory the process creates. Satoshi Hike 2.2 only. This page is the whole install. Do not point `log_dir` at an earlier decision log.
 
 ## Build

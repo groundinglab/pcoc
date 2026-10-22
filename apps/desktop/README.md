@@ -1,5 +1,7 @@
 # PCOC Hike for Linux
 
+> **Do not deploy this tree over the live v2.0 service.** This branch is Satoshi Hike 2.2 and must not replace the live v2.0 service.
+
 PCOC Hike for Linux makes a PCOC, checks one, and signs in, on your own machine, using the Rust SDK in this repository (`sdk/rust`, by path in `Cargo.toml`; About shows the resolved SDK version). A demonstrator, not part of the specification.
 
 A full hike is eighteen stages paced by Bitcoin blocks. That is hours, not a button press. The key stays on the machine. Verify reads the portable index (the live default is the public index). Anyone can bypass that index by checking Bitcoin. The app does not say pass or fail. Sign-in sends the object to a relying party. Accept, refuse, and revoke are that party's policy.

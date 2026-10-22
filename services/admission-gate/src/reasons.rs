@@ -14,7 +14,7 @@ use crate::wire::{self, OUTCOME_EARLIER, OUTCOME_TOO_FEW, OUTCOME_TOO_SHORT};
 
 /// `below_policy`: measured, under the groundinglab minimum.
 pub const CLASS_BELOW_POLICY: &str = "below_policy";
-/// `invalid`: the proof is broken or is not a v2.0 proof.
+/// `invalid`: the proof is broken or is not a 2.2 proof.
 pub const CLASS_INVALID: &str = "invalid";
 /// `operational`: not judged on merit.
 pub const CLASS_OPERATIONAL: &str = "operational";
@@ -43,6 +43,14 @@ pub const CODE_CHALLENGE_EXPIRED: &str = "challenge_expired";
 /// An index document a decision rests on is not from the policy's
 /// `[index] expected_network` (or carries no `network`). gl-admit-v7 on.
 pub const CODE_INDEX_NETWORK_NOT_EXPECTED: &str = "index_network_not_expected";
+/// SPEC §15.4 Rule B10. `tip − last_beacon > K`. Final refuse. No thorough.
+pub const CODE_SUBMISSION_DEADLINE: &str = "submission_deadline";
+/// SPEC §15.3. The held budget ran out.
+pub const CODE_HELD_BOUND: &str = "held_bound";
+/// SPEC §15.4. This door session has verified too many objects.
+pub const CODE_VERIFY_CAP_SESSION: &str = "verify_cap_per_door_session";
+/// SPEC §15.4. This object has been verified too many times.
+pub const CODE_VERIFY_CAP_OBJECT: &str = "verify_cap_per_object";
 
 /// Every code this gate writes, in table order. A test covers this list.
 pub const INVENTORY: &[(&str, &str)] = &[
@@ -67,6 +75,10 @@ pub const INVENTORY: &[(&str, &str)] = &[
     (CODE_VERIFIER_ERROR, CLASS_OPERATIONAL),
     (CODE_CHALLENGE_EXPIRED, CLASS_OPERATIONAL),
     (CODE_INDEX_NETWORK_NOT_EXPECTED, CLASS_INVALID),
+    (CODE_SUBMISSION_DEADLINE, CLASS_INVALID),
+    (CODE_HELD_BOUND, CLASS_OPERATIONAL),
+    (CODE_VERIFY_CAP_SESSION, CLASS_OPERATIONAL),
+    (CODE_VERIFY_CAP_OBJECT, CLASS_OPERATIONAL),
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -103,8 +115,35 @@ pub fn code_of_note(note: &str) -> &'static str {
         "verifier_error" => CODE_VERIFIER_ERROR,
         CODE_CHALLENGE_EXPIRED => CODE_CHALLENGE_EXPIRED,
         CODE_INDEX_NETWORK_NOT_EXPECTED => CODE_INDEX_NETWORK_NOT_EXPECTED,
+        CODE_SUBMISSION_DEADLINE => CODE_SUBMISSION_DEADLINE,
+        note if note == policy::REFUSE_HELD_BOUND || note == CODE_HELD_BOUND => CODE_HELD_BOUND,
+        CODE_VERIFY_CAP_SESSION => CODE_VERIFY_CAP_SESSION,
+        CODE_VERIFY_CAP_OBJECT => CODE_VERIFY_CAP_OBJECT,
         _ => CODE_SHAPE_MISMATCH,
     }
+}
+
+/// One public sentence for `code`.
+pub fn public_sentence(code: &str) -> String {
+    sentence(code, &Measures::empty())
+}
+
+/// Every public reason sentence, plus the lines the log can show on its own.
+pub fn public_reason_lines() -> Vec<String> {
+    let empty = Measures::empty();
+    let mut lines = vec![
+        policy::EARLIER_LINE.to_owned(),
+        policy::UNREADABLE_LINE.to_owned(),
+        policy::NETWORK_NOT_MAIN_LINE.to_owned(),
+        policy::NO_KEY_LINE.to_owned(),
+        policy::BOOKENDS_LINE.to_owned(),
+        policy::BOOKENDS_NOT_READ_LINE.to_owned(),
+        crate::verifier::SPEC_NAME.to_owned(),
+    ];
+    for (code, _) in INVENTORY {
+        lines.push(sentence(code, &empty));
+    }
+    lines
 }
 
 pub fn class_of(code: &str) -> &'static str {
@@ -227,7 +266,17 @@ fn sentence(code: &str, measures: &Measures) -> String {
             "No decision on the PCOC: the sign-in challenge expired before it was answered."
                 .to_owned()
         }
-        CODE_SHAPE_MISMATCH => "Invalid: the object does not match the v2.0 shape.".to_owned(),
+        CODE_SHAPE_MISMATCH => "Invalid: the object does not match the section 6 shape.".to_owned(),
+        CODE_SUBMISSION_DEADLINE => {
+            "Invalid: the submission is past the deadline of K blocks.".to_owned()
+        }
+        CODE_HELD_BOUND => "No decision on the PCOC: the hold ran out of attempts.".to_owned(),
+        CODE_VERIFY_CAP_SESSION => {
+            "No decision on the PCOC: this door session has reached its verify cap.".to_owned()
+        }
+        CODE_VERIFY_CAP_OBJECT => {
+            "No decision on the PCOC: this object has reached its verify cap.".to_owned()
+        }
         CODE_SEED_VALUE_MISMATCH => "Invalid: the opening waypoint does not match.".to_owned(),
         CODE_PATH_PLANT_MISMATCH => "Invalid: a present path does not match the plant.".to_owned(),
         CODE_SUCCESSOR_MISMATCH => "Invalid: a successor waypoint differs.".to_owned(),

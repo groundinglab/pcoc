@@ -7,14 +7,37 @@
 
 use crate::cbor_limit::{self, MAX_CBOR_NESTING};
 use crate::policy::AdmissionPolicy;
-use crate::verifier::IndexRead;
+use crate::reads::{self, ReadStop};
+use crate::verifier::IndexClient;
 use pcoc::profile::Profile;
 use pcoc::verify::Precheck;
+#[cfg(test)]
+use std::cell::Cell;
+use std::time::Instant;
+
+// Test-only elapsed of the fast pass, in milliseconds. Thread-local, so one
+// test cannot inject a budget into another. Not a draw-path hook.
+#[cfg(test)]
+thread_local! {
+    static FAST_ELAPSED_MS: Cell<Option<u64>> = const { Cell::new(None) };
+}
+
+/// Run `body` with the fast-phase clock replaced by `ms` milliseconds.
+#[cfg(test)]
+pub fn with_fast_elapsed<T>(ms: u64, body: impl FnOnce() -> T) -> T {
+    FAST_ELAPSED_MS.set(Some(ms));
+    let out = body();
+    FAST_ELAPSED_MS.set(None);
+    out
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum FastDecision {
-    /// Kind and shape match section 6. No action is granted.
-    Provisional { record: String },
+    /// Kind and shape match, and every fast measurement was read.
+    /// No action is granted. `provisional` is on.
+    Provisional { record: String, tip: Option<u64> },
+    /// Same measurements, with `provisional` off. No grant. Thorough runs next.
+    Direct { record: String, tip: Option<u64> },
     /// A miss settled by the object's own bytes. No thorough run. No grant.
     Refuse {
         reasons: Vec<String>,
@@ -24,8 +47,14 @@ pub enum FastDecision {
         /// wire stays `rejected`. The log reason is `unknown_kind`.
         website: &'static str,
     },
-    /// A measurement the profile needs was not read. Not a refusal.
-    Held { record: String },
+    /// A measurement was not read, or a fast budget was missed. Not a refusal.
+    /// `budget` is a `fast_accept_bound` or `async_catch_budget` miss: it must
+    /// not later become provisional.
+    Held {
+        record: String,
+        budget: bool,
+        tip: Option<u64>,
+    },
 }
 
 /// `true` when the fast phase's kind check is Rule A5.
@@ -33,10 +62,9 @@ pub fn is_unknown_kind(object: &[u8]) -> bool {
     matches!(kind_precheck(object), Some(Precheck::UnknownKind(_)))
 }
 
-/// Run the fast phase. The index reader is accepted so the door can pass its
-/// client through; header and plant reads are not in this phase yet, so a
-/// shape match does not claim them.
-pub fn decide(object: &[u8], _policy: &AdmissionPolicy, _index: &impl IndexRead) -> FastDecision {
+/// Run the fast phase. No terrain. Header and plant reads go through `index`.
+pub fn decide(object: &[u8], policy: &AdmissionPolicy, index: &IndexClient) -> FastDecision {
+    let started = Instant::now();
     let Some(checked) = kind_precheck(object) else {
         return refuse(
             "malformed",
@@ -69,15 +97,63 @@ pub fn decide(object: &[u8], _policy: &AdmissionPolicy, _index: &impl IndexRead)
                     &record,
                 );
             }
-            FastDecision::Provisional {
-                record: serde_json::json!({
-                    "profile": "production",
-                    "shape": "match",
-                    "shape_item": [],
-                })
-                .to_string(),
+            let decision = match reads::assess(object, policy, index) {
+                Ok(view) => {
+                    if policy.provisional_on() {
+                        FastDecision::Provisional {
+                            record: view.record,
+                            tip: view.tip,
+                        }
+                    } else {
+                        FastDecision::Direct {
+                            record: view.record,
+                            tip: view.tip,
+                        }
+                    }
+                }
+                Err(ReadStop::Held { record, tip }) => FastDecision::Held {
+                    record,
+                    budget: false,
+                    tip,
+                },
+                Err(ReadStop::Refuse {
+                    reasons,
+                    line,
+                    record,
+                }) => FastDecision::Refuse {
+                    reasons,
+                    line,
+                    record,
+                    website: crate::wire::OUTCOME_REJECTED,
+                },
+            };
+            apply_budget(decision, policy, elapsed_ms(started))
+        }
+    }
+}
+
+fn elapsed_ms(started: Instant) -> u64 {
+    #[cfg(test)]
+    if let Some(injected) = FAST_ELAPSED_MS.get() {
+        return injected;
+    }
+    u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+fn apply_budget(decision: FastDecision, policy: &AdmissionPolicy, elapsed_ms: u64) -> FastDecision {
+    let over = elapsed_ms > policy.fast_accept_bound_ms || elapsed_ms > policy.async_catch_budget_ms;
+    if !over {
+        return decision;
+    }
+    match decision {
+        FastDecision::Provisional { record, tip } | FastDecision::Direct { record, tip } => {
+            FastDecision::Held {
+                record,
+                budget: true,
+                tip,
             }
         }
+        other => other,
     }
 }
 
