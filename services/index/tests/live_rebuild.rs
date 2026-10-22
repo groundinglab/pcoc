@@ -6,7 +6,7 @@
 //!
 //! Rebuilds heights 971497..=971516 from `https://mempool.space/api` (the
 //! window `~/pcoc-build/pepe.cbor` asks the index for, plus one block), diffs
-//! them against `https://index.groundinglab.io`, and runs `satoshi-hike-verify`
+//! them against `https://index.groundinglab.io`, and runs `pcoc verify`
 //! against both. Off-chain fields are the only allowed difference:
 //! `header.timestamp_unix_ms` and `plant.tree_size` / `plants[].tree_size`.
 //! A block with more than one plant may also differ in `plants` order and in
@@ -201,23 +201,23 @@ fn wait_until_up(url: &str) {
 }
 
 fn verify_bin() -> std::path::PathBuf {
-    if let Ok(path) = std::env::var("SATOSHI_HIKE_VERIFY") {
+    if let Ok(path) = std::env::var("PCOC_VERIFY") {
         return Path::new(&path).to_path_buf();
     }
     let go_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sdk/go");
-    let dest = std::env::temp_dir().join("satoshi-hike-verify-issue32");
+    let dest = std::env::temp_dir().join("pcoc-verify-live");
     let go = std::env::var("GO_BIN").unwrap_or_else(|_| {
-        let home = std::env::var("HOME").unwrap_or_else(|_| "/home/christian".to_owned());
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_owned());
         format!("{home}/opt/go/bin/go")
     });
     let status = Command::new(&go)
         .args(["build", "-o"])
         .arg(&dest)
-        .arg("./cmd/satoshi-hike-verify")
+        .arg("./cmd/pcoc")
         .current_dir(&go_dir)
         .status()
-        .unwrap_or_else(|error| panic!("build satoshi-hike-verify with {go}: {error}"));
-    assert!(status.success(), "go build satoshi-hike-verify failed");
+        .unwrap_or_else(|error| panic!("build pcoc with {go}: {error}"));
+    assert!(status.success(), "go build ./cmd/pcoc failed");
     dest
 }
 

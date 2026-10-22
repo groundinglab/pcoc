@@ -2,7 +2,7 @@
 
 `pcoc-index` serves the portable index: one JSON file per block height. A verifier reads `GET /index/{height}` and treats that body as the stand-in for Bitcoin. Anyone can skip the service and read Bitcoin.
 
-The pin of `pcoc-bari` is still `bari-v0.6.7` (that tag's own `hike` pin is `ref-rust-v2.0.4`). Bari, the gate and the desktop app pin `ref-rust-v2.0.5` directly. Crate version `0.1.4`, tag `index-v0.1.4`.
+`pcoc-bari` is the in-repo crate at `services/bari` (path). That crate no longer pins an SDK tag. Crate version `0.1.4`, tag `index-v0.1.4`. Nothing here is deployed by this change.
 
 Default bind `127.0.0.1:38081`. No arguments, or `pcoc-index serve`, serves the cache. `pcoc-index rebuild` writes the cache from public chain data.
 
@@ -86,8 +86,8 @@ Point a verifier at it with `--index-url http://127.0.0.1:38081`.
 
 | Caller | Request |
 |---|---|
-| `satoshi-hike-verify`, checkpoint measurement | `GET {index-url}/index/{beacon_height}`. On the live profile, an omitted URL means `https://index.groundinglab.io` |
-| `satoshi-hike-produce`, Observe | the plane gossip peer. Not an HTTP tip URL |
+| `pcoc verify`, checkpoint measurement | `GET {index-url}/index/{beacon_height}`. On the production profile, an omitted URL means `https://index.groundinglab.io` |
+| `pcoc produce`, Observe | the plane gossip peer. Not an HTTP tip URL. Live produce is not in the Phase A SDK |
 | [`admission-gate`](../admission-gate/) checkpoint measurement | `GET {index_url}/index/{beacon_height}`, where `index_url` is read from `gate.toml` |
 
 The hike object does not gain a field for `{index-url}` or `{tip-url}`.
@@ -213,7 +213,7 @@ Startup logs the bind address, the cache directory, and how many sequencer clock
 cargo test --locked
 ```
 
-`tests/live_rebuild.rs` is ignored. It rebuilds a real height range from mempool.space, diffs it against the hosted index, and runs `satoshi-hike-verify` on both. `REBUILD-EVIDENCE.md` records one such run.
+`tests/live_rebuild.rs` is ignored. It rebuilds a real height range from mempool.space, diffs it against the hosted index, and runs the 2.2 Go SDK `pcoc` (`sdk/go` `./cmd/pcoc`) on both. `REBUILD-EVIDENCE.md` records an earlier run.
 
 ```bash
 cargo test --locked --release --test live_rebuild -- --ignored --nocapture
