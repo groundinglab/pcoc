@@ -6,10 +6,15 @@
 # a suite whose directory does not exist yet is skipped.
 name: ci
 
+# Branches carry the full suite (pull_request, heavy legs on dax). A push to main
+# gets the light watch only (hosted). The full suite reruns on main nightly
+# (schedule) or on demand (workflow_dispatch), never on every merge.
 on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: "30 16 * * *" # 03:00 ACDT / 02:00 ACST, nightly full run on main
   workflow_dispatch:
 
 permissions:
@@ -84,7 +89,7 @@ jobs:
     # directory or 2.2 entry point is absent is skipped. Same path gate as before:
     # any spec or SDK change runs all four legs.
     needs: changes
-    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.spec == 'true' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.go == 'true' || needs.changes.outputs.java == 'true' || needs.changes.outputs.c == 'true')
+    if: (github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && (needs.changes.outputs.spec == 'true' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.go == 'true' || needs.changes.outputs.java == 'true' || needs.changes.outputs.c == 'true')
     strategy:
       fail-fast: false
       matrix:
@@ -155,7 +160,7 @@ jobs:
 
   services:
     needs: changes
-    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    if: (github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
     strategy:
       fail-fast: false
       matrix:
@@ -212,7 +217,7 @@ jobs:
   desktop:
     # Not required: ci-ok ignores this job's result.
     needs: changes
-    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && needs.changes.outputs.desktop == 'true'
+    if: (github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && needs.changes.outputs.desktop == 'true'
     runs-on: [self-hosted, linux, pcoc-heavy]
     timeout-minutes: 20
     steps:
@@ -288,10 +293,10 @@ jobs:
   xverify:
     # Cross-SDK verify. The harness lives at sdk/conformance/cross-verify.sh
     # (written by the conformance job). sdk/conformance absent => changes.sh
-    # reports xverify=false and a pull request skips this job. A push to main,
-    # and a schedule if this workflow gains one, still runs it.
+    # reports xverify=false and a pull request skips this job. Push to main
+    # skips it (light watch); the nightly schedule and workflow_dispatch run it.
     needs: changes
-    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.changes.outputs.xverify == 'true' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule')
+    if: (github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && (needs.changes.outputs.xverify == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: [self-hosted, linux, pcoc-heavy]
     timeout-minutes: 30
     steps:
