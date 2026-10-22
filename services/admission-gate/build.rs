@@ -1,12 +1,12 @@
 //! Stamp `ADMISSION_COMMIT` and `PCOC_SDK_VERSION` into the binary.
 //!
-//! `PCOC_SDK_VERSION` is the version of the `hike` package (the Rust SDK) that
-//! `Cargo.lock` resolved, plus where it came from: `2.0.0-rc.2 (path)` for the
+//! `PCOC_SDK_VERSION` is the version of the `pcoc` package (the Rust SDK) that
+//! `Cargo.lock` resolved, plus where it came from: `2.2.0 (path)` for the
 //! in-tree `sdk/rust`, or `<version> (git <commit>)` for a git pin. A path
 //! build from a git checkout whose SDK files have uncommitted changes is
-//! `2.0.0-rc.2 (path, dirty)`. The SDK files are `sdk/VERSION` and, under
-//! `sdk/rust/`, the workspace manifest, lock and toolchain files and the `hike`
-//! and `nip06` crates. A missing `hike` entry in `Cargo.lock` fails the build.
+//! `2.2.0 (path, dirty)`. The SDK files are `sdk/VERSION`, `sdk/SPEC_PIN`,
+//! and the `sdk/rust` workspace. A missing `pcoc` entry in `Cargo.lock`
+//! fails the build.
 //!
 //! `COMMIT`, when set to a non-empty single line, is that stamp. Otherwise
 //! `git rev-parse HEAD` in this tree is the stamp. A build with neither
@@ -27,7 +27,7 @@ fn main() {
     println!("cargo:rerun-if-changed=Cargo.lock");
     let lock = std::fs::read_to_string("Cargo.lock").expect("build.rs: read Cargo.lock");
     let mut sdk = sdk_in_lock(&lock)
-        .expect("build.rs: no `hike` package in Cargo.lock; the SDK version cannot be stamped");
+        .expect("build.rs: no `pcoc` package in Cargo.lock; the SDK version cannot be stamped");
     if sdk.ends_with(" (path)") && sdk_tree_dirty() {
         sdk.truncate(sdk.len() - ")".len());
         sdk.push_str(", dirty)");
@@ -38,11 +38,11 @@ fn main() {
 /// The SDK files this gate builds from, relative to the repository root.
 const SDK_FILES: [&str; 6] = [
     "sdk/VERSION",
+    "sdk/SPEC_PIN",
     "sdk/rust/Cargo.toml",
     "sdk/rust/Cargo.lock",
     "sdk/rust/rust-toolchain.toml",
-    "sdk/rust/hike",
-    "sdk/rust/nip06",
+    "sdk/rust/pcoc",
 ];
 
 /// True when `git status` reports a change under [`SDK_FILES`]. Build
@@ -68,7 +68,7 @@ fn sdk_tree_dirty() -> bool {
     }
 }
 
-/// `hike` in Cargo.lock: `<version> (path)` or `<version> (git <short commit>)`.
+/// `pcoc` in Cargo.lock: `<version> (path)` or `<version> (git <short commit>)`.
 fn sdk_in_lock(lock: &str) -> Option<String> {
     let mut lines = lock.lines();
     while let Some(line) = lines.next() {
@@ -90,7 +90,7 @@ fn sdk_in_lock(lock: &str) -> Option<String> {
                 source = Some(v.trim_matches('"'));
             }
         }
-        if name != Some("hike") {
+        if name != Some("pcoc") {
             continue;
         }
         let version = version?;

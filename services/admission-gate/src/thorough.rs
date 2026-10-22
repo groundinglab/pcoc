@@ -1,16 +1,14 @@
-//! Thorough phase. Runs only after a fast `provisional`.
+//! Thorough phase. SPEC §15.5 draws `D = 6 · thorough_rounds` indices from
+//! the operating-system CSPRNG. No byte source, no label, no seed (AC-D3).
 //!
-//! Three runs of six distinct indices, drawn from `OsRng` by the section 14.6
-//! rejection rule, uniform over every leg. The commitment
-//! `H("pcoc-deep-v1" ‖ seq ‖ object_sha ‖ salt ‖ indices)` is fsynced before
-//! any leg is checked. Runs stop at the first mismatch. Rule A4.3 digests for
-//! every leg run after the walks. A mismatch revokes when a grant was issued
-//! and, under this policy, bans the public key. The salt and the indices are
-//! revealed on the result. They are not readable over HTTP before that.
+//! The 2.2 SDK does not yet recompute a caller-supplied index list (parallel
+//! rounds are Phase D). After the draw is stored, this phase returns an
+//! error. The door holds that error: it does not accept, and it does not
+//! treat the missing recompute as a fake leg.
 
 use crate::canon::{self, hex32};
+use crate::cbor_limit::{self, MAX_CBOR_NESTING};
 use crate::policy::AdmissionPolicy;
-use hike::{draw_distinct, Entropy, OsEntropy};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::Write;
@@ -18,6 +16,10 @@ use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 pub const COMMIT_DOMAIN: &[u8] = b"pcoc-deep-v1";
+
+/// Why a stored draw was not accepted. The indices were drawn.
+pub const RECOMPUTE_UNAVAILABLE: &str =
+    "thorough leg recompute is not in this build";
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DrawFile {
@@ -40,23 +42,23 @@ pub struct LegHit {
 
 #[derive(Clone, Debug)]
 pub struct ThoroughOut {
-    /// The job's own provisional seq. The draw file and the commitment are
-    /// keyed on it, and the thorough line's `fast_seq` is this value.
     pub seq: u64,
     pub matched: bool,
     pub runs_done: u64,
     pub legs_matched: u64,
     pub legs_total: u64,
     pub failed: Option<LegHit>,
-    /// Digest mismatch, after the walks. Also a revoke.
     pub digest_mismatch: bool,
     pub salt: String,
     pub indices: Vec<Vec<u64>>,
     pub commitment: String,
 }
 
-/// Draw, fsync the commitment, then walk. A file already at `pending/<seq>.draw`
-/// is reused, so a restart does not draw again.
+/// Draw from the OS CSPRNG, fsync the commitment, then hold.
+///
+/// A file already at `pending/<seq>.draw` is reused, so a restart does not
+/// draw again. The result is always [`RECOMPUTE_UNAVAILABLE`]: this build
+/// does not accept on the draw alone.
 pub fn run(
     log_dir: &Path,
     seq: u64,
@@ -64,174 +66,43 @@ pub fn run(
     object_sha: &[u8; 32],
     policy: &AdmissionPolicy,
 ) -> Result<ThoroughOut, String> {
-    let hike = hike_of(object)?;
-    walk(
-        log_dir,
-        seq,
-        &hike,
-        object_sha,
-        policy,
-        hike::Sizes::production(),
-    )
+    let path = draw_path(log_dir, seq);
+    if path.is_file() {
+        let _ = load_draw(&path, seq, object_sha)?;
+        return Err(RECOMPUTE_UNAVAILABLE.to_owned());
+    }
+    let legs = leg_total(object)?;
+    let rounds = u32::try_from(policy.thorough_six_leg_runs).map_err(|_| "thorough_rounds")?;
+    let draw = fresh_draw(seq, object_sha, legs, rounds)?;
+    store_draw(log_dir, &draw)?;
+    Err(RECOMPUTE_UNAVAILABLE.to_owned())
 }
 
-/// Restart resume of an unsettled provisional. Reuses `pending/<seq>.draw`
-/// and never draws again: a missing draw file is an error, so the caller
-/// holds the provisional instead of judging it with a fresh draw.
+/// Restart resume. Reuses `pending/<seq>.draw` and never draws again.
+/// Still held: the stored indices are not recomputed in this build.
 pub fn resume(
     log_dir: &Path,
     seq: u64,
-    object: &[u8],
+    _object: &[u8],
     object_sha: &[u8; 32],
-    policy: &AdmissionPolicy,
+    _policy: &AdmissionPolicy,
 ) -> Result<ThoroughOut, String> {
-    let hike = hike_of(object)?;
-    run_draws(
-        log_dir,
-        seq,
-        &hike,
-        object_sha,
-        policy,
-        hike::Sizes::production(),
-        Draw::StoredOnly,
-    )
-}
-
-/// [`resume`] at `conformance-small` sizes, on a hike the test already built.
-#[cfg(test)]
-pub(crate) fn resume_for_test(
-    log_dir: &Path,
-    seq: u64,
-    hike: &hike::Hike,
-    object_sha: &[u8; 32],
-    policy: &AdmissionPolicy,
-) -> Result<ThoroughOut, String> {
-    run_draws(
-        log_dir,
-        seq,
-        hike,
-        object_sha,
-        policy,
-        hike::Sizes::conformance_small(),
-        Draw::StoredOnly,
-    )
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Draw {
-    /// Reuse a stored draw, or draw once and store it before any leg runs.
-    StoredOrFresh,
-    /// Reuse a stored draw. No stored draw is an error.
-    StoredOnly,
-}
-
-/// [`run`] at `conformance-small` sizes, on a hike the test already built.
-///
-/// Production [`run`] decodes with section 6 and walks that terrain. This
-/// entry is not in the service binary. A conformance-small object is not
-/// offered to production.
-#[cfg(test)]
-pub(crate) fn run_for_test(
-    log_dir: &Path,
-    seq: u64,
-    hike: &hike::Hike,
-    object_sha: &[u8; 32],
-    policy: &AdmissionPolicy,
-) -> Result<ThoroughOut, String> {
-    walk(
-        log_dir,
-        seq,
-        hike,
-        object_sha,
-        policy,
-        hike::Sizes::conformance_small(),
-    )
-}
-
-fn walk(
-    log_dir: &Path,
-    seq: u64,
-    hike: &hike::Hike,
-    object_sha: &[u8; 32],
-    policy: &AdmissionPolicy,
-    sizes: hike::Sizes,
-) -> Result<ThoroughOut, String> {
-    run_draws(
-        log_dir,
-        seq,
-        hike,
-        object_sha,
-        policy,
-        sizes,
-        Draw::StoredOrFresh,
-    )
-}
-
-fn run_draws(
-    log_dir: &Path,
-    seq: u64,
-    hike: &hike::Hike,
-    object_sha: &[u8; 32],
-    policy: &AdmissionPolicy,
-    sizes: hike::Sizes,
-    mode: Draw,
-) -> Result<ThoroughOut, String> {
-    let legs = leg_total(hike).ok_or_else(|| "leg total".to_owned())?;
     let path = draw_path(log_dir, seq);
-    let draw = if path.is_file() {
-        load_draw(&path, seq, object_sha)?
-    } else if mode == Draw::StoredOnly {
-        return Err(format!("no stored draw for seq {seq}; not drawn again"));
-    } else {
-        let draw = fresh_draw(seq, object_sha, legs, policy)?;
-        store_draw(log_dir, &draw)?;
-        draw
-    };
-    let pin = hike::fill_pin(&hike::production_seed(&hike.public_key, &hike.seed_beacon));
-    let terrain = hike::fill_terrain_sized(pin, sizes);
-    let seed = canon::sha256(&hike::production_seed(&hike.public_key, &hike.seed_beacon));
-    let mut runs_done = 0u64;
-    let mut legs_matched = 0u64;
-    let legs_total = draw.runs.iter().map(|run| run.len() as u64).sum();
-    let mut failed = None;
-    for (run_index, indices) in draw.runs.iter().enumerate() {
-        runs_done += 1;
-        let mut run_failed = false;
-        for index in indices {
-            match eval_leg(hike, &terrain, *index, &seed, sizes) {
-                Ok(true) => legs_matched += 1,
-                Ok(false) => {
-                    failed = Some(hit(hike, run_index as u64, *index));
-                    run_failed = true;
-                    break;
-                }
-                Err(err) => return Err(err),
-            }
-        }
-        if run_failed && policy.thorough_early_stop {
-            break;
-        }
-        if run_failed {
-            break;
-        }
+    if !path.is_file() {
+        return Err("pending draw is missing".to_owned());
     }
-    let digest_mismatch = failed.is_none() && digest_miss(hike, &terrain, &seed, sizes);
-    Ok(ThoroughOut {
-        seq,
-        matched: failed.is_none() && !digest_mismatch,
-        runs_done,
-        legs_matched,
-        legs_total,
-        failed,
-        digest_mismatch,
-        salt: draw.salt,
-        indices: draw.runs,
-        commitment: draw.commitment,
-    })
+    let _ = load_draw(&path, seq, object_sha)?;
+    Err(RECOMPUTE_UNAVAILABLE.to_owned())
 }
 
-fn hike_of(object: &[u8]) -> Result<hike::Hike, String> {
-    hike::decoded_hike(object).map_err(|_| "thorough object".to_owned())
+/// One OS-CSPRNG thorough draw, split into rounds of six. Tests call this
+/// twice and require the index lists to differ.
+pub fn os_draw(leg_total: u64, thorough_rounds: u32) -> Result<Vec<Vec<u64>>, String> {
+    let flat = pcoc::thorough_draw(leg_total, thorough_rounds).map_err(|_| "could not draw")?;
+    if flat.len() != (thorough_rounds as usize).saturating_mul(6) {
+        return Err("draw length".to_owned());
+    }
+    Ok(flat.chunks(6).map(|chunk| chunk.to_vec()).collect())
 }
 
 pub fn commitment(seq: u64, object_sha: &[u8; 32], salt: &[u8; 32], runs: &[Vec<u64>]) -> [u8; 32] {
@@ -258,19 +129,14 @@ fn fresh_draw(
     seq: u64,
     object_sha: &[u8; 32],
     legs: u64,
-    policy: &AdmissionPolicy,
+    rounds: u32,
 ) -> Result<DrawFile, String> {
-    let mut entropy = OsEntropy;
-    let mut runs = Vec::with_capacity(policy.thorough_six_leg_runs as usize);
-    for _ in 0..policy.thorough_six_leg_runs {
-        let indices = draw_distinct(legs, 6, &mut entropy as &mut dyn Entropy)
-            .map_err(|_| "could not draw six legs".to_owned())?;
-        runs.push(indices);
-    }
+    let runs = os_draw(legs, rounds)?;
     let mut salt = [0u8; 32];
-    (&mut entropy as &mut dyn Entropy)
-        .fill_bytes(&mut salt)
-        .map_err(|_| "could not draw a salt".to_owned())?;
+    for chunk in salt.chunks_mut(8) {
+        let word = pcoc::draw::os_csprng_next8().ok_or_else(|| "could not draw a salt".to_owned())?;
+        chunk.copy_from_slice(&word[..chunk.len()]);
+    }
     let digest = commitment(seq, object_sha, &salt, &runs);
     Ok(DrawFile {
         seq,
@@ -281,8 +147,6 @@ fn fresh_draw(
     })
 }
 
-/// Private draw file: `pending/` is 0700 and `<seq>.draw` is 0600, set in
-/// code whatever the process umask is.
 fn store_draw(log_dir: &Path, draw: &DrawFile) -> Result<(), String> {
     let path = draw_path(log_dir, draw.seq);
     if let Some(parent) = path.parent() {
@@ -314,8 +178,7 @@ pub const PRIVATE_FILE_MODE: u32 = 0o600;
 /// Mode of the private `pending/` directory.
 pub const PRIVATE_DIR_MODE: u32 = 0o700;
 
-/// Create or truncate `path` at mode 0600, independent of the umask. An
-/// existing file is set to 0600 too.
+/// Create or truncate `path` at mode 0600, independent of the umask.
 pub fn private_file(path: &Path) -> Result<File, String> {
     let file = fs::OpenOptions::new()
         .write(true)
@@ -353,100 +216,25 @@ fn decode_salt(text: &str) -> Result<[u8; 32], String> {
     Ok(bytes)
 }
 
-/// The draw file is not served. Callers refuse every path under `pending/`.
+/// The draw file is not served.
 pub fn draw_is_public() -> bool {
     false
 }
 
-fn leg_total(hike: &hike::Hike) -> Option<u64> {
-    hike.stages.iter().try_fold(0u64, |sum, stage| {
-        sum.checked_add(stage.checkpoints.len() as u64)
-    })
-}
-
-fn eval_leg(
-    hike: &hike::Hike,
-    terrain: &[u8],
-    index: u64,
-    seed: &[u8; 32],
-    sizes: hike::Sizes,
-) -> Result<bool, String> {
-    let (stage_index, j) = locate(hike, index).ok_or_else(|| format!("leg {index}"))?;
-    let stage = &hike.stages[stage_index];
-    if j >= stage.leg_results.len() || j >= stage.checkpoints.len() {
-        return Err(format!("leg {index} has no stored result"));
+fn leg_total(object: &[u8]) -> Result<u64, String> {
+    if cbor_limit::nesting_exceeds(object, MAX_CBOR_NESTING) {
+        return Err("thorough object".to_owned());
     }
-    let previous = if j == 0 {
-        if stage_index == 0 {
-            *seed
-        } else {
-            stage.waypoint
-        }
-    } else {
-        stage.checkpoints[j - 1]
-    };
-    let stored = u64::from_le_bytes(stage.leg_results[j]);
-    Ok(hike::leg_result_sized(terrain, &previous, sizes) == stored)
-}
-
-fn locate(hike: &hike::Hike, q: u64) -> Option<(usize, usize)> {
-    let mut start = 0u64;
-    for (stage_index, stage) in hike.stages.iter().enumerate() {
-        let len = stage.checkpoints.len() as u64;
-        if q < start + len {
-            return Some((stage_index, (q - start) as usize));
-        }
-        start += len;
-    }
-    None
-}
-
-fn hit(hike: &hike::Hike, run: u64, index: u64) -> LegHit {
-    let (stage, j) = locate(hike, index).unwrap_or((0, 0));
-    let checkpoint = hike
+    let obj = pcoc::decode_object(object).map_err(|_| "thorough object".to_owned())?;
+    let total = obj
         .stages
-        .get(stage)
-        .and_then(|stage| stage.checkpoints.get(j))
-        .map(hex::encode)
-        .unwrap_or_default();
-    LegHit {
-        run,
-        index,
-        stage: stage as u64,
-        j: j as u64,
-        checkpoint,
+        .iter()
+        .try_fold(0u64, |sum, stage| sum.checked_add(stage.checkpoints.len() as u64))
+        .ok_or_else(|| "leg total".to_owned())?;
+    if total < 6 {
+        return Err("fewer than 6 legs".to_owned());
     }
-}
-
-fn digest_miss(hike: &hike::Hike, terrain: &[u8], seed: &[u8; 32], sizes: hike::Sizes) -> bool {
-    for (stage_index, stage) in hike.stages.iter().enumerate() {
-        for (j, stored) in stage.checkpoints.iter().enumerate() {
-            if j >= stage.leg_results.len() {
-                return true;
-            }
-            let previous = if j == 0 {
-                if stage_index == 0 {
-                    *seed
-                } else {
-                    stage.waypoint
-                }
-            } else {
-                stage.checkpoints[j - 1]
-            };
-            let limb = if stage_index == 0 {
-                *seed
-            } else {
-                stage.waypoint
-            };
-            let sample = hike::terrain_sample_sized(terrain, &previous, sizes);
-            let leg = u64::from_le_bytes(stage.leg_results[j]);
-            let digest = hike::checkpoint_sized(&previous, &limb, &sample, leg, sizes);
-            if &digest != stored {
-                return true;
-            }
-        }
-    }
-    false
+    Ok(total)
 }
 
 #[cfg(test)]
@@ -454,35 +242,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_pending_draw_is_reused_and_the_commitment_matches() {
-        let dir = std::env::temp_dir().join(format!(
-            "pcoc-draw-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        let object = [7u8; 32];
-        let mut entropy = OsEntropy;
-        let runs = vec![draw_distinct(20, 6, &mut entropy).unwrap()];
-        let mut salt = [0u8; 32];
-        (&mut entropy as &mut dyn Entropy)
-            .fill_bytes(&mut salt)
-            .unwrap();
-        let digest = commitment(3, &object, &salt, &runs);
-        let draw = DrawFile {
-            seq: 3,
-            object_sha256: hex32(&object),
-            salt: hex::encode(salt),
-            runs: runs.clone(),
-            commitment: hex32(&digest),
-        };
-        store_draw(&dir, &draw).unwrap();
-        let loaded = load_draw(&draw_path(&dir, 3), 3, &object).unwrap();
-        assert_eq!(loaded.runs, runs);
-        assert_eq!(loaded.commitment, draw.commitment);
-        assert!(!draw_is_public());
-        let _ = fs::remove_dir_all(&dir);
+    fn two_os_draws_differ() {
+        let first = os_draw(64, 3).expect("draw");
+        let second = os_draw(64, 3).expect("draw");
+        assert_eq!(first.len(), 3);
+        assert!(first.iter().all(|run| run.len() == 6));
+        assert_ne!(first, second);
     }
 }

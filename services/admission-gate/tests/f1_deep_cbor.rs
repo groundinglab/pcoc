@@ -1,5 +1,5 @@
 //! F1 regression: a deeply nested CBOR object in the one pre-signature field the
-//! door decodes (the sign-in `object`, via `hike::yielded_public_key` at
+//! door decodes (the sign-in `object`, via `verifier::public_key` at
 //! `door.rs` step 6, BEFORE `verify_signature`) must be refused as malformed and
 //! must NOT abort the process.
 //!

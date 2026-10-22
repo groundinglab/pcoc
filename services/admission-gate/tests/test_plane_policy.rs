@@ -1,4 +1,4 @@
-//! Test-plane gate policy, moved out of the SDK (`hike-net`) in rc.2: the
+//! Test-plane gate policy. The header source and Bari client are not in the SDK yet:
 //! spec defines measurements, a policy sets the values (QA B2). This is the
 //! test-plane judgment Bari's test-plane gate tests use; it is a fixture
 //! here, not part of the admission door's v7 policy, and the door does not

@@ -113,7 +113,7 @@ pub fn leg_rate_floor_line(p: u64, q: u64) -> String {
 }
 
 /// `gl-admit-v` plus a positive integer. Bound to one table for its life.
-pub const DEFAULT_POLICY_ID: &str = "gl-admit-v6";
+pub const DEFAULT_POLICY_ID: &str = "gl-admit-v9";
 
 /// `W_1` … `W_16`. `W_17` is never fetched and is not in the anchored count.
 pub const ANCHORED_SPAN: u64 = 16;
@@ -273,7 +273,9 @@ impl Default for AdmissionPolicy {
             pending_per_source: DEFAULT_PENDING_PER_SOURCE,
             pending_global: 4,
             verify_cap_per_door_session: 3,
-            index: None,
+            index: Some(IndexPolicy {
+                expected_network: "main".to_owned(),
+            }),
         }
     }
 }
@@ -474,11 +476,6 @@ fn json_i128(value: &Value) -> Option<i128> {
 
 pub fn judge(report: &Report, floor_p: u64, floor_q: u64) -> Judgment {
     match report {
-        Report::Earlier { .. } => Judgment::Refuse {
-            reasons: vec![REFUSE_EARLIER.to_owned()],
-            line: EARLIER_LINE.to_owned(),
-            record: "{}".to_owned(),
-        },
         Report::Unreadable => Judgment::Refuse {
             reasons: vec![UNREADABLE_REASON.to_owned()],
             line: UNREADABLE_LINE.to_owned(),
@@ -498,6 +495,18 @@ fn judge_measured(measured: &Measured, floor_p: u64, floor_q: u64) -> Judgment {
         return Judgment::Refuse {
             reasons: vec![REFUSE_EARLIER.to_owned()],
             line: EARLIER_LINE.to_owned(),
+            record,
+        };
+    }
+    // Rule A5. The kind is the reason. Bookends are not read on another kind.
+    if measured
+        .verifier_notes
+        .iter()
+        .any(|note| note == crate::reasons::CODE_UNKNOWN_KIND)
+    {
+        return Judgment::Refuse {
+            reasons: vec![crate::reasons::CODE_UNKNOWN_KIND.to_owned()],
+            line: "This object is not the v2.2 kind. The gate refuses it.".to_owned(),
             record,
         };
     }

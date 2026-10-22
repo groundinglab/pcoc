@@ -1,4 +1,4 @@
-//! `admission-service` — Satoshi Hike v2.0 admission gate.
+//! `admission-service` — Satoshi Hike 2.2 admission gate.
 //!
 //! The process reads one config file. The path is `--config` or `GATE_CONFIG`.
 //! `--version` prints the gate version, commit and Rust SDK version, then exits.

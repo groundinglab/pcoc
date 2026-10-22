@@ -1,6 +1,6 @@
 # Gate wire
 
-Satoshi Hike v2.0 only. The `/v1` prefix stays: the website and the phone already call these paths. This process does not mint a session and does not call the website.
+Satoshi Hike 2.2. The only kind is `v2.2-pcoc-object`. The `/v1` prefix stays: the website and the phone already call these paths. This process does not mint a session and does not call the website.
 
 ## Routes
 
@@ -11,7 +11,7 @@ GET  /latest.json                   unsigned tip, after a durable line
 GET  /log/{YYYY-MM-DD}.jsonl        lines whose time_unix_s falls on that UTC date
 GET  /log/{YYYY-MM-DD}/{seq}        one decision-log line
 POST /v1/verify                     202 { "job_id" }
-GET  /v1/verify/{job_id}            status; the section 14 record when the object is v2.0
+GET  /v1/verify/{job_id}            status; the fast pre-check record
 GET  /v1/health                     version, commit, sdk, spec kind, config summary
 GET  /v1/policy                     the policy in force (policy_id and its parameters)
 ```
@@ -65,7 +65,7 @@ An unknown nonce, a nonce whose row has expired, and any token other than a cons
 {"outcome":"<token>"}
 ```
 
-The token is `pending`, `accepted`, `malformed`, `bad_signature`, `too_short`, `rejected`, `earlier_version`, or `too_few_waypoints_anchored`. `rejected` has no extra field. An unknown nonce, and a nonce whose row has expired, is `pending`. That read creates no row.
+The token this build writes is `pending`, `accepted`, `malformed`, `bad_signature`, `too_short`, or `rejected`. A new submit does not write `earlier_version` or `too_few_waypoints_anchored`. `rejected` has no extra field. An unknown nonce, and a nonce whose row has expired, is `pending`. That read creates no row.
 
 A consumed row that is still `pending` adds `submitted`:
 
@@ -87,9 +87,9 @@ The check order returns on the first step that decides:
 4. A consumed row exists. The same `object` and the same signature return the original client class and the original website outcome. Policy does not run again. Any other object or signature is client `malformed`, and the stored outcome stays.
 5. The object is shorter than 32 bytes. Website `too_short`. Client delivery OK. The nonce is consumed. No signature check runs.
 6. The bytes yield no 32-byte public key, or the signature does not verify over `bip340_message_32`. Client `bad_signature`. The nonce is not consumed. Website `bad_signature`. A later consuming submit replaces that recorded outcome.
-7. Kind `satoshi-hike-v1.35-object` after a valid signature. Website `earlier_version`. Client delivery OK. The nonce is consumed.
-8. The bytes are not a v2.0 hike object. Website `rejected`. Client delivery OK. The nonce is consumed.
-9. The bytes are a v2.0 hike object. Client `{"delivery":"ok"}` and no other field. The nonce is consumed when this step starts. Website `pending` until policy settles, then `accepted`, or `too_few_waypoints_anchored` when this build enforces that refuse-at-once, or `rejected`. This build does not enforce fewer than two of `W_1` through `W_16`, so it does not emit `too_few_waypoints_anchored`. A later policy refusal does not free the nonce.
+7. Any kind other than `v2.2-pcoc-object`, after a valid signature, is the fast phase (SPEC §14.7, Rule A5). Website `rejected`. The decision line's reason is `unknown_kind`. Client delivery OK. The nonce is consumed. There is no `earlier_version` outcome for a new submit.
+8. The bytes do not decode. Website `rejected`. Client delivery OK. The nonce is consumed. No fast line.
+9. The bytes are a `v2.2-pcoc-object`. Client `{"delivery":"ok"}` and no other field. The nonce is consumed when this step starts. Website `pending` until the fast phase. A shape mismatch is `rejected`. A shape match writes `provisional`, then the thorough phase draws from the operating-system CSPRNG and holds: leg recompute of those indices is not in this build, so it does not accept and it does not ban the key. This build does not emit `too_few_waypoints_anchored`.
 
 Before that order, oversize, the wrong content type, and the transport rate are completed responses. The client class is delivery OK. The wrong content type writes no website outcome. Oversize and the rate write website `rejected` and do not consume the nonce only when the body is the JSON object, `nonce` is 64 lowercase hex, the nonce has no consumed row, and the object bytes hash to `object`. Otherwise the outcome stays. An unavailable door writes no website outcome. The transport figures are unchanged and are not on this wire.
 
@@ -99,11 +99,11 @@ On this wire, no public response and no public decision-log `reason` contains a 
 
 `submission_sha256` for this wire is SHA-256 of `object_sha256 ‖ public_key ‖ bip340_message_32 ‖ signature` (160 bytes).
 
-### Earlier version
+### Unknown kind
 
-On this wire, kind `satoshi-hike-v1.35-object` after a valid signature is website outcome `earlier_version`. The client body is `{"delivery":"ok"}`. The nonce is consumed. The sign-in response does not carry `reason`.
+On this wire, any kind other than `v2.2-pcoc-object`, after a valid signature, is website outcome `rejected`. The client body is `{"delivery":"ok"}`. The nonce is consumed. The sign-in response does not carry `reason`. The decision line's `reason_code` is `unknown_kind`.
 
-The same object on `POST /v1/verify` finishes the job with `status` `error`, `error.code` `earlier_version`, and this sentence in `error.message`: `This object is an earlier version. This gate checks Satoshi Hike v2.0 only.` The verify page shows `error.message`. The sentence is not "could not be read".
+The same object on `POST /v1/verify` finishes the job with `status` `error`, `error.code` `unknown_kind`, and a sentence that names the v2.2 kind. The verify page shows `error.message`. The sentence is not "could not be read".
 
 ## Poll
 
@@ -133,7 +133,7 @@ After a durable append:
 ```json
 {
   "feed": "pcoc-gate-feed-v2",
-  "spec": "Satoshi Hike v2.0",
+  "spec": "Satoshi Hike 2.2",
   "last_seq": 0,
   "last_event_hash": "<64 hex>",
   "today": "YYYY-MM-DD",
@@ -141,9 +141,9 @@ After a durable append:
 }
 ```
 
-There is no `policy_current`. Profiles are gone. `verify_summary` on a locked sign-in thorough line is `{}`. A provisional line settled on restart stores the section 14 record from `hike::verify_record_json` under `profile` `production`, including `profile` and that record's trailing newline. The newline is inside the decision object. A reader takes JSON values. Splitting the file on every newline splits that resumed line. A fast line's `verify_summary` is `{}` because thorough has not run. The gate does not trim the record and does not remove a key.
+There is no `policy_current`. `verify_summary` on a locked sign-in thorough line is `{}`. A fast line's `verify_summary` is `{}` because thorough has not run. The gate does not trim the record and does not remove a key.
 
-A decision line carries `event` `gate.decision`, `seq`, `prev_event_hash`, `time_unix_s`, `bitcoin_tip_height`, `spec` `Satoshi Hike v2.0`, `gate_version`, `gate_commit`, `phase`, `decision`, `submission_sha256`, `public_key`, `object_sha256`, `reasons`, and `verify_summary`. A resumed provisional's thorough line also carries `fast_seq`. `reason` is present when the decision is `refuse`.
+A decision line carries `event` `gate.decision`, `seq`, `prev_event_hash`, `time_unix_s`, `bitcoin_tip_height`, `spec` `Satoshi Hike 2.2`, `gate_version`, `gate_commit`, `phase`, `decision`, `submission_sha256`, `public_key`, `object_sha256`, `reasons`, and `verify_summary`. A resumed provisional's thorough line also carries `fast_seq`. `reason` is present when the decision is `refuse`.
 
 The feed id is `pcoc-gate-feed-v2`. The hash domain on each line is the frozen string `pcoc-gate-log-v1` (a trailing newline in the preimage). That domain is not the feed id and is not renamed when the feed moves.
 
@@ -153,16 +153,12 @@ Sign-in posts JSON. The transport limit is large enough for the base64 of an obj
 
 ## Health
 
-`GET /v1/health` returns `version` (crate), `commit` (git SHA baked in at build), `sdk` (the Rust SDK version from Cargo.lock, for example `2.0.0-rc.2 (path)`, or `2.0.0-rc.2 (path, dirty)` when the SDK files had uncommitted changes at build time), `spec` (`Satoshi Hike v2.0`), `spec_kind` (`v2.0`), and `config` (the file: bind, index, log directory, limits, rate, leg-rate floor). No secrets.
+`GET /v1/health` returns `version` (crate), `commit` (git SHA baked in at build), `sdk` (the Rust SDK version from Cargo.lock, for example `2.2.0 (path)`, or `2.2.0 (path, dirty)` when the SDK files had uncommitted changes at build time), `spec` (`Satoshi Hike 2.2`), `spec_kind` (`2.2`), and `config` (the file: bind, index, log directory, limits, rate, leg-rate floor). No secrets.
 
 ## Verify job
 
-`POST /v1/verify` does not check a signature. `GET /v1/verify/{job_id}` carries `record`, the bytes of `hike::verify_record_json` under `profile` `production`, including the trailing newline. The job splices those bytes. It does not build a second record. An earlier version does not get that record. It finishes as `error.code` `earlier_version`. A refusal still carries `record` when the object was measured. `reasons`, `reason`, and `error` follow it.
+`POST /v1/verify` does not check a signature. `GET /v1/verify/{job_id}` carries `record` from the fast pre-check (`pcoc::precheck`): decode, kind, and shape. It does not fill a production terrain. Any other kind finishes as `error.code` `unknown_kind`. A refusal still carries `record` when the object was classified. `reasons`, `reason`, and `error` follow it.
 
-Thorough verify calls `hike::verify_with_bind_threads`. The thread count is `bind_threads` in the config (default 6). The process does not read `PCOC_BIND_THREADS`. The draw is the operating-system CSPRNG. Two verifies of one object can differ in `six_leg` and `six_leg_runs`. The other keys of one draw are the reference record.
+The thorough draw, when a sign-in reaches it, calls `pcoc::thorough_draw` (operating-system CSPRNG, no byte source). Leg recompute of the drawn indices is not in this build, so that phase holds. Header and plant reads are not in this build. The process does not read `PCOC_BIND_THREADS`. `bind_threads` in the config defaults to 6. A restart settles an unsettled provisional the same way. It does not enter an unbounded wait. A second POST is a new check.
 
-Each index read is one shot, bounded by `index_timeout_secs`. HTTP 5xx, a timeout, a refused connection, and a DNS failure are not retried. The reference records a failed beacon read as a checkpoint mismatch. The gate also puts `the index did not answer for a stored beacon` on the thorough line when the reference already recorded a fact. An unread closing header by itself is `not read` in the record. How policy treats that pair is in [POLICY.md](../../policy/groundinglab-admission/POLICY.md). The verify slot is released. A restart settles an unsettled provisional the same way. It does not enter an unbounded wait. A second POST is a new check.
-
-A reference fact that names a leg result checked again is stored as `a recomputed leg result differs`.
-
-A locked sign-in of a v2.0 object is `{"delivery":"ok"}`, then a website outcome. A verify job returns the section 14 record. It does not admit.
+A locked sign-in of a `v2.2-pcoc-object` is `{"delivery":"ok"}`, then a website outcome. A verify job returns the fast pre-check record. It does not admit.

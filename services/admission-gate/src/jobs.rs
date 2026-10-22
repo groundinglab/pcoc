@@ -1,12 +1,12 @@
 //! In-memory verify jobs.
 //!
 //! Each job is one call through the verifier seam. The seam does not judge.
-//! A v1.35 object finishes as `earlier_version` and is not measured as a
-//! current object. Sign-in thorough uses the same slot limit.
+//! Any kind other than `v2.2-pcoc-object` finishes as `unknown_kind`
+//! (Rule A5). Sign-in thorough uses the same slot limit.
 
 use crate::config::Config;
 use crate::ids::IdGen;
-use crate::policy::{self, EARLIER_LINE, REFUSE_EARLIER, UNREADABLE_LINE, UNREADABLE_REASON};
+use crate::policy::{self, REFUSE_EARLIER, UNREADABLE_LINE, UNREADABLE_REASON};
 use crate::verifier::{self, Report};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -217,9 +217,6 @@ impl JobStore {
 
     fn finish(&self, job_id: &str, report: Report) {
         match report {
-            Report::Earlier { .. } => {
-                self.finish_error(job_id, REFUSE_EARLIER, EARLIER_LINE.to_owned())
-            }
             Report::Unreadable => {
                 self.finish_error(job_id, UNREADABLE_REASON, UNREADABLE_LINE.to_owned())
             }
@@ -290,6 +287,11 @@ impl JobStore {
 fn static_code(reasons: &[String]) -> &'static str {
     if reasons.iter().any(|reason| reason == REFUSE_EARLIER) {
         REFUSE_EARLIER
+    } else if reasons
+        .iter()
+        .any(|reason| reason == crate::reasons::CODE_UNKNOWN_KIND)
+    {
+        crate::reasons::CODE_UNKNOWN_KIND
     } else if reasons
         .iter()
         .any(|reason| reason == policy::REFUSE_BOOKENDS)
