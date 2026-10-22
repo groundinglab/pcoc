@@ -2,10 +2,28 @@
 # AC-A10. Negatives stay out of the release library and the pcoc binary.
 # Check 4 (mutants) is Phase B.
 set -eu
-cd "$(dirname "$0")/.."
-ROOT=$(pwd)
 
 fail() { echo "FAIL: $1" >&2; exit 1; }
+
+# Walk up to the directory that holds sdk/VERSION and spec/.
+start=$(CDPATH= cd "$(dirname "$0")" && pwd)
+d=$start
+found=
+while :; do
+  if [ -f "$d/sdk/VERSION" ] && [ -d "$d/spec" ]; then
+    found=$d
+    break
+  fi
+  if [ "$d" = "/" ]; then
+    break
+  fi
+  d=$(dirname "$d")
+done
+if [ -z "$found" ]; then
+  fail "cannot locate repository root (no directory holding sdk/VERSION and spec/)"
+fi
+cd "$found/sdk/c"
+ROOT=$(pwd)
 
 # (1) separation: gen/ is not a library or CLI source.
 makefile=$ROOT/Makefile
