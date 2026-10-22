@@ -118,7 +118,9 @@ jobs:
         if: steps.langs.outputs.rust == 'true'
         working-directory: sdk/rust
         run: |
-          cargo test --workspace --locked -- --test-threads=6
+          # Release profile: the suite regenerates the production-size candidates
+          # and object (sdk/rust/README.md); the debug profile overruns the job timeout.
+          cargo test --workspace --locked --release -- --test-threads=6
           for script in check/*.sh; do
             [ -f "$script" ] || continue
             bash "$script"
@@ -293,7 +295,7 @@ jobs:
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21" # sdk/java compiles with release 21
       - name: cross-verify pr tier
         run: bash sdk/conformance/cross-verify.sh --tier pr
 

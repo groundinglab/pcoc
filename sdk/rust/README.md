@@ -14,7 +14,7 @@ From this directory, the full suite:
 CARGO_BUILD_JOBS=4 cargo test --locked --release -- --test-threads=4
 ```
 
-The checkout must contain `sdk/VERSION` and `spec/`. Each test walks up from its crate to that directory and fails if the walk does not find both. The suite does not read a path outside the repository.
+The checkout must contain `sdk/VERSION` and `spec/`. Each test searches upward from its crate for that directory and fails if the search does not find both. The suite does not read a path outside the repository.
 
 Candidate files under `candidates/` and objects under `objects/` are checked against SHA-256 pins in the tests. The generator is re-run and its output must match the committed files byte for byte. Each object is verified against the CASES synthetic index, which the test harness serves on loopback.
 
