@@ -1,4 +1,4 @@
-# CI for groundinglab/pcoc. Heavy suites run on the self-hosted dax pool (label pcoc-heavy,
+# CI for groundinglab/pcoc. Heavy suites run on the self-hosted RS2 pool (label pcoc-heavy,
 # local persistent caches). Light checks run on standard GitHub-hosted ubuntu-latest, which is
 # free for this public repo (Christian, 23 Oct 2026). Jobs never run for fork PRs (fork guard in
 # every job + runner pre-job hook on the self-hosted pool).
@@ -6,7 +6,7 @@
 # a suite whose directory does not exist yet is skipped.
 name: ci
 
-# Branches carry the full suite (pull_request, heavy legs on dax). A push to main
+# Branches carry the full suite (pull_request, heavy legs on RS2). A push to main
 # gets the light watch only (hosted). The full suite reruns on main nightly
 # (schedule) or on demand (workflow_dispatch), never on every merge.
 on:
@@ -118,7 +118,7 @@ jobs:
       - name: local cache dirs (runner-provided; in-tree fallback)
         if: steps.on.outputs.run == 'true'
         run: |
-          # dax runners set PCOC_TARGET_ROOT to a per-runner persistent volume. Cargo build
+          # RS2 runners set PCOC_TARGET_ROOT to a per-runner persistent volume. Cargo build
           # dirs are never shared between concurrent jobs.
           if [[ -n "${PCOC_TARGET_ROOT:-}" ]]; then
             echo "CARGO_TARGET_DIR=$PCOC_TARGET_ROOT/sdk-rust" >> "$GITHUB_ENV"
