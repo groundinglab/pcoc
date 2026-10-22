@@ -209,6 +209,8 @@ mod tests {
             previous_hash: previous.map(|value| [value; 32]),
             height,
             time: None,
+            bits: 0,
+            period_first_time: 0,
         }
     }
 

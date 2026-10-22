@@ -1,8 +1,8 @@
 # pack-2.2.0
 
-Status: incomplete. The files below are the candidate lines on which Rust, C, Go, and Java already agree. `spec/conformance/tools/pack_from_candidates.py` writes a value only when those four files are byte-identical, and it stops if they are not. It does not invent a hash.
+Status: complete. The construction files below are the candidate lines on which Rust, C, Go, and Java already agree. `spec/conformance/tools/pack_from_candidates.py` writes a value only when those four files are byte-identical, and it stops if they are not. It does not invent a hash. `sign-in.json` and `sign-in-origins.json` are produced by the Rust SDK (plan decision D7) and checked by the admission gate.
 
-`manifest.json` names this pack, sets `"status": "incomplete"`, and lists the files present. `sdk/SPEC_PIN` records the SHA-256 of that manifest beside the tag `spec-2.2.0` and `erratum=2`. The maintainers cut that tag on the merge commit. This pack does not create the tag.
+`manifest.json` names this pack, sets `"status": "complete"`, and lists the files present. `sdk/SPEC_PIN` records the SHA-256 of that manifest beside the tag `spec-2.2.0` and `erratum=2`. The maintainers cut that tag on the merge commit. This pack does not create the tag.
 
 Where a published vector and a sentence of the specification conflict, the conflict is a defect in the specification. Report it and do not pick a side (SPEC §16, Precedence). Evidence is the hash-bound set (SPEC §8). The portable index stands in for Bitcoin. Anyone may bypass the index and read Bitcoin directly (SPEC §9 and §14). Vector bytes in this directory are Apache-2.0. Prose here is CC BY 4.0.
 
@@ -44,22 +44,12 @@ Each JSON file other than `blockhash-display.json` is the tab-separated candidat
 | `anchor.json` | Integer anchor comparisons (`anchored` or `not anchored`). |
 | `draw.json` | The thorough-round label `pcoc-pack-2.2/draw` and the index lists. Not the draw bytes. |
 | `hashcash.json` | Hashcash challenge and digest for origin `https://example.com` and the stated fee header. |
+| `br1.json` | Rule BR1: current, before, after, outside, wrong origin, three display-order mismatches, and live-plane and test-plane after and wrong `nBits`. Status is 204 or 402. |
 | `negatives.json` | The 13 permanent negatives, each unequal to the honest value. |
 | `unknown-kind.json` | The Rule A5 line: `kind` and `kind_text` only. |
 | `blockhash-display.json` | The §9 display reversal of the Bitcoin genesis header. |
-
-## Still missing
-
-These §16 items are not in this pack. No SDK in this tree exposes Rule BR1 or the sign-in wire, so the generator has no four-way bytes to write. They were not copied from an older pack.
-
-| Item | State |
-|---|---|
-| Bari paid rule, current, before, after, and outside fee headers | missing |
-| Bari paid rule, wrong origin | missing |
-| display-order mismatch, current, before, and after, each answered 402 | missing |
-| after case and wrong `nBits`, live plane and test plane, each labelled with its plane | missing |
-| `sign-in.json` | missing |
-| `sign-in-origins.json` | missing |
+| `sign-in.json` | §15.1 sign-in wire for the example origin. Rust SDK. Not a section 14 record. |
+| `sign-in-origins.json` | §15.1 origin comparison for a service that serves only `https://example.com`. Rust SDK. |
 
 `stage0-start.json` is not in the §16 publish list. It was not copied.
 

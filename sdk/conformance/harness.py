@@ -22,6 +22,7 @@ from urllib.request import urlopen
 LANGS = ("rust", "c", "go", "java")
 CANDIDATE_FILES = (
     "anchor.txt",
+    "br1.txt",
     "draw.txt",
     "fold.txt",
     "hashcash.txt",
@@ -835,6 +836,9 @@ class Gate:
                         f"cell candidates:{lang}/{name}: first differing key {key} (against {base_lang})"
                     )
                     break
+            if name == "br1.txt" and all(sdk_bytes[lang] is not None for lang in LANGS):
+                if all(sdk_bytes[lang] == sdk_bytes["rust"] for lang in LANGS):
+                    self.check_br1(sdk_rows["rust"] or {})
             if not self.args.ref_dir:
                 if present and all(b == present[0] for b in sdk_bytes.values()):
                     lines.append(f"- `{name}`: the four SDKs are byte-identical")
@@ -888,6 +892,38 @@ class Gate:
             pass
         lines.append("")
         self.part["candidates"] = "\n".join(lines)
+
+    def check_br1(self, rows: dict[str, str]) -> None:
+        """SPEC §13.6 rows the four SDKs must agree on. Status is 204 or 402."""
+        expect = {
+            "current": "204",
+            "before": "204",
+            "after_test": "204",
+            "after_live": "204",
+            "after_live_copy": "204",
+            "outside": "402",
+            "wrong_origin": "402",
+            "display_current": "402",
+            "display_before": "402",
+            "display_after": "402",
+            "wrong_nbits_test": "402",
+            "wrong_nbits_live": "402",
+        }
+        planes = {
+            "after_test": "test",
+            "after_live": "live",
+            "after_live_copy": "live",
+            "wrong_nbits_test": "test",
+            "wrong_nbits_live": "live",
+        }
+        for case, status in expect.items():
+            got = rows.get(f"br1.{case}.status")
+            if got != status:
+                self.fail(f"cell br1:{case}: status {got} != {status}")
+            if case in planes:
+                plane = rows.get(f"br1.{case}.plane")
+                if plane != planes[case]:
+                    self.fail(f"cell br1:{case}: plane {plane} != {planes[case]}")
 
     def check_negatives(self, table: dict[str, str]) -> tuple[list[str], dict[str, str]]:
         lines = ["## Negatives", ""]

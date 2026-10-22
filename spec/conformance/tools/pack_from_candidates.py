@@ -23,6 +23,7 @@ NAMES = (
     "wes.txt",
     "rate.txt",
     "anchor.txt",
+    "br1.txt",
     "draw.txt",
     "hashcash.txt",
     "negatives.txt",
@@ -65,14 +66,18 @@ def main() -> None:
         out.write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n")
         written.append(out.name)
     present = sorted(p.name for p in PACK.iterdir() if p.name != "manifest.json")
-    # The generator does not delete blockhash-display.json or README.md.
+    # The generator does not delete blockhash-display.json, README.md, or the
+    # Rust sign-in files. Those must already be in the directory.
     missing = [name for name in written if name not in present]
     if missing:
         raise SystemExit(f"not written: {missing}")
+    for name in ("br1.json", "sign-in.json", "sign-in-origins.json"):
+        if name not in present:
+            raise SystemExit(f"pack cannot be complete, missing {name}")
     manifest = {
         "files": present,
         "pack": "pack-2.2.0",
-        "status": "incomplete",
+        "status": "complete",
     }
     (PACK / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"wrote {len(written)} candidate files; manifest lists {len(present)}")

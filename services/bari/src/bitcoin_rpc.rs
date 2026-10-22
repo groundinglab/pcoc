@@ -170,6 +170,21 @@ impl BitcoinRpc {
         fee::fee_log_label(&self.fee_policy)
     }
 
+    /// `nTime` of the block at `height`. Used for the Rule BR1 retarget anchor.
+    fn header_time_at_height(&self, height: u32) -> Result<u32, ChainError> {
+        let hash = self.node_call("getblockhash", json!([height]))?;
+        let display = hash
+            .as_str()
+            .ok_or_else(|| ChainError("getblockhash returned a non-string".to_owned()))?;
+        let header = self.node_call("getblockheader", json!([display, true]))?;
+        let time = header
+            .get("time")
+            .and_then(Value::as_u64)
+            .and_then(ntime_seconds)
+            .ok_or_else(|| ChainError("retarget anchor header has no nTime".to_owned()))?;
+        u32::try_from(time).map_err(|_| ChainError("retarget anchor nTime exceeds u32".to_owned()))
+    }
+
     fn header_height(&self, display_hash: &str) -> Result<u32, ChainError> {
         let header = self.node_call("getblockheader", json!([display_hash, true]))?;
         u32::try_from(required_u64(&header, "height")?)
@@ -779,11 +794,18 @@ impl ChainBackend for BitcoinRpc {
             .get("time")
             .and_then(Value::as_u64)
             .and_then(ntime_seconds);
+        let bits = compact_bits(&header)?;
+        let period_first_time = match retarget_anchor_height(height) {
+            None => 0,
+            Some(anchor) => self.header_time_at_height(anchor)?,
+        };
         Ok(ChainTip {
             hash: natural_from_display_hex(display_hash)?,
             previous_hash,
             height,
             time,
+            bits,
+            period_first_time,
         })
     }
 
@@ -1226,6 +1248,31 @@ fn required_i64(value: &Value, field: &str) -> Result<i64, ChainError> {
         .ok_or_else(|| ChainError(format!("RPC result field {field} is missing or not an i64")))
 }
 
+/// Bitcoin Core `getblockheader` `bits`: compact `nBits` as hex, no `0x`.
+fn compact_bits(header: &Value) -> Result<u32, ChainError> {
+    let text = required_str(header, "bits")?;
+    if text.is_empty() || text.len() > 8 || !text.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(ChainError(
+            "getblockheader bits is not compact hex".to_owned(),
+        ));
+    }
+    u32::from_str_radix(text, 16)
+        .map_err(|_| ChainError("getblockheader bits is not compact hex".to_owned()))
+}
+
+/// SPEC §13.6. Height of the block whose `nTime` anchors a retarget of the
+/// block after `height`, or `None` when that next block is not a boundary.
+///
+/// Bitcoin `GetNextWorkRequired` uses `height - 2015` when `height + 1` is a
+/// multiple of 2016.
+fn retarget_anchor_height(height: u32) -> Option<u32> {
+    const RETARGET_INTERVAL: u32 = 2016;
+    if height.wrapping_add(1) % RETARGET_INTERVAL != 0 {
+        return None;
+    }
+    height.checked_sub(RETARGET_INTERVAL - 1)
+}
+
 fn required_f64(value: &Value, field: &str) -> Result<f64, ChainError> {
     value.get(field).and_then(Value::as_f64).ok_or_else(|| {
         ChainError(format!(
@@ -1237,6 +1284,24 @@ fn required_f64(value: &Value, field: &str) -> Result<f64, ChainError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn retarget_anchor_is_the_first_block_of_the_period() {
+        assert_eq!(retarget_anchor_height(100), None);
+        assert_eq!(retarget_anchor_height(2014), None);
+        assert_eq!(retarget_anchor_height(2015), Some(0));
+        assert_eq!(retarget_anchor_height(4031), Some(2016));
+    }
+
+    #[test]
+    fn compact_bits_reads_core_hex() {
+        assert_eq!(
+            compact_bits(&serde_json::json!({"bits": "1d00ffff"})).unwrap(),
+            0x1d00_ffff
+        );
+        assert!(compact_bits(&serde_json::json!({"bits": "zz"})).is_err());
+        assert!(compact_bits(&serde_json::json!({})).is_err());
+    }
 
     #[test]
     fn ntime_seconds_keeps_the_section_9_range() {

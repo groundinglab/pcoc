@@ -18,6 +18,7 @@ public final class Round2Pins {
     static {
         Map<String, String> candidates = new LinkedHashMap<String, String>();
         candidates.put("anchor.txt", "fe58c0b64263d11daa7dcbae7c6daa3e0b0daecb1084b44d47f6f2570da3811a");
+        candidates.put("br1.txt", "76b36c948ae0f37ad9dffd0355db3e507f23fddedc203dde4d58d131b212fa99");
         candidates.put("draw.txt", "45821e7ed5d9bbb6b03c686dfc467c623203027a6adf5160414c4e4074a85e0c");
         candidates.put("fold.txt", "2f14b5ef6953e00673c4c7f124f0057cb5498f17d354057639d944e441ffd271");
         candidates.put("hashcash.txt", "92f010b46c15483877343f635164c485500e55527721305bedd0a34def7ca9d5");

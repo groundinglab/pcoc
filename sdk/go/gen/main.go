@@ -41,6 +41,7 @@ func main() {
 	write(dir, "anchor.txt", anchorFile())
 	write(dir, "draw.txt", drawFile())
 	write(dir, "hashcash.txt", hashcashFile())
+	write(dir, "br1.txt", br1File())
 
 	// S1 full hike for kat-small and the honest leg.
 	s1Legs := legsOf(1)
