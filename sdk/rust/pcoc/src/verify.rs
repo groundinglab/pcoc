@@ -118,13 +118,22 @@ fn verify_inner(
         }
         Err(DecodeError::DecodeFailure) => return Verified::DecodeFailure,
         Err(DecodeError::Malformed) => {
-            return Verified::Record(record_of(&blank_malformed(), profile, index, None, false));
+            // Erratum 2 (E02). There is no stage and no path byte string.
+            // Path fields and checkpoint counts are `not defined`. `skip_list` is `[]`.
+            return Verified::Record(record_of(
+                &blank_malformed(),
+                profile,
+                index,
+                None,
+                false,
+                true,
+            ));
         }
     };
     // A parsed map is measured, including trailing bytes (shape is exactly
     // `malformed cbor`). An unparsed input never reaches here, so a garbage
     // byte string does not fill a terrain.
-    Verified::Record(record_of(&obj, profile, index, draw_next, true))
+    Verified::Record(record_of(&obj, profile, index, draw_next, true, false))
 }
 
 fn blank_malformed() -> HikeObject {
@@ -156,6 +165,7 @@ fn record_of(
     index: &mut dyn HeightIndex,
     mut draw_next: Option<&mut dyn FnMut() -> Option<[u8; 8]>>,
     fill_terrain: bool,
+    malformed: bool,
 ) -> String {
     let shape_item = shape_items(obj, profile);
     let shape = if shape_item.is_empty() { "match" } else { "mismatch" };
@@ -184,7 +194,11 @@ fn record_of(
     let waypoints = measure_waypoints(obj, &terrain, profile);
 
     let mut issued_plants: HashMap<u64, Option<Vec<u8>>> = HashMap::new();
-    let paths = measure_paths(obj, index, &mut issued_plants, &header_rows);
+    let paths = if malformed {
+        malformed_paths()
+    } else {
+        measure_paths(obj, index, &mut issued_plants, &header_rows)
+    };
     let anchors = anchor_tokens(&paths);
     let anchored_total = anchors.iter().filter(|t| **t == "anchored").count();
     let skip_list: Vec<J> = paths
@@ -196,7 +210,7 @@ fn record_of(
         .collect();
 
     let book = bookends(obj, &paths, &header_rows, index, &mut issued_plants);
-    let analysis = analysis_of(obj, &header_rows, &book, index);
+    let analysis = analysis_of(obj, &header_rows, &book, index, malformed);
 
     let leg_total: u64 = obj.stages.iter().map(|s| s.checkpoints.len() as u64).sum();
     let six = measure_six(obj, &seed_d, &terrain, profile, leg_total, &mut draw_next);
@@ -660,6 +674,38 @@ fn claimed_from_natural(hash: &[u8; 32], height: u64) -> J {
         ("block_hash", J::s(&hex_encode(&reverse32(hash)))),
         ("block_height", J::Num(height as i128)),
     ])
+}
+
+/// Erratum 2 (E02). A malformed CBOR value has no stage and no path byte string.
+/// `path_state` and `plant` are `not defined`. The row is not a skip: `skip` is
+/// only an empty path byte string on a decoded stage (Rule A4.5).
+fn malformed_paths() -> Vec<PathRow> {
+    let mut rows = Vec::with_capacity(17);
+    for g in 1..=16 {
+        rows.push(not_defined_path(g, false));
+    }
+    rows.push(not_defined_path(17, true));
+    rows
+}
+
+fn not_defined_path(g: usize, w17: bool) -> PathRow {
+    PathRow {
+        g,
+        w17,
+        path_state: "not defined",
+        plant: "not defined",
+        p_g: J::s("not defined"),
+        height_p_g: J::s("not defined"),
+        d_g: J::s("not defined"),
+        claimed: J::s("not defined"),
+        w17_path: "not defined",
+        skipped: false,
+        anchored: false,
+        validated: false,
+        issued_miss: false,
+        body_height: None,
+        body_hash_natural: None,
+    }
 }
 
 fn measure_paths(
@@ -1149,15 +1195,22 @@ fn analysis_of(
     headers: &[HeaderRow],
     book: &Book,
     index: &mut dyn HeightIndex,
+    malformed: bool,
 ) -> J {
     let complete = obj.stages.len() == 18;
-    let whole = if complete {
+    // Erratum 2 (E02). A malformed value has no stage, so these counts are
+    // `not defined`. A decoded empty checkpoint list still counts as zero (SPEC L961).
+    let whole = if malformed {
+        J::s("not defined")
+    } else if complete {
         let n: usize = obj.stages[1..].iter().map(|s| s.checkpoints.len()).sum();
         J::Num(n as i128)
     } else {
         J::s("not defined")
     };
-    let hike_legs = if complete {
+    let hike_legs = if malformed {
+        J::s("not defined")
+    } else if complete {
         let n: usize = obj.stages.iter().map(|s| s.checkpoints.len()).sum();
         J::Num(n as i128)
     } else {
@@ -1172,7 +1225,12 @@ fn analysis_of(
     let whole_span = span(1, 18);
     let mut per = Vec::with_capacity(18);
     for g in 0..18 {
-        let count = obj.stages.get(g).map(|s| s.checkpoints.len()).unwrap_or(0);
+        let count = if malformed {
+            J::s("not defined")
+        } else {
+            let n = obj.stages.get(g).map(|s| s.checkpoints.len()).unwrap_or(0);
+            J::Num(n as i128)
+        };
         let sp = if g == 0 {
             span(0, 1)
         } else if g < 17 {
@@ -1182,7 +1240,7 @@ fn analysis_of(
         };
         per.push(J::Obj(vec![
             ("g", J::Num(g as i128)),
-            ("checkpoint_count", J::Num(count as i128)),
+            ("checkpoint_count", count),
             ("span", sp),
         ]));
     }
