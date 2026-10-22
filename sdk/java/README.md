@@ -13,3 +13,13 @@ Each test walks up from the working directory to the directory that holds `sdk/V
 `check/negatives.sh` checks that the release jar does not contain the negatives generator. Run it on its own only after `./gradlew jar` has built the release jar.
 
 The files in `candidates/` and `objects/` are the committed round-2 bytes. The suite regenerates them, checks them byte for byte, and checks each file's SHA-256 against the pins in the tests. Section 14 of the committed objects is measured against the CASES synthetic index, which the test harness serves on loopback.
+
+## Quickstart
+
+From this directory:
+
+```sh
+./gradlew run --quiet --args=quickstart
+```
+
+The run uses `-XX:+UnlockDiagnosticVMOptions`, which is how this SDK reports `sha-ni` when the host has it. Six lines. The first names `java`. The second names the SHA-256 backend on this machine. The other four lines are the same text the Rust, C, and Go quickstarts print. The production-leg line is the pinned `legs_le_hex`. The command does not time a leg.

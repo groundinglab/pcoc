@@ -1,0 +1,14 @@
+{
+  "agreed_by": [
+    "rust",
+    "c",
+    "go",
+    "java"
+  ],
+  "candidate": "wes.txt",
+  "values": {
+    "wes.S1.D": "1cf2e2a5fc0849a3f5400241d3f52977d605042677b1cda1257cf185a305ecec",
+    "wes.S1.equal": "true",
+    "wes.S1.stage.0.waypoint": "1cf2e2a5fc0849a3f5400241d3f52977d605042677b1cda1257cf185a305ecec"
+  }
+}

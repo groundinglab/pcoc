@@ -146,6 +146,8 @@ func cborMalformed(why string) error { return decodeError(why) }
 // decodeOne decodes one definite-length data item (SPEC §7.3).
 // A non-shortest unsigned integer is accepted. A major-type-3 string whose
 // bytes are not well-formed UTF-8 is not a text string under this section.
+// A kind value in that state is a malformed CBOR value (erratum 2 E01),
+// not Rule A5 and not a decode failure.
 func decodeOne(b []byte) (cborValue, []byte, error) {
 	if len(b) == 0 {
 		return cborValue{}, nil, cborMalformed("empty")

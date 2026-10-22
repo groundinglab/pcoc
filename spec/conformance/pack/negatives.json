@@ -1,0 +1,39 @@
+{
+  "agreed_by": [
+    "rust",
+    "c",
+    "go",
+    "java"
+  ],
+  "candidate": "negatives.txt",
+  "values": {
+    "negatives.all4_kernel.matches_honest": "false",
+    "negatives.all4_kernel.terrain_sha256": "2d7410d07dc6b0e3f8659345a546f5570499a4c423d3d6f6f1df18f53a5cbb6e",
+    "negatives.cached_leg.legs_le_hex": "3b715e2a251a44d9",
+    "negatives.cached_leg.matches_honest": "false",
+    "negatives.f3_shared_terrain.legs_le_hex": "a73019b8a2c43cd1",
+    "negatives.f3_shared_terrain.matches_honest": "false",
+    "negatives.final_stage_hoist.legs_le_hex": "b1808c8d3927a7d1",
+    "negatives.final_stage_hoist.matches_honest": "false",
+    "negatives.honest.legs_le_hex": "4c9a6a98574cbd31",
+    "negatives.honest.terrain_sha256": "366e6d1d27adb715d5c96c64e6b9d881e1701a0151e6e08d49df08d2996bd97f",
+    "negatives.one_lane_flip.matches_honest": "false",
+    "negatives.one_lane_flip.terrain_sha256": "5c3eaeb82045b81036d39bc59d0390b738951b0ba7fbadda118388d0e3070608",
+    "negatives.partial_slot_read.legs_le_hex": "e1ae647ee5a5d7c5",
+    "negatives.partial_slot_read.matches_honest": "false",
+    "negatives.partial_slot_read_2047.legs_le_hex": "738755dabac824ab",
+    "negatives.partial_slot_read_2047.matches_honest": "false",
+    "negatives.prefold_hoist.legs_le_hex": "a652562037b465fc",
+    "negatives.prefold_hoist.matches_honest": "false",
+    "negatives.s_plus_w_fold.legs_le_hex": "07262df2d90e8ecb",
+    "negatives.s_plus_w_fold.matches_honest": "false",
+    "negatives.slot_summary_fold.legs_le_hex": "b87ce6fc485dd57c",
+    "negatives.slot_summary_fold.matches_honest": "false",
+    "negatives.squeezed_seed_terrain.matches_honest": "false",
+    "negatives.squeezed_seed_terrain.terrain_sha256": "ed0fc97468d0bc1675729776307ee35b9f9a03e2b5f6a671bd7afabf068e5c22",
+    "negatives.xor_accumulator_fold.legs_le_hex": "346188d2d8cf98e8",
+    "negatives.xor_accumulator_fold.matches_honest": "false",
+    "negatives.xor_w_fold.legs_le_hex": "73a4c7fbd105aae1",
+    "negatives.xor_w_fold.matches_honest": "false"
+  }
+}

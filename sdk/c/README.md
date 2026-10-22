@@ -15,3 +15,13 @@ That is the command CI runs. It builds the library, the `pcoc` tool, and the can
     sh check/negatives.sh
 
 The checks locate the repository by walking up to the directory that holds `sdk/VERSION` and `spec/`. If that directory is not found, the check fails.
+
+## Quickstart
+
+From this directory, after `make`:
+
+```sh
+./build/pcoc quickstart
+```
+
+Six lines. The first names `c`. The second names the SHA-256 backend on this machine. The other four lines are the same text the Rust, Go, and Java quickstarts print. The production-leg line is the pinned `legs_le_hex`. The command does not time a leg.

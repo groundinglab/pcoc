@@ -391,35 +391,19 @@ def diff_at(left: bytes, right: bytes) -> str:
     return f"lengths {len(left)} and {len(right)}"
 
 
-# PENDING_ERRATUM_2 is the only mask in this gate. One edit removes it:
-# set the tuple to (). Empty and truncated records are then compared
-# byte for byte, and any split fails.
-#
-# SPEC.md L1320: for g in 1..16, path_state is `present` or `skip`, and
-# plant is `n/a` only when path_state is `skip`.
-# SPEC.md L1346 (Rule A4.1): a value left without a usable object value
-# is `not defined`.
-# Malformed CBOR leaves no object, so those two sentences do not pick
-# one record. The four verifiers disagree on path_state, plant, and
-# skip_list (SPEC.md L1328 lists every g whose path_state is `skip`).
-#
-# The same records also disagree on three analysis counts, and on
-# nothing else. SPEC.md L961 leaves whole_hike_legs `not defined` when a
-# stage is missing. SPEC.md L1338 and L1591 define checkpoint_count and
-# hike_legs as checkpoint counts, including a count of zero. A missing
-# stage has no usable count, so L1346 records `not defined` rather than
-# 0. Rust and Go write 0 for every per_stage checkpoint_count. Go writes
-# 0 for whole_hike_legs and hike_legs. C and Java write `not defined`
-# for the per-stage counts. Rust, C, and Java write `not defined` for
-# the two hike totals.
-PENDING_ERRATUM_2 = (
-    ("paths", "path_state"),  # g in 1..16 only; g=17 has no path_state
-    ("paths", "plant"),
-    ("skip_list",),
-    ("analysis", "per_stage", "checkpoint_count"),  # g in 0..17
-    ("analysis", "whole_hike_legs"),
-    ("analysis", "hike_legs"),
-)
+# PENDING_ERRATUM_2 was the one mask in this gate. SPEC 2.2 erratum 2 (E01,
+# E02, option A) settled the fields it named: on a malformed CBOR value,
+# paths[g].path_state and paths[g].plant for g in 1..16 are `not defined`,
+# skip_list is [], and every per_stage checkpoint_count, whole_hike_legs and
+# hike_legs are `not defined`; a `kind` that is not valid UTF-8 is a malformed
+# CBOR value. The tuple is empty, so the empty input, the truncated bytes and
+# the invalid-UTF-8 `kind` are compared byte for byte, and each record must
+# also equal MALFORMED_RECORD_SHA256.
+PENDING_ERRATUM_2: tuple = ()
+
+# SHA-256 of the one-line record (with its newline) that `verify <file>` prints
+# for every malformed CBOR value under the section 6 constants (erratum 2, E02).
+MALFORMED_RECORD_SHA256 = "eb7bff4d55ddcc47e47c600276693db8a406a0083a47c2526462651ffa5bdb8c"
 
 
 def _json_skip_ws(text: str, i: int) -> int:
@@ -1080,7 +1064,14 @@ class Gate:
             return ""
         raw_same = all(records[lang] == records["rust"] for lang in LANGS)
         if raw_same:
-            lines.append(f"- `{label}`: exit 0, identical record, `malformed cbor`")
+            digest = sha256(records["rust"] + b"\n")
+            if digest != MALFORMED_RECORD_SHA256:
+                self.fail(f"{cell}: record sha256 {digest} != {MALFORMED_RECORD_SHA256}")
+                return ""
+            lines.append(
+                f"- `{label}`: exit 0, identical record, `malformed cbor`, "
+                f"sha256 `{MALFORMED_RECORD_SHA256}` (erratum 2 E02)"
+            )
             return ""
         self.pending_count += 1
         self.pending_names.append(f"malformed {label}")
@@ -1171,41 +1162,19 @@ class Gate:
                 else:
                     lines.append(f"- `{label}`: exit 0, identical Rule A5 record")
             lines.append("")
-            lines.append("### Invalid UTF-8 in `kind`")
-            lines.append("")
-            lines.append(
-                "Pending, not a match. Erratum 2 has not settled this input. "
-                "The gate runs it and does not fail on disagreement. "
-                "The input is a one-pair map whose `kind` text is the byte `0xFF`."
-            )
-            lines.append("")
             utf_path = os.path.join(work, "utf8.cbor")
             open(utf_path, "wb").write(BAD_UTF8)
-            utf_codes = []
-            utf_items = []
+            # Erratum 2 E01: a `kind` that is not valid UTF-8 is malformed CBOR.
+            # The input is a one-pair map whose `kind` text is the byte 0xFF.
+            utf_out: dict[str, tuple[int, bytes, bytes]] = {}
             for lang in LANGS:
-                code, out, err = run_cmd(self.cli_cmd(lang, [], utf_path), env=self.env, timeout=60)
-                utf_codes.append(code)
-                rec = one_record(out)
-                item = None
-                if rec is not None:
-                    try:
-                        item = json.loads(rec).get("shape_item")
-                    except json.JSONDecodeError:
-                        item = None
-                utf_items.append(item)
-                lines.append(
-                    f"- `{lang}` exit {code}; stdout `{snippet(out, 180)}`; stderr `{snippet(err, 180)}`"
-                )
-            self.pending_count += 1
-            self.pending_names.append("invalid UTF-8 in kind")
-            if utf_codes == [0, 0, 0, 0] and utf_items == [["malformed cbor"]] * 4:
-                lines.append("")
-                lines.append(
-                    "All four agree on exit 0 and `shape_item` `[\"malformed cbor\"]`."
-                )
+                utf_out[lang] = run_cmd(self.cli_cmd(lang, [], utf_path), env=self.env, timeout=60)
+            table = self._compare_malformed_erratum2("invalid-utf8-kind", utf_out, lines)
+            if table:
+                pending_tables.append(table)
             lines.append("")
-            self.pending_section = _pending_erratum2_section(pending_tables, self.pending_names)
+            if self.pending_names:
+                self.pending_section = _pending_erratum2_section(pending_tables, self.pending_names)
         finally:
             for dirpath, _dirnames, filenames in os.walk(work, topdown=False):
                 for filename in filenames:

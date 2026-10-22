@@ -1,10 +1,12 @@
 package io.groundinglab.pcoc.cli;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 import io.groundinglab.pcoc.BuildInfo;
+import io.groundinglab.pcoc.Bytes;
 import io.groundinglab.pcoc.Draw;
 import io.groundinglab.pcoc.Index;
 import io.groundinglab.pcoc.Profile;
@@ -36,6 +38,9 @@ public final class Main {
         if ("selftest".equals(args[0])) {
             return selftest(args);
         }
+        if ("quickstart".equals(args[0])) {
+            return quickstart();
+        }
         if ("verify".equals(args[0])) {
             return verify(args);
         }
@@ -44,6 +49,127 @@ public final class Main {
         }
         usage();
         return 2;
+    }
+
+    private static int quickstart() {
+        try {
+            Path sdk = BuildInfo.sdkDir();
+            if (sdk == null) {
+                System.err.println("SPEC_PIN not found");
+                return 1;
+            }
+            Path root = Files.isRegularFile(sdk.resolve("SPEC_PIN")) ? sdk.getParent() : sdk;
+            if (root == null) {
+                System.err.println("SPEC_PIN not found");
+                return 1;
+            }
+            String pinText = Files.readString(root.resolve("sdk").resolve("SPEC_PIN"), StandardCharsets.UTF_8);
+            byte[] manifest = Files.readAllBytes(root.resolve("spec").resolve("conformance").resolve("pack").resolve("manifest.json"));
+            String vector = pinField(pinText, "vector-sha256");
+            String got = Bytes.hex(new Sha256().hash(manifest));
+            if (!got.equals(vector) || !"2".equals(pinField(pinText, "erratum")) || vector.length() < 16) {
+                System.err.println("pin mismatch");
+                return 1;
+            }
+            byte[] object = Files.readAllBytes(root.resolve("sdk").resolve("java").resolve("objects").resolve("O1-S1.cbor"));
+            String o1 = "800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246";
+            if (!o1.equals(Bytes.hex(new Sha256().hash(object)))) {
+                System.err.println("O1-S1 sha256");
+                return 1;
+            }
+            Profile profile = Profile.conformanceSmall(64, 32, 65536, 100);
+            Sha256 sha = new Sha256();
+            byte[] b0 = sha.hash("pcoc-pack-2.2/draw".getBytes(StandardCharsets.US_ASCII));
+            Verify.Report report = Verify.verifyRig(object, profile, Index.EMPTY, new Draw.HashChain(sha, b0));
+            if (!report.decoded || report.json == null || !measuredOk(report.json)) {
+                System.err.println("O1-S1 six_leg, checkpoints, or waypoints differ");
+                return 1;
+            }
+            String neg = Files.readString(root.resolve("sdk").resolve("java").resolve("candidates").resolve("negatives.txt"), StandardCharsets.UTF_8);
+            if (count(neg, "matches_honest\tfalse") != 13) {
+                System.err.println("negatives");
+                return 1;
+            }
+            String prod = Files.readString(root.resolve("sdk").resolve("java").resolve("candidates").resolve("prod.txt"), StandardCharsets.UTF_8);
+            if (!prod.contains("prod.PROD.stage.0.leg.0.legs_le_hex\t88a04ac5beacb8a7")) {
+                System.err.println("prod leg");
+                return 1;
+            }
+            System.out.println("pcoc 2.2.0 (java) spec-2.2.0 erratum 2 pack " + vector.substring(0, 16) + ": pin match");
+            System.out.println("kernel scalar, sha256 " + BuildInfo.shaBackend());
+            System.out.println("O1-S1 object sha256 " + o1);
+            System.out.println("O1-S1 six_leg match, checkpoints match, waypoints match");
+            System.out.println("negatives 13 non-match");
+            System.out.println("PROD leg 0 legs_le_hex 88a04ac5beacb8a7");
+            return 0;
+        } catch (IOException | RuntimeException e) {
+            System.err.println("quickstart not read");
+            return 1;
+        }
+    }
+
+    private static String pinField(String text, String key) {
+        String prefix = key + "=";
+        for (String line : text.split("\n")) {
+            line = line.trim();
+            if (line.startsWith(prefix)) {
+                return line.substring(prefix.length());
+            }
+        }
+        return "";
+    }
+
+    private static int count(String text, String lit) {
+        int n = 0;
+        int i = 0;
+        while (true) {
+            int j = text.indexOf(lit, i);
+            if (j < 0) {
+                return n;
+            }
+            n++;
+            i = j + lit.length();
+        }
+    }
+
+    private static String between(String text, String start, String end) {
+        int i = text.indexOf(start);
+        if (i < 0) {
+            return null;
+        }
+        int a = i + start.length();
+        int b = text.indexOf(end, a);
+        if (b < 0) {
+            return null;
+        }
+        return text.substring(a, b);
+    }
+
+    private static boolean resultsMatch(String body) {
+        int n = 0;
+        int i = 0;
+        String mark = "\"result\":\"";
+        while (true) {
+            int j = body.indexOf(mark, i);
+            if (j < 0) {
+                return n > 0;
+            }
+            if (!body.startsWith("match\"", j + mark.length())) {
+                return false;
+            }
+            n++;
+            i = j + mark.length();
+        }
+    }
+
+    private static boolean measuredOk(String record) {
+        String six = between(record, "\"six_leg\":", ",\"six_leg_runs\":");
+        if (six == null || six.contains("mismatch") || count(six, "\"match\"") != 6) {
+            return false;
+        }
+        String checkpoints = between(record, "\"checkpoints\":", ",\"waypoints\":");
+        String waypoints = between(record, "\"waypoints\":", ",\"paths\":");
+        return checkpoints != null && waypoints != null && resultsMatch(checkpoints) && resultsMatch(waypoints);
     }
 
     private static int version() {
@@ -224,6 +350,7 @@ public final class Main {
     private static void usage() {
         System.err.println("usage: pcoc --version");
         System.err.println("usage: pcoc selftest");
+        System.err.println("usage: pcoc quickstart");
         System.err.println("usage: pcoc produce --rig --out dir");
         System.err.println("usage: pcoc verify [--profile production|conformance-small|test|live]"
                 + " [--slot-bytes N --sample-bytes N --terrain-bytes N --steps-per-leg N]"

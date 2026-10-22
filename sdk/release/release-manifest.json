@@ -1,0 +1,166 @@
+{
+  "schema": "pcoc-sdk-release/1",
+  "release": {
+    "version": "2.2.0",
+    "date": "2026-10-23",
+    "commit": "e868865ef87704225a2505b1d1e5841f5b421e87",
+    "notes": "Parent of the commit that adds this file. Tags are not cut."
+  },
+  "spec": {
+    "version": "2.2",
+    "erratum": 2,
+    "tag": "spec-2.2.0",
+    "url": "https://github.com/groundinglab/pcoc/blob/sdk22/integ-phaseA/spec/satoshi-hike-v2.2/SPEC.md",
+    "erratum_url": "https://github.com/groundinglab/pcoc/blob/spec/erratum-2/spec/satoshi-hike-v2.2/ERRATUM-2.md",
+    "pack_url": "https://github.com/groundinglab/pcoc/tree/sdk22/integ-phaseA/spec/conformance/pack",
+    "pack_manifest_sha256": "ec704be3975d0e1af3eab9bb0f6d5ab7b6c6da5dd4b0d9b87988af54d0886a2c",
+    "pack_status": "incomplete"
+  },
+  "links": {
+    "interop_evidence": "https://github.com/groundinglab/pcoc/tree/interop/evidence-2.2/spec/conformance/interop",
+    "policy_page": "https://groundinglab.io/admission-gate/policy/",
+    "policy_file": "https://github.com/groundinglab/pcoc/blob/sdk22/gate-complete/policy/groundinglab-admission/gl-admit-v9.toml"
+  },
+  "conformance": {
+    "objects": {
+      "O1-S1": "800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246",
+      "O2-S2": "6bfc769b831b62de86165d290b8cb8b4fc872d7759183ebbad4c0ab94c0be5e0",
+      "O3-PROD": "b16ecdaa13ad6df28ae62ba84e653b90cbcc3b163af90b62a0db836ff6f3bea7"
+    },
+    "prod_leg_legs_le_hex": "88a04ac5beacb8a7",
+    "negatives": {
+      "count": 13,
+      "all_non_match": true
+    },
+    "quickstart_fixed_lines_sha256": "bd47f23f971ab9ef6d7f2f827251dc6cc17681613a8cc127b88f889f03f2f0c5"
+  },
+  "sdks": [
+    {
+      "language": "rust",
+      "version": "2.2.0",
+      "tag": "sdk-rust-v2.2.0",
+      "tag_status": "not cut",
+      "toolchain_min": "Rust 1.99.0",
+      "quickstart": {
+        "commands": "cd sdk/rust\ncargo run -p pcoc-cli --release --quiet -- quickstart",
+        "expected_stdout_example": "pcoc 2.2.0 (rust) spec-2.2.0 erratum 2 pack ec704be3975d0e1a: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
+        "machine_specific_lines": [
+          2
+        ],
+        "expected_stdout_sha256_fixed_lines": "bd47f23f971ab9ef6d7f2f827251dc6cc17681613a8cc127b88f889f03f2f0c5"
+      },
+      "tested_on": [
+        {
+          "machine": "reference-system-3",
+          "config": "AMD Ryzen 5 7430U, 12 hardware threads",
+          "os": "Linux Mint 22.3",
+          "date": "2026-10-23",
+          "quickstart": "match",
+          "cold_start": "not run",
+          "kernel": "scalar",
+          "sha256": "sha-ni"
+        }
+      ],
+      "performance": []
+    },
+    {
+      "language": "c",
+      "version": "2.2.0",
+      "tag": "sdk-c-v2.2.0",
+      "tag_status": "not cut",
+      "toolchain_min": "gcc, C11, -march=x86-64",
+      "quickstart": {
+        "commands": "cd sdk/c\nmake -j4 build/pcoc\n./build/pcoc quickstart",
+        "expected_stdout_example": "pcoc 2.2.0 (c) spec-2.2.0 erratum 2 pack ec704be3975d0e1a: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
+        "machine_specific_lines": [
+          2
+        ],
+        "expected_stdout_sha256_fixed_lines": "bd47f23f971ab9ef6d7f2f827251dc6cc17681613a8cc127b88f889f03f2f0c5"
+      },
+      "tested_on": [
+        {
+          "machine": "reference-system-3",
+          "config": "AMD Ryzen 5 7430U, 12 hardware threads",
+          "os": "Linux Mint 22.3",
+          "date": "2026-10-23",
+          "quickstart": "match",
+          "cold_start": "not run",
+          "kernel": "scalar",
+          "sha256": "sha-ni"
+        }
+      ],
+      "performance": []
+    },
+    {
+      "language": "go",
+      "version": "2.2.0",
+      "tag": "sdk-go-v2.2.0",
+      "tag_status": "not cut",
+      "toolchain_min": "Go 1.22 or newer",
+      "quickstart": {
+        "commands": "cd sdk/go\ngo run ./cmd/pcoc quickstart",
+        "expected_stdout_example": "pcoc 2.2.0 (go) spec-2.2.0 erratum 2 pack ec704be3975d0e1a: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
+        "machine_specific_lines": [
+          2
+        ],
+        "expected_stdout_sha256_fixed_lines": "bd47f23f971ab9ef6d7f2f827251dc6cc17681613a8cc127b88f889f03f2f0c5"
+      },
+      "tested_on": [
+        {
+          "machine": "reference-system-3",
+          "config": "AMD Ryzen 5 7430U, 12 hardware threads",
+          "os": "Linux Mint 22.3",
+          "date": "2026-10-23",
+          "quickstart": "match",
+          "cold_start": "not run",
+          "kernel": "scalar",
+          "sha256": "sha-ni"
+        }
+      ],
+      "performance": []
+    },
+    {
+      "language": "java",
+      "version": "2.2.0",
+      "tag": "sdk-java-v2.2.0",
+      "tag_status": "not cut",
+      "toolchain_min": "JDK 21",
+      "quickstart": {
+        "commands": "cd sdk/java\n./gradlew run --args=quickstart",
+        "expected_stdout_example": "pcoc 2.2.0 (java) spec-2.2.0 erratum 2 pack ec704be3975d0e1a: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
+        "machine_specific_lines": [
+          2
+        ],
+        "expected_stdout_sha256_fixed_lines": "bd47f23f971ab9ef6d7f2f827251dc6cc17681613a8cc127b88f889f03f2f0c5"
+      },
+      "tested_on": [
+        {
+          "machine": "reference-system-3",
+          "config": "AMD Ryzen 5 7430U, 12 hardware threads",
+          "os": "Linux Mint 22.3",
+          "date": "2026-10-23",
+          "quickstart": "match",
+          "cold_start": "not run",
+          "kernel": "scalar",
+          "sha256": "sha-ni"
+        }
+      ],
+      "performance": []
+    }
+  ],
+  "performance": [],
+  "performance_note": "No timing run was taken for this manifest. The production-leg line in the quickstart is the pinned legs_le_hex, not a measured duration.",
+  "site": {
+    "v22_pending_closed": [
+      15,
+      16,
+      17
+    ],
+    "pages": [
+      "technical/sdk",
+      "technical/index",
+      "make",
+      "admission-gate/policy"
+    ]
+  }
+}
