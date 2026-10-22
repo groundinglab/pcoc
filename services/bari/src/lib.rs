@@ -11,6 +11,7 @@ pub mod bitcoin_rpc;
 pub mod clock;
 mod fee;
 pub mod hashcash;
+pub mod header_source;
 pub mod http;
 pub mod merkle;
 pub mod operator;

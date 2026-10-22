@@ -20,9 +20,9 @@ Bari timestamps waypoints by sealing each tip's pool into one Bitcoin transactio
 | Test | `BARI_TIP_SOURCE=synth`, plus a simulated commit |
 | Unset | `BARI_TIP_SOURCE` remains the RPC poll and is not the live tip |
 
-## Pins
+## Header source
 
-`hike` and `hike-net` are pinned at `ref-rust-v2.0.5`.
+The synth plane is in this crate (`header_source`). A live Bitcoin header source is not in this build (SPEC §9, Phase C). The process fails closed if `BARI_TIP_SOURCE=bitcoin-gossip` is asked to follow live headers. Nothing here is deployed from this change.
 
 ## More
 

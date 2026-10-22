@@ -1,4 +1,4 @@
-use hike::{GossipNetwork, HeaderClock, TipTick};
+use pcoc_bari::header_source::{GossipNetwork, HeaderClock, TipTick};
 use pcoc_bari::bitcoin_rpc::{BitcoinRpc, BitcoinRpcConfig, RpcAuth, UtxoPolicy};
 use pcoc_bari::clock::{BariClock, ChainTip};
 use pcoc_bari::http::BariService;
@@ -87,7 +87,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let backend = Arc::new(SynthCommit::new());
             // Regtest here is Bitcoin header wire magic on the synth peer.
             // It is not a Bitcoin Core regtest node and it is not the plant.
-            let headers = HeaderClock::start(peer.clone(), GossipNetwork::Regtest);
+            let mut headers = HeaderClock::start(&peer, GossipNetwork::Regtest);
             let (headers, first) = tokio::task::spawn_blocking(move || {
                 headers
                     .wait_tips_after(None)
@@ -136,7 +136,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             refuse_synth_env_on_bitcoin_gossip(&synth_env_set())?;
             let backend = open_bitcoin_backend(network.clone())?;
             let fee_label = backend.fee_log_label();
-            let headers = HeaderClock::start(peer.clone(), GossipNetwork::Mainnet);
+            let mut headers = HeaderClock::start(&peer, GossipNetwork::Mainnet);
             let (headers, first) = tokio::task::spawn_blocking(move || {
                 headers
                     .wait_tips_after(None)
@@ -442,7 +442,7 @@ async fn follow_headers(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut after = Some(opened);
     loop {
-        let current = headers;
+        let mut current = headers;
         let waited = tokio::task::spawn_blocking(move || {
             current
                 .wait_tips_after(after)

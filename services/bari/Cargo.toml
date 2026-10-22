@@ -17,7 +17,6 @@ path = "src/main.rs"
 
 [dependencies]
 axum = "0.8"
-hike = { git = "https://github.com/groundinglab/pcoc", tag = "ref-rust-v2.0.5" }
 hex = "0.4"
 base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
@@ -39,4 +38,3 @@ tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 
 [dev-dependencies]
-hike-net = { git = "https://github.com/groundinglab/pcoc", tag = "ref-rust-v2.0.5" }

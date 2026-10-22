@@ -16,8 +16,10 @@ use std::time::{Duration, Instant};
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use hike::{live_plane_host, parse_index_document, serve_synth, GossipNetwork, HeaderClock, TipTick};
-use hike_net::{judge_test_policy, GateJudgment, GateSkip, TestGateMeasurement};
+use pcoc_bari::header_source::{
+    judge_test_policy, live_plane_host, parse_index_document, serve_synth, GateJudgment, GateSkip,
+    GossipNetwork, HeaderClock, TestGateMeasurement, TipTick,
+};
 use pcoc_bari::clock::{
     BariClock, ChainBackend, ChainError, ChainPostCheck, ChainTip, PlantError, PlantReceipt,
     SkipReason,
@@ -133,7 +135,7 @@ fn spawn_synth() -> String {
     peer
 }
 
-async fn next_tips(headers: HeaderClock, after: Option<[u8; 32]>) -> (HeaderClock, Vec<TipTick>) {
+async fn next_tips(mut headers: HeaderClock, after: Option<[u8; 32]>) -> (HeaderClock, Vec<TipTick>) {
     tokio::task::spawn_blocking(move || {
         headers
             .wait_tips_after(after)
