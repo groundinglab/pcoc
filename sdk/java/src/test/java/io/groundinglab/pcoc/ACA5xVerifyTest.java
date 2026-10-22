@@ -12,47 +12,39 @@ import org.junit.jupiter.api.Test;
 import io.groundinglab.pcoc.produce.Cases;
 
 /**
- * AC-A5x. The same injected draw and the CASES index make the §14 record identical
- * across every round-2 copy and this SDK's objects. Header reads the index can
- * supply are not {@code not read}.
+ * AC-A5x. The same section 14 checks on each committed object. The CASES synthetic
+ * index is served by this harness on loopback. Header reads the index can supply
+ * are not {@code not read}.
  */
 public class ACA5xVerifyTest {
     @Test
     public void crossVerify() throws Exception {
-        Path job = Path.of("").toAbsolutePath().getParent().getParent().getParent();
-        String[] dirs = {
-                "ref-round2/A-sonnet/impl/objects",
-                "ref-round2/B-sol/objects",
-                "ref-round2/C-grok/objects",
-                "ref-round2/D-gemini/objects",
-                "ref-round2/E-kimi/objects",
-                "ref-round2/F-glm/impl/objects",
-                "pcoc/sdk/java/objects"
-        };
+        Repo.root();
+        Path objects = Repo.javaDir().resolve("objects");
         String[] names = {"O1-S1.cbor", "O2-S2.cbor", "O3-PROD.cbor"};
         Profile[] profiles = {Cases.s1(), Cases.s2(), Profile.production()};
-        Index index = new SyntheticIndex();
-        for (int n = 0; n < names.length; n++) {
-            String record = null;
-            for (String dir : dirs) {
-                Path file = job.resolve(dir).resolve(names[n]);
-                assertTrue(Files.isRegularFile(file), file.toString());
+        for (String name : names) {
+            Path file = objects.resolve(name);
+            assertTrue(Files.isRegularFile(file), name);
+            assertEquals(Round2Pins.OBJECTS.get(name), ACA5Round2Test.sha256(file), name);
+        }
+        try (LoopbackIndex index = new LoopbackIndex()) {
+            assertTrue(index.base().startsWith("http://127.0.0.1:"), index.base());
+            for (int n = 0; n < names.length; n++) {
+                int before = index.gets();
+                Path file = objects.resolve(names[n]);
                 Sha256 sha = new Sha256();
                 byte[] b0 = Cases.asciiHash(sha, "pcoc-pack-2.2/draw");
                 Verify.Report report = Verify.verifyRig(Files.readAllBytes(file), profiles[n], index,
                         new Draw.HashChain(sha, b0));
+                assertTrue(index.gets() > before, names[n] + " did not GET the loopback index");
                 assertTrue(report.decoded, names[n]);
                 assertEquals("match", report.shape, names[n]);
                 assertEquals("match", report.seedValue, names[n]);
                 assertTrue(report.checkpointsMatch, names[n]);
                 assertTrue(report.waypointsMatch, names[n]);
                 assertEquals("match", report.sixLeg, names[n]);
-                assertFalse(report.json.contains("\"not read\""), names[n] + " " + dir);
-                if (record == null) {
-                    record = report.json;
-                } else {
-                    assertEquals(record, report.json, names[n] + " " + dir);
-                }
+                assertFalse(report.json.contains("\"not read\""), names[n]);
             }
         }
     }

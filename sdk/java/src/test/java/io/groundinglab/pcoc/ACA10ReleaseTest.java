@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 public class ACA10ReleaseTest {
     @Test
     public void scriptPasses() throws Exception {
-        Path root = Path.of("").toAbsolutePath();
+        Path root = Repo.javaDir();
         Process p = new ProcessBuilder(root.resolve("check/negatives.sh").toString())
                 .directory(root.toFile())
                 .redirectErrorStream(true)

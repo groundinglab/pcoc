@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 public class ACA8ShaTest {
     @Test
     public void backendMatchesHost() throws Exception {
+        Repo.root();
         assertEquals(null, BuildInfo.katProblem());
         String backend = BuildInfo.shaBackend();
         if (BuildInfo.cpuHasShaNi()) {

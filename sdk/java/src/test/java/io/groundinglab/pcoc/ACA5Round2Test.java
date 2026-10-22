@@ -3,45 +3,45 @@ package io.groundinglab.pcoc;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 
 import io.groundinglab.pcoc.gen.GenCandidates;
 import io.groundinglab.pcoc.produce.Cases;
 
-/** AC-A5. Round-2 candidate files and scripted-rig objects, byte for byte. */
+/**
+ * AC-A5. Regenerated candidate files and scripted-rig objects match the committed
+ * bytes, and each committed file matches its pinned SHA-256.
+ */
 public class ACA5Round2Test {
-    private static final String O1 = "800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246";
-    private static final String O2 = "6bfc769b831b62de86165d290b8cb8b4fc872d7759183ebbad4c0ab94c0be5e0";
-    private static final String O3 = "b16ecdaa13ad6df28ae62ba84e653b90cbcc3b163af90b62a0db836ff6f3bea7";
-
     @Test
     public void candidatesMatchReferenceAndStayStable() throws Exception {
-        Path job = Path.of("").toAbsolutePath().getParent().getParent().getParent();
-        Path ref = job.resolve("ref-round2/C-grok/candidates");
-        Path committed = Path.of("candidates").toAbsolutePath();
+        Repo.root();
+        Path committed = Repo.javaDir().resolve("candidates");
+        assertPinned(committed, Round2Pins.CANDIDATES);
+        String prod = Files.readString(committed.resolve("prod.txt"));
+        assertTrueLine(prod, "prod.PROD.stage.0.leg.0.legs_le_hex\t" + Round2Pins.PROD_LEG0);
         Path temp = Files.createTempDirectory("pcoc-cand");
         try {
             GenCandidates.generate(temp);
-            String[] names = {"seed", "nl4", "terrain", "fold", "kat-small", "test-3leg", "prod", "wes",
-                    "rate", "anchor", "draw", "unknown-kind", "hashcash", "negatives"};
-            for (String name : names) {
-                byte[] got = Files.readAllBytes(temp.resolve(name + ".txt"));
-                byte[] expect = Files.readAllBytes(ref.resolve(name + ".txt"));
-                assertArrayEquals(expect, got, name);
-                byte[] stored = Files.readAllBytes(committed.resolve(name + ".txt"));
-                assertArrayEquals(stored, got, "rerun " + name);
+            for (String name : Round2Pins.CANDIDATES.keySet()) {
+                byte[] got = Files.readAllBytes(temp.resolve(name));
+                byte[] stored = Files.readAllBytes(committed.resolve(name));
+                assertArrayEquals(stored, got, name);
             }
         } finally {
             delete(temp);
         }
-        String prod = Files.readString(committed.resolve("prod.txt"));
-        assertTrueLine(prod, "prod.PROD.stage.0.leg.0.legs_le_hex\t88a04ac5beacb8a7");
         Sha256 sha = new Sha256();
         byte[] header = GenCandidates.feeHeader(sha);
         byte[] once = sha.hash(header);
@@ -54,21 +54,34 @@ public class ACA5Round2Test {
 
     @Test
     public void scriptedRigObjects() throws Exception {
+        Repo.root();
+        Path committed = Repo.javaDir().resolve("objects");
+        assertPinned(committed, Round2Pins.OBJECTS);
         Path temp = Files.createTempDirectory("pcoc-obj");
         try {
             Cases.writeObjects(temp);
-            assertEquals(O1, sha256(temp.resolve("O1-S1.cbor")));
-            assertEquals(O2, sha256(temp.resolve("O2-S2.cbor")));
-            assertEquals(O3, sha256(temp.resolve("O3-PROD.cbor")));
-            Path committed = Path.of("objects").toAbsolutePath();
-            assertArrayEquals(Files.readAllBytes(temp.resolve("O1-S1.cbor")),
-                    Files.readAllBytes(committed.resolve("O1-S1.cbor")));
-            assertArrayEquals(Files.readAllBytes(temp.resolve("O2-S2.cbor")),
-                    Files.readAllBytes(committed.resolve("O2-S2.cbor")));
-            assertArrayEquals(Files.readAllBytes(temp.resolve("O3-PROD.cbor")),
-                    Files.readAllBytes(committed.resolve("O3-PROD.cbor")));
+            for (String name : Round2Pins.OBJECTS.keySet()) {
+                byte[] stored = Files.readAllBytes(committed.resolve(name));
+                byte[] got = Files.readAllBytes(temp.resolve(name));
+                assertArrayEquals(stored, got, name);
+                assertEquals(Round2Pins.OBJECTS.get(name), sha256(temp.resolve(name)), name);
+            }
         } finally {
             delete(temp);
+        }
+    }
+
+    private static void assertPinned(Path dir, Map<String, String> pins) throws Exception {
+        assertTrue(Files.isDirectory(dir), dir.toString());
+        List<String> found = new ArrayList<String>();
+        try (Stream<Path> listing = Files.list(dir)) {
+            listing.forEach(p -> found.add(p.getFileName().toString()));
+        }
+        assertEquals(pins.size(), found.size(), found.toString());
+        for (Map.Entry<String, String> e : pins.entrySet()) {
+            Path file = dir.resolve(e.getKey());
+            assertTrue(Files.isRegularFile(file), e.getKey());
+            assertEquals(e.getValue(), sha256(file), e.getKey());
         }
     }
 

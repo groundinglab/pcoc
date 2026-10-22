@@ -14,6 +14,7 @@ import io.groundinglab.pcoc.produce.Hike;
 public class ACA12ScalarTest {
     @Test
     public void s1StepZeroLoadsEveryWord() {
+        Repo.root();
         Hike.Result hike = Cases.run(Cases.s1(), Cases.PK_A, Cases.legs(1));
         Profile profile = hike.profile;
         long s = Bytes.getLe64(hike.seed, 0);

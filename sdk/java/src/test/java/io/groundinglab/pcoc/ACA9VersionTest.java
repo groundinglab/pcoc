@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 public class ACA9VersionTest {
     @Test
     public void versionEverywhere() throws Exception {
-        Path sdk = BuildInfo.sdkDir();
+        Path sdk = Repo.root().resolve("sdk");
         String file = Files.readString(sdk.resolve("VERSION")).trim();
         assertEquals(file, BuildInfo.VERSION);
         assertEquals("2.2.0", BuildInfo.VERSION);

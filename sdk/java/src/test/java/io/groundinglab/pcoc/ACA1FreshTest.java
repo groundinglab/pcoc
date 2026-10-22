@@ -14,8 +14,8 @@ import org.junit.jupiter.api.Test;
 public class ACA1FreshTest {
     @Test
     public void addedOnThisBranch() throws Exception {
-        Path javaDir = Path.of("").toAbsolutePath();
-        Path repo = javaDir.getParent().getParent();
+        Path repo = Repo.root();
+        Path javaDir = Repo.javaDir();
         assertTrue(Files.isDirectory(javaDir.resolve("src/main/java")), "sdk/java sources");
         String listed = git(repo, "ls-tree", "-r", "--name-only", "a786e6e", "--", "sdk/java");
         assertEquals("", listed.trim(), "sdk/java is empty at the branch base");

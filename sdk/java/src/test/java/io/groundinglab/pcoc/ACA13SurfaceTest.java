@@ -10,6 +10,7 @@ import io.groundinglab.pcoc.produce.Hike;
 public class ACA13SurfaceTest {
     @Test
     public void phaseASurface() {
+        Repo.root();
         assertNotNull(Seed.class);
         assertNotNull(Terrain.class);
         assertNotNull(Step.class);
