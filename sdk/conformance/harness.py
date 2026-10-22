@@ -391,6 +391,331 @@ def diff_at(left: bytes, right: bytes) -> str:
     return f"lengths {len(left)} and {len(right)}"
 
 
+# PENDING_ERRATUM_2 is the only mask in this gate. One edit removes it:
+# set the tuple to (). Empty and truncated records are then compared
+# byte for byte, and any split fails.
+#
+# SPEC.md L1320: for g in 1..16, path_state is `present` or `skip`, and
+# plant is `n/a` only when path_state is `skip`.
+# SPEC.md L1346 (Rule A4.1): a value left without a usable object value
+# is `not defined`.
+# Malformed CBOR leaves no object, so those two sentences do not pick
+# one record. The four verifiers disagree on path_state, plant, and
+# skip_list (SPEC.md L1328 lists every g whose path_state is `skip`).
+#
+# The same records also disagree on three analysis counts, and on
+# nothing else. SPEC.md L961 leaves whole_hike_legs `not defined` when a
+# stage is missing. SPEC.md L1338 and L1591 define checkpoint_count and
+# hike_legs as checkpoint counts, including a count of zero. A missing
+# stage has no usable count, so L1346 records `not defined` rather than
+# 0. Rust and Go write 0 for every per_stage checkpoint_count. Go writes
+# 0 for whole_hike_legs and hike_legs. C and Java write `not defined`
+# for the per-stage counts. Rust, C, and Java write `not defined` for
+# the two hike totals.
+PENDING_ERRATUM_2 = (
+    ("paths", "path_state"),  # g in 1..16 only; g=17 has no path_state
+    ("paths", "plant"),
+    ("skip_list",),
+    ("analysis", "per_stage", "checkpoint_count"),  # g in 0..17
+    ("analysis", "whole_hike_legs"),
+    ("analysis", "hike_legs"),
+)
+
+
+def _json_skip_ws(text: str, i: int) -> int:
+    n = len(text)
+    while i < n and text[i] in " \t\r\n":
+        i += 1
+    return i
+
+
+def _json_string_end(text: str, i: int) -> int:
+    if i >= len(text) or text[i] != '"':
+        raise ValueError("expected a JSON string")
+    i += 1
+    n = len(text)
+    while i < n:
+        if text[i] == "\\":
+            if i + 1 >= n:
+                raise ValueError("truncated JSON escape")
+            i += 2
+            continue
+        if text[i] == '"':
+            return i + 1
+        i += 1
+    raise ValueError("unterminated JSON string")
+
+
+def _json_atomic_end(text: str, i: int) -> int:
+    if text[i] == '"':
+        return _json_string_end(text, i)
+    if text.startswith("true", i):
+        return i + 4
+    if text.startswith("false", i):
+        return i + 5
+    if text.startswith("null", i):
+        return i + 4
+    j = i
+    n = len(text)
+    if j < n and text[j] == "-":
+        j += 1
+    digits = j
+    while j < n and text[j].isdigit():
+        j += 1
+    if j == digits:
+        raise ValueError("expected a JSON value")
+    if j < n and text[j] == ".":
+        j += 1
+        digits = j
+        while j < n and text[j].isdigit():
+            j += 1
+        if j == digits:
+            raise ValueError("bad JSON fraction")
+    if j < n and text[j] in "eE":
+        j += 1
+        if j < n and text[j] in "+-":
+            j += 1
+        digits = j
+        while j < n and text[j].isdigit():
+            j += 1
+        if j == digits:
+            raise ValueError("bad JSON exponent")
+    return j
+
+
+def _json_value_spans(text: str) -> list[tuple[tuple, int, int]]:
+    """Byte spans of every atomic value and every array in `text`."""
+    found: list[tuple[tuple, int, int]] = []
+
+    def walk(i: int, path: tuple) -> int:
+        i = _json_skip_ws(text, i)
+        if i >= len(text):
+            raise ValueError("truncated JSON")
+        c = text[i]
+        if c == "{":
+            return walk_object(i, path)
+        if c == "[":
+            return walk_array(i, path)
+        end = _json_atomic_end(text, i)
+        found.append((path, i, end))
+        return end
+
+    def walk_object(i: int, path: tuple) -> int:
+        i += 1
+        first = True
+        while True:
+            i = _json_skip_ws(text, i)
+            if i >= len(text):
+                raise ValueError("truncated JSON object")
+            if text[i] == "}":
+                return i + 1
+            if not first:
+                if text[i] != ",":
+                    raise ValueError("expected a comma in a JSON object")
+                i = _json_skip_ws(text, i + 1)
+            first = False
+            if i >= len(text) or text[i] != '"':
+                raise ValueError("expected a JSON object key")
+            key_end = _json_string_end(text, i)
+            key = json.loads(text[i:key_end])
+            if not isinstance(key, str):
+                raise ValueError("JSON object key is not a string")
+            i = _json_skip_ws(text, key_end)
+            if i >= len(text) or text[i] != ":":
+                raise ValueError("expected a colon")
+            i = walk(i + 1, path + (key,))
+
+    def walk_array(i: int, path: tuple) -> int:
+        start = i
+        i += 1
+        first = True
+        index = 0
+        while True:
+            i = _json_skip_ws(text, i)
+            if i >= len(text):
+                raise ValueError("truncated JSON array")
+            if text[i] == "]":
+                found.append((path, start, i + 1))
+                return i + 1
+            if not first:
+                if text[i] != ",":
+                    raise ValueError("expected a comma in a JSON array")
+                i = _json_skip_ws(text, i + 1)
+            first = False
+            i = walk(i, path + (index,))
+            index += 1
+
+    end = walk(0, ())
+    end = _json_skip_ws(text, end)
+    if end != len(text):
+        raise ValueError("trailing bytes after the JSON value")
+    return found
+
+
+def _erratum2_masks(path: tuple, g_of: dict[int, object]) -> bool:
+    if not PENDING_ERRATUM_2:
+        return False
+    if path == ("skip_list",) and ("skip_list",) in PENDING_ERRATUM_2:
+        return True
+    if path == ("analysis", "whole_hike_legs") and ("analysis", "whole_hike_legs") in PENDING_ERRATUM_2:
+        return True
+    if path == ("analysis", "hike_legs") and ("analysis", "hike_legs") in PENDING_ERRATUM_2:
+        return True
+    if (
+        len(path) == 4
+        and path[0] == "analysis"
+        and path[1] == "per_stage"
+        and isinstance(path[2], int)
+        and path[3] == "checkpoint_count"
+        and ("analysis", "per_stage", "checkpoint_count") in PENDING_ERRATUM_2
+    ):
+        return True
+    if (
+        len(path) == 3
+        and path[0] == "paths"
+        and isinstance(path[1], int)
+        and path[2] in ("path_state", "plant")
+        and ("paths", path[2]) in PENDING_ERRATUM_2
+    ):
+        g = g_of.get(path[1])
+        return isinstance(g, int) and not isinstance(g, bool) and 1 <= g <= 16
+    return False
+
+
+def mask_pending_erratum_2(record: bytes) -> bytes:
+    """Drop PENDING_ERRATUM_2 value bytes. An empty tuple returns `record`."""
+    if not PENDING_ERRATUM_2:
+        return record
+    text = record.decode("utf-8")
+    found = _json_value_spans(text)
+    g_of: dict[int, object] = {}
+    for path, start, end in found:
+        if (
+            len(path) == 3
+            and path[0] == "paths"
+            and isinstance(path[1], int)
+            and path[2] == "g"
+        ):
+            g_of[path[1]] = json.loads(text[start:end])
+    spans = [
+        (start, end)
+        for path, start, end in found
+        if _erratum2_masks(path, g_of)
+    ]
+    spans.sort()
+    chosen: list[tuple[int, int]] = []
+    for start, end in spans:
+        if start < 0 or end < start or end > len(text):
+            raise ValueError("mask span is outside the record")
+        if chosen and start < chosen[-1][1]:
+            if end <= chosen[-1][1]:
+                continue
+            raise ValueError("mask spans overlap")
+        chosen.append((start, end))
+    for start, end in reversed(chosen):
+        text = text[:start] + text[end:]
+    return text.encode("utf-8")
+
+
+def _json_token(value: object) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
+def _uniform(values: list) -> str:
+    if values and all(item == values[0] for item in values):
+        return _json_token(values[0])
+    return _json_token(values)
+
+
+def erratum2_field_table(label: str, parsed: dict[str, dict]) -> str:
+    """Markdown table of the masked fields, one column per verifier."""
+
+    def path_values(obj: dict, key: str) -> str:
+        vals = []
+        for el in obj.get("paths") or []:
+            if isinstance(el, dict) and isinstance(el.get("g"), int) and 1 <= el["g"] <= 16:
+                vals.append(el.get(key))
+        return _uniform(vals)
+
+    def analysis_value(obj: dict, key: str) -> str:
+        analysis = obj.get("analysis")
+        if not isinstance(analysis, dict):
+            return "missing"
+        return _json_token(analysis.get(key))
+
+    def counts(obj: dict) -> str:
+        analysis = obj.get("analysis")
+        stages = analysis.get("per_stage") if isinstance(analysis, dict) else None
+        if not isinstance(stages, list):
+            return "missing"
+        vals = []
+        for el in stages:
+            vals.append(el.get("checkpoint_count") if isinstance(el, dict) else None)
+        return _uniform(vals)
+
+    rows = (
+        ("`paths[g].path_state` for g in 1…16", lambda obj: path_values(obj, "path_state")),
+        ("`paths[g].plant` for g in 1…16", lambda obj: path_values(obj, "plant")),
+        ("`skip_list`", lambda obj: _json_token(obj.get("skip_list"))),
+        ("`analysis.per_stage[g].checkpoint_count` for g in 0…17", counts),
+        ("`analysis.whole_hike_legs`", lambda obj: analysis_value(obj, "whole_hike_legs")),
+        ("`analysis.hike_legs`", lambda obj: analysis_value(obj, "hike_legs")),
+    )
+    lines = [
+        f"### `{label}`",
+        "",
+        "| field | rust | c | go | java |",
+        "|---|---|---|---|---|",
+    ]
+    for name, getter in rows:
+        cells = [getter(parsed[lang]) for lang in LANGS]
+        lines.append("| " + " | ".join([name, *cells]) + " |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _pending_erratum2_section(tables: list[str], names: list[str]) -> str:
+    lines = [
+        "## pending erratum 2",
+        "",
+        "These cells are pending. They are not matches. "
+        "`PENDING_ERRATUM_2` in `sdk/conformance/harness.py` is the only mask. "
+        "Set that tuple to `()` and the empty and truncated records are compared byte for byte.",
+        "",
+        "SPEC.md line 1320 limits `path_state` to `present` or `skip`, and `plant` is `n/a` only when `path_state` is `skip`. "
+        "SPEC.md line 1346 (Rule A4.1) says a value left without a usable object value is `not defined`. "
+        "Malformed CBOR leaves no object, so those sentences do not pick one record.",
+        "",
+        "Three analysis counts differ for the same reason, and no other field differs. "
+        "SPEC.md line 961 leaves `whole_hike_legs` `not defined` when a stage is missing. "
+        "SPEC.md lines 1338 and 1591 define `checkpoint_count` and `hike_legs` as checkpoint counts, including zero. "
+        "A missing stage has no usable count, so line 1346 records `not defined` rather than 0. "
+        "Rust and Go record 0 for every `checkpoint_count`. "
+        "Go records 0 for `whole_hike_legs` and `hike_legs`. "
+        "The others record `not defined`.",
+        "",
+        "`shape`, `shape_item`, and the exit code are not masked. "
+        "A malformed cell is pending only when every verifier exits 0, `shape` is `mismatch`, "
+        '`shape_item` is `["malformed cbor"]`, and every other byte of the records matches.',
+        "",
+    ]
+    if tables:
+        lines.extend(tables)
+    else:
+        lines.append("No malformed cell is pending. A difference outside the mask is a failed cell.")
+        lines.append("")
+    listed = ", ".join(f"`{name}`" for name in names) if names else "(none)"
+    lines.append(f"Pending cells: {listed}.")
+    lines.append("")
+    lines.append(
+        "Invalid UTF-8 in `kind` is pending and is not a match. "
+        "The per-verifier output is under Malformed and unknown kind. "
+        "The gate does not fail on that input."
+    )
+    lines.append("")
+    return "\n".join(lines)
+
+
 class Gate:
     def __init__(self, args: argparse.Namespace):
         self.args = args
@@ -400,6 +725,9 @@ class Gate:
         self.part: dict[str, str] = {}
         self.cells_run = 0
         self.cells_match = 0
+        self.pending_count = 0
+        self.pending_names: list[str] = []
+        self.pending_section = ""
         self.invocations = 0
         self.docs = {h: cases_document(h) for h in range(989, 1019)}
         self.env = os.environ.copy()
@@ -699,6 +1027,69 @@ class Gate:
         lines.append("")
         self.part["six"] = "\n".join(lines)
 
+    def _compare_malformed_erratum2(
+        self,
+        label: str,
+        outputs: dict[str, tuple[int, bytes, bytes]],
+        lines: list[str],
+    ) -> str:
+        """Compare one malformed-CBOR input. Mask only PENDING_ERRATUM_2."""
+        cell = f"cell malformed:{label}"
+        if any(outputs[lang][0] != 0 for lang in LANGS):
+            shown = ", ".join(f"{lang} {outputs[lang][0]}" for lang in LANGS)
+            self.fail(f"{cell}: exit {shown}")
+            return ""
+        parsed: dict[str, dict] = {}
+        records: dict[str, bytes] = {}
+        for lang in LANGS:
+            rec = one_record(outputs[lang][1])
+            if rec is None:
+                self.fail(
+                    f"{cell}: {lang} did not write one record; stdout {snippet(outputs[lang][1])}"
+                )
+                return ""
+            try:
+                obj = json.loads(rec)
+            except json.JSONDecodeError:
+                self.fail(f"{cell}: {lang} record is not JSON")
+                return ""
+            if obj.get("shape") != "mismatch" or obj.get("shape_item") != ["malformed cbor"]:
+                self.fail(
+                    f"{cell}: {lang} shape {obj.get('shape')!r} "
+                    f"shape_item {obj.get('shape_item')!r}"
+                )
+                return ""
+            parsed[lang] = obj
+            records[lang] = rec
+        masked: dict[str, bytes] = {}
+        for lang in LANGS:
+            try:
+                masked[lang] = mask_pending_erratum_2(records[lang])
+            except ValueError as exc:
+                self.fail(f"{cell}: {lang} record could not be masked ({exc})")
+                return ""
+        parts = []
+        base = masked["rust"]
+        for lang in LANGS:
+            if lang != "rust" and masked[lang] != base:
+                parts.append(f"rust vs {lang}: {diff_at(base, masked[lang])}")
+        if masked["go"] != masked["java"]:
+            parts.append(f"go vs java: {diff_at(masked['go'], masked['java'])}")
+        if parts:
+            self.fail(f"{cell}: outside PENDING_ERRATUM_2; " + "; ".join(parts))
+            return ""
+        raw_same = all(records[lang] == records["rust"] for lang in LANGS)
+        if raw_same:
+            lines.append(f"- `{label}`: exit 0, identical record, `malformed cbor`")
+            return ""
+        self.pending_count += 1
+        self.pending_names.append(f"malformed {label}")
+        lines.append(
+            f"- `{label}`: pending erratum 2; exit 0; shape `mismatch`; "
+            'shape_item `["malformed cbor"]`'
+        )
+        return erratum2_field_table(label, parsed)
+
     def check_malformed(self, base_o1: bytes | None) -> None:
         lines = ["## Malformed and unknown kind", ""]
         work = tempfile.mkdtemp(prefix="xverify-malformed-")
@@ -737,10 +1128,16 @@ class Gate:
                 if label.startswith("unknown-kind."):
                     n = label.rsplit(".", 1)[1]
                     paths[label] = os.path.join(work, f"kind-{n}.cbor")
+            pending_tables: list[str] = []
             for label, _blob, expect in cases:
                 for lang in LANGS:
                     code, out, err = run_cmd(self.cli_cmd(lang, [], paths[label]), env=self.env, timeout=60)
                     outputs[label][lang] = (code, out, err)
+                if label in ("empty", "truncated"):
+                    table = self._compare_malformed_erratum2(label, outputs[label], lines)
+                    if table:
+                        pending_tables.append(table)
+                    continue
                 codes = {outputs[label][lang][0] for lang in LANGS}
                 stdouts = {outputs[label][lang][1] for lang in LANGS}
                 cell = f"cell malformed:{label}"
@@ -768,32 +1165,47 @@ class Gate:
                 code = next(iter(codes))
                 stdout = next(iter(stdouts))
                 rec = one_record(stdout)
-                if label in ("empty", "truncated"):
-                    if code != 0 or rec is None or b'"malformed cbor"' not in rec:
-                        self.fail(f"{cell}: exit {code} record {snippet(stdout)}")
-                    else:
-                        lines.append(f"- `{label}`: exit 0, identical record, `malformed cbor`")
+                if code != 0 or rec != expect:
+                    shown = diff_at(rec or b"", expect or b"") if rec is not None else snippet(stdout)
+                    self.fail(f"{cell}: exit {code}; {shown}")
                 else:
-                    if code != 0 or rec != expect:
-                        shown = diff_at(rec or b"", expect or b"") if rec is not None else snippet(stdout)
-                        self.fail(f"{cell}: exit {code}; {shown}")
-                    else:
-                        lines.append(f"- `{label}`: exit 0, identical Rule A5 record")
+                    lines.append(f"- `{label}`: exit 0, identical Rule A5 record")
             lines.append("")
             lines.append("### Invalid UTF-8 in `kind`")
             lines.append("")
             lines.append(
-                "Erratum 2 has not settled this input. The gate runs it and does not fail on disagreement. The input is a one-pair map whose `kind` text is the byte `0xFF`."
+                "Pending, not a match. Erratum 2 has not settled this input. "
+                "The gate runs it and does not fail on disagreement. "
+                "The input is a one-pair map whose `kind` text is the byte `0xFF`."
             )
             lines.append("")
             utf_path = os.path.join(work, "utf8.cbor")
             open(utf_path, "wb").write(BAD_UTF8)
+            utf_codes = []
+            utf_items = []
             for lang in LANGS:
                 code, out, err = run_cmd(self.cli_cmd(lang, [], utf_path), env=self.env, timeout=60)
+                utf_codes.append(code)
+                rec = one_record(out)
+                item = None
+                if rec is not None:
+                    try:
+                        item = json.loads(rec).get("shape_item")
+                    except json.JSONDecodeError:
+                        item = None
+                utf_items.append(item)
                 lines.append(
                     f"- `{lang}` exit {code}; stdout `{snippet(out, 180)}`; stderr `{snippet(err, 180)}`"
                 )
+            self.pending_count += 1
+            self.pending_names.append("invalid UTF-8 in kind")
+            if utf_codes == [0, 0, 0, 0] and utf_items == [["malformed cbor"]] * 4:
+                lines.append("")
+                lines.append(
+                    "All four agree on exit 0 and `shape_item` `[\"malformed cbor\"]`."
+                )
             lines.append("")
+            self.pending_section = _pending_erratum2_section(pending_tables, self.pending_names)
         finally:
             for dirpath, _dirnames, filenames in os.walk(work, topdown=False):
                 for filename in filenames:
@@ -922,13 +1334,17 @@ class Gate:
 
     def report(self) -> str:
         result = "pass" if not self.failures else "FAIL"
+        pending_note = ""
+        if self.pending_count:
+            pending_note = f" (pending: {self.pending_count}, not matches)"
         head = [
             f"# Cross-verify ({self.args.tier})",
             "",
-            f"result: **{result}**",
+            f"result: **{result}**{pending_note}",
             "",
             f"- cells run: {self.cells_run}",
             f"- cells matching: {self.cells_match}",
+            f"- pending: {self.pending_count}",
             f"- verifier invocations: {self.invocations}",
             "",
         ]
@@ -944,6 +1360,8 @@ class Gate:
             for item in self.notes:
                 head.append(f"- {item}")
             head.append("")
+        if self.pending_section:
+            head.append(self.pending_section)
         head.append(
             "The CASES synthetic index is `GET /index/{height}` for heights 989 through 1018, served on 127.0.0.1 only. Java reads those bodies from `{height}.json`. Rust, C, and Go read them from the listener."
         )
