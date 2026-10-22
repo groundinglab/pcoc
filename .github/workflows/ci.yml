@@ -167,11 +167,13 @@ jobs:
       - if: steps.on.outputs.run == 'true'
         name: sparse worktree (full clone, cone mode, no partial filter)
         # The gate builds sdk/rust by path and reads the §15.4 policy file.
-        # The index builds services/bari by path. Cone mode on sdk/rust also
-        # brings the files directly under sdk/ (VERSION, SPEC_PIN).
+        # pack_sign_in reads spec/conformance/pack/sign-in.json and
+        # sign-in-origins.json. The index builds services/bari by path.
+        # Cone mode on sdk/rust also brings the files directly under sdk/
+        # (VERSION, SPEC_PIN).
         run: |
           case "${{ matrix.key }}" in
-            gate) git sparse-checkout set services/admission-gate sdk/rust policy ;;
+            gate) git sparse-checkout set services/admission-gate sdk/rust policy spec/conformance/pack ;;
             # Bari links sdk/rust/pcoc, which include_str's sdk/VERSION and sdk/SPEC_PIN.
             bari) git sparse-checkout set services/bari sdk/rust ;;
             index) git sparse-checkout set services/index services/bari sdk/rust ;;
