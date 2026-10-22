@@ -17,6 +17,7 @@ pub mod mix;
 pub mod object;
 pub mod path;
 pub mod pin;
+pub mod produce;
 pub mod profile;
 pub mod step;
 pub mod terrain;
