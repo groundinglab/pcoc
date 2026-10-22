@@ -3,7 +3,7 @@
 //! The fast phase calls [`crate::fast`] (`pcoc::precheck`). Thorough draws
 //! call [`crate::thorough`] (`pcoc::thorough_draw`). This module classifies
 //! kind and key, and turns a pre-check into a [`Report`], without filling a
-//! terrain. Leg recompute of a drawn index is not in this build.
+//! terrain. Leg recompute of a drawn index is the thorough phase.
 #![forbid(unsafe_code)]
 
 use crate::cbor_limit::{self, MAX_CBOR_NESTING};
@@ -74,7 +74,7 @@ impl Measures {
         })
     }
 
-    fn empty() -> Self {
+    pub fn empty() -> Self {
         Self {
             legs: None,
             span_s: None,
@@ -173,11 +173,19 @@ pub fn measure(object: &[u8], _opts: &MeasureOpts) -> Report {
                 "shape_item": shape_item,
             })
             .to_string();
-            let notes = if shape == "match" {
-                // Header, plant, and leg recompute are not measured here.
-                vec!["thorough recompute is not in this build".to_owned()]
+            let (record, notes) = if shape == "match" {
+                // Header, plant, and leg recompute are not this call.
+                // `hike_span` stays `not read`, so the judge holds.
+                let record = serde_json::json!({
+                    "profile": "production",
+                    "shape": shape,
+                    "shape_item": shape_item,
+                    "analysis": { "hike_legs": "not read", "hike_span": "not read" },
+                })
+                .to_string();
+                (record, Vec::new())
             } else {
-                vec!["shape_mismatch".to_owned()]
+                (record, vec!["shape_mismatch".to_owned()])
             };
             Report::Read(Measured {
                 earlier_version: false,
@@ -222,47 +230,174 @@ pub fn public_key(object: &[u8]) -> Option<[u8; 32]> {
     Some(key)
 }
 
-/// Network string on a portable-index body. `None` when the body is not JSON.
+/// Network string on a portable-index body. `None` when the body is not JSON
+/// or the `network` string is absent. The string `"absent"` is not invented.
 pub fn document_network(body: &str) -> Option<String> {
     let value: serde_json::Value = serde_json::from_str(body).ok()?;
-    Some(
-        value
-            .get("network")
-            .and_then(|item| item.as_str())
-            .unwrap_or(NETWORK_ABSENT)
-            .to_owned(),
-    )
+    let text = value.get("network").and_then(|item| item.as_str())?;
+    if text.is_empty() {
+        None
+    } else {
+        Some(text.to_owned())
+    }
 }
 
 /// A document that parsed and carried no string `network`.
 pub const NETWORK_ABSENT: &str = "absent";
 
-/// Height documents the fast phase may have read. This build's fast phase
-/// does not read them yet (SPEC §15.3 header and plant reads are a follow-up),
-/// so [`IndexRead::observed_networks`] is empty and a provisional that the
-/// policy ties to a network is held.
+/// Height documents the fast phase has read. A missing `network` string is a
+/// gap, not the word `"absent"`.
 pub trait IndexRead {
     fn observed_networks(&self) -> Vec<String>;
+    /// A document was read and carried no `network` string.
+    fn network_gap(&self) -> bool {
+        false
+    }
 }
 
-/// One-shot index client. Reads are not issued by the fast pre-check.
+/// Cache of `{index-url}` response bodies. Not a terrain. One entry per path.
+pub struct Mirror {
+    bodies: std::sync::Mutex<std::collections::HashMap<String, String>>,
+    bypasses: std::sync::atomic::AtomicU64,
+    fresh: std::sync::atomic::AtomicU64,
+}
+
+impl Mirror {
+    pub fn new() -> Self {
+        Self {
+            bodies: std::sync::Mutex::new(std::collections::HashMap::new()),
+            bypasses: std::sync::atomic::AtomicU64::new(0),
+            fresh: std::sync::atomic::AtomicU64::new(0),
+        }
+    }
+
+    pub fn bypass_count(&self) -> u64 {
+        self.bypasses.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    pub fn fresh_count(&self) -> u64 {
+        self.fresh.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    fn cached(&self, path: &str) -> Option<String> {
+        self.bodies
+            .lock()
+            .expect("index mirror")
+            .get(path)
+            .cloned()
+    }
+
+    fn store(&self, path: &str, body: String) {
+        self.bodies
+            .lock()
+            .expect("index mirror")
+            .insert(path.to_owned(), body);
+    }
+}
+
+impl Default for Mirror {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// One-shot index client. The mirror caches response bodies only.
 pub struct IndexClient {
     url: String,
     timeout: Duration,
+    mirror: std::sync::Arc<Mirror>,
+    networks: std::sync::Mutex<Vec<String>>,
+    gap: std::sync::atomic::AtomicBool,
 }
 
 impl IndexClient {
     pub fn open(url: &str, timeout: Duration) -> Self {
+        Self::shared(url, timeout, std::sync::Arc::new(Mirror::new()))
+    }
+
+    pub fn shared(url: &str, timeout: Duration, mirror: std::sync::Arc<Mirror>) -> Self {
         Self {
-            url: url.to_owned(),
+            url: url.trim_end_matches('/').to_owned(),
             timeout,
+            mirror,
+            networks: std::sync::Mutex::new(Vec::new()),
+            gap: std::sync::atomic::AtomicBool::new(false),
         }
+    }
+
+    pub fn mirror(&self) -> std::sync::Arc<Mirror> {
+        self.mirror.clone()
+    }
+
+    /// Cached GET. A miss fetches once and stores the body.
+    pub fn get_cached(&self, path: &str) -> Result<String, ()> {
+        if let Some(hit) = self.mirror.cached(path) {
+            self.note_body(&hit);
+            return Ok(hit);
+        }
+        let body = self.fetch(path)?;
+        self.mirror.store(path, body.clone());
+        self.note_body(&body);
+        Ok(body)
+    }
+
+    /// Fresh GET that bypasses the mirror, then replaces the cached body.
+    pub fn confirm_fresh(&self, path: &str) -> Result<String, ()> {
+        self.mirror
+            .bypasses
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let body = self.fetch(path)?;
+        self.mirror.store(path, body.clone());
+        self.note_body(&body);
+        Ok(body)
+    }
+
+    /// Tip read. Always fresh. Not stored as a height document.
+    pub fn tip(&self) -> Result<String, ()> {
+        self.mirror
+            .fresh
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let body = self.fetch("/index")?;
+        self.note_body(&body);
+        Ok(body)
+    }
+
+    fn note_body(&self, body: &str) {
+        match document_network(body) {
+            Some(network) => {
+                let mut networks = self.networks.lock().expect("networks");
+                if !networks.iter().any(|item| item == &network) {
+                    networks.push(network);
+                }
+            }
+            None if serde_json::from_str::<serde_json::Value>(body).is_ok() => {
+                self.gap.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+            None => {}
+        }
+    }
+
+    fn fetch(&self, path: &str) -> Result<String, ()> {
+        let url = format!("{}{path}", self.url);
+        let agent = ureq::AgentBuilder::new()
+            .timeout_connect(self.timeout)
+            .timeout_read(self.timeout)
+            .redirects(0)
+            .build();
+        let response = agent.get(&url).call().map_err(|_| ())?;
+        if !(200..300).contains(&response.status()) {
+            return Err(());
+        }
+        response.into_string().map_err(|_| ())
     }
 }
 
 impl IndexRead for IndexClient {
     fn observed_networks(&self) -> Vec<String> {
-        let _ = (&self.url, self.timeout);
-        Vec::new()
+        self.networks.lock().expect("networks").clone()
+    }
+
+    fn network_gap(&self) -> bool {
+        self.gap.load(std::sync::atomic::Ordering::SeqCst)
     }
 }

@@ -4,7 +4,7 @@
 //! nonce is the single-use lock. It does not admit a provisional grant.
 //! A result read of an unknown nonce returns `pending` and writes nothing.
 
-use crate::wire::{self, ClientClass, OUTCOME_PENDING, RESULT_KEEP_S};
+use crate::wire::{self, ClientClass, OUTCOME_PENDING};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -47,18 +47,74 @@ pub struct Deep {
 
 pub struct SignInRows {
     rows: Mutex<HashMap<[u8; 32], Row>>,
+    /// Unix second at which this store could have lost rows. Moves forward
+    /// on process start and on [`Self::flush`].
+    store_start: Mutex<u64>,
+    retention_s: u64,
+    skew_s: u64,
 }
 
 impl SignInRows {
+    /// Test helper. Retention does not expire rows. Skew is 0. Start is 0.
+    /// A door uses [`Self::open`] with the policy values.
     pub fn new() -> Self {
+        Self::open(0, u64::MAX, 0)
+    }
+
+    /// `now` is the nonce-store start. `retention_s` and `skew_s` come from
+    /// the loaded policy.
+    pub fn open(now: u64, retention_s: u64, skew_s: u64) -> Self {
         Self {
             rows: Mutex::new(HashMap::new()),
+            store_start: Mutex::new(now),
+            retention_s,
+            skew_s,
         }
+    }
+
+    pub fn store_start(&self) -> u64 {
+        *self.store_start.lock().expect("nonce store start")
+    }
+
+    pub fn retention_seconds(&self) -> u64 {
+        self.retention_s
+    }
+
+    pub fn skew_seconds(&self) -> u64 {
+        self.skew_s
+    }
+
+    /// Drop every row and move the start forward. A flush with no new process.
+    pub fn flush(&self, now: u64) {
+        self.rows.lock().expect("sign-in rows").clear();
+        self.note_loss(now);
+    }
+
+    /// The store could have lost rows. The start only moves forward.
+    pub fn note_loss(&self, now: u64) {
+        let mut start = self.store_start.lock().expect("nonce store start");
+        if now > *start {
+            *start = now;
+        }
+    }
+
+    /// Replace the nonce-store start. Production records it at process open
+    /// and only moves it forward ([`Self::note_loss`]). A test that pins the
+    /// door clock to a fixture epoch calls this so the third window
+    /// comparison uses that epoch, not the wall clock.
+    pub fn set_start(&self, now: u64) {
+        *self.store_start.lock().expect("nonce store start") = now;
+    }
+
+    fn prune(&self, rows: &mut HashMap<[u8; 32], Row>, now: u64) {
+        let retention = self.retention_s;
+        let skew = self.skew_s;
+        rows.retain(|_, row| row_live(row, now, retention, skew));
     }
 
     pub fn outcome(&self, nonce: &[u8; 32], now: u64) -> String {
         let mut rows = self.rows.lock().expect("sign-in rows");
-        rows.retain(|_, row| row_live(row, now));
+        self.prune(&mut rows, now);
         rows.get(nonce)
             .map(|row| row.outcome.clone())
             .unwrap_or_else(|| OUTCOME_PENDING.to_owned())
@@ -72,7 +128,7 @@ impl SignInRows {
             return;
         }
         let mut rows = self.rows.lock().expect("sign-in rows");
-        rows.retain(|_, row| row_live(row, now));
+        self.prune(&mut rows, now);
         if rows.get(nonce).is_some_and(|row| row.consumed) {
             return;
         }
@@ -110,7 +166,7 @@ impl SignInRows {
     /// replaces this outcome.
     pub fn note_bad_signature(&self, body: &wire::LockedBody, now: u64) -> Option<Replay> {
         let mut rows = self.rows.lock().expect("sign-in rows");
-        rows.retain(|_, row| row_live(row, now));
+        self.prune(&mut rows, now);
         if let Some(row) = rows.get(&body.nonce) {
             if row.consumed {
                 return Some(replay_of(row, &body.object_sha, &body.signature));
@@ -161,7 +217,7 @@ impl SignInRows {
         now: u64,
     ) -> Result<(), Replay> {
         let mut rows = self.rows.lock().expect("sign-in rows");
-        rows.retain(|_, row| row_live(row, now));
+        self.prune(&mut rows, now);
         if let Some(row) = rows.get(&body.nonce) {
             if row.consumed {
                 return Err(replay_of(row, &body.object_sha, &body.signature));
@@ -252,7 +308,7 @@ impl SignInRows {
     /// key, the object hash, and numeric bookends. Other tokens stay one field.
     pub fn result_value(&self, nonce: &[u8; 32], now: u64) -> Value {
         let mut rows = self.rows.lock().expect("sign-in rows");
-        rows.retain(|_, row| row_live(row, now));
+        self.prune(&mut rows, now);
         let Some(row) = rows.get(nonce) else {
             return json!({ "outcome": OUTCOME_PENDING });
         };
@@ -307,7 +363,7 @@ impl SignInRows {
     /// nonce has no consumed row.
     pub fn replay(&self, body: &wire::LockedBody, now: u64) -> Option<Replay> {
         let mut rows = self.rows.lock().expect("sign-in rows");
-        rows.retain(|_, row| row_live(row, now));
+        self.prune(&mut rows, now);
         let row = rows.get(&body.nonce)?;
         if !row.consumed {
             return None;
@@ -346,10 +402,18 @@ fn replay_of(row: &Row, object_sha: &[u8; 32], signature: &[u8; 64]) -> Replay {
     }
 }
 
-fn row_live(row: &Row, now: u64) -> bool {
+fn row_live(row: &Row, now: u64, retention_s: u64, skew_s: u64) -> bool {
+    // A consumed row stays through the challenge window, even when retention
+    // is shorter, so a replay inside the window still finds the row.
+    if row.consumed {
+        let until = u128::from(row.exp).saturating_add(u128::from(skew_s));
+        if u128::from(now) < until {
+            return true;
+        }
+    }
     match row.settled_at {
         Some(at) if row.outcome != OUTCOME_PENDING => {
-            u128::from(now) < u128::from(at) + u128::from(RESULT_KEEP_S)
+            u128::from(now) < u128::from(at).saturating_add(u128::from(retention_s))
         }
         _ => true,
     }

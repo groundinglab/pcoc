@@ -72,6 +72,21 @@ impl Service {
         for job in door.unsettled() {
             spawn_thorough(door.clone(), jobs.clone(), job);
         }
+        let ticking = door.clone();
+        let tick_jobs = jobs.clone();
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(std::time::Duration::from_secs(1));
+            loop {
+                ticker.tick().await;
+                for ready in ticking.poll_held() {
+                    let door = ticking.clone();
+                    let jobs = tick_jobs.clone();
+                    tokio::spawn(async move {
+                        run_thorough(door, jobs, ready.job, ready.seq, ready.granted).await;
+                    });
+                }
+            }
+        });
         Ok(Self {
             jobs,
             cfg,
@@ -475,25 +490,14 @@ fn spawn_locked(door: Door, jobs: JobStore, job: LockedThorough) {
         }
         match door.settle_fast_seq(&job) {
             (crate::door::FastPhase::Provisional, Some(seq)) => {
-                // `seq` is this job's own provisional line, from the fast
-                // phase. It is the draw key and the thorough `fast_seq`.
-                let object = job.object.clone();
-                let object_sha = job.object_sha;
-                let public_key = job.public_key;
-                let log_dir = jobs.log_dir();
-                let policy = door.policy().clone();
-                let outcome = tokio::task::spawn_blocking(move || {
-                    crate::thorough::run(&log_dir, seq, &object, &object_sha, &policy)
-                })
-                .await
-                .unwrap_or_else(|error| Err(format!("thorough worker failed: {error}")));
-                // No fallback: an error is held, never a second check that
-                // could write `accept`.
-                door.finish_thorough(&job, outcome);
-                let _ = public_key;
+                run_thorough(door, jobs, job, seq, true).await;
+            }
+            (crate::door::FastPhase::Direct, Some(seq)) => {
+                run_thorough(door, jobs, job, seq, false).await;
             }
             (
                 crate::door::FastPhase::Provisional
+                | crate::door::FastPhase::Direct
                 | crate::door::FastPhase::Held
                 | crate::door::FastPhase::Done
                 | crate::door::FastPhase::Sticky,
@@ -525,6 +529,29 @@ async fn get_sign_in_result(
 
 /// Restart resume. The stored `pending/<seq>.draw` is reused through the
 /// thorough check; nothing is drawn again. No stored draw is held.
+async fn run_thorough(
+    door: Door,
+    jobs: JobStore,
+    job: crate::door::LockedThorough,
+    seq: u64,
+    granted: bool,
+) {
+    let object = job.object.clone();
+    let object_sha = job.object_sha;
+    let log_dir = jobs.log_dir();
+    let policy = door.policy().clone();
+    let outcome = tokio::task::spawn_blocking(move || {
+        crate::thorough::run(&log_dir, seq, &object, &object_sha, &policy)
+    })
+    .await
+    .unwrap_or_else(|error| Err(format!("thorough worker failed: {error}")));
+    if granted {
+        door.finish_thorough(&job, outcome);
+    } else {
+        door.finish_direct(&job, outcome);
+    }
+}
+
 fn spawn_thorough(door: Door, jobs: JobStore, job: ThoroughJob) {
     tokio::spawn(async move {
         let log_dir = jobs.log_dir();

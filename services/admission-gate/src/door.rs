@@ -32,6 +32,21 @@ pub struct Door {
     index_timeout: std::time::Duration,
     /// Site origins this gate serves (config `served_origins`). Exact bytes.
     served_origins: Arc<Vec<String>>,
+    /// Cache of index response bodies for this door. Not a terrain.
+    mirror: Arc<verifier::Mirror>,
+}
+
+#[derive(Clone)]
+struct HeldEntry {
+    job: LockedThorough,
+    attempts: u64,
+    last_unix: u64,
+    start_tip: Option<u64>,
+    deciding_tip: Option<u64>,
+    grant: bool,
+    budget: bool,
+    record: String,
+    networks: Value,
 }
 
 struct Inner {
@@ -41,11 +56,17 @@ struct Inner {
     /// Public keys this gate ignores. A fake leg writes one. The value is
     /// the seq of the revoke that banned it.
     banned: std::collections::HashMap<[u8; 32], u64>,
+    /// Unix second the ban was recorded. A loaded ban uses process start.
+    banned_at: std::collections::HashMap<[u8; 32], u64>,
     /// Open fast or thorough work, counted for the pending caps.
     pending_global: u64,
     pending_by_source: std::collections::HashMap<String, u64>,
     /// How many times a banned key was ignored. Not a decision line.
     ban_ignored: u64,
+    /// Consuming sign-ins that started a verify in this process.
+    verify_session: u64,
+    verify_object: std::collections::HashMap<[u8; 32], u64>,
+    held: Vec<HeldEntry>,
 }
 
 /// One locked-wire POST, after the transport edge.
@@ -113,6 +134,24 @@ impl Door {
         served_origins: Vec<String>,
         build: policy::GateBuild,
     ) -> Result<Self, String> {
+        let rows = Arc::new(SignInRows::open(
+            unix_now(),
+            policy.result_retention_seconds,
+            policy.challenge_clock_skew_seconds,
+        ));
+        Self::open_with_rows(dir, policy, index_url, index_timeout, served_origins, build, rows)
+    }
+
+    /// Two workers share one nonce store. The store start is the shared one.
+    pub fn open_with_rows(
+        dir: &Path,
+        policy: AdmissionPolicy,
+        index_url: &str,
+        index_timeout: std::time::Duration,
+        served_origins: Vec<String>,
+        build: policy::GateBuild,
+        rows: Arc<SignInRows>,
+    ) -> Result<Self, String> {
         policy::check_build(&policy, build)?;
         if served_origins.is_empty() {
             return Err("served_origins is empty; the gate serves no site origin".to_owned());
@@ -122,21 +161,36 @@ impl Door {
         log.set_policy_hint(policy::public_document(&policy))
             .map_err(show_log)?;
         let banned = load_bans(log.dir());
+        let opened = unix_now();
+        let banned_at = banned.keys().map(|key| (*key, opened)).collect();
         Ok(Self {
             inner: Arc::new(Mutex::new(Inner {
                 log,
                 now: None,
                 banned,
+                banned_at,
                 pending_global: 0,
                 pending_by_source: std::collections::HashMap::new(),
                 ban_ignored: 0,
+                verify_session: 0,
+                verify_object: std::collections::HashMap::new(),
+                held: Vec::new(),
             })),
-            rows: Arc::new(SignInRows::new()),
+            rows,
             policy,
             index_url: index_url.to_owned(),
             index_timeout,
             served_origins: Arc::new(served_origins),
+            mirror: Arc::new(verifier::Mirror::new()),
         })
+    }
+
+    pub fn nonce_rows(&self) -> Arc<SignInRows> {
+        self.rows.clone()
+    }
+
+    pub fn store_start(&self) -> u64 {
+        self.rows.store_start()
     }
 
     /// The site origins this gate serves for sign-in.
@@ -148,7 +202,7 @@ impl Door {
     /// The counter is the only record of the ignore.
     pub fn banned(&self, public_key: &[u8; 32]) -> bool {
         let mut inner = self.lock();
-        if inner.banned.contains_key(public_key) {
+        if self.ban_live(&inner, public_key) {
             inner.ban_ignored = inner.ban_ignored.saturating_add(1);
             true
         } else {
@@ -160,7 +214,19 @@ impl Door {
     /// settle paths use it so a key banned while its job was in flight is
     /// never granted.
     pub fn is_banned(&self, public_key: &[u8; 32]) -> bool {
-        self.lock().banned.contains_key(public_key)
+        let inner = self.lock();
+        self.ban_live(&inner, public_key)
+    }
+
+    fn ban_live(&self, inner: &Inner, public_key: &[u8; 32]) -> bool {
+        if !inner.banned.contains_key(public_key) {
+            return false;
+        }
+        let Some(seconds) = self.policy.fake_leg_ignore_seconds else {
+            return true;
+        };
+        let at = inner.banned_at.get(public_key).copied().unwrap_or(0);
+        clock(inner.now) < at.saturating_add(seconds)
     }
 
     pub fn last_seq(&self) -> u64 {
@@ -212,7 +278,18 @@ impl Door {
     /// jobs cannot share a ticket. A seq that does not name this job's
     /// provisional writes no line: the provisional stays unsettled (held).
     pub fn settle_thorough(&self, job: &LockedThorough, out: crate::thorough::ThoroughOut) {
-        if !self.provisional_is(out.seq, job) {
+        self.settle_with(job, out, true);
+    }
+
+    /// Thorough after `provisional = off`. No grant was issued, so a mismatch
+    /// is `refuse`, and the accept line omits `fast_seq`.
+    pub fn settle_direct(&self, job: &LockedThorough, out: crate::thorough::ThoroughOut) {
+        self.settle_with(job, out, false);
+    }
+
+    fn settle_with(&self, job: &LockedThorough, out: crate::thorough::ThoroughOut, granted: bool) {
+        self.drop_held(&job.nonce);
+        if granted && !self.provisional_is(out.seq, job) {
             eprintln!(
                 "admission-service thorough fast_seq={} does not name this job's provisional; held",
                 out.seq
@@ -247,12 +324,14 @@ impl Door {
             job.object_sha,
             job.object.clone(),
             &out,
+            granted,
         );
         let seq = {
             let mut inner = self.lock();
             inner.log.append(&write).ok()
         };
         if out.matched {
+            self.write_friendly(&job.public_key, &job.object_sha);
             // The thorough accept line opens the claim window, like a return.
             if let Some(seq) = seq {
                 self.rows
@@ -279,8 +358,25 @@ impl Door {
         job: &LockedThorough,
         outcome: Result<crate::thorough::ThoroughOut, String>,
     ) {
+        self.finish_with(job, outcome, true);
+    }
+
+    pub fn finish_direct(
+        &self,
+        job: &LockedThorough,
+        outcome: Result<crate::thorough::ThoroughOut, String>,
+    ) {
+        self.finish_with(job, outcome, false);
+    }
+
+    fn finish_with(
+        &self,
+        job: &LockedThorough,
+        outcome: Result<crate::thorough::ThoroughOut, String>,
+        granted: bool,
+    ) {
         match outcome {
-            Ok(out) => self.settle_thorough(job, out),
+            Ok(out) => self.settle_with(job, out, granted),
             Err(error) => {
                 eprintln!("admission-service thorough did not finish; held: {error}");
             }
@@ -296,13 +392,19 @@ impl Door {
         object_sha: [u8; 32],
         object: Vec<u8>,
         out: &crate::thorough::ThoroughOut,
+        granted: bool,
     ) -> DecisionWrite {
-        let mut write = if out.matched {
-            DecisionWrite::bare(now, None, "thorough", "accept")
+        let decision = if out.matched {
+            "accept"
+        } else if granted {
+            "revoke"
         } else {
-            DecisionWrite::bare(now, None, "thorough", "revoke")
+            "refuse"
         };
-        write.fast_seq = Some(out.seq);
+        let mut write = DecisionWrite::bare(now, None, "thorough", decision);
+        if granted {
+            write.fast_seq = Some(out.seq);
+        }
         // The thorough check reads no index. It rests on the provisional's reads.
         let networks = self.line_networks(out.seq);
         self.stamp_network(&mut write, networks);
@@ -312,8 +414,10 @@ impl Door {
         write.object = object;
         write.reasons = vec![if out.matched {
             wire::OUTCOME_ACCEPTED.to_owned()
-        } else {
+        } else if granted {
             "revoke".to_owned()
+        } else {
+            "refuse".to_owned()
         }];
         write.summary = Some("{}".to_owned());
         write.policy_id = Some(self.policy.policy_id.clone());
@@ -380,6 +484,7 @@ impl Door {
             job.object_sha,
             job.object,
             &out,
+            true,
         );
         let seq = {
             let mut inner = self.lock();
@@ -398,7 +503,9 @@ impl Door {
                 }
             }
         };
-        if !out.matched && self.policy.ban_key_on_fake_leg {
+        if out.matched {
+            self.write_friendly(&job.public_key, &job.object_sha);
+        } else if self.policy.ban_key_on_fake_leg {
             self.ban_key(&job.public_key, seq);
         }
     }
@@ -437,7 +544,7 @@ impl Door {
     /// the check and the take.
     pub fn try_begin_pending(&self, public_key: &[u8; 32], source: &str) -> PendingAdmit {
         let mut inner = self.lock();
-        if inner.banned.contains_key(public_key) {
+        if self.ban_live(&inner, public_key) {
             inner.ban_ignored = inner.ban_ignored.saturating_add(1);
             return PendingAdmit::Banned;
         }
@@ -484,7 +591,9 @@ impl Door {
     /// Write a ban for the public key only. The seed is not stored.
     pub fn ban_key(&self, public_key: &[u8; 32], seq: u64) {
         let mut inner = self.lock();
+        let at = clock(inner.now);
         inner.banned.insert(*public_key, seq);
+        inner.banned_at.insert(*public_key, at);
         let dir = inner.log.dir().to_path_buf();
         drop(inner);
         if let Err(err) = store_ban(&dir, public_key, seq) {
@@ -505,7 +614,7 @@ impl Door {
         let body = crate::wire::LockedBody {
             origin: self.served_origins[0].clone(),
             nonce: *nonce,
-            exp: now.saturating_add(120),
+            exp: now.saturating_add(self.policy.challenge_lifetime_seconds),
             object_sha,
             object: Vec::new(),
             signature: [0u8; 64],
@@ -522,13 +631,23 @@ impl Door {
     }
 
     fn now_unix_s(&self) -> u64 {
-        if let Some(now) = self.lock().now {
-            return now;
+        clock(self.lock().now)
+    }
+
+    /// Count a verify that is about to start. `None` means it may start.
+    fn over_verify_cap(&self, object_sha: &[u8; 32]) -> Option<&'static str> {
+        let mut inner = self.lock();
+        if inner.verify_session >= self.policy.verify_cap_per_door_session {
+            return Some(reasons::CODE_VERIFY_CAP_SESSION);
         }
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|duration| duration.as_secs())
-            .unwrap_or(0)
+        if let Some(cap) = self.policy.verify_cap_per_object {
+            if inner.verify_object.get(object_sha).copied().unwrap_or(0) >= cap {
+                return Some(reasons::CODE_VERIFY_CAP_OBJECT);
+            }
+        }
+        inner.verify_session = inner.verify_session.saturating_add(1);
+        *inner.verify_object.entry(*object_sha).or_insert(0) += 1;
+        None
     }
 
     /// `GET /v1/sign-in/result/<nonce>`. An unknown nonce is `pending` and
@@ -579,8 +698,26 @@ impl Door {
         }
         let mut jobs = Vec::new();
         for line in inner.log.lines() {
-            if line.value.get("decision").and_then(|item| item.as_str()) != Some("provisional") {
+            let decision = line.value.get("decision").and_then(|item| item.as_str());
+            if decision != Some("provisional") && decision != Some("received") {
                 continue;
+            }
+            if decision == Some("received") {
+                let submission = line
+                    .value
+                    .get("submission_sha256")
+                    .and_then(|item| item.as_str());
+                let settled_direct = inner.log.lines().iter().any(|later| {
+                    later.value.get("phase").and_then(|item| item.as_str()) == Some("thorough")
+                        && later
+                            .value
+                            .get("submission_sha256")
+                            .and_then(|item| item.as_str())
+                            == submission
+                });
+                if settled_direct {
+                    continue;
+                }
             }
             let Some(seq) = line.value.get("seq").and_then(|item| item.as_u64()) else {
                 continue;
@@ -646,7 +783,13 @@ impl Door {
 
         // 2. Origin, field grammar, or the window.
         if !wire::origin_served(&self.served_origins, &body.origin)
-            || !wire::window_accepts(now, body.exp)
+            || !wire::window_accepts(
+                now,
+                body.exp,
+                self.policy.challenge_lifetime_seconds,
+                self.policy.challenge_clock_skew_seconds,
+                self.rows.store_start(),
+            )
         {
             self.rows
                 .note_unconsumed(&body.nonce, hash_matches, wire::OUTCOME_MALFORMED, now);
@@ -733,7 +876,49 @@ impl Door {
             PendingAdmit::Begun => {}
         }
 
-        // 9. v2.0. Consume when this step starts. Policy settles later.
+        // 9. Consume when this step starts. A verify cap refuses here, before
+        // thorough, and does not increment the counter.
+        if let Some(code) = self.over_verify_cap(&body.object_sha) {
+            self.end_pending(&pending_key);
+            let signed = self.rows.consume(
+                &body,
+                ClientClass::DeliveryOk,
+                wire::OUTCOME_PENDING,
+                now,
+            );
+            if signed.is_ok() {
+                self.rows.note_holder(&body.nonce, public_key);
+                let submission = wire::submission_sha256(
+                    &body.object_sha,
+                    &public_key,
+                    &message,
+                    &body.signature,
+                );
+                let job = LockedThorough {
+                    nonce: body.nonce,
+                    origin: body.origin.clone(),
+                    object: body.object,
+                    submission,
+                    public_key,
+                    object_sha: body.object_sha,
+                    prior_accept: None,
+                };
+                self.write_fast_refuse(
+                    &job,
+                    &[code.to_owned()],
+                    &reasons::public_sentence(code),
+                    "{}",
+                    Value::Null,
+                );
+                self.rows
+                    .settle(&body.nonce, wire::OUTCOME_REJECTED, now);
+            }
+            return match signed {
+                Ok(()) => locked_client(ClientClass::DeliveryOk, None),
+                Err(replay) => replay_response(replay),
+            };
+        }
+
         let submission =
             wire::submission_sha256(&body.object_sha, &public_key, &message, &body.signature);
         match self
@@ -974,10 +1159,20 @@ impl Door {
             // Fail closed: a provisional that rests on no observed index
             // document is not mainnet evidence. Held, never a grant.
             Some(_)
-                if networks.is_empty() && matches!(decision, FastDecision::Provisional { .. }) =>
+                if (networks.is_empty() || index.network_gap())
+                    && matches!(
+                        decision,
+                        FastDecision::Provisional { .. } | FastDecision::Direct { .. }
+                    ) =>
             {
+                let tip = match &decision {
+                    FastDecision::Provisional { tip, .. } | FastDecision::Direct { tip, .. } => *tip,
+                    _ => None,
+                };
                 FastDecision::Held {
                     record: "{}".to_owned(),
+                    budget: false,
+                    tip,
                 }
             }
             Some(expected) if networks.iter().any(|network| network != expected) => {
@@ -1001,7 +1196,7 @@ impl Door {
     }
 
     fn index_client(&self) -> verifier::IndexClient {
-        verifier::IndexClient::open(&self.index_url, self.index_timeout)
+        verifier::IndexClient::shared(&self.index_url, self.index_timeout, self.mirror.clone())
     }
 
     fn finish_fast(
@@ -1017,18 +1212,26 @@ impl Door {
                 line,
                 record,
             } => {
+                self.drop_held(&job.nonce);
                 self.write_fast_refuse(job, &reasons, &line, &record, networks);
                 self.rows.settle(&job.nonce, website, self.now_unix_s());
                 FastPhase::Done
             }
-            FastDecision::Held { .. } => {
+            FastDecision::Held { record, budget, tip } => {
                 // Website token stays pending. The locked table has no `held`.
+                self.note_held(job, &record, budget, networks.clone(), tip, None);
                 FastPhase::Held
             }
-            FastDecision::Provisional { record } => {
+            FastDecision::Provisional { record, .. } => {
                 return match self.write_provisional(job, &record, networks) {
                     Some(seq) => (FastPhase::Provisional, Some(seq)),
                     // No provisional line, so no thorough ticket. Held.
+                    None => (FastPhase::Held, None),
+                };
+            }
+            FastDecision::Direct { record, .. } => {
+                return match self.write_received(job, &record, networks) {
+                    Some(seq) => (FastPhase::Direct, Some(seq)),
                     None => (FastPhase::Held, None),
                 };
             }
@@ -1136,6 +1339,233 @@ impl Door {
         }
     }
 
+    fn write_received(
+        &self,
+        job: &LockedThorough,
+        record: &str,
+        networks: Value,
+    ) -> Option<u64> {
+        let now = self.now_unix_s();
+        let mut write = DecisionWrite::bare(now, None, "fast", "received");
+        self.stamp_network(&mut write, networks);
+        write.submission_sha256 = job.submission;
+        write.public_key = job.public_key;
+        write.object_sha256 = job.object_sha;
+        write.object = job.object.clone();
+        write.reasons = vec!["received".to_owned()];
+        write.summary = Some(if record.is_empty() {
+            "{}".to_owned()
+        } else {
+            record.to_owned()
+        });
+        write.policy_id = Some(self.policy.policy_id.clone());
+        let mut inner = self.lock();
+        match inner.log.append(&write) {
+            Ok(seq) => Some(seq),
+            Err(error) => {
+                eprintln!(
+                    "admission-service received was not written: {}",
+                    show_log(error)
+                );
+                None
+            }
+        }
+    }
+
+    fn drop_held(&self, nonce: &[u8; 32]) {
+        self.lock().held.retain(|entry| entry.job.nonce != *nonce);
+    }
+
+    fn note_held(
+        &self,
+        job: &LockedThorough,
+        record: &str,
+        budget: bool,
+        networks: Value,
+        tip: Option<u64>,
+        previous_attempts: Option<u64>,
+    ) {
+        let now = self.now_unix_s();
+        let grant = self.has_provisional(job);
+        let mut inner = self.lock();
+        let attempts = if let Some(existing) = inner.held.iter_mut().find(|entry| entry.job.nonce == job.nonce)
+        {
+            existing.attempts = existing.attempts.saturating_add(1);
+            existing.last_unix = now;
+            existing.budget = budget;
+            existing.record = record.to_owned();
+            existing.networks = networks;
+            existing.grant = existing.grant || grant;
+            if existing.start_tip.is_none() {
+                existing.start_tip = tip;
+            }
+            if tip.is_some() {
+                existing.deciding_tip = tip;
+            }
+            existing.attempts
+        } else {
+            let attempts = previous_attempts.unwrap_or(1);
+            inner.held.push(HeldEntry {
+                job: job.clone(),
+                attempts,
+                last_unix: now,
+                start_tip: tip,
+                deciding_tip: tip,
+                grant,
+                budget,
+                record: record.to_owned(),
+                networks,
+            });
+            attempts
+        };
+        let start_tip = inner
+            .held
+            .iter()
+            .find(|entry| entry.job.nonce == job.nonce)
+            .and_then(|entry| entry.start_tip);
+        let deciding = inner
+            .held
+            .iter()
+            .find(|entry| entry.job.nonce == job.nonce)
+            .and_then(|entry| entry.deciding_tip);
+        let grant = inner
+            .held
+            .iter()
+            .find(|entry| entry.job.nonce == job.nonce)
+            .map(|entry| entry.grant)
+            .unwrap_or(grant);
+        let detail = held_bound_detail(
+            attempts,
+            start_tip,
+            deciding,
+            self.policy.reverify_max_attempts,
+            self.policy.max_held_blocks,
+        );
+        if detail.is_some() {
+            inner.held.retain(|entry| entry.job.nonce != job.nonce);
+        }
+        drop(inner);
+        if let Some(detail) = detail {
+            self.write_held_bound(job, grant, detail);
+        }
+    }
+
+    fn write_held_bound(&self, job: &LockedThorough, grant: bool, detail: &str) {
+        let now = self.now_unix_s();
+        let decision = if grant { "revoke" } else { "refuse" };
+        let mut write = DecisionWrite::bare(now, None, "fast", decision);
+        if grant {
+            if let Some(seq) = self.provisional_seq(job) {
+                write.fast_seq = Some(seq);
+            }
+        }
+        self.stamp_network(&mut write, Value::Null);
+        write.submission_sha256 = job.submission;
+        write.public_key = job.public_key;
+        write.object_sha256 = job.object_sha;
+        write.object = job.object.clone();
+        write.reasons = vec![reasons::CODE_HELD_BOUND.to_owned()];
+        write.reason = Some(detail.to_owned());
+        write.reason_code = Some(reasons::CODE_HELD_BOUND.to_owned());
+        write.class = Some(reasons::class_of(reasons::CODE_HELD_BOUND).to_owned());
+        write.summary = Some("{}".to_owned());
+        write.policy_id = Some(self.policy.policy_id.clone());
+        let mut inner = self.lock();
+        if inner.log.append(&write).is_ok() {
+            drop(inner);
+            self.rows.settle(
+                &job.nonce,
+                wire::OUTCOME_REJECTED,
+                now,
+            );
+        }
+    }
+
+    fn has_provisional(&self, job: &LockedThorough) -> bool {
+        self.provisional_seq(job).is_some()
+    }
+
+    fn provisional_seq(&self, job: &LockedThorough) -> Option<u64> {
+        let inner = self.lock();
+        let submission = hex32(&job.submission);
+        inner.log.lines().iter().find_map(|line| {
+            let decision = line.value.get("decision").and_then(|item| item.as_str());
+            let same = line
+                .value
+                .get("submission_sha256")
+                .and_then(|item| item.as_str())
+                == Some(submission.as_str());
+            if decision == Some("provisional") && same {
+                line.value.get("seq").and_then(|item| item.as_u64())
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Retry held jobs whose `held_retry_seconds` has elapsed. Returns the
+    /// jobs that left `held` for provisional or direct thorough.
+    pub fn poll_held(&self) -> Vec<HeldReady> {
+        let now = self.now_unix_s();
+        let retry = self.policy.held_retry_seconds;
+        let due: Vec<HeldEntry> = {
+            let inner = self.lock();
+            inner
+                .held
+                .iter()
+                .filter(|entry| now >= entry.last_unix.saturating_add(retry))
+                .cloned()
+                .collect()
+        };
+        let mut ready = Vec::new();
+        for entry in due {
+            if entry.budget {
+                self.note_held(
+                    &entry.job,
+                    &entry.record,
+                    true,
+                    entry.networks.clone(),
+                    entry.deciding_tip,
+                    None,
+                );
+                continue;
+            }
+            let index = self.index_client();
+            let decision = fast::decide(&entry.job.object, &self.policy, &index);
+            let (phase, seq) = self.finish_fast_read(&entry.job, decision, &index);
+            if phase != FastPhase::Held {
+                self.drop_held(&entry.job.nonce);
+            }
+            if let (Some(seq), true) = (
+                seq,
+                matches!(phase, FastPhase::Provisional | FastPhase::Direct),
+            ) {
+                ready.push(HeldReady {
+                    job: entry.job,
+                    seq,
+                    granted: phase == FastPhase::Provisional,
+                });
+            }
+        }
+        ready
+    }
+
+    fn write_friendly(&self, public_key: &[u8; 32], object_sha: &[u8; 32]) {
+        use std::io::Write;
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        let dir = self.lock().log.dir().join("friendly");
+        let _ = std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(&dir);
+        let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+        let path = dir.join(hex32(public_key));
+        if let Ok(mut file) = crate::thorough::private_file(&path) {
+            let _ = file.write_all(hex32(object_sha).as_bytes());
+            let _ = file.sync_all();
+        }
+    }
+
     pub fn latest_bytes(&self) -> Option<Vec<u8>> {
         self.lock().log.latest_bytes()
     }
@@ -1177,6 +1607,77 @@ impl Door {
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
         self.inner.lock().expect("admission log")
+    }
+
+    /// The door's index-body cache. Tests count fresh reads that bypass it.
+    pub fn mirror(&self) -> Arc<verifier::Mirror> {
+        self.mirror.clone()
+    }
+
+    /// Pin the nonce-store start. Production [`Door::open`] records the
+    /// process clock and does not call this. A test whose clock is a fixture
+    /// epoch calls it so a challenge issued in that epoch is not a restart
+    /// replay against the wall clock.
+    pub fn test_set_store_start(&self, start: u64) {
+        self.rows.set_start(start);
+    }
+
+    #[cfg(test)]
+    pub fn test_flush_nonce_store(&self, now: u64) {
+        self.rows.flush(now);
+    }
+
+    /// A provisional line with no index read. The seq is the thorough ticket.
+    #[cfg(test)]
+    pub fn test_grant_provisional(&self, job: &LockedThorough) -> u64 {
+        self.write_provisional(job, "{}", serde_json::json!(["main"]))
+            .expect("provisional")
+    }
+
+    #[cfg(test)]
+    pub fn test_held_attempts(&self, nonce: &[u8; 32]) -> Option<u64> {
+        self.lock()
+            .held
+            .iter()
+            .find(|entry| entry.job.nonce == *nonce)
+            .map(|entry| entry.attempts)
+    }
+
+    #[cfg(test)]
+    pub fn test_decisions(&self) -> Vec<String> {
+        self.lock()
+            .log
+            .lines()
+            .iter()
+            .filter_map(|line| {
+                line.value
+                    .get("decision")
+                    .and_then(|item| item.as_str())
+                    .map(str::to_owned)
+            })
+            .collect()
+    }
+
+    #[cfg(test)]
+    pub fn test_reasons(&self) -> Vec<String> {
+        self.lock()
+            .log
+            .lines()
+            .iter()
+            .filter_map(|line| {
+                line.value
+                    .get("reasons")
+                    .and_then(|item| item.as_array())
+                    .and_then(|items| items.first())
+                    .and_then(|item| item.as_str())
+                    .map(str::to_owned)
+            })
+            .collect()
+    }
+
+    #[cfg(test)]
+    pub fn log_dir(&self) -> std::path::PathBuf {
+        self.lock().log.dir().to_path_buf()
     }
 }
 
@@ -1371,16 +1872,57 @@ fn locked_client(client: ClientClass, _outcome: Option<&str>) -> LockedSignIn {
     }
 }
 
+/// A held job that may now start thorough.
+pub struct HeldReady {
+    pub job: LockedThorough,
+    pub seq: u64,
+    pub granted: bool,
+}
+
 /// What the fast phase did with a consumed nonce.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FastPhase {
     /// A grant was issued. Thorough runs.
     Provisional,
-    /// `not read`. No line. The website stays `pending`.
+    /// Measurements were read and `provisional` is off. Thorough runs. No grant.
+    Direct,
+    /// `not read`. No provisional line. The website stays `pending`.
     Held,
     /// A settled refuse, or a sticky stored outcome. Thorough does not run.
     Done,
     Sticky,
+}
+
+fn clock(now: Option<u64>) -> u64 {
+    now.unwrap_or_else(unix_now)
+}
+
+fn unix_now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0)
+}
+
+fn held_bound_detail(
+    attempts: u64,
+    start_tip: Option<u64>,
+    deciding_tip: Option<u64>,
+    reverify_max_attempts: u64,
+    max_held_blocks: u64,
+) -> Option<&'static str> {
+    let attempts_hit = attempts >= reverify_max_attempts;
+    let blocks_hit = match (start_tip, deciding_tip) {
+        (Some(start), Some(tip)) => tip >= start.saturating_add(max_held_blocks),
+        _ => false,
+    };
+    if attempts_hit {
+        Some("reverify_max_attempts")
+    } else if blocks_hit {
+        Some("max_held_blocks")
+    } else {
+        None
+    }
 }
 
 fn load_bans(dir: &Path) -> std::collections::HashMap<[u8; 32], u64> {
