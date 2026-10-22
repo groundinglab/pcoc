@@ -13,7 +13,7 @@ Run from the repository root.
 3. **Pins.** Each object file's SHA-256 is the pinned digest, and `prod.PROD.stage.0.leg.0.legs_le_hex` is `88a04ac5beacb8a7`.
 4. **Candidates.** The 14 CASES v2 files under `sdk/<lang>/candidates/` are byte-identical across the four SDKs. With `--ref-dir`, they also match the reference builds' agreed bytes (the byte string held by the largest set of reference builds). A difference prints the first differing key.
 5. **Negatives.** Each `negatives.txt` matches the erratum reference table, every `matches_honest` is false, the leg values are pairwise distinct, and the terrain digests are pairwise distinct. Then each verifier measures an S1 object whose `leg_results` are that leg negative, and the six-leg results are `mismatch`. Those objects are built in this harness by replacing the 8-byte leg strings. No SDK negative module is linked.
-6. **Malformed.** Empty input (`malformed cbor`, exit 0), the four CASES unknown-kind labels (the Rule A5 record, exit 0), and a truncated object (a byte string that claims 5 bytes and supplies 1). Invalid UTF-8 in `kind` is run and reported. It does not decide the exit code. Erratum 2 settles it.
+6. **Malformed.** Empty input and a truncated object (a byte string that claims 5 bytes and supplies 1) must exit 0 with `shape` `mismatch` and `shape_item` exactly `["malformed cbor"]`. The four CASES unknown-kind labels must be the Rule A5 record and exit 0. Invalid UTF-8 in `kind` is run and reported. It does not decide the exit code. See [Pending erratum 2](#pending-erratum-2).
 
 A matrix cell matches when the section 14 records are byte-identical across verifiers for those object bytes, `shape` is `match`, every header comparison is `match`, every six-leg result is `match`, and the record has no `not read`. Stages 1–17 store the empty path, so the bookends `a`, `b`, `N`, `S`, and `delta_h` are `not defined`.
 
@@ -53,6 +53,24 @@ bash sdk/conformance/cross-verify.sh --tier full --ref-dir ../ref-round2 --out .
 - A self-hosted runner. The script does not start a workflow.
 
 Thread use is capped at 4 compile jobs. Verifiers run one at a time under `nice -n 10`. `GOMAXPROCS` is 1 while verifying.
+
+## Pending erratum 2
+
+On an empty input and on the truncated bytes `58 05 01`, the four verifiers agree on the exit code, on `shape`, and on `shape_item`. They do not agree on every other field. `PENDING_ERRATUM_2` in `harness.py` names the fields that differ, and it is the only mask:
+
+- `paths[g].path_state` and `paths[g].plant` for `g` in 1…16
+- `skip_list`
+- `analysis.per_stage[g].checkpoint_count` for `g` in 0…17
+- `analysis.whole_hike_legs`
+- `analysis.hike_legs`
+
+SPEC.md line 1320 limits `path_state` to `present` or `skip`, and `plant` is `n/a` only when `path_state` is `skip`. SPEC.md line 1346 (Rule A4.1) says a value left without a usable object value is `not defined`. Malformed CBOR leaves no object, so those sentences do not pick one record. The analysis counts are the same gap: SPEC.md line 961 leaves `whole_hike_legs` `not defined` when a stage is missing, and lines 1338 and 1591 define the checkpoint counts, including zero. A missing stage has no usable count. No other field of these records differs. `g = 17` (`w17_path`, `claimed_block`) is not masked.
+
+The gate removes those value bytes and requires the remaining bytes to be identical. A difference outside the mask fails. The report has a `pending erratum 2` section with each verifier's values, and the summary counts the cells as pending, not as matches.
+
+To remove the exception, set `PENDING_ERRATUM_2` to `()`. That one edit stops the mask. Empty and truncated records must then be byte-identical, and the split fails the gate until the four SDKs agree.
+
+Invalid UTF-8 in `kind` (Erratum 1 open point 4) stays a separate pending input. The gate prints each verifier and does not fail on it. Clearing `PENDING_ERRATUM_2` does not change that. All four currently exit 0 and record `malformed cbor` for that input.
 
 ## Adding a fifth SDK
 
