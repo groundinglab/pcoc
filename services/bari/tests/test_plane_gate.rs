@@ -407,19 +407,19 @@ async fn skip_is_recorded_beside_the_gate() {
 }
 
 #[tokio::test]
-async fn hashcash_for_a_different_tip_is_400_and_not_the_gate() {
+async fn hashcash_for_a_different_tip_is_402_and_not_the_gate() {
     let opened = open_on_synth().await;
     let leaf = [0x73; 32];
     let other = hashcash::assemble_header(&[0xEE; 32], 1, hashcash::SYNTH_NBITS, 9);
     assert_ne!(hashcash::header_hash(&other), opened.tip_hash);
     let status = status_of(opened.service.router(), paid(&other, leaf)).await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(status, StatusCode::PAYMENT_REQUIRED);
     assert_eq!(opened.chain.plants.load(Ordering::SeqCst), 0);
     assert_eq!(opened.chain.best_tip_calls.load(Ordering::SeqCst), 0);
     assert_eq!(
         judge_test_policy(&TestGateMeasurement {
             planted: false,
-            path_status: 400,
+            path_status: 402,
             index_is_live: false,
             index_matches_tip: false,
         }),
