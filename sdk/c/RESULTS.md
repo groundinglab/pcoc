@@ -14,7 +14,7 @@ The generator writes the CASES v2 keys. Where this file and `spec/satoshi-hike-v
 
 ## Deviations from CASES.md
 
-None. The 14 candidate files match the round-2 byte files. Object hashes:
+None. The candidate files match the round-2 byte files, and `br1.txt` is the Rule BR1 vector the four SDKs agree on. Object hashes:
 
 - `objects/O1-S1.cbor` `800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246`
 - `objects/O2-S2.cbor` `6bfc769b831b62de86165d290b8cb8b4fc872d7759183ebbad4c0ab94c0be5e0`
@@ -24,4 +24,4 @@ PROD leg 0 `legs_le_hex` is `88a04ac5beacb8a7`. `hashcash.header_hash` is SHA-25
 
 ## Pending, not missing
 
-Bari paid rule, sign-in vectors, non-empty paths, and the later-round shape objects named in CASES.md “Not in the cores”. SIMD fold kernels and the dispatcher probe are Phase B. The live header source and Bari client are Phase C. The release gate path’s OS-CSPRNG draw has no byte-source parameter (`pcoc_six_leg_draw`, `pcoc_thorough_draw`); the byte-source variants are `pcoc_six_leg_draw_rig` and `pcoc_thorough_draw_rig`.
+Non-empty paths and the later-round shape objects named in CASES.md “Not in the cores”. The Bari paid rule is in this SDK. Sign-in wire is Rust only. SIMD fold kernels and the dispatcher probe are Phase B. The live header source and Bari client are Phase C. The release gate path’s OS-CSPRNG draw has no byte-source parameter (`pcoc_six_leg_draw`, `pcoc_thorough_draw`); the byte-source variants are `pcoc_six_leg_draw_rig` and `pcoc_thorough_draw_rig`.

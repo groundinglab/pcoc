@@ -1,0 +1,116 @@
+{
+  "aux_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+  "cases": [
+    {
+      "bip340_message_32_hex": "85d75b61df828a355a5fcc863b4f76f6843f73bfb989c83f7750b27ae17efeba",
+      "challenge_bytes_hex": "70636f632d676174652d7369676e696e2d7631001368747470733a2f2f6578616d706c652e636f6d0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0000000070dbd880aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "challenge_bytes_len": 112,
+      "client": "delivery_ok_past_step_2",
+      "note": "served origin, exact",
+      "origin": "https://example.com",
+      "origin_len": 19,
+      "served_accepts": true,
+      "signature_hex": "aa47699866613be2ef3736323a7ffb25f613de4cff3e95724c8d9684e4b4bf29650fbde0500d96bb2358f0c852faa255c37db5b0aa79da9e906996f094dda2ba",
+      "signature_valid": true
+    },
+    {
+      "bip340_message_32_hex": "90e38d7538d543aff5148318b7cb310595def390dac199c99bb10bc9ead5e0c2",
+      "challenge_bytes_hex": "70636f632d676174652d7369676e696e2d7631001768747470733a2f2f67726f756e64696e676c61622e696f0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0000000070dbd880aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "challenge_bytes_len": 116,
+      "client": "malformed",
+      "note": "another deployment's origin",
+      "origin": "https://groundinglab.io",
+      "origin_len": 23,
+      "served_accepts": false,
+      "signature_hex": "05674eed5e01b51beea3a767dda78e6c94027524014525b57073d71da229463dd82d20deecab2874a9d55b43f52c1a8f48ce2072ced76cba5ce946fb3f36c778",
+      "signature_valid": true
+    },
+    {
+      "bip340_message_32_hex": "67d7412495e72ba6a90afd9fe6c41c7ffd63444acaff3002df86082c4797b244",
+      "challenge_bytes_hex": "70636f632d676174652d7369676e696e2d7631001468747470733a2f2f6578616d706c652e636f6d2f0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0000000070dbd880aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "challenge_bytes_len": 113,
+      "client": "malformed",
+      "note": "trailing slash",
+      "origin": "https://example.com/",
+      "origin_len": 20,
+      "served_accepts": false,
+      "signature_hex": "b3425080540e246e0acfb83ca521935f0e7bb3032a21760e1c65f698d61166d36d92517b6fc0bde307f758dc0dd5a521d2600e52c2a5e706f5f725edcf0548a5",
+      "signature_valid": true
+    },
+    {
+      "bip340_message_32_hex": "ec43281b2f7bd37b395facd22f8dbb647cdb6acf2dee432da403126c7316dfa6",
+      "challenge_bytes_hex": "70636f632d676174652d7369676e696e2d76310012687474703a2f2f6578616d706c652e636f6d0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0000000070dbd880aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "challenge_bytes_len": 111,
+      "client": "malformed",
+      "note": "http instead of https",
+      "origin": "http://example.com",
+      "origin_len": 18,
+      "served_accepts": false,
+      "signature_hex": "fd28e28461016708c2cfa7734cbc5960fb22258202ac412e157f7555f991a96df5a2a3b1e2d4847f1eac08b1def703a9b27323371b5ffee29ce396c7d0b07968",
+      "signature_valid": true
+    },
+    {
+      "bip340_message_32_hex": "22dec82762f2b1fb56fdbac40bd83dab915af9ce3d27268f58060b016c1866a1",
+      "challenge_bytes_hex": "70636f632d676174652d7369676e696e2d7631001868747470733a2f2f6578616d706c652e636f6d3a383434330123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0000000070dbd880aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "challenge_bytes_len": 117,
+      "client": "malformed",
+      "note": "different port",
+      "origin": "https://example.com:8443",
+      "origin_len": 24,
+      "served_accepts": false,
+      "signature_hex": "61e0a79dccd39f65e9976d4440beab559250118ce7fe2426b822276a762d785705d986e6f274034a18a4b2530c392a1616c2f5dd81747182e67dbe990d4f8f63",
+      "signature_valid": true
+    },
+    {
+      "bip340_message_32_hex": "21ea20e3a0ffaaa4ca557d544537ff06e8ebe15df4ccef22a9f23a20919b67e3",
+      "challenge_bytes_hex": "70636f632d676174652d7369676e696e2d7631001768747470733a2f2f6578616d706c652e636f6d3a3434330123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0000000070dbd880aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "challenge_bytes_len": 116,
+      "client": "malformed",
+      "note": "explicit default port is not the serialization",
+      "origin": "https://example.com:443",
+      "origin_len": 23,
+      "served_accepts": false,
+      "signature_hex": "42f42fac9044836199112d7620174e5698be962307ee2a9c6a9d864b225ab7c878c74b09821cb33083a4cb3a3ef54599c67004714eae52e056d129e2b5ac4f11",
+      "signature_valid": true
+    },
+    {
+      "bip340_message_32_hex": "cb95b1abaa39b46f2acf15388b4a0a53c55ecb9b721081ce846729436c1f0f41",
+      "challenge_bytes_hex": "70636f632d676174652d7369676e696e2d7631001368747470733a2f2f4558414d504c452e636f6d0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0000000070dbd880aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "challenge_bytes_len": 112,
+      "client": "malformed",
+      "note": "uppercase host",
+      "origin": "https://EXAMPLE.com",
+      "origin_len": 19,
+      "served_accepts": false,
+      "signature_hex": "9806a89c3eab7e1421d724975cf4068e99ca1768d01291ef53bb668c144f6ab5e9cdeb0589f3851c3e77d3fad4bbcfd4ef03040eaffd5bb753f7cf6418983a5d",
+      "signature_valid": true
+    },
+    {
+      "bip340_message_32_hex": "9ebc2ada1848559a0645adfc1554f371dcbbe82ffd03f60eaf5b56bd8d0a5d27",
+      "challenge_bytes_hex": "70636f632d676174652d7369676e696e2d7631001348545450533a2f2f6578616d706c652e636f6d0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0000000070dbd880aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "challenge_bytes_len": 112,
+      "client": "malformed",
+      "note": "uppercase scheme",
+      "origin": "HTTPS://example.com",
+      "origin_len": 19,
+      "served_accepts": false,
+      "signature_hex": "03b79ea7c051cdf496f818e780208fdcba98bbb6af51d0cc77ed4f97b304e758b93bff0c0306108f1dfd262e057cb3d8b68b77de601403fd8252a2ee16d8db80",
+      "signature_valid": true
+    }
+  ],
+  "domain": "pcoc-gate-signin-v1",
+  "expiry_unix_s": 1893456000,
+  "generator": "sdk/rust pcoc::signin (BIP-340, aux 32 zero bytes)",
+  "id": "sign-in-origins",
+  "label": "The signed origin is the requesting site's own origin, compared byte for byte. Not a section 14 record. Produced by the Rust SDK.",
+  "nonce_hex": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "object_sha256_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "public_key_hex": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+  "secret_hex": "0000000000000000000000000000000000000000000000000000000000000001",
+  "served": [
+    "https://example.com"
+  ],
+  "served_note": "What a service that serves only https://example.com does at check-order step 2. A mismatch is client malformed and the nonce is not consumed.",
+  "spec": "Satoshi Hike 2.2 section 15.1 Origin",
+  "test_key_note": "Not a production key. Do not use it on a deployed gate."
+}

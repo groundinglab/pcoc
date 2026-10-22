@@ -72,6 +72,7 @@ func sdkDir(t *testing.T) string {
 // cross-build comparison itself is the separate cross-verify gate.
 var candidateNames = []string{
 	"anchor.txt",
+	"br1.txt",
 	"draw.txt",
 	"fold.txt",
 	"hashcash.txt",
@@ -89,6 +90,7 @@ var candidateNames = []string{
 
 var candidatePins = map[string]string{
 	"anchor.txt":       "fe58c0b64263d11daa7dcbae7c6daa3e0b0daecb1084b44d47f6f2570da3811a",
+	"br1.txt":          "76b36c948ae0f37ad9dffd0355db3e507f23fddedc203dde4d58d131b212fa99",
 	"draw.txt":         "45821e7ed5d9bbb6b03c686dfc467c623203027a6adf5160414c4e4074a85e0c",
 	"fold.txt":         "2f14b5ef6953e00673c4c7f124f0057cb5498f17d354057639d944e441ffd271",
 	"hashcash.txt":     "92f010b46c15483877343f635164c485500e55527721305bedd0a34def7ca9d5",
@@ -230,7 +232,7 @@ func TestACA3(t *testing.T) {
 	}
 }
 
-// TestACA5 regenerates the fourteen candidate files and checks them
+// TestACA5 regenerates the fifteen candidate files and checks them
 // byte-identical to the committed files, checks each committed file's
 // SHA-256 against its pin, checks the three object pins, and checks the
 // PROD leg pin.

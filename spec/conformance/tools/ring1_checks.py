@@ -14,10 +14,9 @@ Replacements for the four 2.0 checks:
    the previous file named another KIND and a seed-domain label, and section 6
    says there is no seed-domain label. The replacement parses the section 6
    table in SPEC.md and checks each name against the value written there.
-2. sign-in.json locks the wire. The 2.2 pack does not publish sign-in.json or
-   sign-in-origins.json (pack README). The replacement checks the section 15.1
-   sentences that are in SPEC.md, and that the pack manifest does not list
-   those files.
+2. sign-in.json locks the wire. The pack publishes sign-in.json and
+   sign-in-origins.json. The check reads the section 15.1 sentences in
+   SPEC.md and the example digest in sign-in.json.
 3. Relative links under spec/ stay inside spec/, with the same spec/README.md
    parent allowlist.
 4. A hash of every file under spec/conformance/ except tools/. Rule I5 pins the
@@ -95,7 +94,7 @@ check("section6 names", set(parsed) == set(SECTION6), sorted(set(parsed) ^ set(S
 for name, want in SECTION6.items():
     check(f"section6 {name}", parsed.get(name) == want, f"spec={parsed.get(name)!r} want={want!r}")
 
-# Section 15.1 sentences. sign-in.json is not in this pack.
+# Section 15.1 sentences, and the pack's sign-in files.
 for needle in (
     "Two origins are the same only when their serialized bytes are equal.",
     "It names the challenge-bytes domain `pcoc-gate-signin-v1`.",
@@ -107,8 +106,13 @@ for needle in (
     check(f"section15.1 {needle}", needle in spec, needle)
 manifest = json.load(open(f"{PACK}/manifest.json", encoding="utf-8"))
 listed = set(manifest.get("files", []))
-check("pack has no sign-in.json", "sign-in.json" not in listed and "sign-in-origins.json" not in listed)
-check("pack status incomplete", manifest.get("status") == "incomplete" and manifest.get("pack") == "pack-2.2.0")
+check("pack lists sign-in.json", "sign-in.json" in listed and "sign-in-origins.json" in listed)
+check("pack status complete", manifest.get("status") == "complete" and manifest.get("pack") == "pack-2.2.0")
+sign_in = open(f"{PACK}/sign-in.json", encoding="utf-8").read()
+check(
+    "sign-in example digest",
+    "90e38d7538d543aff5148318b7cb310595def390dac199c99bb10bc9ead5e0c2" in sign_in,
+)
 
 for d, _, fs in os.walk("spec"):
     for f in fs:

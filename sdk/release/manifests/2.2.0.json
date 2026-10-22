@@ -3,7 +3,7 @@
   "release": {
     "version": "2.2.0",
     "date": "2026-10-23",
-    "commit": "e868865ef87704225a2505b1d1e5841f5b421e87",
+    "commit": "de802b2f0e85259789f35f6dbed57265e4bd274b",
     "notes": "Parent of the commit that adds this file. Tags are not cut."
   },
   "spec": {
@@ -13,8 +13,8 @@
     "url": "https://github.com/groundinglab/pcoc/blob/sdk22/integ-phaseA/spec/satoshi-hike-v2.2/SPEC.md",
     "erratum_url": "https://github.com/groundinglab/pcoc/blob/spec/erratum-2/spec/satoshi-hike-v2.2/ERRATUM-2.md",
     "pack_url": "https://github.com/groundinglab/pcoc/tree/sdk22/integ-phaseA/spec/conformance/pack",
-    "pack_manifest_sha256": "ec704be3975d0e1af3eab9bb0f6d5ab7b6c6da5dd4b0d9b87988af54d0886a2c",
-    "pack_status": "incomplete"
+    "pack_manifest_sha256": "91ded57e5c05b7cb4cd74d313a51d83d2373fa86dc625df41faed9586e9032af",
+    "pack_status": "complete"
   },
   "links": {
     "interop_evidence": "https://github.com/groundinglab/pcoc/tree/interop/evidence-2.2/spec/conformance/interop",
@@ -43,7 +43,7 @@
       "toolchain_min": "Rust 1.99.0",
       "quickstart": {
         "commands": "cd sdk/rust\ncargo run -p pcoc-cli --release --quiet -- quickstart",
-        "expected_stdout_example": "pcoc 2.2.0 (rust) spec-2.2.0 erratum 2 pack ec704be3975d0e1a: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
+        "expected_stdout_example": "pcoc 2.2.0 (rust) spec-2.2.0 erratum 2 pack 91ded57e5c05b7cb: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
         "machine_specific_lines": [
           2
         ],
@@ -71,7 +71,7 @@
       "toolchain_min": "gcc, C11, -march=x86-64",
       "quickstart": {
         "commands": "cd sdk/c\nmake -j4 build/pcoc\n./build/pcoc quickstart",
-        "expected_stdout_example": "pcoc 2.2.0 (c) spec-2.2.0 erratum 2 pack ec704be3975d0e1a: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
+        "expected_stdout_example": "pcoc 2.2.0 (c) spec-2.2.0 erratum 2 pack 91ded57e5c05b7cb: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
         "machine_specific_lines": [
           2
         ],
@@ -99,7 +99,7 @@
       "toolchain_min": "Go 1.22 or newer",
       "quickstart": {
         "commands": "cd sdk/go\ngo run ./cmd/pcoc quickstart",
-        "expected_stdout_example": "pcoc 2.2.0 (go) spec-2.2.0 erratum 2 pack ec704be3975d0e1a: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
+        "expected_stdout_example": "pcoc 2.2.0 (go) spec-2.2.0 erratum 2 pack 91ded57e5c05b7cb: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
         "machine_specific_lines": [
           2
         ],
@@ -127,7 +127,7 @@
       "toolchain_min": "JDK 21",
       "quickstart": {
         "commands": "cd sdk/java\n./gradlew run --args=quickstart",
-        "expected_stdout_example": "pcoc 2.2.0 (java) spec-2.2.0 erratum 2 pack ec704be3975d0e1a: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
+        "expected_stdout_example": "pcoc 2.2.0 (java) spec-2.2.0 erratum 2 pack 91ded57e5c05b7cb: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
         "machine_specific_lines": [
           2
         ],

@@ -19,5 +19,5 @@
 - apps/, guides/ (#42–43): desktop and Android builds on SDK 2.2.0
 - verify/ (#1–7): a 2.2 PCOC from reference system 1
 - pcoc-at-scale, by-audience (#40–41): no timing run, so no new legs/s
-- Bari paid-rule vectors and sign-in wire: not in the pack; manifest `pack_status` is `incomplete`
+- Bari paid-rule vectors and the sign-in wire are in the pack; manifest `pack_status` is `complete`
 - Performance table: `performance` is an empty list

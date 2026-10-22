@@ -3,6 +3,7 @@
 //! Each public function below names the section it implements (Rule I2).
 #![deny(unsafe_code)]
 
+pub mod br1;
 pub mod cbor;
 pub mod checkpoint;
 pub mod compare;
@@ -19,6 +20,7 @@ pub mod object;
 pub mod path;
 pub mod pin;
 pub mod profile;
+pub mod signin;
 pub mod step;
 pub mod terrain;
 pub mod verify;
@@ -101,6 +103,15 @@ pub use hashcash::hashcash_solve;
 /// SPEC §13.1. Leading zero bits, high bit of the first byte first.
 pub use hashcash::leading_zero_bits;
 
+/// SPEC §13.6 Rule BR1. `204` when the waypoint post is paid, `402` otherwise.
+pub use br1::br1_status;
+
+/// SPEC §13.6. Current, before, after, or outside, before the Hashcash check.
+pub use br1::br1_window;
+
+/// SPEC §9 and §13.6. Compact `nBits` an "after" fee header must carry.
+pub use br1::required_bits;
+
 /// SPEC §7.3 / §8. Deterministic object bytes.
 pub use object::encode_object;
 
@@ -124,6 +135,18 @@ pub use compare::leg_rate_floor;
 
 /// SPEC §16.1 Anchor comparison. Integer window only.
 pub use compare::anchor_window;
+
+/// SPEC §15.1. Challenge bytes for the sign-in wire.
+pub use signin::challenge_bytes;
+
+/// SPEC §15.1. `SHA-256(challenge_bytes)`, the BIP-340 message. Not hashed again.
+pub use signin::bip340_message;
+
+/// SPEC §15.1. Exact origin comparison.
+pub use signin::origin_served;
+
+/// SPEC §15.1. Challenge-window comparison, wide integers.
+pub use signin::window_accepts;
 
 /// SPEC §11.1. SHA-256 backend actually in use: `sha-ni` or `software`.
 pub use hash::sha_backend;

@@ -1,0 +1,263 @@
+{
+  "bodies": [
+    {
+      "body": {
+        "exp": 1893456000,
+        "nonce": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "object": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "object_b64": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo=",
+        "origin": "https://groundinglab.io",
+        "signature": "05674eed5e01b51beea3a767dda78e6c94027524014525b57073d71da229463dd82d20deecab2874a9d55b43f52c1a8f48ce2072ced76cba5ce946fb3f36c778"
+      },
+      "class": "grammar_ok",
+      "note": "field grammar only; the example bytes do not hash to the object field"
+    },
+    {
+      "body": {
+        "exp": 1893456000,
+        "nonce": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "object": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "object_b64": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo=",
+        "origin": "https://groundinglab.io"
+      },
+      "class": "malformed",
+      "note": "missing signature"
+    },
+    {
+      "body": {
+        "door": "https://admission.groundinglab.io/v1/sign-in",
+        "exp": 1893456000,
+        "nonce": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "object": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "object_b64": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo=",
+        "origin": "https://groundinglab.io",
+        "signature": "05674eed5e01b51beea3a767dda78e6c94027524014525b57073d71da229463dd82d20deecab2874a9d55b43f52c1a8f48ce2072ced76cba5ce946fb3f36c778"
+      },
+      "class": "malformed",
+      "note": "unknown key"
+    },
+    {
+      "body": {
+        "exp": "1893456000",
+        "nonce": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "object": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "object_b64": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo=",
+        "origin": "https://groundinglab.io",
+        "signature": "05674eed5e01b51beea3a767dda78e6c94027524014525b57073d71da229463dd82d20deecab2874a9d55b43f52c1a8f48ce2072ced76cba5ce946fb3f36c778"
+      },
+      "class": "malformed",
+      "note": "exp as a string"
+    },
+    {
+      "body": {
+        "exp": 1893456000,
+        "nonce": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "object": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "object_b64": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo=",
+        "origin": "https://groundinglab.io",
+        "signature": "05674eed5e01b51beea3a767dda78e6c94027524014525b57073d71da229463dd82d20deecab2874a9d55b43f52c1a8f48ce2072ced76cba5ce946fb3f36c77F"
+      },
+      "class": "malformed",
+      "note": "uppercase signature"
+    },
+    {
+      "body": {
+        "exp": 1893456000,
+        "nonce": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "object": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "object_b64": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo",
+        "origin": "https://groundinglab.io",
+        "signature": "05674eed5e01b51beea3a767dda78e6c94027524014525b57073d71da229463dd82d20deecab2874a9d55b43f52c1a8f48ce2072ced76cba5ce946fb3f36c778"
+      },
+      "class": "malformed",
+      "note": "base64 without padding"
+    }
+  ],
+  "client_codes": [
+    "bad_signature",
+    "malformed"
+  ],
+  "client_ok": "Sign-in submitted",
+  "content_type": "application/json",
+  "domain": "pcoc-gate-signin-v1",
+  "door": "https://admission.groundinglab.io/v1/sign-in",
+  "example": {
+    "aux_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+    "bip340_message_32_hex": "90e38d7538d543aff5148318b7cb310595def390dac199c99bb10bc9ead5e0c2",
+    "challenge_bytes_hex": "70636f632d676174652d7369676e696e2d7631001768747470733a2f2f67726f756e64696e676c61622e696f0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0000000070dbd880aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "challenge_bytes_len": 116,
+    "double_hash_hex": "971dce7037192561161eafa08a7e46950880ce9274bd02b4a5abbf677cc6fab8",
+    "expiry_unix_s": 1893456000,
+    "file_of_0xaa_sha256": "e0e77a507412b120f6ede61f62295b1a7b2ff19d3dcc8f7253e51663470c888e",
+    "hash_matches_object_field": false,
+    "link": "https://groundinglab.io/sign-in/?v=1&nonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&exp=1893456000",
+    "nonce_hex": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "object_b64": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo=",
+    "object_sha256_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "object_sha256_note": "The 32-byte field of 0xaa. Not the hash of a file of 32 0xaa bytes.",
+    "origin": "https://groundinglab.io",
+    "parity": "even",
+    "public_key_hex": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+    "secret_hex": "0000000000000000000000000000000000000000000000000000000000000001",
+    "signature_hex": "05674eed5e01b51beea3a767dda78e6c94027524014525b57073d71da229463dd82d20deecab2874a9d55b43f52c1a8f48ce2072ced76cba5ce946fb3f36c778",
+    "test_key_note": "Not a production key. Do not use it on a deployed gate.",
+    "window_accepts_example_at_2026_10_10": false,
+    "window_now_2026_10_10": 1791590400
+  },
+  "id": "sign-in",
+  "label": "Locked sign-in wire. Not a section 14 record. Produced by the Rust SDK.",
+  "lifetime_s": 120,
+  "links": [
+    {
+      "class": "link",
+      "input": "https://groundinglab.io/sign-in/?v=1&nonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&exp=1893456000",
+      "note": "canonical"
+    },
+    {
+      "class": "link",
+      "input": " \thttps://groundinglab.io/sign-in/?v=1&nonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&exp=1893456000\r\n",
+      "note": "ASCII trim"
+    },
+    {
+      "class": "link",
+      "input": "https://groundinglab.io/sign-in/?v=1&nonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&exp=0",
+      "note": "exp 0 is the one leading-zero exception"
+    },
+    {
+      "class": "malformed",
+      "input": "https://groundinglab.io/sign-in/?h=90e38d7538d543aff5148318b7cb310595def390dac199c99bb10bc9ead5e0c2",
+      "note": "retired ?h= form"
+    },
+    {
+      "class": "malformed",
+      "input": "https://groundinglab.io/sign-in/?v=1&nonce=0123456789Abcdef0123456789abcdef0123456789abcdef0123456789abcdef&exp=1893456000",
+      "note": "uppercase hex"
+    },
+    {
+      "class": "malformed",
+      "input": "https://groundinglab.io/sign-in/?v=1&nonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&exp=1893456000&door=https://admission.groundinglab.io/v1/sign-in",
+      "note": "extra parameter"
+    },
+    {
+      "class": "malformed",
+      "input": "https://groundinglab.io/sign-in/?v=1&exp=1893456000&nonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "note": "swapped parameter order"
+    },
+    {
+      "class": "malformed",
+      "input": "http://groundinglab.io/sign-in/?v=1&nonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&exp=1893456000",
+      "note": "http"
+    },
+    {
+      "class": "malformed",
+      "input": "https://www.groundinglab.io/sign-in/?v=1&nonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&exp=1893456000",
+      "note": "www host"
+    },
+    {
+      "class": "malformed",
+      "input": "https://groundinglab.io/sign-in/?v=1&nonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&exp=1893456000#x",
+      "note": "fragment"
+    },
+    {
+      "class": "malformed",
+      "input": "https://groundinglab.io/sign-in/?v=1&nonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&exp=01893456000",
+      "note": "leading zero on exp"
+    },
+    {
+      "class": "malformed",
+      "input": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "note": "bare 64 hex"
+    },
+    {
+      "class": "malformed",
+      "input": "https://groundinglab.io/sign-in/?v=1&nonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&exp=18446744073709551616",
+      "note": "exp above u64"
+    },
+    {
+      "class": "malformed",
+      "input": " https://groundinglab.io/sign-in/?v=1&nonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&exp=1893456000",
+      "note": "leading U+00A0"
+    },
+    {
+      "class": "malformed",
+      "input": "https://groundinglab.io/sign-in/?v=1&nonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&exp=1893456000&object=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "note": "object parameter"
+    },
+    {
+      "class": "malformed",
+      "input": "https://groundinglab.io/sign-in/?v=1&nonce=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&exp=1893456000&x=1",
+      "note": "extra parameter x"
+    }
+  ],
+  "method": "POST",
+  "origin": "https://groundinglab.io",
+  "responses": {
+    "bad_signature": {
+      "error": {
+        "code": "bad_signature"
+      }
+    },
+    "delivery_ok": {
+      "delivery": "ok"
+    },
+    "malformed": {
+      "error": {
+        "code": "malformed"
+      }
+    }
+  },
+  "skew_s": 5,
+  "spec": "Satoshi Hike 2.2 section 15.1",
+  "website_outcomes": [
+    "pending",
+    "accepted",
+    "malformed",
+    "bad_signature",
+    "too_short",
+    "rejected",
+    "unknown_kind",
+    "too_few_waypoints_anchored"
+  ],
+  "window": [
+    {
+      "accept": true,
+      "exp": 1000120,
+      "now": 1000000
+    },
+    {
+      "accept": true,
+      "exp": 1000120,
+      "now": 1000120
+    },
+    {
+      "accept": true,
+      "exp": 1000120,
+      "now": 1000124
+    },
+    {
+      "accept": false,
+      "exp": 1000120,
+      "now": 1000125
+    },
+    {
+      "accept": true,
+      "exp": 1000125,
+      "now": 1000000
+    },
+    {
+      "accept": false,
+      "exp": 1000126,
+      "now": 1000000
+    },
+    {
+      "accept": true,
+      "exp": 999996,
+      "now": 1000000
+    },
+    {
+      "accept": false,
+      "exp": 999995,
+      "now": 1000000
+    }
+  ]
+}

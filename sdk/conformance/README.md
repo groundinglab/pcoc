@@ -60,7 +60,7 @@ SPEC 2.2 erratum 2 settled the record of a malformed CBOR value (E02, option A) 
 
 ## Adding a fifth SDK
 
-1. Put it at `sdk/<lang>/` with `objects/O1-S1.cbor`, `O2-S2.cbor`, `O3-PROD.cbor` and the 14 files in `candidates/`. Do not add a negative to its release CLI.
+1. Put it at `sdk/<lang>/` with `objects/O1-S1.cbor`, `O2-S2.cbor`, `O3-PROD.cbor` and the candidate files, including `br1.txt`. Do not add a negative to its release CLI.
 2. In `cross-verify.sh`, add a release build (baseline ISA, no `-march=native`) that produces a verify CLI. Fail with `missing toolchain:` if that compiler is absent.
 3. Teach the CLI, or a driver under `sdk/conformance/`, to verify one object with `--profile`, the four `conformance-small` integers, `--draw-label`, and the CASES index. If the CLI cannot take the index, add a driver that calls that SDK's verify entry and reads `GET http://127.0.0.1:PORT/index/{height}`. A directory of `{height}.json` is acceptable only when that is the CLI's own index argument, and the files must be the loopback bodies.
 4. Add the language to `LANGS` in `harness.py`, and to the matrix command and the CLI command. Keep the verifier order stable so the report's columns stay readable.

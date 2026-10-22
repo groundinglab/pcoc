@@ -178,6 +178,7 @@ static int ac_a3(void) {
  * committed object. The cross-build comparison lives in the separate gate. */
 static const char *CAND_PINS[][2] = {
     {"anchor.txt", "fe58c0b64263d11daa7dcbae7c6daa3e0b0daecb1084b44d47f6f2570da3811a"},
+    {"br1.txt", "76b36c948ae0f37ad9dffd0355db3e507f23fddedc203dde4d58d131b212fa99"},
     {"draw.txt", "45821e7ed5d9bbb6b03c686dfc467c623203027a6adf5160414c4e4074a85e0c"},
     {"fold.txt", "2f14b5ef6953e00673c4c7f124f0057cb5498f17d354057639d944e441ffd271"},
     {"hashcash.txt", "92f010b46c15483877343f635164c485500e55527721305bedd0a34def7ca9d5"},
@@ -303,9 +304,108 @@ static void produce_objects(void) {
   system_rc(cmd);
 }
 
+static int br1_nibble(int c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  return -1;
+}
+
+static int br1_unhex(const char *s, uint8_t *out, size_t n) {
+  if (strlen(s) != n * 2) return -1;
+  for (size_t i = 0; i < n; i++) {
+    int hi = br1_nibble((unsigned char)s[2 * i]);
+    int lo = br1_nibble((unsigned char)s[2 * i + 1]);
+    if (hi < 0 || lo < 0) return -1;
+    out[i] = (uint8_t)((hi << 4) | lo);
+  }
+  return 0;
+}
+
+static int br1_u32(const char *s, int base, uint32_t *out) {
+  char *end = NULL;
+  errno = 0;
+  unsigned long v = strtoul(s, &end, base);
+  if (!s[0] || !end || *end != '\0' || errno == ERANGE || v > 0xfffffffful) return -1;
+  *out = (uint32_t)v;
+  return 0;
+}
+
+static int br1_field(const char *id, const char *field, char *out, size_t cap) {
+  char path[1024], key[96];
+  int n = snprintf(key, sizeof(key), "br1.%s.%s", id, field);
+  if (n < 0 || (size_t)n >= sizeof(key)) return -1;
+  snprintf(path, sizeof(path), "%s/candidates/br1.txt", here);
+  FILE *f = fopen(path, "rb");
+  if (!f) return -1;
+  char line[512];
+  int found = 0;
+  size_t klen = strlen(key);
+  while (fgets(line, sizeof(line), f)) {
+    if (strncmp(line, key, klen) == 0 && line[klen] == '\t') {
+      char *v = line + klen + 1;
+      v[strcspn(v, "\r\n")] = 0;
+      if (strlen(v) + 1 > cap) break;
+      memcpy(out, v, strlen(v) + 1);
+      found = 1;
+      break;
+    }
+  }
+  fclose(f);
+  return found ? 0 : -1;
+}
+
+static void check_br1_one(const char *id, unsigned expect) {
+  char origin[160], nonce[40], fee[176], plane_s[16];
+  char hash_h[80], prev_h[80], wp_h[80];
+  char height_s[32], time_s[32], bits_s[16], first_s[32], label[64];
+  snprintf(label, sizeof(label), "br1 %s field", id);
+  need(br1_field(id, "origin", origin, sizeof(origin)) == 0, label);
+  need(br1_field(id, "nonce", nonce, sizeof(nonce)) == 0, label);
+  need(br1_field(id, "fee_header", fee, sizeof(fee)) == 0, label);
+  need(br1_field(id, "plane", plane_s, sizeof(plane_s)) == 0, label);
+  need(br1_field(id, "waypoint", wp_h, sizeof(wp_h)) == 0, label);
+  need(br1_field(id, "tip_hash", hash_h, sizeof(hash_h)) == 0, label);
+  need(br1_field(id, "tip_previous", prev_h, sizeof(prev_h)) == 0, label);
+  need(br1_field(id, "tip_height", height_s, sizeof(height_s)) == 0, label);
+  need(br1_field(id, "tip_time", time_s, sizeof(time_s)) == 0, label);
+  need(br1_field(id, "tip_bits", bits_s, sizeof(bits_s)) == 0, label);
+  need(br1_field(id, "period_first_time", first_s, sizeof(first_s)) == 0, label);
+  uint8_t waypoint[32];
+  pcoc_br1_tip tip;
+  memset(&tip, 0, sizeof(tip));
+  need(br1_unhex(wp_h, waypoint, 32) == 0, "br1 waypoint");
+  need(br1_unhex(hash_h, tip.hash, 32) == 0, "br1 tip hash");
+  need(br1_unhex(prev_h, tip.previous, 32) == 0, "br1 tip previous");
+  need(br1_u32(height_s, 10, &tip.height) == 0, "br1 height");
+  need(br1_u32(time_s, 10, &tip.time) == 0, "br1 time");
+  need(br1_u32(bits_s, 16, &tip.bits) == 0, "br1 bits");
+  need(br1_u32(first_s, 10, &tip.period_first_time) == 0, "br1 period");
+  int plane = -1;
+  if (strcmp(plane_s, "test") == 0) plane = PCOC_BR1_PLANE_TEST;
+  if (strcmp(plane_s, "live") == 0) plane = PCOC_BR1_PLANE_LIVE;
+  need(plane >= 0, "br1 plane");
+  unsigned st = pcoc_br1_status(waypoint, 32, nonce, fee, origin, &tip, plane);
+  if (st != expect) {
+    fprintf(stderr, "FAIL br1 %s status %u\n", id, st);
+    exit(1);
+  }
+}
+
+static void check_br1_rows(void) {
+  need(pcoc_br1_mainnet_next_bits(2015u, 0x1d00ffffu, 1233061996u, 1231006505u) == 0x1d00ffffu,
+       "br1 historical nBits");
+  need(pcoc_br1_mainnet_next_bits(2015u, 0x1d00ffffu, 1231006505u + 302400u, 1231006505u) ==
+           0x1c3fffc0u,
+       "br1 harder nBits");
+  check_br1_one("current", 204);
+  check_br1_one("after_live", 204);
+  check_br1_one("display_current", 402);
+}
+
 static int ac_a5(void) {
   char cmd[2048];
   check_candidate_pins();
+  check_br1_rows();
   check_object_pins();
   check_prod_leg();
   regen_candidates();

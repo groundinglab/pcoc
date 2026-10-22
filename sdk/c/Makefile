@@ -4,7 +4,7 @@ CFLAGS  ?= -std=c11 -O2 -Wall -Wextra -Wno-unused-function -march=x86-64 -fPIC
 CPPFLAGS += -Iinclude -Igen
 LDFLAGS ?=
 
-LIB_SRC = src/sha256.c src/terrain.c src/cbor.c src/hashcash.c src/verify.c src/produce.c src/info.c
+LIB_SRC = src/sha256.c src/terrain.c src/cbor.c src/hashcash.c src/verify.c src/produce.c src/info.c src/br1.c
 LIB_OBJ = $(LIB_SRC:src/%.c=build/%.o)
 
 .PHONY: all check candidates clean

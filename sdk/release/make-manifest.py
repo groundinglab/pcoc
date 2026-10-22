@@ -75,7 +75,7 @@ def main() -> None:
             "erratum_url": "https://github.com/groundinglab/pcoc/blob/spec/erratum-2/spec/satoshi-hike-v2.2/ERRATUM-2.md",
             "pack_url": "https://github.com/groundinglab/pcoc/tree/sdk22/integ-phaseA/spec/conformance/pack",
             "pack_manifest_sha256": manifest_sha,
-            "pack_status": "incomplete",
+            "pack_status": json.loads((ROOT / "spec/conformance/pack/manifest.json").read_text())["status"],
         },
         "links": {
             "interop_evidence": "https://github.com/groundinglab/pcoc/tree/interop/evidence-2.2/spec/conformance/interop",
