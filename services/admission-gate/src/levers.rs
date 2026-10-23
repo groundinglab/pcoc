@@ -422,7 +422,7 @@ born_height = 972685
         }
         let live = load(&raw, 2).expect("compiled pin");
         assert_eq!(live.policy_id, "gl-admit-v10");
-        assert_eq!(pcoc::build_info().spec_tag, "spec-2.2.0");
+        assert_eq!(pcoc::build_info().spec_tag, "spec-2.3.0");
     }
 
     #[test]
@@ -591,10 +591,10 @@ born_height = 972685
         assert!(spec_identity("spec-2.20").is_err());
         assert_eq!(crate::verifier::SPEC_KIND, "v2.2-pcoc-object");
         let tag = pcoc::build_info().spec_tag;
-        assert_eq!(tag, "spec-2.2.0");
-        assert_eq!(spec_identity(&tag).unwrap(), ("Satoshi Hike 2.2", "2.2"));
+        assert_eq!(tag, "spec-2.3.0");
+        assert_eq!(spec_identity(&tag).unwrap(), ("Satoshi Hike 2.3", "2.3"));
         let (name, label) = crate::verifier::health_spec();
-        assert_eq!(name, "Satoshi Hike 2.2");
-        assert_eq!(label, "2.2");
+        assert_eq!(name, "Satoshi Hike 2.3");
+        assert_eq!(label, "2.3");
     }
 }
