@@ -65,15 +65,15 @@ impl ChainTip {
     pub fn from_gossip_tick(tick: &TipTick) -> Result<Self, String> {
         let height = u32::try_from(tick.height).map_err(|_| "tip height exceeds u32".to_owned())?;
         let bits = u32::from_le_bytes(tick.header[72..76].try_into().expect("nBits is 4 bytes"));
-        // A gossip tick does not carry the block 2015 back. The RPC tip read
-        // fills `period_first_time`. The live gossip source is not in this build.
+        // The RPC tip read fills this from the block 2015 back. A gossip tick
+        // carries the same value when the next height is a retarget boundary.
         Ok(Self {
             hash: tick.hash,
             previous_hash: tick.previous,
             height,
             time: Some(u64::from(tick.n_time)),
             bits,
-            period_first_time: 0,
+            period_first_time: tick.period_first_time,
         })
     }
 }
@@ -3468,6 +3468,7 @@ mod tests {
             previous: Some([1; 32]),
             n_time: 1_700_000_050,
             header: [0; 80],
+            period_first_time: 0,
         };
         let tip = ChainTip::from_gossip_tick(&tick).unwrap();
         assert_eq!(tip.time, Some(1_700_000_050));
@@ -3485,6 +3486,7 @@ mod tests {
             previous: Some([2; 32]),
             n_time: 0,
             header: [0; 80],
+            period_first_time: 0,
         })
         .unwrap();
         assert_eq!(epoch.time, Some(0));

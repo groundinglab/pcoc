@@ -1,9 +1,9 @@
 //! Bari-owned header source.
 //!
-//! SPEC §9 names the live header source. That source, and the Bari client a
-//! producer would dial, are Phase C and are not in the 2.2 SDK. This module
-//! keeps the synth plane the test gate already runs, and fails closed on any
-//! live network. It is not a pin to an older SDK.
+//! The synth plane is the newline JSON test wire. The live plane is Bitcoin
+//! mainnet gossip (`crate::gossip`), linked into the default release build.
+//! The 2.2 SDK still has no producer header source. This module is not a pin
+//! to an older SDK.
 //!
 //! The synth wire is newline-delimited JSON, one tip per line:
 //! `{"hash","height","previous","n_time","header"}`. Hash and previous are
@@ -27,6 +27,9 @@ pub struct TipTick {
     pub n_time: u32,
     /// The 80-byte header whose SHA-256d is `hash`.
     pub header: [u8; 80],
+    /// `nTime` of the block at `height - 2015` when `height + 1` is a multiple
+    /// of 2016. Zero otherwise. The live retarget reads only the boundary case.
+    pub period_first_time: u32,
 }
 
 /// Which header wire this clock speaks.
@@ -34,7 +37,7 @@ pub struct TipTick {
 pub enum GossipNetwork {
     /// Synth plane. Not Bitcoin Core.
     Regtest,
-    /// Live Bitcoin headers. Not in this build (SPEC §9, Phase C).
+    /// Live Bitcoin headers. Bitcoin mainnet gossip, in this build.
     Mainnet,
 }
 
@@ -45,11 +48,13 @@ pub struct HeaderError {
 }
 
 enum ClockState {
-    /// Live source. Every wait fails closed.
+    /// A genuine stop. The live clock swaps a bad peer and only lands here
+    /// when the caller treats a quorum failure as final. Not the absent-source arm.
     Closed {
         message: String,
     },
     Synth(TcpStream),
+    Live(crate::gossip::LiveClock),
 }
 
 /// Blocking header clock. `wait_tips_after` is called from a blocking thread.
@@ -58,13 +63,12 @@ pub struct HeaderClock {
 }
 
 impl HeaderClock {
-    /// Open a clock. A live network does not dial. Regtest retries the synth peer.
+    /// Open a clock. Mainnet stores the peer and dials on the first wait.
+    /// Regtest retries the synth peer. Neither arm is the absent-source sentence.
     pub fn start(peer: &str, network: GossipNetwork) -> Self {
         match network {
             GossipNetwork::Mainnet => Self {
-                state: ClockState::Closed {
-                    message: "live header source is not in this build".to_owned(),
-                },
+                state: ClockState::Live(crate::gossip::open_pending(peer)),
             },
             GossipNetwork::Regtest => {
                 let deadline = std::time::Instant::now() + Duration::from_secs(5);
@@ -104,6 +108,7 @@ impl HeaderClock {
             ClockState::Closed { message } => Err(HeaderError {
                 message: message.clone(),
             }),
+            ClockState::Live(clock) => clock.wait(_after),
             ClockState::Synth(stream) => {
                 let line = read_line(stream)?;
                 let tick = parse_tick(&line)?;
@@ -141,6 +146,7 @@ pub fn serve_synth(bind: &str, interval: Duration) -> Result<(), String> {
                 previous,
                 n_time,
                 header,
+                period_first_time: 0,
             };
             if write_tick(&mut stream, &tick).is_err() {
                 break;
@@ -244,7 +250,30 @@ fn parse_tick(line: &str) -> Result<TipTick, HeaderError> {
         previous,
         n_time,
         header,
+        period_first_time: 0,
     })
+}
+
+impl HeaderClock {
+    /// `true` when this clock was opened on the live gossip arm.
+    pub fn live_source_in_build(&self) -> bool {
+        matches!(self.state, ClockState::Live(_))
+    }
+
+    /// `true` only for the old absent-source sentence. A genuine gossip error
+    /// is not this arm.
+    pub fn absent_live_source(&self) -> bool {
+        matches!(
+            &self.state,
+            ClockState::Closed { message } if message == crate::gossip::ABSENT_LIVE_SOURCE
+        )
+    }
+}
+
+/// Release-binary probe. No dial. Fails when mainnet still takes the
+/// absent-source arm, or when the recorded-header and in-process peer checks fail.
+pub fn release_self_check() -> Result<&'static str, String> {
+    crate::gossip::release_self_check()
 }
 
 fn parse_hash(value: Option<&Value>) -> Result<Hash32, HeaderError> {

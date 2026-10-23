@@ -34,7 +34,7 @@ Every service binds to loopback by default. To serve one publicly, put a reverse
 
 | Folder | Process | Default bind | Depends on | Release tag |
 |---|---|---|---|---|
-| [`bari/`](bari/) | `bari` (crate `pcoc-bari`) | `127.0.0.1:38080` | in-repo header source; live header source is not in this build | `bari-v0.6.9` |
+| [`bari/`](bari/) | `bari` (crate `pcoc-bari`) | `127.0.0.1:38080` | in-repo header source; live mainnet gossip is in the default release build | `bari-v0.6.9` |
 | [`index/`](index/) | `pcoc-index` | `127.0.0.1:38081` | `pcoc-bari` by path (`../bari`) | `index-v0.1.5` |
 | [`admission-gate/`](admission-gate/) | `admission-service` (crate `pcoc-admission`) | `127.0.0.1:8787` | `pcoc` from the in-tree Rust SDK, by path (`sdk/rust/pcoc`; version in `sdk/VERSION`) | `gate-v0.5.7` |
 | [`admission-claims/`](admission-claims/) | `admission-claims` (crate 0.1.0) | `127.0.0.1:8793` | none in this repository (reads the gate at `127.0.0.1:8787` by default) | none yet |
@@ -43,7 +43,7 @@ Release tags are `<service>-v<x.y.z>` and point at the commit that ships that re
 
 ## Bari
 
-[bari/](bari/) takes 32-byte waypoints (`POST /waypoint`, Hashcash 21 leading zero bits over `bari-hc-v2`, the public origin, and `X-Bari-Hashcash-Header`) into the pool for the live tip and serves Merkle paths (`GET /path/{leaf}`). `GET /ops` is the operator page. It writes the index cache and does not serve `GET /index`. On the live plane the tip comes from Bitcoin gossip (`BARI_TIP_SOURCE=bitcoin-gossip`, peer `PCOC_LIVE_GOSSIP_PEER`, which this tree does not fill) and the plant is Bitcoin Core. On the test plane the tip comes from the synth sequencer (`BARI_TIP_SOURCE=synth`) and the commit is simulated. See [bari/README.md](bari/README.md).
+[bari/](bari/) takes 32-byte waypoints (`POST /waypoint`, Hashcash 21 leading zero bits over `bari-hc-v2`, the public origin, and `X-Bari-Hashcash-Header`) into the pool for the live tip and serves Merkle paths (`GET /path/{leaf}`). `GET /ops` is the operator page. It writes the index cache and does not serve `GET /index`. On the live plane the tip comes from Bitcoin gossip (`BARI_TIP_SOURCE=bitcoin-gossip`, peer `PCOC_LIVE_GOSSIP_PEER`, which this tree does not fill). A bad, dropped, or silent peer is replaced. The tip moves only when two valid peers agree. The plant is Bitcoin Core. On the test plane the tip comes from the synth sequencer (`BARI_TIP_SOURCE=synth`) and the commit is simulated. See [bari/README.md](bari/README.md).
 
 ## Index
 
