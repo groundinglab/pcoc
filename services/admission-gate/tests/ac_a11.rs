@@ -72,9 +72,9 @@ fn gl_admit_v10_loads() {
     assert_eq!(policy.born_height, 972685);
 }
 
-/// The previous id stays as it was. It has no `born_height` key, so load
-/// treats that boundary as 0. This test reads the file. It sets nothing
-/// on the process.
+/// The previous id stays as it was. It has no `born_height` key. Load
+/// refuses that file and names the key. This test reads the file. It sets
+/// nothing on the process.
 #[test]
 fn gl_admit_v9_file_is_unchanged() {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -87,9 +87,9 @@ fn gl_admit_v9_file_is_unchanged() {
         }),
         "gl-admit-v9.toml gained a born_height key"
     );
-    let policy = levers::load(&text, 2).expect("v9");
-    assert_eq!(policy.policy_id, "gl-admit-v9");
-    assert_eq!(policy.born_height, 0);
+    let err = levers::load(&text, 2).expect_err("v9");
+    assert!(err.contains("born_height"), "{err}");
+    assert!(err.contains("absent"), "{err}");
 }
 
 fn base_levers() -> String {
@@ -110,13 +110,16 @@ max_held_blocks = 6
 provisional = "on"
 fast_accept_bound = 2
 async_catch_budget = 22.05
+[policy_rules]
+draw_commitment = "sha256(draw || salt), revealed with the result"
+born_height = 972685
 "#
     .to_owned()
 }
 
 #[test]
 fn a_bad_lever_file_is_refused() {
-    let unknown = base_levers() + "\nsurprise = 1\n";
+    let unknown = base_levers().replace("[policy_rules]", "surprise = 1\n[policy_rules]");
     let err = levers::refuse_reason(&unknown).unwrap_err();
     assert!(err.contains("unknown lever"), "{err}");
 

@@ -291,7 +291,8 @@ pub struct AdmissionPolicy {
     pub challenge_clock_skew_seconds: u64,
     pub result_retention_seconds: u64,
     /// `[policy_rules] born_height`. Heights below this are testing.
-    /// `0` admits every height. Not a SPEC lever.
+    /// The policy file must set it. An explicit `0` admits every height.
+    /// Not a SPEC lever.
     pub born_height: u64,
     /// `[index]` (gl-admit-v7 on). Absent in gl-admit-v6 and earlier, and
     /// then not serialized, so their bind hash and policy document stay the same.
@@ -299,10 +300,14 @@ pub struct AdmissionPolicy {
     pub index: Option<IndexPolicy>,
 }
 
+/// Mirrors gl-admit-v10, including door-session cap 3. `Config::load` does
+/// not call this. A policy file goes through `levers::load`, which refuses
+/// a missing required lever and leaves an absent door-session cap unset.
+/// Unit tests compile this impl. Integration tests compile it through the
+/// `test-util` feature. A release build compiles neither, so the service
+/// has no built-in policy table.
+#[cfg(any(test, feature = "test-util"))]
 impl Default for AdmissionPolicy {
-    /// Mirrors gl-admit-v10, including door-session cap 3. `Config::load` does
-    /// not call this. A policy file goes through `levers::load`, which refuses
-    /// a missing required lever and leaves an absent door-session cap unset.
     fn default() -> Self {
         Self {
             policy_id: DEFAULT_POLICY_ID.to_owned(),

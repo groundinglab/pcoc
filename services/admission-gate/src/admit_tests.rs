@@ -145,6 +145,7 @@ result_retention_seconds = {retention}
 {extra}
 [policy_rules]
 expected_network = "main"
+draw_commitment = "sha256(draw || salt), revealed with the result"
 born_height = {born}
 "#,
             min = self.min_anchored,

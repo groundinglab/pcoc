@@ -1,6 +1,10 @@
 //! SPEC §15.4 policy file. The SDK has no policy reader. This module is the
 //! gate's. A bad lever refuses the whole file. Keys outside `[levers]`, other
 //! than `spec`, are the policy's (`policy_id`, `status`, `[policy_rules]`).
+//! The loader reads `policy_id`, `draw_commitment`, `born_height`, and
+//! `expected_network`. The first three have no unset meaning and are required.
+//! An absent `expected_network` means no index-network constraint. `status`
+//! and the other `[policy_rules]` keys are not read.
 
 use crate::policy::{self, AdmissionPolicy, IndexPolicy, RateFloor};
 use std::collections::BTreeSet;
@@ -63,12 +67,6 @@ pub fn load_for_pin(
         .and_then(toml::Value::as_str)
         .ok_or_else(|| "policy spec must be the string \"2.2\" or \"2.3\"".to_owned())?;
     crate::verifier::accept_policy_spec(spec, pin)?;
-    let policy_id = root
-        .get("policy_id")
-        .and_then(toml::Value::as_str)
-        .map(str::to_owned)
-        .unwrap_or_else(|| policy::DEFAULT_POLICY_ID.to_owned());
-    let policy_id = policy::parse_policy_id(&policy_id)?;
     let levers = root
         .get("levers")
         .and_then(toml::Value::as_table)
@@ -107,21 +105,18 @@ pub fn load_for_pin(
     let challenge_lifetime_seconds = int_at_least(levers, "challenge_lifetime_seconds", 1)?;
     let challenge_clock_skew_seconds = int_at_least(levers, "challenge_clock_skew_seconds", 0)?;
     let result_retention_seconds = int_at_least(levers, "result_retention_seconds", 0)?;
-    let rules = root.get("policy_rules");
-    let draw_commitment = rules
-        .and_then(|table| table.get("draw_commitment"))
-        .and_then(toml::Value::as_str)
-        .unwrap_or("sha256(draw || salt), revealed with the result")
-        .to_owned();
-    // Absent means 0 so a partial test file still loads. The shipped file sets it.
-    let born_height = match rules.and_then(|table| table.get("born_height")) {
-        None => 0,
-        Some(toml::Value::Integer(n)) if *n >= 0 => *n as u64,
-        Some(toml::Value::Integer(_)) => return Err("born_height is out of range".to_owned()),
-        Some(_) => return Err("born_height has the wrong type".to_owned()),
+    let rules = match root.get("policy_rules") {
+        None => None,
+        Some(value) => Some(
+            value
+                .as_table()
+                .ok_or_else(|| "policy_rules has the wrong type".to_owned())?,
+        ),
     };
-    let expected = root
-        .get("policy_rules")
+    let (policy_id, draw_commitment, born_height) = policy_keys(&root, rules)?;
+    // Absent means no index-network constraint. Older policy ids omit the key
+    // so their bind hash stays the same. It is not a filled-in network name.
+    let expected = rules
         .and_then(|table| table.get("expected_network"))
         .and_then(toml::Value::as_str)
         .map(str::to_owned);
@@ -173,6 +168,61 @@ fn absent_levers(missing: &[&str]) -> String {
             "levers {} are absent and have no default",
             missing.join(", ")
         )
+    }
+}
+
+/// `policy_id`, `draw_commitment`, and `born_height` are required. A missing
+/// key is named. A present value of the wrong type is a type error.
+fn policy_keys(
+    root: &toml::Value,
+    rules: Option<&toml::map::Map<String, toml::Value>>,
+) -> Result<(String, String, u64), String> {
+    let mut missing = Vec::new();
+    let policy_id = match root.get("policy_id") {
+        None => {
+            missing.push("policy_id");
+            None
+        }
+        Some(toml::Value::String(text)) => Some(text.clone()),
+        Some(_) => return Err("policy_id has the wrong type".to_owned()),
+    };
+    let draw_commitment = match rules.and_then(|table| table.get("draw_commitment")) {
+        None => {
+            missing.push("draw_commitment");
+            None
+        }
+        Some(toml::Value::String(text)) => Some(text.clone()),
+        Some(_) => return Err("draw_commitment has the wrong type".to_owned()),
+    };
+    let born_height = match rules.and_then(|table| table.get("born_height")) {
+        None => {
+            missing.push("born_height");
+            None
+        }
+        Some(toml::Value::Integer(n)) if *n >= 0 => Some(*n as u64),
+        Some(toml::Value::Integer(_)) => return Err("born_height is out of range".to_owned()),
+        Some(_) => return Err("born_height has the wrong type".to_owned()),
+    };
+    if !missing.is_empty() {
+        return Err(absent_policy_keys(&missing));
+    }
+    let (Some(policy_id), Some(draw_commitment), Some(born_height)) =
+        (policy_id, draw_commitment, born_height)
+    else {
+        return Err(absent_policy_keys(&missing));
+    };
+    Ok((
+        policy::parse_policy_id(&policy_id)?,
+        draw_commitment,
+        born_height,
+    ))
+}
+
+fn absent_policy_keys(missing: &[&str]) -> String {
+    if missing.len() == 1 {
+        format!("{} is absent and has no default", missing[0])
+    } else {
+        format!("{} are absent and have no default", missing.join(", "))
     }
 }
 
@@ -323,6 +373,9 @@ max_held_blocks = 6
 provisional = \"on\"
 fast_accept_bound = 2
 async_catch_budget = 22.05
+[policy_rules]
+draw_commitment = \"sha256(draw || salt), revealed with the result\"
+born_height = 972685
 "
         )
     }
@@ -359,6 +412,11 @@ async_catch_budget = 22.05
             assert_eq!(loaded.verify_cap_per_door_session, Some(3), "{pin}");
             assert_eq!(loaded.verify_cap_per_object, None, "{pin}");
             assert_eq!(loaded.fake_leg_ignore_seconds, None, "{pin}");
+            assert_eq!(loaded.born_height, 972685, "{pin}");
+            assert_eq!(
+                loaded.draw_commitment, "sha256(draw || salt), revealed with the result",
+                "{pin}"
+            );
             let value = serde_json::to_value(&loaded).expect("policy json");
             assert_eq!(value["verify_cap_per_door_session"], 3, "{pin}");
         }
@@ -380,19 +438,10 @@ async_catch_budget = 22.05
     }
 
     #[test]
-    fn each_formerly_defaulted_lever_is_named_when_absent() {
+    fn each_required_lever_is_named_when_absent() {
         let raw = complete("2.2");
-        let keys = [
-            "min_anchored_paths",
-            "leg_rate_floor",
-            "submission_deadline_blocks",
-            "held_retry_seconds",
-            "thorough_rounds",
-            "challenge_lifetime_seconds",
-            "challenge_clock_skew_seconds",
-            "result_retention_seconds",
-        ];
-        for key in keys {
+        assert_eq!(REQUIRED.len(), 13);
+        for key in REQUIRED {
             let stripped = without(&raw, key);
             assert_ne!(stripped, raw, "{key} was not removed");
             let err = load_for_pin(&stripped, 2, "spec-2.2.0").expect_err(key);
@@ -430,12 +479,94 @@ async_catch_budget = 22.05
     }
 
     #[test]
-    fn an_absent_door_session_cap_is_unset() {
+    fn absent_unset_levers_stay_unset() {
         let loaded = load_for_pin(&complete("2.2"), 2, "spec-2.2.0").expect("load");
+        assert_eq!(loaded.verify_cap_per_object, None);
         assert_eq!(loaded.verify_cap_per_door_session, None);
-        let set = complete("2.2") + "verify_cap_per_door_session = 3\n";
+        assert_eq!(loaded.fake_leg_ignore_seconds, None);
+        let set = complete("2.3").replace(
+            "[policy_rules]",
+            "verify_cap_per_object = 2\n\
+             verify_cap_per_door_session = 3\n\
+             fake_leg_ignore_seconds = 60\n\
+             [policy_rules]",
+        );
         let loaded = load_for_pin(&set, 2, "spec-2.3.0").expect("set");
+        assert_eq!(loaded.verify_cap_per_object, Some(2));
         assert_eq!(loaded.verify_cap_per_door_session, Some(3));
+        assert_eq!(loaded.fake_leg_ignore_seconds, Some(60));
+    }
+
+    #[test]
+    fn each_required_policy_key_is_named_when_absent() {
+        let raw = complete("2.2");
+        for key in ["policy_id", "draw_commitment", "born_height"] {
+            let stripped = without(&raw, key);
+            assert_ne!(stripped, raw, "{key} was not removed");
+            let err = load_for_pin(&stripped, 2, "spec-2.3.0").expect_err(key);
+            assert!(err.contains(key), "{key}: {err}");
+            assert!(err.contains("absent"), "{key}: {err}");
+        }
+        let raw = complete("2.2");
+        let id = raw.replace("policy_id = \"gl-admit-v10\"", "policy_id = 10");
+        let err = load_for_pin(&id, 2, "spec-2.2.0").expect_err("policy_id type");
+        assert!(
+            err.contains("policy_id") && err.contains("wrong type"),
+            "{err}"
+        );
+        let draw = raw.replace(
+            "draw_commitment = \"sha256(draw || salt), revealed with the result\"",
+            "draw_commitment = 1",
+        );
+        let err = load_for_pin(&draw, 2, "spec-2.2.0").expect_err("draw type");
+        assert!(
+            err.contains("draw_commitment") && err.contains("wrong type"),
+            "{err}"
+        );
+        let born = raw.replace("born_height = 972685", "born_height = \"972685\"");
+        let err = load_for_pin(&born, 2, "spec-2.2.0").expect_err("born type");
+        assert!(
+            err.contains("born_height") && err.contains("wrong type"),
+            "{err}"
+        );
+        let born = raw.replace("born_height = 972685", "born_height = -1");
+        let err = load_for_pin(&born, 2, "spec-2.2.0").expect_err("born range");
+        assert!(
+            err.contains("born_height") && err.contains("out of range"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn v9_omits_born_height_and_is_refused_on_both_pins() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../policy/groundinglab-admission/gl-admit-v9.toml");
+        let raw = std::fs::read_to_string(path).expect("gl-admit-v9.toml");
+        assert!(
+            !raw.lines().any(|line| {
+                let line = line.trim();
+                !line.starts_with('#') && line.starts_with("born_height")
+            }),
+            "gl-admit-v9.toml gained a born_height key"
+        );
+        for pin in ["spec-2.2.0", "spec-2.3.0"] {
+            let err = load_for_pin(&raw, 2, pin).expect_err(pin);
+            assert!(err.contains("born_height"), "{pin}: {err}");
+            assert!(err.contains("absent"), "{pin}: {err}");
+        }
+        // The on-disk file is not edited. An explicit 0 is the old cutoff,
+        // and that text still matches both pins.
+        let with_born = format!("{raw}\nborn_height = 0\n");
+        for pin in ["spec-2.2.0", "spec-2.3.0"] {
+            let loaded =
+                load_for_pin(&with_born, 2, pin).unwrap_or_else(|err| panic!("{pin}: {err}"));
+            assert_eq!(loaded.policy_id, "gl-admit-v9", "{pin}");
+            assert_eq!(loaded.born_height, 0, "{pin}");
+            assert_eq!(
+                loaded.draw_commitment, "sha256(draw || salt), revealed with the result",
+                "{pin}"
+            );
+        }
     }
 
     #[test]
