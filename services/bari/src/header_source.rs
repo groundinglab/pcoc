@@ -48,9 +48,8 @@ pub struct HeaderError {
 }
 
 enum ClockState {
-    /// A genuine stop: bad proof of work, unexpected difficulty, too few
-    /// peers, peer disagreement, or a chain that does not link. Not the
-    /// absent-source arm.
+    /// A genuine stop. The live clock swaps a bad peer and only lands here
+    /// when the caller treats a quorum failure as final. Not the absent-source arm.
     Closed {
         message: String,
     },

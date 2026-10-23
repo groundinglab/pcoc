@@ -87,11 +87,12 @@ fn in_process_peer_checks() -> Result<(), String> {
         return Err("peer disagreement".to_owned());
     }
     let lone = Chain::open_fixed(anchor, 10, bits).map_err(|fault| fault.message())?;
-    match Session::from_scripted(
+    let mut lone_session = Session::from_scripted(
         lone,
         vec![ScriptedPeer::new(anchor_hash, vec![header], false)],
-        Duration::from_secs(2),
-    ) {
+        Duration::from_millis(500),
+    )?;
+    match lone_session.opening_tip() {
         Err(message) if message == "too few peers" => Ok(()),
         Err(message) => Err(message),
         Ok(_) => Err("too few peers".to_owned()),

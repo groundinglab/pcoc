@@ -65,6 +65,7 @@ struct Node {
 
 /// Headers that link to one anchor. The tip is the most recently accepted
 /// extension of that anchor, which is the only chain this clock follows.
+#[derive(Clone)]
 pub struct Chain {
     mode: Mode,
     nodes: HashMap<[u8; 32], Node>,
@@ -151,10 +152,6 @@ impl Chain {
         self.nodes.contains_key(hash)
     }
 
-    pub fn height_of(&self, hash: &[u8; 32]) -> Option<u32> {
-        self.nodes.get(hash).map(|node| node.height)
-    }
-
     pub fn locator(&self) -> Vec<[u8; 32]> {
         let mut out = vec![self.best];
         let mut hash = self.best;
@@ -188,6 +185,41 @@ impl Chain {
         if self.nodes.contains_key(&hash) {
             return Ok(());
         }
+        let node = self.validated_node(header)?;
+        if self
+            .by_height
+            .get(&node.height)
+            .is_some_and(|have| *have != node.hash)
+        {
+            return Err(Fault::Fork {
+                height: node.height,
+            });
+        }
+        self.by_height.insert(node.height, node.hash);
+        self.best = node.hash;
+        self.nodes.insert(node.hash, node);
+        Ok(())
+    }
+
+    /// Check `header` and remember it without moving the adopted tip.
+    ///
+    /// A second valid child of one parent is kept so a later header can link
+    /// to it. Callers stage on a scratch copy. The adopted chain uses `append`.
+    pub fn stage(&mut self, header: [u8; 80]) -> Result<(), Fault> {
+        let node = self.validated_node(header)?;
+        self.nodes.insert(node.hash, node);
+        Ok(())
+    }
+
+    pub fn prev_of(&self, hash: &[u8; 32]) -> Option<[u8; 32]> {
+        self.nodes.get(hash).map(|node| node.prev)
+    }
+
+    fn validated_node(&self, header: [u8; 80]) -> Result<Node, Fault> {
+        let hash = header_hash(&header);
+        if let Some(node) = self.nodes.get(&hash).copied() {
+            return Ok(node);
+        }
         let prev = header_prev(&header);
         let parent = self.nodes.get(&prev).copied().ok_or(Fault::UnknownParent)?;
         let bits = header_bits(&header);
@@ -204,25 +236,14 @@ impl Chain {
         if !hash_meets(&hash, &target) {
             return Err(Fault::BadPow);
         }
-        if self
-            .by_height
-            .get(&height)
-            .is_some_and(|have| *have != hash)
-        {
-            return Err(Fault::Fork { height });
-        }
-        let node = Node {
+        Ok(Node {
             header,
             hash,
             prev,
             height,
             bits,
             time: header_time(&header),
-        };
-        self.nodes.insert(hash, node);
-        self.by_height.insert(height, hash);
-        self.best = hash;
-        Ok(())
+        })
     }
 
     pub fn tick(&self, hash: [u8; 32]) -> Result<TipTick, Fault> {

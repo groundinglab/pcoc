@@ -34,7 +34,7 @@ cargo build --locked --release
 
 Run that in `services/bari`. No extra `--features`. `BARI_TIP_SOURCE=bitcoin-gossip` follows live headers (`HeaderClock`, mainnet). Startup does not fail closed with `live header source is not in this build`.
 
-The clock fails closed on a bad proof of work, an unexpected difficulty (including a retarget), fewer than two peers, a header that does not link, or peers that disagree. `bari --self-check` checks that arm on recorded headers and in-process peers. It does not dial.
+The clock keeps two peers that agree on a valid chain. A peer that sends a bad proof of work, an unexpected difficulty (including a retarget), or a header that does not link is disconnected and replaced from the Bitcoin Core mainnet DNS seeds or a peer that already served a valid header. So is a peer that contradicts a chain two other valid peers agree on, a peer that drops, and a peer that stays silent for 120 seconds after another peer announced a header. A one-to-one split does not move the tip; the clock asks another peer. The tip never moves on one peer. If two agreeing valid peers are still missing after 180 seconds, the read fails closed for that window and tries again. A quiet gap between blocks is not a failed peer. `bari --self-check` checks that arm on recorded headers and in-process peers. It does not dial.
 
 `BARI_TIP_SOURCE=rpc`, and an unset value, stay the lab Bitcoin Core poll. `BARI_TIP_SOURCE=synth` stays the offline test plane. Nothing here is deployed from this change.
 

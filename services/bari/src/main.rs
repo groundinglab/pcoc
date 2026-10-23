@@ -144,14 +144,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             refuse_synth_env_on_bitcoin_gossip(&synth_env_set())?;
             let backend = open_bitcoin_backend(network.clone())?;
             let fee_label = backend.fee_log_label();
-            let mut headers = HeaderClock::start(&peer, GossipNetwork::Mainnet);
-            let (headers, first) = tokio::task::spawn_blocking(move || {
-                headers
-                    .wait_tips_after(None)
-                    .map(|ticks| (headers, ticks))
-                    .map_err(|err| err.message)
-            })
-            .await??;
+            let (headers, first) = wait_live_opening(&peer).await?;
             let opened = first.first().ok_or("bitcoin gossip returned no tip")?;
             let tip = chain_tip(opened)?;
             let opened_hash = opened.hash;
@@ -459,6 +452,37 @@ fn validate_synth_wire(name: Option<&str>) -> Result<(), String> {
     }
 }
 
+fn header_quorum_hold(message: &str) -> bool {
+    message == "too few peers" || message == "peer disagreement"
+}
+
+/// Opening read for the live clock. A quorum failure keeps the same session
+/// and tries again. The tip is still withheld until two valid peers agree.
+async fn wait_live_opening(
+    peer: &str,
+) -> Result<(HeaderClock, Vec<TipTick>), Box<dyn std::error::Error>> {
+    let mut headers = HeaderClock::start(peer, GossipNetwork::Mainnet);
+    loop {
+        let mut clock = headers;
+        let (clock, result) = tokio::task::spawn_blocking(move || {
+            let result = clock.wait_tips_after(None);
+            (clock, result)
+        })
+        .await?;
+        headers = clock;
+        match result {
+            Ok(ticks) => return Ok((headers, ticks)),
+            Err(err) if header_quorum_hold(&err.message) => {
+                eprintln!(
+                    "header peers: {}; fail closed for this window, seeking two agreeing peers",
+                    err.message
+                );
+            }
+            Err(err) => return Err(err.message.into()),
+        }
+    }
+}
+
 async fn follow_headers(
     service: BariService,
     mut headers: HeaderClock,
@@ -467,16 +491,26 @@ async fn follow_headers(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut after = Some(opened);
     loop {
-        let mut current = headers;
-        let waited = tokio::task::spawn_blocking(move || {
-            current
-                .wait_tips_after(after)
-                .map(|ticks| (current, ticks))
-                .map_err(|err| err.message)
+        let mut clock = headers;
+        let after_now = after;
+        let (clock, result) = tokio::task::spawn_blocking(move || {
+            let result = clock.wait_tips_after(after_now);
+            (clock, result)
         })
-        .await??;
-        headers = waited.0;
-        for tick in waited.1 {
+        .await?;
+        headers = clock;
+        let ticks = match result {
+            Ok(ticks) => ticks,
+            Err(err) if header_quorum_hold(&err.message) => {
+                eprintln!(
+                    "header peers: {}; fail closed for this window, seeking two agreeing peers",
+                    err.message
+                );
+                continue;
+            }
+            Err(err) => return Err(err.message.into()),
+        };
+        for tick in ticks {
             let tip = chain_tip(&tick)?;
             let service = service.clone();
             if let Some(report) = tokio::task::spawn_blocking(move || service.on_tip(tip)).await?? {
