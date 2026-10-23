@@ -1,0 +1,9 @@
+== F-glm build 17:43:04
+rc=0 wall=16.7s
+== F-glm test 17:43:20
+rc=1 wall=26.0s
+== F-glm cands 17:43:46
+rc=0 wall=24.8s
+== F-glm objects 17:44:11
+rc=0 wall=94.6s
+== F-glm done 17:45:46

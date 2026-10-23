@@ -1,0 +1,30 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.10.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :compileKotlin UP-TO-DATE
+> Task :compileJava NO-SOURCE
+> Task :processResources NO-SOURCE
+> Task :classes UP-TO-DATE
+> Task :jar UP-TO-DATE
+> Task :negatives:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :negatives:compileKotlin UP-TO-DATE
+> Task :negatives:compileJava NO-SOURCE
+> Task :negatives:processResources NO-SOURCE
+> Task :negatives:classes UP-TO-DATE
+> Task :negatives:jar UP-TO-DATE
+> Task :compileTestKotlin UP-TO-DATE
+> Task :compileTestJava NO-SOURCE
+> Task :processTestResources NO-SOURCE
+> Task :testClasses UP-TO-DATE
+
+> Task :test
+WARNING: Using incubator modules: jdk.incubator.vector
+
+> Task :negatives:compileTestKotlin NO-SOURCE
+> Task :negatives:compileTestJava NO-SOURCE
+> Task :negatives:processTestResources NO-SOURCE
+> Task :negatives:testClasses UP-TO-DATE
+> Task :negatives:test NO-SOURCE
+
+BUILD SUCCESSFUL in 16s
+6 actionable tasks: 1 executed, 5 up-to-date

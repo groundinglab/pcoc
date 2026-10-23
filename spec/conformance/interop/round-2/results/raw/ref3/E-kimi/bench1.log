@@ -1,0 +1,7 @@
+host engine in force: Avx2; seal backend: libcrypto SHA256 (SHA-NI)
+engine Scalar: terrain fill 0.657s (390 MiB/s)
+engine Scalar: one production leg 6.144s (325506 steps/s, result a7b8acbec54aa088)
+engine Avx2: terrain fill 0.409s (625 MiB/s)
+engine Avx2: one production leg 4.032s (496063 steps/s, result a7b8acbec54aa088)
+seal via managed SHA256.TryHashData: 671 ns/hash (64a2a1ae7259ea00)
+seal via libcrypto SHA256:        320 ns/hash (64a2a1ae7259ea00)

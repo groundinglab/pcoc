@@ -1,0 +1,44 @@
+# groundinglab admission policy gl-admit-v9. DRAFT, not deployed.
+# Repo path (agreed layout): policy/groundinglab-admission/gl-admit-v9.toml
+# Argued in POLICY.md next to this file. Sets SPEC 2.2 section 15.4 levers only.
+# Encoding is SPEC 2.2 section 15.4 "Policy file encoding": keys in [levers] are the
+# exact lever names; an absent key means the SPEC default (or unset where the default
+# is unset). A gate refuses this file if `spec` differs from the SPEC its SDK pins, if a
+# key names an unknown lever, if a value has the wrong type, or if a value is outside
+# the lever's allowed range.
+
+policy_id = "gl-admit-v9"
+spec      = "2.2"            # Satoshi Hike 2.2, tag spec-2.2.0
+status    = "draft"
+
+[levers]
+# SPEC labelled defaults, set explicitly.
+min_anchored_paths           = 6                  # waypoints, range 2..16
+leg_rate_floor               = { p = 1, q = 5 }   # checkpoints/s, p >= 1, q >= 1; must be re-measured under 2.2
+submission_deadline_blocks   = 3                  # K, blocks, range 0..6
+held_retry_seconds           = 600                # gate-scoped, >= 1
+thorough_rounds              = 3                  # D = 18 legs
+challenge_lifetime_seconds   = 120
+challenge_clock_skew_seconds = 5
+result_retention_seconds     = 600
+
+# SPEC gives no default; the policy must set these. Values are the earlier
+# `default` profile figures, carried over unchanged.
+reverify_max_attempts        = 3
+max_held_blocks              = 6
+provisional                  = "on"
+fast_accept_bound            = 2                  # seconds (SPEC 15.4 encoding: integer ms = round(x*1000))
+async_catch_budget           = 22.05              # seconds, at most 3 fractional digits
+
+# SPEC default "unset", kept unset by leaving the keys absent. Earlier candidates were 1 and 3.
+# verify_cap_per_object       = 1
+# verify_cap_per_door_session = 3
+# fake_leg_ignore_seconds unset: the fake-leg ignore has no expiry.
+
+[policy_rules]
+# Behaviour the SPEC leaves to policy (POLICY.md section 3). Not levers.
+expected_network       = "main"                    # P1 integrity
+plant_gap              = "record-only"             # P2: d_g is recorded, never compared
+friendly_entry_custody = "newest-thorough-accept"  # P3
+old_policy_resubmit    = "new-cycle"               # P3
+draw_commitment        = "sha256(draw || salt), revealed with the result"

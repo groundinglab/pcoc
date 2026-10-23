@@ -1,0 +1,12 @@
+machine,build,engine,N,instance,legs_total,legs_in_window,window_s,legs_per_s,rss_kb,verify_leg,verify
+ref3,grok,fast,1,i1,24,21,55.99,0.3751,262248,leg23,MATCH
+ref3,grok,fast,4,i1,16,13,53.22,0.2443,262248,leg15,MATCH
+ref3,grok,fast,4,i2,16,13,52.35,0.2483,262252,leg15,MATCH
+ref3,grok,fast,4,i3,16,13,53.78,0.2417,262252,leg15,MATCH
+ref3,grok,fast,4,i4,17,14,55.84,0.2507,262252,leg16,MATCH
+ref3,grok,fast,6,i1,12,9,52.69,0.1708,262248,leg11,MATCH
+ref3,grok,fast,6,i2,12,9,52.8,0.1705,262248,leg11,MATCH
+ref3,grok,fast,6,i3,12,9,54.18,0.1661,262248,leg11,MATCH
+ref3,grok,fast,6,i4,12,9,51.45,0.1749,262244,leg11,MATCH
+ref3,grok,fast,6,i5,12,9,53.26,0.169,262248,leg11,MATCH
+ref3,grok,fast,6,i6,11,8,48.96,0.1634,262252,leg10,MATCH

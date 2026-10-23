@@ -1,0 +1,285 @@
+[0/1] Planning build
+Building for production...
+[0/7] Write sources
+[1/10] Write swift-version-5F9EAC4ED275676.txt
+[3/11] Compiling SatoshiHike CBOR.swift
+~/interop-r2/src/F-glm/impl/Sources/SatoshiHike/Index.swift:35:13: warning: variable 'parser' was never mutated; consider changing to 'let' constant
+ 33 |         }
+ 34 |         guard let str = String(validating: bytes, as: UTF8.self) else { return .fail }
+ 35 |         var parser = Parser(scalars: Array(str.unicodeScalars))
+    |             `- warning: variable 'parser' was never mutated; consider changing to 'let' constant
+ 36 |         parser.skipWs()
+ 37 |         guard let v = parser.parseValue(dup: &parser.dup) else { return .fail }
+
+~/interop-r2/src/F-glm/impl/Sources/SatoshiHike/Index.swift:248:20: warning: immutable value 'bytes' was never used; consider replacing with '_' or removing it
+246 |             // header.height (integer 0 … 2^53 − 1). `time` is read separately.
+247 |             if let hs = JSON.asString(JSON.member(h, "hash")),
+248 |                let bytes = Hex.decode(hs, expectBytes: 32) {
+    |                    `- warning: immutable value 'bytes' was never used; consider replacing with '_' or removing it
+249 |                 uHash = hs
+250 |                 if let ht = JSON.asInt(JSON.member(h, "height")), ht >= 0,
+
+~/interop-r2/src/F-glm/impl/Sources/SatoshiHike/Terrain.swift:47:13: warning: variable 'P' was never mutated; consider changing to 'let' constant
+ 45 |         bufSize = profile.terrainBytes
+ 46 |         buf = UnsafeMutableRawPointer.allocate(byteCount: bufSize, alignment: 64)
+ 47 |         var P = lanes
+    |             `- warning: variable 'P' was never mutated; consider changing to 'let' constant
+ 48 |         if scalar {
+ 49 |             TerrainFill.scalarReference(buf, nSlots: nSlots, wordsPerSlot: wordsPerSlot, P: P)
+
+~/interop-r2/src/F-glm/impl/Sources/SatoshiHike/Verify.swift:528:13: warning: variable 'claimedByG' was never used; consider replacing with '_' or removing it
+526 |         }
+527 |         var pathMeas: [PathMeas] = []
+528 |         var claimedByG: [UInt64: CanonicalPathBody] = [:]
+    |             `- warning: variable 'claimedByG' was never used; consider replacing with '_' or removing it
+529 |         for g in 1...16 {
+530 |             var pm = PathMeas()
+
+~/interop-r2/src/F-glm/impl/Sources/SatoshiHike/Verify.swift:795:53: warning: immutable value 'lim' was never used; consider replacing with '_' or removing it
+793 |                         let previous: [UInt8]? = j == 0 ? limb
+794 |                             : (j - 1 < checkpointsByStage[g].count ? checkpointsByStage[g][j - 1] : nil)
+795 |                         if let prev = previous, let lim = limb {
+    |                                                     `- warning: immutable value 'lim' was never used; consider replacing with '_' or removing it
+796 |                             let lr = Leg.result(terrain: terrain!, previousCheckpoint: prev)
+797 |                             result = lr == LE.u64(lrs[j]) ? Outcome.match : Outcome.mismatch
+[4/13] Compiling Negatives Negatives.swift
+[5/14] Compiling SHikeCLI Bench.swift
+~/interop-r2/src/F-glm/impl/Sources/SHikeCLI/Bench.swift:30:17: warning: initialization of immutable value 'tSw' was never used; consider replacing with assignment to '_' or removing it
+28 |             let tAuto = now() - t0
+29 |             buf.withUnsafeBufferPointer { shk_sha256_mode($0.baseAddress, buf.count, &out, 1) }
+30 |             let tSw = now() - t0 - tAuto
+   |                 `- warning: initialization of immutable value 'tSw' was never used; consider replacing with assignment to '_' or removing it
+31 |             let t1 = now()
+32 |             buf.withUnsafeBufferPointer { shk_sha256_mode($0.baseAddress, buf.count, &out, 1) }
+
+~/interop-r2/src/F-glm/impl/Sources/SHikeCLI/Bench.swift:42:17: warning: variable 'P' was never mutated; consider changing to 'let' constant
+40 |         // ---------------- terrain fill, production ----------------
+41 |         do {
+42 |             var P = Seed.lanes(Seed.seed(publicKey: pk, seedBeacon: sb))
+   |                 `- warning: variable 'P' was never mutated; consider changing to 'let' constant
+43 |             let size = 268_435_456
+44 |             let bufA = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: 64)
+
+~/interop-r2/src/F-glm/impl/Sources/SHikeCLI/Bench.swift:68:17: warning: variable 'P' was never mutated; consider changing to 'let' constant
+66 |         // ---------------- one production leg ----------------
+67 |         do {
+68 |             var P = Seed.lanes(Seed.seed(publicKey: pk, seedBeacon: sb))
+   |                 `- warning: variable 'P' was never mutated; consider changing to 'let' constant
+69 |             let size = 268_435_456
+70 |             let buf = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: 64)
+[5/15] Write Objects.LinkFileList
+[6/15] Linking SHikeCLI
+[8/15] Compiling GenCandidatesCore CandidateFile.swift
+[9/17] Compiling GenCandidatesCLI main.swift
+[9/18] Write Objects.LinkFileList
+[10/18] Linking GenCandidatesCLI
+[12/18] Compiling SatoshiHikeTests SatoshiHikeTests.swift
+~/interop-r2/src/F-glm/impl/Tests/SatoshiHikeTests/SatoshiHikeTests.swift:82:13: warning: variable 'P' was never mutated; consider changing to 'let' constant
+ 80 |         let bufB = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: 64)
+ 81 |         defer { bufA.deallocate(); bufB.deallocate() }
+ 82 |         var P = lanes
+    |             `- warning: variable 'P' was never mutated; consider changing to 'let' constant
+ 83 |         P.withUnsafeBufferPointer { shk_terrain_fill_scalar(bufA, 16384, 2048, $0.baseAddress) }
+ 84 |         P.withUnsafeBufferPointer { shk_terrain_fill_avx512(bufB, 16384, 2048, $0.baseAddress) }
+[12/18] ~/interop-r2/src/F-glm/impl/.build/x86_64-unknown-linux-gnu/release/SatoshiHikePackageDiscoveredTests.derived/all-discovered-tests.swift
+[13/18] Write sources
+[15/19] Compiling SatoshiHikePackageDiscoveredTests SatoshiHikeTests.swift
+[15/19] ~/interop-r2/src/F-glm/impl/.build/x86_64-unknown-linux-gnu/release/SatoshiHikePackageTests.derived/runner.swift
+[16/19] Write sources
+[18/20] Compiling SatoshiHikePackageTests runner.swift
+[18/20] Write Objects.LinkFileList
+[19/20] Linking SatoshiHikePackageTests.xctest
+Build complete! (24.61s)
+Test Suite 'All tests' started at 2026-10-22 17:43:46.170
+Test Suite 'release.xctest' started at 2026-10-22 17:43:46.171
+Test Suite 'release.xctest' passed at 2026-10-22 17:43:46.171
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.0 (0.0) seconds
+Test Suite 'All tests' passed at 2026-10-22 17:43:46.171
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.0 (0.0) seconds
+◇ Test run started.
+↳ Testing Library Version: 6.1.2 (d6b70f9ef9eb207)
+↳ Target Platform: x86_64-unknown-linux-gnu
+◇ Suite "Kernel differentials" started.
+◇ Suite "Committed candidates" started.
+◇ Suite "SPEC 7.4 checks" started.
+◇ Suite "CBOR" started.
+◇ Suite "Verify records" started.
+◇ Test s2LegScalarEqualsOptimized() started.
+◇ Test generatorReproducesCommittedFiles() started.
+◇ Test roundTripO1() started.
+◇ Test foldKernelsAgree() started.
+◇ Test verifyO2() started.
+◇ Test decodeRules() started.
+◇ Test seedExample() started.
+◇ Test rateAndAnchor() started.
+◇ Test sealZero() started.
+◇ Test sha256Abc() started.
+◇ Test terrainScalarSwiftEqualsC() started.
+◇ Test prodTerrainScalarEqualsAvx512() started.
+◇ Test hashcash() started.
+◇ Test policyFile() started.
+◇ Test le64Checks() started.
+◇ Test ruleA5Records() started.
+◇ Test keyOrderInsensitivity() started.
+◇ Test verifyO1() started.
+◇ Test drawChainStructures() started.
+◇ Test malformedRecord() started.
+✔ Test seedExample() passed after 0.008 seconds.
+✔ Test rateAndAnchor() passed after 0.008 seconds.
+✔ Test sha256Abc() passed after 0.008 seconds.
+✔ Test sealZero() passed after 0.008 seconds.
+✔ Test roundTripO1() passed after 0.008 seconds.
+✔ Test decodeRules() passed after 0.008 seconds.
+✔ Test policyFile() passed after 0.008 seconds.
+✔ Test le64Checks() passed after 0.008 seconds.
+✔ Test foldKernelsAgree() passed after 0.008 seconds.
+✔ Test s2LegScalarEqualsOptimized() passed after 0.009 seconds.
+✔ Test keyOrderInsensitivity() passed after 0.008 seconds.
+✔ Test drawChainStructures() passed after 0.008 seconds.
+✔ Test malformedRecord() passed after 0.008 seconds.
+✔ Test ruleA5Records() passed after 0.008 seconds.
+✔ Suite "SPEC 7.4 checks" passed after 0.009 seconds.
+✔ Suite "CBOR" passed after 0.009 seconds.
+✔ Test hashcash() passed after 0.010 seconds.
+✔ Test verifyO1() passed after 0.011 seconds.
+✔ Test terrainScalarSwiftEqualsC() passed after 0.022 seconds.
+✔ Test verifyO2() passed after 0.035 seconds.
+✔ Suite "Verify records" passed after 0.036 seconds.
+
+*** Signal 4: Backtracing from 0x56534d23f4f8... done ***
+
+*** Program crashed: Illegal instruction at 0x000056534d23f4f8 ***
+
+Thread 0 "SatoshiHikePack":
+
+0  0x00007f2753197301 <unknown> in libc.so.6
+
+Thread 1:
+
+ 0                         0x000056534d23ed4c shk_terrain_fill_scalar + 460 in SatoshiHikePackageTests.xctest at Sources/CSatoshiKernels/terrain.c:56:39
+ 1 [ra] [inlined]          0x000056534d2727f1 specialized Array.withUnsafeBufferPointer<A, B>(_:) in SatoshiHikePackageTests.xctest at ~/interop-r2/src/F-glm/impl/Sources/SatoshiHike/Terrain.swift:52:17
+ 2 [ra]                    0x000056534d2727f1 Terrain.init(publicKey:seedBeacon:profile:scalar:) + 400 in SatoshiHikePackageTests.xctest at ~/interop-r2/src/F-glm/impl/Sources/SatoshiHike/Terrain.swift:51:15
+ 3 [ra] [inlined] [thunk]  0x000056534d24676d Terrain.__allocating_init(publicKey:seedBeacon:profile:scalar:) in SatoshiHikePackageTests.xctest at //<compiler-generated>
+ 4 [ra]                    0x000056534d24676d specialized static Generator.terrainCase() + 636 in SatoshiHikePackageTests.xctest at ~/interop-r2/src/F-glm/impl/Sources/GenCandidatesCore/CandidateFile.swift:128:18
+ 5 [ra] [inlined] [system] 0x000056534d24af53 static Generator.terrainCase() in SatoshiHikePackageTests.xctest at //<compiler-generated>
+ 6 [ra]                    0x000056534d24af53 static Generator.run(outDir:repoRoot:) + 178 in SatoshiHikePackageTests.xctest at ~/interop-r2/src/F-glm/impl/Sources/GenCandidatesCore/CandidateFile.swift:29:36
+ 7 [ra]                    0x000056534d2ab30e specialized CandidatesTests.generatorReproducesCommittedFiles() + 621 in SatoshiHikePackageTests.xctest at ~/interop-r2/src/F-glm/impl/Tests/SatoshiHikeTests/SatoshiHikeTests.swift:403:23
+ 8 [ra] [inlined] [system] 0x000056534d2995ea CandidatesTests.generatorReproducesCommittedFiles() in SatoshiHikePackageTests.xctest at //<compiler-generated>
+ 9 [ra] [inlined]          0x000056534d2995ea $s16SatoshiHikeTests010CandidatesC0V33generatorReproducesCommittedFiles4TestfMp_7__localfMu0_ #1 @Sendable (_:) in static CandidatesTests.$s16SatoshiHikeTests010CandidatesC0V33generatorReproducesCommittedFiles4TestfMp_9Z75f6684dfMu_@Sendable () in SatoshiHikePackageTests.xctest at /tmp/swift-generated-sources/@__swiftmacro_16SatoshiHikeTests010CandidatesC0V33generatorReproducesCommittedFiles4TestfMp_.swift:5:160
+10 [ra] [inlined]          0x000056534d2995ea static CandidatesTests.$s16SatoshiHikeTests010CandidatesC0V33generatorReproducesCommittedFiles4TestfMp_9Z75f6684dfMu_@Sendable () in SatoshiHikePackageTests.xctest at /tmp/swift-generated-sources/@__swiftmacro_16SatoshiHikeTests010CandidatesC0V33generatorReproducesCommittedFiles4TestfMp_.swift:7:13
+11 [ra]                    0x000056534d2995ea implicit closure #1 in static CandidatesTests.$s16SatoshiHikeTests010CandidatesC0V33generatorReproducesCommittedFiles4TestfMp_38__🟠$test_container__function__75f6684dfMu_.__tests.getter + 25 in SatoshiHikePackageTests.xctest at /tmp/swift-generated-sources/@__swiftmacro_16SatoshiHikeTests010CandidatesC0V33generatorReproducesCommittedFiles4TestfMp_.swift:21:19
+12 [async]                 0x00007f2754362a10 specialized Runner._applyScopingTraits(for:testCase:_:) in libTesting.so
+13 [async]                 0x00007f275435f020 closure #1 in closure #1 in closure #1 in Runner._runTestCase(_:within:) in libTesting.so
+14 [async] [thunk]         0x00007f2754367b60 partial apply for closure #1 in closure #1 in closure #1 in Runner._runTestCase(_:within:) in libTesting.so
+15 [async]                 0x00007f27543addb0 withTimeLimit(for:configuration:_:timeoutHandler:) in libTesting.so
+16 [async]                 0x00007f275435edd0 closure #1 in closure #1 in Runner._runTestCase(_:within:) in libTesting.so
+17 [async] [thunk]         0x00007f2754367b50 partial apply for closure #1 in closure #1 in Runner._runTestCase(_:within:) in libTesting.so
+18 [async]                 0x00007f2754327120 static Issue.withErrorRecording(at:configuration:isolation:_:) in libTesting.so
+19 [async]                 0x00007f275435eb20 closure #1 in Runner._runTestCase(_:within:) in libTesting.so
+20 [async] [thunk]         0x00007f2754367bc0 partial apply for closure #1 in Runner._runTestCase(_:within:) in libTesting.so
+21 [async]                 0x00007f2754d918d0 TaskLocal.withValueImpl<A>(_:operation:isolation:file:line:) in libswift_Concurrency.so
+22 [async]                 0x00007f2754d917a0 TaskLocal.withValue<A>(_:operation:isolation:file:line:) in libswift_Concurrency.so
+23 [async]                 0x00007f2754355990 static Test.Case.withCurrent<A>(_:perform:) in libTesting.so
+24 [async]                 0x00007f275435e7a0 Runner._runTestCase(_:within:) in libTesting.so
+25 [async]                 0x00007f275435e480 closure #2 in Runner._runTestCases<A>(_:within:) in libTesting.so
+26 [async] [thunk]         0x00007f2754367b40 partial apply for closure #2 in Runner._runTestCases<A>(_:within:) in libTesting.so
+27 [async]                 0x00007f2754362160 specialized closure #1 in closure #1 in Runner._forEach<A, B>(in:for:_:) in libTesting.so
+28 [async] [thunk]         0x00007f2754367b30 partial apply for specialized closure #1 in closure #1 in Runner._forEach<A, B>(in:for:_:) in libTesting.so
+29 [async] [system]        0x00007f2754dbf3b0 completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*) in libswift_Concurrency.so
+
+Thread 2:
+
+0  0x00007f2753263f36 <unknown> in libc.so.6
+
+Thread 3:
+
+0  0x00007f27531e0f16 <unknown> in libc.so.6
+
+Thread 4:
+
+0  0x00007f27531e0f16 <unknown> in libc.so.6
+
+Thread 5:
+
+0  0x00007f27531e0f16 <unknown> in libc.so.6
+
+Thread 6:
+
+0  0x00007f27531e0f16 <unknown> in libc.so.6
+
+Thread 7 crashed:
+
+ 0                         0x000056534d23f4f8 shk_terrain_fill_avx512 + 40 in SatoshiHikePackageTests.xctest at Sources/CSatoshiKernels/terrain.c:110:56
+ 1 [ra] [inlined]          0x000056534d29d91a specialized Array.withUnsafeBufferPointer<A, B>(_:) in SatoshiHikePackageTests.xctest at ~/interop-r2/src/F-glm/impl/Tests/SatoshiHikeTests/SatoshiHikeTests.swift:84:37
+ 2 [ra]                    0x000056534d29d91a specialized KernelDifferentials.prodTerrainScalarEqualsAvx512() + 281 in SatoshiHikePackageTests.xctest at ~/interop-r2/src/F-glm/impl/Tests/SatoshiHikeTests/SatoshiHikeTests.swift:84:11
+ 3 [ra] [inlined] [system] 0x000056534d296f25 KernelDifferentials.prodTerrainScalarEqualsAvx512() in SatoshiHikePackageTests.xctest at //<compiler-generated>
+ 4 [ra] [inlined]          0x000056534d296f25 $s16SatoshiHikeTests19KernelDifferentialsV29prodTerrainScalarEqualsAvx5124TestfMp_7__localfMu0_ #1 @Sendable (_:) in static KernelDifferentials.$s16SatoshiHikeTests19KernelDifferentialsV29prodTerrainScalarEqualsAvx5124TestfMp_8b9b73280fMu_@Sendable () in SatoshiHikePackageTests.xctest at /tmp/swift-generated-sources/@__swiftmacro_16SatoshiHikeTests19KernelDifferentialsV29prodTerrainScalarEqualsAvx5124TestfMp_.swift:5:162
+ 5 [ra] [inlined]          0x000056534d296f25 static KernelDifferentials.$s16SatoshiHikeTests19KernelDifferentialsV29prodTerrainScalarEqualsAvx5124TestfMp_8b9b73280fMu_@Sendable () in SatoshiHikePackageTests.xctest at /tmp/swift-generated-sources/@__swiftmacro_16SatoshiHikeTests19KernelDifferentialsV29prodTerrainScalarEqualsAvx5124TestfMp_.swift:7:13
+ 6 [ra]                    0x000056534d296f25 implicit closure #1 in static KernelDifferentials.$s16SatoshiHikeTests19KernelDifferentialsV29prodTerrainScalarEqualsAvx5124TestfMp_38__🟠$test_container__function__b9b73280fMu_.__tests.getter + 20 in SatoshiHikePackageTests.xctest at /tmp/swift-generated-sources/@__swiftmacro_16SatoshiHikeTests19KernelDifferentialsV29prodTerrainScalarEqualsAvx5124TestfMp_.swift:21:19
+ 7 [async]                 0x00007f2754362a10 specialized Runner._applyScopingTraits(for:testCase:_:) in libTesting.so
+ 8 [async]                 0x00007f275435f020 closure #1 in closure #1 in closure #1 in Runner._runTestCase(_:within:) in libTesting.so
+ 9 [async] [thunk]         0x00007f2754367b60 partial apply for closure #1 in closure #1 in closure #1 in Runner._runTestCase(_:within:) in libTesting.so
+10 [async]                 0x00007f27543addb0 withTimeLimit(for:configuration:_:timeoutHandler:) in libTesting.so
+11 [async]                 0x00007f275435edd0 closure #1 in closure #1 in Runner._runTestCase(_:within:) in libTesting.so
+12 [async] [thunk]         0x00007f2754367b50 partial apply for closure #1 in closure #1 in Runner._runTestCase(_:within:) in libTesting.so
+13 [async]                 0x00007f2754327120 static Issue.withErrorRecording(at:configuration:isolation:_:) in libTesting.so
+14 [async]                 0x00007f275435eb20 closure #1 in Runner._runTestCase(_:within:) in libTesting.so
+15 [async] [thunk]         0x00007f2754367bc0 partial apply for closure #1 in Runner._runTestCase(_:within:) in libTesting.so
+16 [async]                 0x00007f2754d918d0 TaskLocal.withValueImpl<A>(_:operation:isolation:file:line:) in libswift_Concurrency.so
+17 [async]                 0x00007f2754d917a0 TaskLocal.withValue<A>(_:operation:isolation:file:line:) in libswift_Concurrency.so
+18 [async]                 0x00007f2754355990 static Test.Case.withCurrent<A>(_:perform:) in libTesting.so
+19 [async]                 0x00007f275435e7a0 Runner._runTestCase(_:within:) in libTesting.so
+20 [async]                 0x00007f275435e480 closure #2 in Runner._runTestCases<A>(_:within:) in libTesting.so
+21 [async] [thunk]         0x00007f2754367b40 partial apply for closure #2 in Runner._runTestCases<A>(_:within:) in libTesting.so
+22 [async]                 0x00007f2754362160 specialized closure #1 in closure #1 in Runner._forEach<Aerror: Exited with unexpected signal code 4
+, B>(in:for:_:) in libTesting.so
+23 [async] [thunk]         0x00007f2754367b30 partial apply for specialized closure #1 in closure #1 in Runner._forEach<A, B>(in:for:_:) in libTesting.so
+24 [async] [system]        0x00007f2754dbf3b0 completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*) in libswift_Concurrency.so
+
+Thread 8:
+
+0  0x00007f27531e0f16 <unknown> in libc.so.6
+
+Thread 9:
+
+0  0x00007f27531e0f16 <unknown> in libc.so.6
+
+Thread 10:
+
+0  0x00007f27531e0f16 <unknown> in libc.so.6
+
+
+Registers:
+
+rax 0x0000000000000000  0
+rdx 0x0000000000004000  16384
+rcx 0x00007f272800a840  1c f2 e2 a5 fc 08 49 a3 f5 40 02 41 d3 f5 29 77  ·òâ¥ü·I£õ@·AÓõ)w
+rbx 0x0000000000000800  2048
+rsi 0x00007f2703ffe040  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ················
+rdi 0x0000000000004000  16384
+rbp 0x00007f27497f9990  00 9c 7f 49 27 7f 00 00 1a d9 29 4d 53 56 00 00  ···I'····Ù)MSV··
+rsp 0x00007f27497f96c0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ················
+ r8 0x00007f2723ffb040  cd 69 ea 87 b5 50 c7 4d a7 9a cb ba 88 e9 d7 c7  Íiê·µPÇM§·Ëº·é×Ç
+ r9 0x0000000000000800  2048
+r10 0xbf58476d1ce4e5b9  13787848793156543929
+r11 0x94d049bb133111eb  10723151780598845931
+r12 0x00007f2713fff040  78 19 cf 78 13 e5 9e 06 96 a4 5a a8 53 5b 61 d9  x·Ïx·å···¤Z¨S[aÙ
+r13 0x00007f272800a820  40 08 cc 54 27 7f 00 00 03 00 00 00 00 00 00 00  @·ÌT'···········
+r14 0x0000000000000800  2048
+r15 0x00007f2703ffe040  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ················
+rip 0x000056534d23f4f8  62 f2 fd 48 5b 01 62 f1 fd 48 7f 44 24 02 62 f2  bòýH[·bñýH·D$·bò
+
+rflags 0x0000000000010206  PF
+
+cs 0x0033  fs 0x0000  gs 0x0000
+
+
+Images (17 omitted):
+
+0x000056534d22d000–0x000056534d2d22c0 493b184c90e27c2f2ff07763f19ed2418c9833e4 SatoshiHikePackageTests.xctest ~/interop-r2/src/F-glm/impl/.build/x86_64-unknown-linux-gnu/release/SatoshiHikePackageTests.xctest
+0x00007f275315b000–0x00007f27532d60fc 93ac61ec5a8eb1396f9fbd350e3169a558528a40 libc.so.6                      /usr/lib/x86_64-linux-gnu/libc.so.6
+0x00007f275428a000–0x00007f27543da080 7484b191d4c402d23049ad6afeecc0e19ff017f4 libTesting.so                  ~/interop-r2/toolchains/swift/usr/lib/swift/linux/libTesting.so
+0x00007f2754d54000–0x00007f2754dd9b00 0ce95be66bd1faafa906f4705f7f353c3bd05725 libswift_Concurrency.so        ~/interop-r2/toolchains/swift/usr/lib/swift/linux/libswift_Concurrency.so
+
+Backtrace took 0.21s
+

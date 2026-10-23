@@ -1,0 +1,33 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Pcoc -> ~/interop-r2/src/E-kimi/impl/src/Pcoc/bin/Release/net8.0/Pcoc.dll
+  Pcoc.Cli -> ~/interop-r2/src/E-kimi/impl/src/Pcoc.Cli/bin/Release/net8.0/pcoc-cli.dll
+  Pcoc.Tests -> ~/interop-r2/src/E-kimi/impl/tests/Pcoc.Tests/bin/Release/net8.0/Pcoc.Tests.dll
+Test run for ~/interop-r2/src/E-kimi/impl/tests/Pcoc.Tests/bin/Release/net8.0/Pcoc.Tests.dll (.NETCoreApp,Version=v8.0)
+VSTest version 17.11.1 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.29]     Pcoc.Tests.EngineEquivalence.TerrainIdenticalAcrossEngines [FAIL]
+[xUnit.net 00:00:00.29]     Pcoc.Tests.EngineEquivalence.FoldIdenticalAcrossEngines [FAIL]
+  Failed Pcoc.Tests.EngineEquivalence.TerrainIdenticalAcrossEngines [29 ms]
+  Error Message:
+   System.PlatformNotSupportedException : Operation is not supported on this platform.
+  Stack Trace:
+     at System.Runtime.Intrinsics.X86.Avx512F.Xor(Vector512`1 left, Vector512`1 right)
+   at Pcoc.Terrain.FillBaseAvx512(Profile profile, UInt64[] terrain, Int64 i, Int32 wps, Int32 vec, Vector512`1 lane0, Vector512`1 lane1r, Vector512`1 lane2r, Vector512`1 lane3r, Vector512`1 jv0, Vector512`1 step, Vector512`1 add, Vector512`1 m1, Vector512`1 m2, ReadOnlySpan`1 lanes) in ~/interop-r2/src/E-kimi/impl/src/Pcoc/Terrain.cs:line 394
+   at Pcoc.Terrain.FillAvx512(Profile profile, UInt64[] terrain, ReadOnlySpan`1 lanes) in ~/interop-r2/src/E-kimi/impl/src/Pcoc/Terrain.cs:line 341
+   at Pcoc.Tests.EngineEquivalence.TerrainIdenticalAcrossEngines() in ~/interop-r2/src/E-kimi/impl/tests/Pcoc.Tests/SpecChecks.cs:line 94
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+  Failed Pcoc.Tests.EngineEquivalence.FoldIdenticalAcrossEngines [7 ms]
+  Error Message:
+   System.PlatformNotSupportedException : Operation is not supported on this platform.
+  Stack Trace:
+     at System.Runtime.Intrinsics.X86.Avx512F.Xor(Vector512`1 left, Vector512`1 right)
+   at Pcoc.Leg.FoldAvx512(ReadOnlySpan`1 slot, UInt64 s) in ~/interop-r2/src/E-kimi/impl/src/Pcoc/Leg.cs:line 207
+   at Pcoc.Tests.EngineEquivalence.FoldIdenticalAcrossEngines() in ~/interop-r2/src/E-kimi/impl/tests/Pcoc.Tests/SpecChecks.cs:line 109
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+Failed!  - Failed:     2, Passed:    33, Skipped:     0, Total:    35, Duration: 51 s - Pcoc.Tests.dll (net8.0)

@@ -1,0 +1,49 @@
+
+*** Signal 4: Backtracing from 0x5c3256c91518... done ***
+
+*** Program crashed: Illegal instruction at 0x00005c3256c91518 ***
+
+Thread 0 "SHikeCLI" crashed:
+
+0                         0x00005c3256c91518 shk_terrain_fill_avx512 + 40 in SHikeCLI at Sources/CSatoshiKernels/terrain.c:110:56
+1 [ra] [inlined]          0x00005c3256c98ad5 specialized Array.withUnsafeBufferPointer<A, B>(_:) in SHikeCLI at ~/interop-r2/src/F-glm/impl/Sources/SHikeCLI/Bench.swift:56:41
+2 [ra]                    0x00005c3256c98ad5 specialized static Bench.run() + 1828 in SHikeCLI at ~/interop-r2/src/F-glm/impl/Sources/SHikeCLI/Bench.swift:56:15
+3 [ra] [inlined] [system] 0x00005c3256c95c34 static Bench.run() in SHikeCLI at //<compiler-generated>
+4 [ra]                    0x00005c3256c95c34 SHikeCLI_main + 3203 in SHikeCLI at ~/interop-r2/src/F-glm/impl/Sources/SHikeCLI/main.swift:178:11
+5 [ra]                    0x000073eb6702a1ca __libc_start_call_main + 121 in libc.so.6
+6 [ra]                    0x000073eb6702a28b __libc_start_main@GLIBC_2.2.5 + 138 in libc.so.6
+
+
+Registers:
+
+rax 0x00011f4f95ab5750  315901650622288
+rdx 0x0000000000004000  16384
+rcx 0x00005c327d8a2600  1c f2 e2 a5 fc 08 49 a3 f5 40 02 41 d3 f5 29 77  ·òâ¥ü·I£õ@·AÓõ)w
+rbx 0x0000000000000800  2048
+rsi 0x000073eb447fe040  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ················
+rdi 0x0000000000004000  16384
+rbp 0x00007ffca1a88ba0  10 8f a8 a1 fc 7f 00 00 d5 8a c9 56 32 5c 00 00  ··¨¡ü···Õ·ÉV2\··
+rsp 0x00007ffca1a888c0  f8 6a ab 68 eb 73 00 00 28 6b ab 68 eb 73 00 00  øj«hës··(k«hës··
+ r8 0x0000000000000000  0
+ r9 0x0000000000000000  0
+r10 0x0000000000000000  0
+r11 0x0000000000000000  0
+r12 0x000073eb447fe040  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ················
+r13 0x00005c327d8a2600  1c f2 e2 a5 fc 08 49 a3 f5 40 02 41 d3 f5 29 77  ·òâ¥ü·I£õ@·AÓõ)w
+r14 0x0000000000000800  2048
+r15 0x00005c327d8a25e0  60 6f ab 68 eb 73 00 00 03 00 00 00 00 00 00 00  `o«hës··········
+rip 0x00005c3256c91518  62 f2 fd 48 5b 01 62 f1 fd 48 7f 44 24 02 62 f2  bòýH[·bñýH·D$·bò
+
+rflags 0x0000000000010206  PF
+
+cs 0x0033  fs 0x0000  gs 0x0000
+
+
+Images (17 omitted):
+
+0x00005c3256c86000–0x00005c3256cdfbf0 9609f2ef104b2f8cdacee5e04e2d5f8a00303226 SHikeCLI  ~/interop-r2/src/F-glm/impl/.build/x86_64-unknown-linux-gnu/release/SHikeCLI
+0x000073eb67000000–0x000073eb671b0039 a4a7992a8e66555c8141ab2a08a8465ff6e0ea65 libc.so.6 /usr/lib/x86_64-linux-gnu/libc.so.6
+
+Backtrace took 0.07s
+
+timeout: the monitored command dumped core

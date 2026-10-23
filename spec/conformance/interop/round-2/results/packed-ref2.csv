@@ -1,0 +1,7 @@
+machine,build,engine,N,instance,legs_total,legs_in_window,window_s,legs_per_s,rss_kb,verify_leg,verify
+ref2,grok,fast,1,i1,10,7,52.1,0.1344,262248,leg9,MATCH
+ref2,grok,fast,2,i1,10,7,51.21,0.1367,262248,leg9,MATCH
+ref2,grok,fast,2,i2,10,7,51.09,0.137,262248,leg9,MATCH
+ref2,grok,scalar,1,i1,16,13,53.74,0.2419,262248,leg15,MATCH
+ref2,grok,scalar,2,i1,16,13,54.41,0.2389,262248,leg15,MATCH
+ref2,grok,scalar,2,i2,16,13,54.65,0.2379,262248,leg15,MATCH

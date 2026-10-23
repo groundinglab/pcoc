@@ -1,0 +1,49 @@
+Building for production...
+[0/2] Write swift-version-5F9EAC4ED275676.txt
+[2/3] Compiling SHikeCLI Bench.swift
+~/interop-r2/src/F-glm/impl/Sources/SHikeCLI/Bench.swift:30:17: warning: initialization of immutable value 'tSw' was never used; consider replacing with assignment to '_' or removing it
+28 |             let tAuto = now() - t0
+29 |             buf.withUnsafeBufferPointer { shk_sha256_mode($0.baseAddress, buf.count, &out, 1) }
+30 |             let tSw = now() - t0 - tAuto
+   |                 `- warning: initialization of immutable value 'tSw' was never used; consider replacing with assignment to '_' or removing it
+31 |             let t1 = now()
+32 |             buf.withUnsafeBufferPointer { shk_sha256_mode($0.baseAddress, buf.count, &out, 1) }
+
+~/interop-r2/src/F-glm/impl/Sources/SHikeCLI/Bench.swift:42:17: warning: variable 'P' was never mutated; consider changing to 'let' constant
+40 |         // ---------------- terrain fill, production ----------------
+41 |         do {
+42 |             var P = Seed.lanes(Seed.seed(publicKey: pk, seedBeacon: sb))
+   |                 `- warning: variable 'P' was never mutated; consider changing to 'let' constant
+43 |             let size = 268_435_456
+44 |             let bufA = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: 64)
+
+~/interop-r2/src/F-glm/impl/Sources/SHikeCLI/Bench.swift:68:17: warning: variable 'P' was never mutated; consider changing to 'let' constant
+66 |         // ---------------- one production leg ----------------
+67 |         do {
+68 |             var P = Seed.lanes(Seed.seed(publicKey: pk, seedBeacon: sb))
+   |                 `- warning: variable 'P' was never mutated; consider changing to 'let' constant
+69 |             let size = 268_435_456
+70 |             let buf = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: 64)
+[2/4] Write Objects.LinkFileList
+[3/4] Linking SHikeCLI
+Build of product 'SHikeCLI' complete! (2.05s)
+path_skip 1
+path_skip 2
+path_skip 3
+path_skip 4
+path_skip 5
+path_skip 6
+path_skip 7
+path_skip 8
+path_skip 9
+path_skip 10
+path_skip 11
+path_skip 12
+path_skip 13
+path_skip 14
+path_skip 15
+path_skip 16
+not fetched by design 17
+O1 (S1, 18x1 legs)  3639 bytes  0.0s
+O2 (S2, 18x3 legs)  5189 bytes  0.0s
+O3 (PROD, 18x1 legs)  3644 bytes  58.8s

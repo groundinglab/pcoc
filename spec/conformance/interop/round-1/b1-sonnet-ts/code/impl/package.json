@@ -1,0 +1,13 @@
+{
+  "name": "satoshi-hike-2.2-ts",
+  "version": "2.2.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "candidates": "node src/gen/gen-candidates.ts",
+    "produce": "node src/cli.ts produce-test-plane ../objects",
+    "verify": "node src/cli.ts verify",
+    "test": "node --test test/*.test.ts"
+  }
+}

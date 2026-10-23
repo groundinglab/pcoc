@@ -1,0 +1,144 @@
+[0/1] Planning build
+Building for production...
+[0/5] Write swift-version-5F9EAC4ED275676.txt
+[2/6] Compiling SatoshiHike CBOR.swift
+~/interop-r2/src/F-glm/impl/Sources/SatoshiHike/Index.swift:35:13: warning: variable 'parser' was never mutated; consider changing to 'let' constant
+ 33 |         }
+ 34 |         guard let str = String(validating: bytes, as: UTF8.self) else { return .fail }
+ 35 |         var parser = Parser(scalars: Array(str.unicodeScalars))
+    |             `- warning: variable 'parser' was never mutated; consider changing to 'let' constant
+ 36 |         parser.skipWs()
+ 37 |         guard let v = parser.parseValue(dup: &parser.dup) else { return .fail }
+
+~/interop-r2/src/F-glm/impl/Sources/SatoshiHike/Index.swift:248:20: warning: immutable value 'bytes' was never used; consider replacing with '_' or removing it
+246 |             // header.height (integer 0 … 2^53 − 1). `time` is read separately.
+247 |             if let hs = JSON.asString(JSON.member(h, "hash")),
+248 |                let bytes = Hex.decode(hs, expectBytes: 32) {
+    |                    `- warning: immutable value 'bytes' was never used; consider replacing with '_' or removing it
+249 |                 uHash = hs
+250 |                 if let ht = JSON.asInt(JSON.member(h, "height")), ht >= 0,
+
+~/interop-r2/src/F-glm/impl/Sources/SatoshiHike/Terrain.swift:47:13: warning: variable 'P' was never mutated; consider changing to 'let' constant
+ 45 |         bufSize = profile.terrainBytes
+ 46 |         buf = UnsafeMutableRawPointer.allocate(byteCount: bufSize, alignment: 64)
+ 47 |         var P = lanes
+    |             `- warning: variable 'P' was never mutated; consider changing to 'let' constant
+ 48 |         if scalar {
+ 49 |             TerrainFill.scalarReference(buf, nSlots: nSlots, wordsPerSlot: wordsPerSlot, P: P)
+
+~/interop-r2/src/F-glm/impl/Sources/SatoshiHike/Verify.swift:528:13: warning: variable 'claimedByG' was never used; consider replacing with '_' or removing it
+526 |         }
+527 |         var pathMeas: [PathMeas] = []
+528 |         var claimedByG: [UInt64: CanonicalPathBody] = [:]
+    |             `- warning: variable 'claimedByG' was never used; consider replacing with '_' or removing it
+529 |         for g in 1...16 {
+530 |             var pm = PathMeas()
+
+~/interop-r2/src/F-glm/impl/Sources/SatoshiHike/Verify.swift:795:53: warning: immutable value 'lim' was never used; consider replacing with '_' or removing it
+793 |                         let previous: [UInt8]? = j == 0 ? limb
+794 |                             : (j - 1 < checkpointsByStage[g].count ? checkpointsByStage[g][j - 1] : nil)
+795 |                         if let prev = previous, let lim = limb {
+    |                                                     `- warning: immutable value 'lim' was never used; consider replacing with '_' or removing it
+796 |                             let lr = Leg.result(terrain: terrain!, previousCheckpoint: prev)
+797 |                             result = lr == LE.u64(lrs[j]) ? Outcome.match : Outcome.mismatch
+[3/8] Compiling Negatives Negatives.swift
+[4/8] Compiling SHikeCLI Bench.swift
+~/interop-r2/src/F-glm/impl/Sources/SHikeCLI/Bench.swift:30:17: warning: initialization of immutable value 'tSw' was never used; consider replacing with assignment to '_' or removing it
+28 |             let tAuto = now() - t0
+29 |             buf.withUnsafeBufferPointer { shk_sha256_mode($0.baseAddress, buf.count, &out, 1) }
+30 |             let tSw = now() - t0 - tAuto
+   |                 `- warning: initialization of immutable value 'tSw' was never used; consider replacing with assignment to '_' or removing it
+31 |             let t1 = now()
+32 |             buf.withUnsafeBufferPointer { shk_sha256_mode($0.baseAddress, buf.count, &out, 1) }
+
+~/interop-r2/src/F-glm/impl/Sources/SHikeCLI/Bench.swift:42:17: warning: variable 'P' was never mutated; consider changing to 'let' constant
+40 |         // ---------------- terrain fill, production ----------------
+41 |         do {
+42 |             var P = Seed.lanes(Seed.seed(publicKey: pk, seedBeacon: sb))
+   |                 `- warning: variable 'P' was never mutated; consider changing to 'let' constant
+43 |             let size = 268_435_456
+44 |             let bufA = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: 64)
+
+~/interop-r2/src/F-glm/impl/Sources/SHikeCLI/Bench.swift:68:17: warning: variable 'P' was never mutated; consider changing to 'let' constant
+66 |         // ---------------- one production leg ----------------
+67 |         do {
+68 |             var P = Seed.lanes(Seed.seed(publicKey: pk, seedBeacon: sb))
+   |                 `- warning: variable 'P' was never mutated; consider changing to 'let' constant
+69 |             let size = 268_435_456
+70 |             let buf = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: 64)
+[4/9] Write Objects.LinkFileList
+[5/10] Linking SHikeCLI
+[7/10] Compiling GenCandidatesCore CandidateFile.swift
+[8/12] Compiling GenCandidatesCLI main.swift
+[8/13] Write Objects.LinkFileList
+[9/13] Linking GenCandidatesCLI
+[11/13] Compiling SatoshiHikeTests SatoshiHikeTests.swift
+~/interop-r2/src/F-glm/impl/Tests/SatoshiHikeTests/SatoshiHikeTests.swift:82:13: warning: variable 'P' was never mutated; consider changing to 'let' constant
+ 80 |         let bufB = UnsafeMutableRawPointer.allocate(byteCount: size, alignment: 64)
+ 81 |         defer { bufA.deallocate(); bufB.deallocate() }
+ 82 |         var P = lanes
+    |             `- warning: variable 'P' was never mutated; consider changing to 'let' constant
+ 83 |         P.withUnsafeBufferPointer { shk_terrain_fill_scalar(bufA, 16384, 2048, $0.baseAddress) }
+ 84 |         P.withUnsafeBufferPointer { shk_terrain_fill_avx512(bufB, 16384, 2048, $0.baseAddress) }
+[11/13] ~/interop-r2/src/F-glm/impl/.build/x86_64-unknown-linux-gnu/release/SatoshiHikePackageDiscoveredTests.derived/all-discovered-tests.swift
+[12/14] Write sources
+[14/15] Compiling SatoshiHikePackageDiscoveredTests SatoshiHikeTests.swift
+[14/16] Write Objects.LinkFileList
+[15/16] Linking SatoshiHikePackageTests.xctest
+Build complete! (20.05s)
+Test Suite 'Selected tests' started at 2026-10-22 17:40:06.089
+Test Suite 'Selected tests' passed at 2026-10-22 17:40:06.090
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.0 (0.0) seconds
+◇ Test run started.
+↳ Testing Library Version: 6.1.2 (d6b70f9ef9eb207)
+↳ Target Platform: x86_64-unknown-linux-gnu
+◇ Suite "CBOR" started.
+◇ Suite "Committed candidates" started.
+◇ Suite "Kernel differentials" started.
+◇ Suite "SPEC 7.4 checks" started.
+◇ Suite "Verify records" started.
+◇ Test s2LegScalarEqualsOptimized() started.
+◇ Test decodeRules() started.
+◇ Test keyOrderInsensitivity() started.
+◇ Test sha256Abc() started.
+◇ Test generatorReproducesCommittedFiles() started.
+◇ Test foldKernelsAgree() started.
+◇ Test seedExample() started.
+◇ Test sealZero() started.
+◇ Test hashcash() started.
+◇ Test ruleA5Records() started.
+◇ Test roundTripO1() started.
+◇ Test policyFile() started.
+◇ Test terrainScalarSwiftEqualsC() started.
+◇ Test verifyO2() started.
+◇ Test drawChainStructures() started.
+◇ Test verifyO1() started.
+◇ Test rateAndAnchor() started.
+◇ Test le64Checks() started.
+◇ Test malformedRecord() started.
+✔ Test sha256Abc() passed after 0.001 seconds.
+✔ Test sealZero() passed after 0.001 seconds.
+✔ Test seedExample() passed after 0.001 seconds.
+✔ Test drawChainStructures() passed after 0.001 seconds.
+✔ Test decodeRules() passed after 0.001 seconds.
+✔ Test keyOrderInsensitivity() passed after 0.001 seconds.
+✔ Test le64Checks() passed after 0.001 seconds.
+✔ Test rateAndAnchor() passed after 0.001 seconds.
+✔ Test malformedRecord() passed after 0.001 seconds.
+✔ Test roundTripO1() passed after 0.001 seconds.
+✔ Suite "SPEC 7.4 checks" passed after 0.001 seconds.
+✔ Suite "CBOR" passed after 0.001 seconds.
+✔ Test verifyO1() passed after 0.002 seconds.
+✔ Test policyFile() passed after 0.002 seconds.
+✔ Test ruleA5Records() passed after 0.002 seconds.
+✔ Test hashcash() passed after 0.002 seconds.
+✔ Test s2LegScalarEqualsOptimized() passed after 0.003 seconds.
+✔ Test foldKernelsAgree() passed after 0.003 seconds.
+✔ Test terrainScalarSwiftEqualsC() passed after 0.008 seconds.
+✔ Suite "Kernel differentials" passed after 0.008 seconds.
+✔ Test verifyO2() passed after 0.011 seconds.
+✔ Suite "Verify records" passed after 0.012 seconds.
+✔ Test generatorReproducesCommittedFiles() passed after 4.791 seconds.
+✔ Suite "Committed candidates" passed after 4.791 seconds.
+✔ Test run with 19 tests passed after 4.791 seconds.
+rc=0

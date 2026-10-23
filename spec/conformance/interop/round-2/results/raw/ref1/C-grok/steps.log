@@ -1,0 +1,24 @@
+== C-grok build 17:22:10
+rc=0 wall=21.6s
+== C-grok test 17:22:32
+rc=1 wall=16.5s
+== C-grok cands 17:22:48
+rc=0 wall=3.2s
+== C-grok objects 17:22:51
+rc=0 wall=45.3s
+== C-grok done 17:23:37
+== C-grok test 17:33:10
+rc=0 wall=3.1s
+== C-grok done 17:33:13
+== C-grok cands 17:34:24
+rc=0 wall=3.1s
+== C-grok objects 17:34:27
+rc=0 wall=44.8s
+== C-grok done 17:35:12
+== C-grok bench1 17:40:10
+rc=0 wall=5.6s
+== C-grok bench2 17:40:16
+rc=0 wall=5.6s
+== C-grok bench3 17:40:22
+rc=0 wall=5.6s
+== C-grok done 17:40:27

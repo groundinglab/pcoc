@@ -1,0 +1,7 @@
+candidates: S1/S2 terrain fills
+candidates: PROD terrain fill (this is the slow one)
+candidates: S1 hike (18 × 1)
+candidates: S2 hike (18 × 3)
+candidates: PROD first leg
+candidates: negatives
+candidates: done

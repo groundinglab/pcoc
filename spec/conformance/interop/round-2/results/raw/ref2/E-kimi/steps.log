@@ -1,0 +1,15 @@
+== E-kimi build 18:34:15
+rc=0 wall=18.1s
+== E-kimi test 18:34:33
+rc=1 wall=54.8s
+== E-kimi cands 18:35:28
+rc=0 wall=10.6s
+== E-kimi objects 18:35:38
+rc=0 wall=113.0s
+== E-kimi bench1 18:37:31
+rc=0 wall=16.9s
+== E-kimi bench2 18:37:48
+rc=0 wall=16.8s
+== E-kimi bench3 18:38:05
+rc=0 wall=16.9s
+== E-kimi done 18:38:22

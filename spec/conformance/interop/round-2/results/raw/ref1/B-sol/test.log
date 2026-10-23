@@ -1,0 +1,13 @@
+python3 -m unittest discover -s tests -v
+test_cbor_accepts_non_shortest_uint_and_rejects_trailing (test_core.CoreTests.test_cbor_accepts_non_shortest_uint_and_rejects_trailing) ... ok
+test_committed_o1_full_verifier_record (test_core.CoreTests.test_committed_o1_full_verifier_record) ... ok
+test_fixture_draws_restart_at_b0 (test_core.CoreTests.test_fixture_draws_restart_at_b0) ... ok
+test_optimized_and_scalar_are_identical (test_core.CoreTests.test_optimized_and_scalar_are_identical) ... ok
+test_section_7_checks (test_core.CoreTests.test_section_7_checks) ... ok
+test_section_7_seed_example (test_core.CoreTests.test_section_7_seed_example) ... ok
+test_candidate_generator_is_reproducible (test_generated.GeneratedArtifactsTests.test_candidate_generator_is_reproducible) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 8.132s
+
+OK

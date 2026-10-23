@@ -1,0 +1,10 @@
+== B-sol build 17:32:54
+rc=0 wall=0.5s
+== B-sol test 17:32:54
+rc=0 wall=11.8s
+== B-sol cands 17:33:06
+rc=0 wall=146.1s
+== B-sol done 17:35:32
+== B-sol bench1 17:51:11
+rc=0 wall=51.9s
+== B-sol done 17:52:03
