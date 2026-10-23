@@ -526,9 +526,7 @@ async fn thorough_verify_returns_when_the_index_answers_500() {
     assert_eq!(job["status"], "error");
     let reasons = job["reasons"].as_array().unwrap();
     assert!(
-        reasons
-            .iter()
-            .any(|reason| reason == "unknown_kind"),
+        reasons.iter().any(|reason| reason == "unknown_kind"),
         "{job}"
     );
     let (status, second) = post_cbor(&router, other_kind([9u8; 32])).await;
@@ -690,6 +688,82 @@ async fn verify_over_the_object_cap_is_refused() {
         .unwrap()
         .contains("260000"));
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A shape match used to invent `hike_span` `not read` without calling the
+/// index, so every current object finished `held`. SPEC §14 reads the index.
+/// When those headers are readable and the pair meets gl-admit-v9's 1/5 floor,
+/// the job is `done`.
+#[tokio::test]
+async fn a_readable_hike_is_done_not_held() {
+    let object = std::fs::read(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../sdk/rust/objects/O3-PROD.cbor"),
+    )
+    .expect("O3");
+    let index = index_for_hike(&object);
+    let dir = scratch("hike-read");
+    let router = opened(dir.clone(), &index.base, |cfg| {
+        cfg.index_timeout = Duration::from_secs(5);
+    });
+    let (status, posted) = post_cbor(&router, object).await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{posted}");
+    let job = poll_job_for(
+        &router,
+        posted["job_id"].as_str().unwrap(),
+        Duration::from_secs(600),
+    )
+    .await;
+    assert_eq!(job["status"], "done", "{job}");
+    assert_eq!(job["record"]["shape"], "match", "{job}");
+    assert_eq!(job["record"]["analysis"]["hike_legs"], 18, "{job}");
+    assert_eq!(job["record"]["analysis"]["hike_span"], 90, "{job}");
+    assert!(job["record"]["headers"].is_array(), "{job}");
+    assert!(job.get("error").is_none(), "{job}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Headers whose natural hash is the object's beacon, 5 s apart, so
+/// `MTP(last) − MTP(first)` is `5 * (last − first)` = 90 s for O3.
+fn index_for_hike(object: &[u8]) -> Index {
+    let obj = pcoc::decode_object(object).expect("object");
+    let mut beacons = HashMap::<u64, [u8; 32]>::new();
+    for stage in &obj.stages {
+        beacons.insert(stage.beacon_height, stage.beacon);
+    }
+    if obj.has_last_height {
+        beacons.insert(obj.last_interrupt_height, obj.last_interrupt);
+    }
+    let mut lo = u64::MAX;
+    let mut hi = 0u64;
+    for &height in beacons.keys() {
+        let n = height.saturating_add(1).min(11);
+        let start = height + 1 - n;
+        lo = lo.min(start);
+        hi = hi.max(height);
+    }
+    let mut exact = HashMap::new();
+    for height in lo..=hi {
+        let natural = beacons.get(&height).copied().unwrap_or([0x11; 32]);
+        let display = pcoc::hexutil::hex_encode(&pcoc::hexutil::reverse32(&natural));
+        let time = 1_600_000_000u64 + 5 * height;
+        let body = format!(
+            "{{\"network\":\"synthetic\",\"header\":{{\"hash\":\"{display}\",\"height\":{height},\"time\":{time}}}}}"
+        );
+        exact.insert(
+            format!("/index/{height}"),
+            Reply::Body {
+                status: "200 OK".to_owned(),
+                body,
+            },
+        );
+    }
+    Index::serve(
+        exact,
+        Reply::Body {
+            status: "404 Not Found".to_owned(),
+            body: String::new(),
+        },
+    )
 }
 
 /// Rule A5. A verify job for any other kind is `unknown_kind`.
