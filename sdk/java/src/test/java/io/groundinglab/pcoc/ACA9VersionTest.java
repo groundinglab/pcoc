@@ -3,17 +3,18 @@ package io.groundinglab.pcoc;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 import org.junit.jupiter.api.Test;
 
-/** AC-A9. Library constant and pcoc --version. The pin line is whatever sdk/SPEC_PIN names. */
+/** AC-A9. Library constant, sdk/VERSION, and pcoc --version. */
 public class ACA9VersionTest {
     @Test
     public void versionEverywhere() throws Exception {
         Path sdk = Repo.root().resolve("sdk");
-        // sdk/VERSION is owned by the release job and may still name 2.2.0.
-        // This SDK's identity is its own constant.
+        String file = Files.readString(sdk.resolve("VERSION")).trim();
+        assertEquals(file, BuildInfo.VERSION);
         assertEquals("2.3.0", BuildInfo.VERSION);
         assertEquals(BuildInfo.VERSION, Version.STRING);
         Pin pin = Pin.read(sdk.resolve("SPEC_PIN"));

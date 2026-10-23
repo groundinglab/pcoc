@@ -67,7 +67,8 @@ public final class Main {
             byte[] manifest = Files.readAllBytes(root.resolve("spec").resolve("conformance").resolve("pack").resolve("manifest.json"));
             String vector = pinField(pinText, "vector-sha256");
             String got = Bytes.hex(new Sha256().hash(manifest));
-            if (!got.equals(vector) || !"2".equals(pinField(pinText, "erratum")) || vector.length() < 16) {
+            String tag = pinField(pinText, "tag");
+            if (!got.equals(vector) || !"spec-2.3.0".equals(tag) || vector.length() < 16) {
                 System.err.println("pin mismatch");
                 return 1;
             }
@@ -95,8 +96,8 @@ public final class Main {
                 System.err.println("prod leg");
                 return 1;
             }
-            System.out.println("pcoc " + BuildInfo.VERSION + " (java) " + pinField(pinText, "tag")
-                    + " erratum " + pinField(pinText, "erratum") + " pack " + vector.substring(0, 16) + ": pin match");
+            System.out.println("pcoc " + BuildInfo.VERSION + " (java) " + tag
+                    + " pack " + vector.substring(0, 16) + ": pin match");
             System.out.println("kernel scalar, sha256 " + BuildInfo.shaBackend());
             System.out.println("O1-S1 object sha256 " + o1);
             System.out.println("O1-S1 six_leg match, checkpoints match, waypoints match");

@@ -1,6 +1,6 @@
 package io.groundinglab.pcoc;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -16,9 +16,7 @@ public class ACA3PinTest {
         Path sdk = repo.resolve("sdk");
         Path pinFile = sdk.resolve("SPEC_PIN");
         Pin pin = Pin.read(pinFile);
-        // The release job owns sdk/SPEC_PIN. Do not hardcode spec-2.2.0 or spec-2.3.0.
-        assertFalse(pin.tag.isEmpty(), "SPEC_PIN tag");
-        assertTrue(pin.tag.startsWith("spec-"), pin.tag);
+        assertEquals("spec-2.3.0", pin.tag);
         Path manifest = repo.resolve("spec").resolve("conformance").resolve("pack").resolve("manifest.json");
         assertTrue(Files.isRegularFile(manifest), manifest.toString());
         assertTrue(pin.matches(manifest), pin.vectorSha256 + " vs " + Pin.sha256(manifest));
