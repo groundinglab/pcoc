@@ -17,7 +17,7 @@ import com.sun.management.HotSpotDiagnosticMXBean;
  * for the JVM to report it. The flag's default is already on; unlocking only makes it readable.
  */
 public final class BuildInfo {
-    public static final String VERSION = "2.2.0";
+    public static final String VERSION = "2.3.0";
     public static final String LANGUAGE = "java";
     public static final String KERNEL = "scalar";
 

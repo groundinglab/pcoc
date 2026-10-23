@@ -95,7 +95,8 @@ public final class Main {
                 System.err.println("prod leg");
                 return 1;
             }
-            System.out.println("pcoc 2.2.0 (java) spec-2.2.0 erratum 2 pack " + vector.substring(0, 16) + ": pin match");
+            System.out.println("pcoc " + BuildInfo.VERSION + " (java) " + pinField(pinText, "tag")
+                    + " erratum " + pinField(pinText, "erratum") + " pack " + vector.substring(0, 16) + ": pin match");
             System.out.println("kernel scalar, sha256 " + BuildInfo.shaBackend());
             System.out.println("O1-S1 object sha256 " + o1);
             System.out.println("O1-S1 six_leg match, checkpoints match, waypoints match");

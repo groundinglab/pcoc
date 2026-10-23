@@ -11,6 +11,6 @@ JAVA=$JAVA_HOME/bin/java
 FLAGS="-XX:+UnlockDiagnosticVMOptions -Xmx2g"
 if [ "${1:-}" = "candidates" ]; then
     shift
-    exec "$JAVA" $FLAGS -jar "$ROOT/build/libs/pcoc-gen-2.2.0.jar" "$@"
+    exec "$JAVA" $FLAGS -jar "$ROOT/build/libs/pcoc-gen-2.3.0.jar" "$@"
 fi
-exec "$JAVA" $FLAGS -jar "$ROOT/build/libs/pcoc-2.2.0.jar" "$@"
+exec "$JAVA" $FLAGS -jar "$ROOT/build/libs/pcoc-2.3.0.jar" "$@"
