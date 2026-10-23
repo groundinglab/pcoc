@@ -255,6 +255,8 @@ Section 13 produces the object. Section 14 measures it. Section 15 is the admiss
 
 “Must” and “must not” apply to a conforming producer, a conforming verifier, and a conforming admission service.
 
+In this file, “must”, “must not”, and “may”, in lowercase or in capitals, carry the meanings that BCP 14 (RFC 2119, RFC 8174) gives to MUST, MUST NOT, and MAY. They state requirements only in text marked **Normative**. In normative text, a plain statement (“is”, “does”, “uses”, “is not”) is a requirement as well. Text marked **Informative** states no requirement. Where informative text uses one of these words, it restates a rule of the normative section it names, and that section governs.
+
 Byte ranges are half-open. `b[i:j]` is bytes `i` through `j-1` of `b`, starting at index 0.
 
 `0^n` is the byte string of `n` zero bytes.
