@@ -1,5 +1,5 @@
 //! Reads the `pcoc` pin from the workspace manifest and lock file and
-//! exposes it to the About page. Package name `pcoc`, version 2.2.0.
+//! exposes it to the About page. Package name `pcoc`, version 2.3.0.
 //! It reports the pin; it does not refuse one.
 
 use std::path::PathBuf;
@@ -40,7 +40,7 @@ fn main() {
     let (version, commit) = std::fs::read_to_string(&lock_path)
         .ok()
         .and_then(|lock| pcoc_in_lock(&lock))
-        .unwrap_or_else(|| ("2.2.0".to_owned(), "unresolved".to_owned()));
+        .unwrap_or_else(|| ("2.3.0".to_owned(), "unresolved".to_owned()));
 
     println!("cargo:rustc-env=PCOC_REF_PIN_KIND={kind}");
     println!("cargo:rustc-env=PCOC_REF_PIN={pin}");
