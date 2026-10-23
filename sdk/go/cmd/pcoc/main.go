@@ -104,7 +104,7 @@ func cmdQuickstart() int {
 		fmt.Fprintln(os.Stderr, "prod leg")
 		return 1
 	}
-	fmt.Printf("pcoc 2.2.0 (go) spec-2.2.0 erratum 2 pack %s: pin match\n", vector[:16])
+	fmt.Printf("pcoc %s (go) %s erratum 2 pack %s: pin match\n", pcoc.Version, pcoc.SpecTag, vector[:16])
 	fmt.Printf("kernel scalar, sha256 %s\n", pcoc.SHABackend())
 	fmt.Printf("O1-S1 object sha256 %s\n", o1)
 	fmt.Println("O1-S1 six_leg match, checkpoints match, waypoints match")
