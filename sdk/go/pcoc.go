@@ -2,7 +2,7 @@
 //
 // SPEC §16.2 Rule I2. Each exported function names the section it implements.
 // The version is 2.3.1 (Rule I5). The only object kind is v2.2-pcoc-object.
-// The module tag is sdk/go/v2.3.0.
+// The module tag is sdk/go/v2.3.1.
 package pcoc
 
 import "github.com/groundinglab/pcoc/sdk/go/v2/internal/fold"

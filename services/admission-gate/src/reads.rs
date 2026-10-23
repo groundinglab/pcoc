@@ -356,3 +356,153 @@ fn record_json(legs: i128, span: i128, anchored: u64) -> String {
     })
     .to_string()
 }
+
+#[cfg(test)]
+mod stored_interrupt_tests {
+    use super::{compare_plants, stored_interrupt};
+    use crate::policy::AdmissionPolicy;
+    use crate::verifier::IndexClient;
+    use pcoc::object::{HikeObject, Stage};
+    use std::time::Duration;
+
+    fn stage(height: u64, beacon: [u8; 32], path: Option<Vec<u8>>) -> Stage {
+        Stage {
+            beacon,
+            beacon_height: height,
+            height_over: false,
+            leg_count: 0,
+            waypoint: [0xab; 32],
+            path,
+            checkpoints: Vec::new(),
+            leg_results: Vec::new(),
+            usable: true,
+        }
+    }
+
+    fn object(stages: Vec<Stage>, last: [u8; 32], last_height: u64, last_over: bool) -> HikeObject {
+        HikeObject {
+            kind: pcoc::constants::KIND.to_owned(),
+            fill: "dag2".to_owned(),
+            slot_bytes: 0,
+            n_slots: 0,
+            sample_bytes: 0,
+            steps_per_leg: 0,
+            public_key: [0; 32],
+            seed_beacon: [0; 32],
+            stages,
+            last_interrupt: last,
+            last_interrupt_height: last_height,
+            last_height_over: last_over,
+            has_last: true,
+            has_last_height: true,
+            field_set: true,
+            stage0_path: false,
+            trailing: false,
+            top_ok: true,
+        }
+    }
+
+    /// One-leaf path. `block_hash` is the inclusion header in natural order.
+    fn one_leaf(block_hash: &[u8; 32], block_height: u32) -> Vec<u8> {
+        let waypoint = [0xabu8; 32];
+        let root = pcoc::hash::sha256_parts(&[&[0x1au8], &waypoint]);
+        let mut out = Vec::with_capacity(146);
+        out.push(0x01);
+        out.extend_from_slice(&waypoint);
+        out.extend_from_slice(&0u32.to_be_bytes());
+        out.extend_from_slice(&1u32.to_be_bytes());
+        out.push(0);
+        out.extend_from_slice(&root);
+        out.extend_from_slice(&[0x11; 32]);
+        out.extend_from_slice(&0u32.to_be_bytes());
+        out.extend_from_slice(block_hash);
+        out.extend_from_slice(&block_height.to_be_bytes());
+        out
+    }
+
+    #[test]
+    fn stored_interrupt_matches_a_later_stage_or_the_close() {
+        let beacon = [0x22u8; 32];
+        let foreign = [0x09u8; 32];
+        let mut stages = vec![
+            stage(100, [0x01; 32], None),
+            stage(100, [0x11; 32], None),
+            stage(102, beacon, None),
+        ];
+        let obj = object(stages.clone(), [0x33; 32], 200, false);
+        assert!(stored_interrupt(&obj, 102, &beacon));
+        assert!(!stored_interrupt(&obj, 102, &foreign));
+        // Stage 0 is the seed beacon, not an interrupt header.
+        stages[0].beacon = beacon;
+        stages[0].beacon_height = 102;
+        stages[2].beacon = [0x44; 32];
+        let seed_only = object(stages, [0x33; 32], 200, false);
+        assert!(!stored_interrupt(&seed_only, 102, &beacon));
+        let closed = object(
+            vec![stage(100, [0x11; 32], None), stage(100, [0x11; 32], None)],
+            beacon,
+            102,
+            false,
+        );
+        assert!(stored_interrupt(&closed, 102, &beacon));
+        let over = object(
+            vec![stage(100, [0x11; 32], None), stage(100, [0x11; 32], None)],
+            beacon,
+            102,
+            true,
+        );
+        assert!(!stored_interrupt(&over, 102, &beacon));
+    }
+
+    #[test]
+    fn a_path_whose_block_is_not_a_stored_interrupt_is_not_read() {
+        let posted = 100u64;
+        let foreign = [0x09u8; 32];
+        let beacon = [0x22u8; 32];
+        let path_stage = stage(
+            posted,
+            [0x11; 32],
+            Some(one_leaf(&foreign, (posted + 2) as u32)),
+        );
+        let interrupt = stage(posted + 2, beacon, None);
+        let obj = object(
+            vec![stage(posted, [0x01; 32], None), path_stage, interrupt],
+            [0x33; 32],
+            200,
+            false,
+        );
+        let mut policy = AdmissionPolicy::default();
+        policy.min_anchored_paths = 1;
+        // Closed port. A plant GET would fail inside the timeout. The skip
+        // returns before that GET.
+        let index = IndexClient::open("http://127.0.0.1:1", Duration::from_millis(200));
+        match compare_plants(&obj, &policy, &index) {
+            Ok(0) => {}
+            Ok(n) => panic!("counted a path that is not a stored interrupt: {n}"),
+            Err(_) => panic!("plant read issued for a path that is not a stored interrupt"),
+        }
+
+        let stored_path = stage(
+            posted,
+            [0x11; 32],
+            Some(one_leaf(&beacon, (posted + 2) as u32)),
+        );
+        let stored = object(
+            vec![
+                stage(posted, [0x01; 32], None),
+                stored_path,
+                stage(posted + 2, beacon, None),
+            ],
+            [0x33; 32],
+            200,
+            false,
+        );
+        match compare_plants(&stored, &policy, &index) {
+            Err(super::ReadStop::Held { .. }) => {}
+            Ok(n) => panic!("stored interrupt did not reach the plant read, anchored {n}"),
+            Err(super::ReadStop::Refuse { .. }) => {
+                panic!("stored interrupt was refused before the unread plant read")
+            }
+        }
+    }
+}

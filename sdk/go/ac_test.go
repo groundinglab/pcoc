@@ -484,7 +484,7 @@ func TestACA8(t *testing.T) {
 	}
 }
 
-// TestACA9: the library version is 2.3.0 and the spec tag is spec-2.3.0.
+// TestACA9: the library version is 2.3.1 and the spec tag is spec-2.3.0.
 func TestACA9(t *testing.T) {
 	root := repoRoot(t)
 	b, err := os.ReadFile(filepath.Join(root, "sdk", "VERSION"))

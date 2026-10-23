@@ -326,7 +326,7 @@ fn cmd_produce(args: &[String]) -> ExitCode {
                     eprintln!("--public-key needs 64 hex digits");
                     return ExitCode::from(2);
                 };
-                let Some(bytes) = pcoc::hexutil::hex_decode_exact::<32>(v) else {
+                let Some(bytes) = parse_public_key(v) else {
                     eprintln!("--public-key needs 64 hex digits");
                     return ExitCode::from(2);
                 };
@@ -614,4 +614,45 @@ fn cmd_quickstart() -> ExitCode {
     println!("negatives 13 non-match");
     println!("PROD leg 0 legs_le_hex 88a04ac5beacb8a7");
     ExitCode::SUCCESS
+}
+
+/// SPEC 2.3 P13.12 and §13. A public-key input is 64 hex digits under §7.2,
+/// with an optional leading `0x` or `0X`. Exactly those two prefix bytes are
+/// stripped. The remaining spelling is 64 digits, `0-9` `a-f` `A-F`, no spaces.
+fn parse_public_key(text: &str) -> Option<[u8; 32]> {
+    let hex = text
+        .strip_prefix("0x")
+        .or_else(|| text.strip_prefix("0X"))
+        .unwrap_or(text);
+    pcoc::hexutil::hex_decode_exact::<32>(hex)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_public_key;
+
+    const DIGITS: &str = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+
+    #[test]
+    fn public_key_with_and_without_0x_is_the_same_key() {
+        let raw = parse_public_key(DIGITS).unwrap();
+        assert_eq!(parse_public_key(&format!("0x{DIGITS}")).unwrap(), raw);
+        assert_eq!(parse_public_key(&format!("0X{DIGITS}")).unwrap(), raw);
+        assert_eq!(parse_public_key(&DIGITS.to_ascii_uppercase()).unwrap(), raw);
+        assert_eq!(
+            parse_public_key(&format!("0x{}", DIGITS.to_ascii_uppercase())).unwrap(),
+            raw
+        );
+    }
+
+    #[test]
+    fn public_key_bad_hex_is_refused() {
+        assert!(parse_public_key("zz").is_none());
+        assert!(parse_public_key(&format!("0x{DIGITS}ff")).is_none());
+        assert!(parse_public_key(&format!("0x{}", &DIGITS[..62])).is_none());
+        assert!(parse_public_key(&format!("0xzz{}", &DIGITS[..60])).is_none());
+        assert!(parse_public_key(&format!("0x {DIGITS}")).is_none());
+        assert!(parse_public_key(&format!("{DIGITS} ")).is_none());
+        assert!(parse_public_key("0x").is_none());
+    }
 }
