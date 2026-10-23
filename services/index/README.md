@@ -2,7 +2,7 @@
 
 `pcoc-index` serves the portable index: one JSON file per block height. A verifier reads `GET /index/{height}` and treats that body as the stand-in for Bitcoin. Anyone can skip the service and read Bitcoin.
 
-`pcoc-bari` is the in-repo crate at `services/bari` (path). That crate no longer pins an SDK tag. Crate version `0.1.4`, tag `index-v0.1.4`. Nothing here is deployed by this change.
+`pcoc-bari` is the in-repo crate at `services/bari` (path). That crate no longer pins an SDK tag. Crate version `0.1.5`, tag `index-v0.1.5`.
 
 Default bind `127.0.0.1:38081`. No arguments, or `pcoc-index serve`, serves the cache. `pcoc-index rebuild` writes the cache from public chain data.
 
@@ -99,6 +99,7 @@ The hike object does not gain a field for `{index-url}` or `{tip-url}`.
 | `GET` | `/index` | **200** current tip: the `height-XXXXXXXXXX.json` file with the highest height in the name. **404** with an empty body when the cache has no such file |
 | `GET` | `/index/{height}` | **200** the retained document for that height. **404** with an empty body when that height is absent |
 | `GET` | `/index/since` | **200** `application/x-ndjson`. One line per retained mainnet height, ascending. See below |
+| `GET` | `/health` | **200** `application/json` with `version` (this crate) and `commit` (the git SHA stamped at build). Not an index document. The document `version` on `GET /index` stays 2 |
 | `OPTIONS` | `/index`, `/index/{height}`, and `/index/since` | **204** CORS preflight |
 
 `{height}` is a decimal `u32`. A path segment that is not a `u32` is **400** (`Cannot parse … to a u32`). A `u32` missing from the cache is **404**. A path this router does not define is **404**.

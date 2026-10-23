@@ -472,7 +472,7 @@ dependencies = [
 
 [[package]]
 name = "pcoc-bari"
-version = "0.6.8"
+version = "0.6.9"
 dependencies = [
  "axum",
  "base64",
@@ -496,7 +496,7 @@ dependencies = [
 
 [[package]]
 name = "pcoc-index"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "axum",
  "base64",

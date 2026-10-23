@@ -34,9 +34,9 @@ Every service binds to loopback by default. To serve one publicly, put a reverse
 
 | Folder | Process | Default bind | Depends on | Release tag |
 |---|---|---|---|---|
-| [`bari/`](bari/) | `bari` (crate `pcoc-bari`) | `127.0.0.1:38080` | in-repo header source; live header source is not in this build | `bari-v0.6.8` |
-| [`index/`](index/) | `pcoc-index` | `127.0.0.1:38081` | `pcoc-bari` by path (`../bari`) | `index-v0.1.4` |
-| [`admission-gate/`](admission-gate/) | `admission-service` (crate `pcoc-admission`) | `127.0.0.1:8787` | `pcoc` from the in-tree Rust SDK, by path (`sdk/rust/pcoc`; version in `sdk/VERSION`) | `gate-v0.5.6` |
+| [`bari/`](bari/) | `bari` (crate `pcoc-bari`) | `127.0.0.1:38080` | in-repo header source; live header source is not in this build | `bari-v0.6.9` |
+| [`index/`](index/) | `pcoc-index` | `127.0.0.1:38081` | `pcoc-bari` by path (`../bari`) | `index-v0.1.5` |
+| [`admission-gate/`](admission-gate/) | `admission-service` (crate `pcoc-admission`) | `127.0.0.1:8787` | `pcoc` from the in-tree Rust SDK, by path (`sdk/rust/pcoc`; version in `sdk/VERSION`) | `gate-v0.5.7` |
 | [`admission-claims/`](admission-claims/) | `admission-claims` (crate 0.1.0) | `127.0.0.1:8793` | none in this repository (reads the gate at `127.0.0.1:8787` by default) | none yet |
 
 Release tags are `<service>-v<x.y.z>` and point at the commit that ships that release. The table's Release tag column is the release that matches the working tree.
@@ -47,7 +47,7 @@ Release tags are `<service>-v<x.y.z>` and point at the commit that ships that re
 
 ## Index
 
-[index/](index/) is its own service. It serves the portable-index files: `GET /index` (tip), `GET /index/{height}`, and `GET /index/since` (NDJSON catch-up). Bari can write those files. `pcoc-index rebuild` can write them from a public block API, or from a pruned node, with no plant and no wallet RPC. A verifier may read `GET {index-url}/index/{beacon_height}`. `https://index.groundinglab.io` is opt-in. This tree's `pcoc verify` does not dial a live index. See [index/README.md](index/README.md).
+[index/](index/) is its own service. It serves the portable-index files: `GET /index` (tip), `GET /index/{height}`, and `GET /index/since` (NDJSON catch-up). `GET /health` reports this build's version and commit. It is not an index document. Bari can write those files. `pcoc-index rebuild` can write them from a public block API, or from a pruned node, with no plant and no wallet RPC. A verifier may read `GET {index-url}/index/{beacon_height}`. `https://index.groundinglab.io` is opt-in. This tree's `pcoc verify` does not dial a live index. See [index/README.md](index/README.md).
 
 ## Admission Gate
 

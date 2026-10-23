@@ -68,4 +68,4 @@ Build the new binary, replace the file in `ExecStart`, then `sudo systemctl rest
 
 `POST /v1/sign-in`, `POST /v1/verify`, `GET /v1/verify/{job_id}`, `GET /v1/health`, `GET /v1/policy`, `GET /latest.json`, `GET /log/{YYYY-MM-DD}.jsonl`, `GET /log/{YYYY-MM-DD}/{seq}`. Anything else, including `POST /v1/admit`, is HTTP 404. Bodies are in [WIRE.md](../WIRE.md).
 
-The groundinglab policy file is `policy/groundinglab-admission/gl-admit-v10.toml`. `gl-admit-v9.toml` is unchanged. The id is bound to a hash of the full table. Changing any value requires a new id. The process writes that binding to `{log_dir}/policy-bind.json` and exits before it listens when the same id is paired with a different table.
+The groundinglab policy file is `policy/groundinglab-admission/gl-admit-v10.toml`. `gl-admit-v9.toml` is `superseded`. The id is bound to a hash of the full table. Changing any value requires a new id. The process writes that binding to `{log_dir}/policy-bind.json` and exits before it listens when the same id is paired with a different table.

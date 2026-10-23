@@ -4,6 +4,7 @@
 //! `height-XXXXXXXXXX.json` files. Bind defaults to `127.0.0.1:38081`.
 //! `GET /index` is the current tip. `GET /index/{height}` is the height fetch.
 //! `GET /index/since` streams mainnet heights as newline-delimited JSON.
+//! `GET /health` reports this build's version and commit. It is not an index document.
 //! Produce Observe is the plane gossip peer, not this process.
 //! These routes do not use Hashcash. CORS allows `https://groundinglab.io`,
 //! `https://www.groundinglab.io`, and loopback HTTP (`localhost`, `127.0.0.1`, `[::1]`).
@@ -26,6 +27,21 @@ use std::sync::Arc;
 pub mod chain;
 pub mod document;
 pub mod rebuild;
+
+/// Crate version on `GET /health`. Not the index document `version`.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Commit stamped by `build.rs`. Not read from the environment at request time.
+pub fn compiled_commit() -> &'static str {
+    env!("INDEX_COMMIT")
+}
+
+fn health_value() -> Value {
+    serde_json::json!({
+        "version": VERSION,
+        "commit": compiled_commit(),
+    })
+}
 
 /// Largest `limit` `GET /index/since` accepts.
 ///
@@ -188,6 +204,7 @@ impl IndexService {
 
     pub fn router(&self) -> Router {
         Router::new()
+            .route("/health", get(fetch_health))
             .route("/index", get(fetch_index).options(index_options))
             // Registered before `/index/{height}`. Otherwise that route parses
             // `since` as a u32 and answers 400 (`Cannot parse since to a u32`).
@@ -290,6 +307,10 @@ impl From<serde_json::Error> for CacheError {
     fn from(error: serde_json::Error) -> Self {
         Self::Json(error)
     }
+}
+
+async fn fetch_health() -> Json<Value> {
+    Json(health_value())
 }
 
 async fn fetch_index(State(service): State<IndexService>, headers: HeaderMap) -> Response {
@@ -555,6 +576,75 @@ mod tests {
     async fn body_json(response: Response) -> serde_json::Value {
         let bytes = response.into_body().collect().await.unwrap().to_bytes();
         serde_json::from_slice(&bytes).unwrap()
+    }
+
+    #[tokio::test]
+    async fn health_reports_version_and_commit_without_changing_the_index_document() {
+        let temp = tempfile::tempdir().unwrap();
+        write_tip(temp.path(), 19001, "main");
+        let app = IndexService::open(temp.path()).unwrap().router();
+
+        let health = app
+            .clone()
+            .oneshot(
+                axum::http::Request::get("/health")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(health.status(), StatusCode::OK);
+        assert_eq!(
+            health
+                .headers()
+                .get(header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok()),
+            Some("application/json")
+        );
+        let health_json = body_json(health).await;
+        assert_eq!(health_json["version"], VERSION);
+        assert_eq!(health_json["version"], "0.1.5");
+        assert_eq!(health_json["commit"], compiled_commit());
+        assert!(compiled_commit().len() >= 7, "{}", compiled_commit());
+        let mut keys: Vec<&str> = health_json
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort_unstable();
+        assert_eq!(keys, ["commit", "version"]);
+
+        let tip = app
+            .oneshot(
+                axum::http::Request::get("/index")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(tip.status(), StatusCode::OK);
+        let tip_json = body_json(tip).await;
+        assert_eq!(tip_json["version"], 2);
+        assert!(tip_json.get("commit").is_none(), "{tip_json}");
+    }
+
+    #[tokio::test]
+    async fn health_on_an_empty_cache() {
+        let temp = tempfile::tempdir().unwrap();
+        let app = IndexService::open(temp.path()).unwrap().router();
+        let health = app
+            .oneshot(
+                axum::http::Request::get("/health")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(health.status(), StatusCode::OK);
+        let health_json = body_json(health).await;
+        assert_eq!(health_json["version"], VERSION);
+        assert_eq!(health_json["commit"], compiled_commit());
     }
 
     #[tokio::test]

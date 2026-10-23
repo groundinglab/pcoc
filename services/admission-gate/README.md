@@ -30,7 +30,7 @@ Any kind other than `v2.2-pcoc-object` is Rule A5. The fast phase's reason is `u
 | Directory | `services/admission-gate/` |
 | Binary | `admission-service` |
 | Config | one TOML file, `--config` or `GATE_CONFIG` |
-| Crate version | `0.5.6` |
+| Crate version | `0.5.7` |
 
 ```text
 POST /v1/sign-in           -> locked §15.1 body
@@ -48,7 +48,7 @@ GET  /v1/health            -> version, commit, sdk, spec, spec_kind, config
 
 `POST /v1/verify` runs section 14 (`pcoc::verify`) against `index_url`. Any other kind is Rule A5 (`unknown_kind`) and does not read the index. A shape match whose `hike_span` is `not read` finishes `held`. One whose pair meets the floor finishes `done`. The sign-in fast phase is `pcoc::precheck` plus the header and plant reads in `reads`. The thorough phase calls `pcoc::thorough_draw`.
 
-Policy values come from the policy file, not from the specification. The groundinglab policy is [gl-admit-v10.toml](../../policy/groundinglab-admission/gl-admit-v10.toml). `gl-admit-v9.toml` is unchanged. A change of any value needs a new id. See [POLICY.md](../../policy/groundinglab-admission/POLICY.md). `born_height` is policy, not a SPEC lever. The current value is 972685. A stored or claimed height below it finishes the verify job as terminal `before_born_height`, with `born_height` and `lowest_height` on the output. That job is not `held`. The index still serves the median-time lookback of `MTP_LOOKBACK` headers below `born_height` (10; `MTP_WINDOW` is 11). Those headers are not production heights. Health and verify output report `born_height` next to `policy_id`. The verifier writes `measures`. The gate writes `policy_id` and `policy_checks`. A refusal carries one `reason_code` and a class. `bitcoin_tip_height` is null when unknown. Public health does not show `log_dir` or `config_path`. Health echoes the policy id.
+Policy values come from the policy file, not from the specification. The groundinglab policy is [gl-admit-v10.toml](../../policy/groundinglab-admission/gl-admit-v10.toml). `gl-admit-v9.toml` is `superseded`. A change of any value needs a new id. See [POLICY.md](../../policy/groundinglab-admission/POLICY.md). `born_height` is policy, not a SPEC lever. The current value is 972685. A stored or claimed height below it finishes the verify job as terminal `before_born_height`, with `born_height` and `lowest_height` on the output. That job is not `held`. The index still serves the median-time lookback of `MTP_LOOKBACK` headers below `born_height` (10; `MTP_WINDOW` is 11). Those headers are not production heights. Health and verify output report `born_height` next to `policy_id`. The verifier writes `measures`. The gate writes `policy_id` and `policy_checks`. A refusal carries one `reason_code` and a class. `bitcoin_tip_height` is null when unknown. Public health does not show `log_dir` or `config_path`. Health echoes the policy id.
 
 The public log starts empty. The process creates `log_dir`. A chain that is not Satoshi Hike 2.2 is not opened and not served.
 
