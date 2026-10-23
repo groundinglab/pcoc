@@ -2,7 +2,7 @@
 
 > **Do not deploy this tree over the live v2.0 service.** This branch is Satoshi Hike 2.2 and must not replace the live v2.0 service.
 
-One binary, `bari`. Crate `pcoc-bari`, library `pcoc_bari`, version 0.6.9, tag `bari-v0.6.9`.
+One binary, `bari`. Crate `pcoc-bari`, library `pcoc_bari`, version 0.6.10, tag `bari-v0.6.10`.
 
 It accepts 32-byte waypoints and later serves a Merkle path. It writes the index cache. It does not serve `GET /index`. The index HTTP reader is [services/index](../index/).
 
