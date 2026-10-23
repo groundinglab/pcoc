@@ -12,6 +12,7 @@ This folder holds the evidence behind groundinglab's admission policy numbers: i
 | [round-1/](round-1/) | Two low-effort builds against SPEC 2.2 (pcoc 2b50df7). Their disagreements became SPEC 2.2 erratum 1 |
 | [round-2/](round-2/) | Six high-effort builds against SPEC 2.2 + erratum 1 (pcoc 7b40353), built and timed on three reference machines |
 | [round-2/results/](round-2/results/) | Timings, packed runs, the 6 × 6 cross-verify grid, output comparisons and raw logs |
+| [spec-2.3/](spec-2.3/) | Round-2 evidence re-run on RS3 against SPEC 2.3 (spec-2.3.0). Same objects, fixtures, and negatives |
 | [calibration/](calibration/) | How the leg-rate floor in the groundinglab admission policy follows from the measurements |
 | [kit/](kit/) | The scripts used to build, test, cross-verify and time every build |
 | [community/](community/) | How to submit your own results, and the file schema |
