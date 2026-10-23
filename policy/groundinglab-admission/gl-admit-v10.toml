@@ -1,18 +1,22 @@
 # groundinglab admission policy gl-admit-v10. Live from 2026-10-23. status is active. Supersedes gl-admit-v9.
 # Repo path (agreed layout): policy/groundinglab-admission/gl-admit-v10.toml
 # Argued in POLICY.md next to this file. Sets SPEC 2.2 section 15.4 levers only.
-# Encoding is SPEC 2.2 section 15.4 "Policy file encoding": keys in [levers] are the
-# exact lever names; an absent key means the SPEC default (or unset where the default
-# is unset). A gate refuses this file if `spec` differs from the SPEC its SDK pins, if a
-# key names an unknown lever, if a value has the wrong type, or if a value is outside
-# the lever's allowed range.
+# Encoding is SPEC 2.3 §15.4 "Policy file encoding". Keys in [levers] are the exact
+# lever names. SPEC 2.3 gives no lever a default (D2). An absent key means unset only
+# for verify_cap_per_object, verify_cap_per_door_session, and fake_leg_ignore_seconds,
+# whose ranges list unset. Any other absent key refuses the whole file, and so do an
+# absent policy_id, draw_commitment, or born_height. On a spec-2.3.0 pin the gate
+# accepts a policy whose spec is "2.2" or "2.3" (Rule I5/D7). A "2.2" file is not
+# refused for differing from that pin. The gate still refuses the file if a key names
+# an unknown lever, if a value has the wrong type, or if a value is outside the
+# lever's allowed range. With no policy file, or a refused one, the gate admits nothing.
 
 policy_id = "gl-admit-v10"
 spec      = "2.2"            # Satoshi Hike 2.2, tag spec-2.2.0
 status    = "active"
 
 [levers]
-# SPEC labelled defaults, set explicitly.
+# Set explicitly. SPEC 2.3 gives these levers no default.
 min_anchored_paths           = 6                  # waypoints, range 2..16
 leg_rate_floor               = { p = 1, q = 5 }   # checkpoints/s, p >= 1, q >= 1; must be re-measured under 2.2
 submission_deadline_blocks   = 3                  # K, blocks, range 0..6
@@ -30,7 +34,7 @@ provisional                  = "on"
 fast_accept_bound            = 2                  # seconds (SPEC 15.4 encoding: integer ms = round(x*1000))
 async_catch_budget           = 22.05              # seconds, at most 3 fractional digits
 
-# SPEC default "unset" for the two keys that stay absent. The door-session cap is set.
+# Absent means unset for verify_cap_per_object and fake_leg_ignore_seconds. The door-session cap is set.
 # verify_cap_per_object       = 1
 verify_cap_per_door_session  = 3
 # fake_leg_ignore_seconds unset: the fake-leg ignore has no expiry.
