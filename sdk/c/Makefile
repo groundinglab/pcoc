@@ -1,4 +1,4 @@
-# Satoshi Hike 2.2, C. Baseline ISA. SHA-NI is selected at runtime.
+# Satoshi Hike 2.3, C. Baseline ISA. SHA-NI is selected at runtime.
 CC      ?= gcc
 CFLAGS  ?= -std=c11 -O2 -Wall -Wextra -Wno-unused-function -march=x86-64 -fPIC
 CPPFLAGS += -Iinclude -Igen

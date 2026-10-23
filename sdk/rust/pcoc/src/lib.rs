@@ -1,5 +1,5 @@
-//! Satoshi Hike 2.2 construction and verifier.
-//! Behaviour is `spec/satoshi-hike-v2.2/SPEC.md` plus erratum 1.
+//! Satoshi Hike 2.3 construction and verifier.
+//! Behaviour is `spec/satoshi-hike-v2.3/SPEC.md`. Errata 1 and 2 are folded into that file.
 //! Each public function below names the section it implements (Rule I2).
 #![deny(unsafe_code)]
 
@@ -28,7 +28,7 @@ pub mod verify;
 pub mod waypoint;
 
 /// SPEC Rule I5. SDK version. Equals `sdk/VERSION`.
-pub const VERSION: &str = "2.2.0";
+pub const VERSION: &str = "2.3.0";
 
 const VERSION_FILE: &str = include_str!("../../../VERSION");
 const SPEC_PIN_FILE: &str = include_str!("../../../SPEC_PIN");

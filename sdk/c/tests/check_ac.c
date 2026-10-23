@@ -194,7 +194,7 @@ static int ac_a1(void) {
 static int ac_a3(void) {
   char tag[64], vec[80];
   read_pin(tag, sizeof(tag), vec, sizeof(vec));
-  need(strcmp(tag, "spec-2.2.0") == 0, "tag");
+  need(strcmp(tag, "spec-2.3.0") == 0, "tag");
   char path[1024], got[65];
   snprintf(path, sizeof(path), "%s/spec/conformance/pack/manifest.json", repo);
   sha256_file(path, got);
@@ -1124,7 +1124,7 @@ static int ac_a9(void) {
   need(f && fgets(ver, sizeof(ver), f), "VERSION");
   if (f) fclose(f);
   ver[strcspn(ver, "\r\n")] = 0;
-  need(strcmp(ver, "2.2.0") == 0, "VERSION file");
+  need(strcmp(ver, "2.3.0") == 0, "VERSION file");
   need(strcmp(pcoc_version(), ver) == 0, "library constant");
   char tag[64], vec[80], out[1024], err[256];
   read_pin(tag, sizeof(tag), vec, sizeof(vec));
@@ -1133,7 +1133,7 @@ static int ac_a9(void) {
   snprintf(cmd, sizeof(cmd), "cd '%s' && '%s/build/pcoc' --version", repo, here);
   capture(cmd, &rc, out, sizeof(out), err, sizeof(err));
   need(rc == 0, "version exit");
-  need(strstr(out, "2.2.0\n") == out, "version line");
+  need(strstr(out, "2.3.0\n") == out, "version line");
   need(strstr(out, tag) != NULL, "spec tag");
   need(strstr(out, vec) != NULL, "pack pin");
   printf("PASS a9\n");

@@ -8,10 +8,10 @@
     "release": {"type": "object", "required": ["version", "date", "commit"]},
     "spec": {
       "type": "object",
-      "required": ["version", "erratum", "tag", "pack_manifest_sha256"],
+      "required": ["version", "tag", "pack_manifest_sha256"],
       "properties": {
-        "erratum": {"const": 2},
-        "tag": {"const": "spec-2.2.0"},
+        "version": {"const": "2.3"},
+        "tag": {"const": "spec-2.3.0"},
         "pack_manifest_sha256": {"type": "string", "minLength": 64, "maxLength": 64}
       }
     },

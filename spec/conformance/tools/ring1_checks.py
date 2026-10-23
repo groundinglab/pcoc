@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Ring 1 checks for Satoshi Hike 2.2.
+"""Ring 1 checks for Satoshi Hike 2.3.
 
 Run from the repository root. Exit 1 on any failure. Short and deterministic.
 
-The 2.0 script opened spec/satoshi-hike-v2.0/Satoshi-Hike-v2.0.md and
-spec/conformance/v2.0/. Those paths are gone. This script reads
-spec/satoshi-hike-v2.2/SPEC.md, ERRATUM-1.md, spec/conformance/pack/, and
-sdk/SPEC_PIN.
+This script reads spec/satoshi-hike-v2.3/SPEC.md, spec/conformance/pack/, and
+sdk/SPEC_PIN. Errata 1 and 2 are folded into that SPEC, so the pin has no
+erratum key. spec/satoshi-hike-v2.2/ERRATUM-1.md remains the negative
+reference table the harness parses; this script checks that file still names
+the 2.2 SPEC.
 
 Replacements for the four 2.0 checks:
 
@@ -26,7 +27,7 @@ Replacements for the four 2.0 checks:
 """
 import hashlib, json, os, re, sys
 
-SPEC = "spec/satoshi-hike-v2.2/SPEC.md"
+SPEC = "spec/satoshi-hike-v2.3/SPEC.md"
 ERRATUM = "spec/satoshi-hike-v2.2/ERRATUM-1.md"
 PACK = "spec/conformance/pack"
 PIN = "sdk/SPEC_PIN"
@@ -84,7 +85,7 @@ spec = open(SPEC, encoding="utf-8").read()
 erratum = open(ERRATUM, encoding="utf-8").read()
 
 check("erratum names SPEC.md", "spec/satoshi-hike-v2.2/SPEC.md" in erratum)
-check("SPEC tag sentence", "Its tag is `spec-2.2.0`." in spec)
+check("SPEC tag sentence", "Its tag is `spec-2.3.0`." in spec)
 
 sec6 = spec[spec.index("## 6. Constants"):]
 sec6 = sec6[: sec6.index("\n## 7")]
@@ -139,7 +140,8 @@ for line in open(PIN, encoding="utf-8"):
     pin[key] = value
 manifest_bytes = open(f"{PACK}/manifest.json", "rb").read()
 digest = hashlib.sha256(manifest_bytes).hexdigest()
-check("SPEC_PIN tag", pin.get("tag") == "spec-2.2.0", pin.get("tag", ""))
+check("SPEC_PIN tag", pin.get("tag") == "spec-2.3.0", pin.get("tag", ""))
+check("SPEC_PIN has no erratum key", "erratum" not in pin, pin.get("erratum", ""))
 check("SPEC_PIN vector-sha256", pin.get("vector-sha256") == digest, f"pin={pin.get('vector-sha256')} file={digest}")
 for name in sorted(listed):
     check(f"pack file {name}", os.path.isfile(os.path.join(PACK, name)), name)

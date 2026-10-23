@@ -1,5 +1,15 @@
 # CHANGES
 
+## 2.3.0
+
+Satoshi Hike 2.3. Errata 1 and 2 are folded into `spec/satoshi-hike-v2.3/SPEC.md`. `sdk/SPEC_PIN` names tag `spec-2.3.0` and the SHA-256 of the pack manifest. There is no `erratum` key.
+
+No object byte changes. `KIND` stays `v2.2-pcoc-object`. The pack id stays `pack-2.2.0`. The pack manifest bytes and `vector-sha256` `91ded57e5c05b7cb4cd74d313a51d83d2373fa86dc625df41faed9586e9032af` are unchanged.
+
+Decision D2: the specification gives no lever a default. An absent lever refuses the policy file, except a lever whose range lists unset. These SDKs do not read a policy file and do not fill a lever when a key is absent.
+
+`pcoc quickstart` still prints six lines. The first line is `pcoc 2.3.0 (<language>) spec-2.3.0 pack <prefix>: pin match`.
+
 ## 2.2.0
 
 Satoshi Hike 2.2, erratum 2. Four SDKs: Rust, C, Go, and Java.
