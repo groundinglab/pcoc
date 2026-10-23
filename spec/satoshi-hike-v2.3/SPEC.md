@@ -17,6 +17,8 @@ This file is the specification. A hike, a checkpoint, a waypoint, a seed, and a 
 
 Sections marked **Normative** are the construction. Sections marked **Informative** explain that construction and do not add a second one.
 
+<a id="sec-1"></a>
+
 ## 1. Status
 
 The status prose in this section is **informative**. The rule index is the ID-to-heading map. The subsection “Part A rule classes” is the **normative** classification.
@@ -96,137 +98,137 @@ This subsection is the normative classification of Part A. It does not add a sec
 
 | Rule ID | Class | One-line rule | SPEC locus |
 |---|---|---|---|
-| P2.2 | INVARIANT | Produce and verify perform no signature check. The admission service checks the signature (section 15). | §2, §15 |
-| P3.1 | INVARIANT | Ranges are half-open; `0^n` is `n` zero bytes; `‖` is raw concatenation; `H` is FIPS 180-4 SHA-256. | §3 |
-| P3.2 | RANGE | `le64` and `u64_le` are 8 little-endian bytes of an unsigned integer below `2^64`. | §3 |
-| P3.3 | INVARIANT | `mod` is the non-negative remainder; `mod 2^64` keeps the low 64 bits. | §3 |
-| P4.1 | RANGE | Outcome tokens are the closed lowercase set. There is no token `not obtained`. | §4 |
-| P4.2 | INVARIANT | Part A does not pass, fail, reject, deny, or admit. | §4 |
-| P6.1 | CONSTANT | `SLOT_BYTES` is 16384. | §6 |
-| P6.2 | CONSTANT | `WORDS_PER_SLOT` is 2048. | §6 |
-| P6.3 | CONSTANT | `TERRAIN_BYTES` is 268435456. | §6 |
-| P6.4 | CONSTANT | `N_SLOTS` is 16384. | §6 |
-| P6.5 | CONSTANT | `SAMPLE_BYTES` is 1024. | §6 |
-| P6.6 | CONSTANT | `OFFSET_MODULUS` is 268434433. | §6 |
-| P6.7 | CONSTANT | `STEPS_PER_LEG` is 2000000. | §6 |
-| P6.8 | CONSTANT | `STAGES` is 18. | §6 |
-| P6.9 | CONSTANT | `HASH_BYTES` is 32. | §6 |
-| P6.10 | CONSTANT | `LEG_RESULT_BYTES` is 8. | §6 |
-| P6.11 | CONSTANT | `PUBLIC_KEY_BYTES` is 32. | §6 |
-| P6.12 | CONSTANT | `BEACON_BYTES` is 32. | §6 |
-| P6.13 | CONSTANT | `SEAL_DOMAIN` is the twelve bytes `pcoc-walk-v1`. | §6 |
-| P6.15 | CONSTANT | `KIND` is `v2.2-pcoc-object`. | §6 |
-| P6.16 | CONSTANT | `FILL` is `dag2`. | §6 |
-| P6.17 | CONSTANT | `MIX_ADD` is `0x9E3779B97F4A7C15`. | §6 |
-| P6.18 | CONSTANT | `MIX_MUL1` is `0xBF58476D1CE4E5B9`. | §6 |
-| P6.19 | CONSTANT | `MIX_MUL2` is `0x94D049BB133111EB`. | §6 |
-| P6.20 | CONSTANT | `WORD_XOR` is `0xC0FFEE`. | §6 |
-| P6.21 | CONSTANT | `PARENT_MUL` is `0xD1B54A32D192ED03`. | §6 |
-| P6.22 | CONSTANT | `SLOT_MUL` is `0xA24BAED4963EE407`. | §6 |
-| P6.23 | INVARIANT | `WORDS_PER_SLOT = SLOT_BYTES / 8`, and the division is exact. | §6 |
-| P6.24 | INVARIANT | `N_SLOTS = TERRAIN_BYTES / SLOT_BYTES`, and the division is exact. | §6 |
-| P6.25 | INVARIANT | `OFFSET_MODULUS = TERRAIN_BYTES − SAMPLE_BYTES + 1`. | §6 |
-| P6.26 | INVARIANT | This version has no `AUDIT_K`. The six-leg draw count is not a section 6 constant. | §6 |
-| P7.1 | INVARIANT | The first eight bytes of a digest are `b[0:8]`. `u64_le` does not reverse a digest a second time. | §7.1 |
-| P7.2 | RANGE | Hex uses `0-9`, `a-f`, and `A-F` with no spaces. A 64-digit spelling is 32 bytes, byte 0 first. | §7.2 |
-| P7.3 | INVARIANT | Produce emits one CBOR map in core deterministic encoding. | §7.3 |
-| P7.4 | INVARIANT | Top-level and per-stage key orders are the orders section 7.3 lists. Stage 0 has no `path` key. | §7.3 |
-| P7.5 | RANGE | Text is definite-length UTF-8. Byte fields, unsigned integers, and definite arrays are as section 7.3 states. | §7.3 |
-| P7.6 | RANGE | Verify decodes any definite-length encoding of the same values, including a non-shortest unsigned integer. Key order is not a shape `mismatch`. | §7.3 |
-| P7.7 | INVARIANT | Malformed CBOR is shape `mismatch`, and `shape_item` includes `malformed cbor`. Later measurements are still recorded. | §7.3 |
-| A3 | INVARIANT | The hike object has exactly the top-level fields, types, and lengths in the section 8 table. | §8 Rule A3 |
-| P8.1 | INVARIANT | Evidence is the hash-bound set in section 8. Convenience signposts are checked against the evidence or the index and never relied on. | §8, §14 |
-| P8.2 | INVARIANT | Stored heights are convenience. `d_g` and `delta_h` subtract index-confirmed heights only. | §8, §14.3, §14.4 |
-| A3.1 | INVARIANT | The object stores `seed_beacon` and all 18 interrupts, with strictly later heights and differing hashes, and stores no block time. | §8 Rule A3.1 |
-| A3.2 | INVARIANT | Each stage map has exactly the listed fields. Array lengths equal `leg_count`. `leg_count` is at least 1. Stage 0’s `waypoint` is the seed. | §8 Rule A3.2 |
-| A3.3.1 | INVARIANT | Stage 0 omits `path`. An empty byte string is not a stage-0 path. “not planted by design” is not a token. | §8 Rule A3.3 |
-| A3.3.2 | INVARIANT | `stages[17].path` is always empty. `W_17` is not asked, including on a jump. The record is `not fetched by design`. | §8 Rule A3.3 |
-| A3.3.3 | CONSTANT | Sixteen waypoints, `W_1` through `W_16`, are fetchable. `W_17` is not. | §8 Rule A3.3 |
-| A3.3.4 | INVARIANT | The object has no terrain field. A stored leg result is `le64` of the section 11 `u64`. | §8 |
-| A3.4 | INVARIANT | `path_skip <g>` and `not fetched by design 17` are the exact stderr lines, in that order, at the close. That step does not delay the object. Empty bytes are not a silent skip. | §13.3 Rule A3.4 |
-| P9.1 | RANGE | `{tip-url}`, `{index-url}`, and `{bari-url}` are absolute `http` or `https` URLs with no trailing slash. | §9, §13 |
-| P9.2 | INVARIANT | A clock read is one GET, does not follow a redirect, and is successful only on status 200. | §9 |
-| P9.3 | RANGE | A successful body is one UTF-8 JSON object, with no BOM, no second value, and no duplicate member name. | §9 |
-| P9.4 | RANGE | `header.hash` is 64 hex digits in Bitcoin display order. The natural beacon reverses those 32 bytes. | §9 |
-| P9.5 | RANGE | `header.height` is a JSON number in `0 … 2^53 − 1`, not a string and not a non-integer JSON number. An index height above that bound is an unsuccessful read: `not read`. An integer above that bound in `beacon_height` or `last_interrupt_height` is section 14 `shape_item` `height_range`. | §9, §14 |
-| P9.6 | RANGE | `header.time` is a JSON integer in `0 … 2^32 − 1` Unix seconds, not a string and not a non-integer JSON number. | §9 |
-| P9.7 | INVARIANT | On mainnet, `header.time` equals the `nTime` of the block whose hash is `header.hash`. Section 14 measures the portable index. A direct Bitcoin read is outside that procedure. | §9, §14 |
-| P9.8 | CONSTANT | With no named gossip peer, the starting list is the copied Bitcoin Core mainnet DNS seeds, in the listed order, port 8333. | §9 |
-| P9.10 | INVARIANT | Produce Observe reads the plane tip sequence and does not GET an HTTP tip or the portable index. | §9 |
-| P9.11 | INVARIANT | The interrupt is the first post-checkpoint tip read whose hash differs and whose height is strictly greater. The tip read returns at once the latest header the header source holds and never waits. There is no rebinding. | §9, Rule A1 |
-| P9.12 | INVARIANT | No clock-read failure or other transitory network condition stops a run or withholds the object. Produce logs it (section 13.5) and the walk continues. An unsuccessful Hashcash, POST, or path-ask read is a miss, and produce continues. A run ends only at `I_17`, on a producer failure, or on explicit cancellation. | §9, Rule A6 |
-| P9.13 | INVARIANT | Verify does not Observe, does not GET an HTTP tip, and does not GET a Bari path. It reads the portable index at each stored height, and it reads one path inclusion height only when that height is in the anchor window and that header is a stored interrupt. | §9, §14 |
-| P9.14 | INVARIANT | The seed beacon is the natural beacon from the first successful Observe, before any leg. That Observe is the latest header already on the tip sequence. It does not wait for a header mined after produce starts. Until a seed read succeeds the run has not started, so no leg exists to pause. | §9 |
-| P9.15 | INVARIANT | A height is not an input to `SHA-256` in this construction. | §9 |
-| P9.16 | CONSTANT | On the live plane the header source keeps at least `HEADER_PEERS_MIN` 2 gossip peers. A connected peer that has not announced a header within `HEADER_PEER_SILENCE_SECONDS` 120 of another connected peer announcing it is replaced. Below 2 peers the source reconnects asynchronously with backoff and writes an `alert` `header_peers_low`; the walk and the object are unaffected. | §9 |
-| P9.17 | INVARIANT | Every Rule BR1 block-hash comparison (current, before, after) is natural order on both sides: `SHA-256(SHA-256(header))` and the header’s previous-block field in wire order, the same bytes as `header_hash`. A display-hex tip hash is reversed once before comparing. A match only under reversal is a 402. | §9, §13.6 |
-| P10.1 | INVARIANT | The seed preimage is `public_key ‖ seed_beacon`, 64 bytes. The seed is `SHA-256` of that preimage, 32 bytes, no label, read as four little-endian lanes. | §10 |
-| P10.2 | INVARIANT | `mix64`, the NL4 base word, the parent indices, and the dag2 fill are the section 10 construction. Every terrain word depends on all 256 bits of the seed. Terrain is filled once per terrain. The step does not write it. | §10 |
-| P10.3 | INVARIANT | The seed equals `stages[0].waypoint` by design. | §10, §12.1 |
-| P11.1 | INVARIANT | A step folds every word of the selected slot by §11.1 (`acc` starts at 0 and grows by wrapping addition; `mix64` includes `MIX_ADD`) and sets the next state from `SHA-256(SEAL_DOMAIN ‖ le64(S_folded))`. | §11.1 |
-| P11.2 | INVARIANT | The leg result is `STEPS_PER_LEG` steps from the first eight bytes of the previous checkpoint, stored as `le64`. | §11.2 |
-| P11.3 | INVARIANT | The terrain sample is `SAMPLE_BYTES` at the offset taken from the previous checkpoint. It is not the waypoint slot sample. | §11.3 |
-| A2.1 | CONSTANT | `seed_beacon` plus the 18 interrupts gives stages numbered 0–17. | §12.1 Rule A2.1 |
-| A2.2 | INVARIANT | The seed is `SHA-256(public_key ‖ seed_beacon)`, stored at `stages[0].waypoint`, never posted, and not one of `W_1` … `W_17`. The seed equals that field by design. Leg 0 starts from it or from `W_g`. | §12.1 Rule A2.2 |
-| A2.3 | INVARIANT | The checkpoint preimage is the previous checkpoint, the stage limb, the terrain sample, and `le64(leg_result)`, in that order. | §11.4, §12.1 Rule A2.3 |
-| A2.4 | INVARIANT | The first Bari post is `W_1`, started after `I_0`, alongside stage 1’s legs. Stage 0 has no plant and no path. | §12.1 Rule A2.4 |
-| A1.3 | INVARIANT | `W_{g+1}` is `SHA-256` of `I_g`, its slot sample, `stages[g].waypoint`, and the fold of that stage’s checkpoints. `slot_index` is `u64_le` of the first eight bytes of `I_g`, modulo `N_SLOTS`. No waypoint is built from `I_17`. | §12.2, §13 Rule A1.3 |
-| A1 | INVARIANT | At each stage boundary the order is legs, then the tip read, then the interrupt, then the waypoint bytes, then the pivot. Stage `g+1`’s leg 0 starts at once from the pivot. The post is an asynchronous event started at the pivot and is not ordered before any leg. There is no rebinding. | §13 Rule A1 |
-| A1.1 | INVARIANT | Legs in a stage run back to back. The tip is read after each checkpoint; that read returns at once and never waits. A leg already in progress finishes. | §13 Rule A1.1 |
-| A1.2 | INVARIANT | When the tip read shows interrupt `I_g`, leg production in stage `g` stops. | §13 Rule A1.2 |
-| A1.4 | INVARIANT | When `W_{g+1}` is known the producer starts its post to Bari with the Hashcash fee as an asynchronous event. The post does not delay, order, or pause any leg, and its outcome is not an input to any leg, checkpoint, leg result, or waypoint. | §13 Rule A1.4 |
-| A1.5 | INVARIANT | `W_{g+1}` is the pivot. Stage `g+1` leg 0 starts from it at once. | §13 Rule A1.5 |
-| A6 | INVARIANT | No post, Hashcash solve, ask, peer or header-source read, Bari exchange, or log write pauses, orders, delays, or interrupts a leg. Each is an asynchronous event. The post-checkpoint tip read stays on the walk path and never waits. | §13 Rule A6 |
-| P13.1 | INVARIANT | Produce sets no wall-clock bound, no steps-per-second quota, and no leg-count quota. `leg_count ≥ 1` is the drive loop. | §13, §13.3 |
-| P13.2 | CONSTANT | `ANCHOR_WINDOW_OFFSETS` is 2, 3, 4. That list is written once in §13.1. A plant posted at height H is asked only at H plus each offset. The path is gone one header after the last offset. | §13.1 |
-| P13.3 | INVARIANT | Produce never pauses a leg: not before the first leg of a stage and not between legs (Rule A6). A stage that ends at one leg, when the next header is the interrupt, is a world event the producer recorded. | §13.1 |
-| P13.4 | INVARIANT | The Hashcash challenge is `SHA-256("bari-hc-v2" ‖ bari_origin ‖ header_hash)` and the digest is `SHA-256(challenge ‖ waypoint ‖ le64(nonce))`, as section 13.1 defines. Leading zero bits are counted from the first digest byte. | §13.1 |
-| P13.5 | CONSTANT | The Hashcash difficulty is 21 leading zero bits, the one value for produce and for Bari. | §13.1 |
-| P13.6 | INVARIANT | The nonce search starts at 0. Produce sends one waypoint POST as an asynchronous event. Status 204 means Bari holds the waypoint. The only retry is one background resend 30 seconds after a transitory send failure (P13.13). Any other outcome is logged and does not withhold the object. H is the stage beacon height in §13.1. There is no fee bump. | §13.1 |
-| P13.7 | INVARIANT | The leaf is 64 lowercase hex digits, byte 0 first. A due ask is sent, as an asynchronous event, when the producer’s header source learns the due header. There is no wait before an ask. | §13.1 |
-| P13.8 | INVARIANT | A checked path is a status 200 canonical path body that validates for that waypoint and whose block is one height in the anchor window. Every other ask result is a miss. | §13.1 |
-| P13.9 | INVARIANT | The cut-off is `last_interrupt_height`. Production ends when the tip read shows `I_17`, and the object closes at once with the checked paths that have arrived by then. There is no collection window. An ask in flight at the close is abandoned, and no ask is made after it. `W_17` is not asked. | §13.1 |
-| P13.10 | INVARIANT | `leg_count` is a convenience copy of `len(checkpoints)`. Produce does not invent path bytes. No metric reads `leg_count`. | §13.3 |
-| P13.11 | INVARIANT | The live event log is not the hike object and is not an input to a leg, a checkpoint, a leg result, or a waypoint. | §13.5 |
-| P13.12 | RANGE | A public-key input is 32 bytes, or 64 hex digits with an optional leading `0x`. The object stores the 32 bytes. | §13 |
-| P13.13 | INVARIANT | After a transitory send failure (a transport failure, section 13.1) the producer resends the identical waypoint POST exactly once, in the background, 30 seconds later, then drops it if the resend fails. Both attempts are logged. This is the only retry of a waypoint POST. | §13.1 |
-| P13.14 | INVARIANT | Plant height H is `stages[g].beacon_height` for `W_g`, written once in §13.1. The fee header on the POST is not H. | §13.1 |
-| P13.15 | INVARIANT | The live event log uses the six record types in section 13.5, in the key order that section lists. | §13.5 |
-| P13.17 | INVARIANT | Event-log records are appended asynchronously. Produce does not wait for a record to be written, flushed, or synced. | §13.5 |
-| P13.16 | INVARIANT | The waypoint POST is `POST {bari-url}/waypoint`. The body is the 32 waypoint bytes. `Content-Type` is `application/octet-stream`. The headers are `X-Bari-Hashcash-Nonce` and `X-Bari-Hashcash-Header` (the 80-byte fee header). | §13.1 |
-| A4 | INVARIANT | Verify records measurements against the object and the portable index and does not judge. Section 15 is not applied in section 14. | §14 Rule A4 |
-| P14.1 | INVARIANT | Anyone may read Bitcoin directly. That read is outside the section 14 procedure. Section 14 measures the portable index (P9.7). P9.7 is not a conformance-vector check. A LAN match is not a mainnet fact. | §14 |
-| P14.2 | RANGE | The verify record is the JSON object section 14 defines: required keys, no JSON null, decimal integers, and the stated array lengths. | §14 verify record |
-| P14.3 | RANGE | `shape_item` uses only the 14 strings in that table, in that order. Malformed CBOR is exactly `malformed cbor`. `height_range` is an object-byte height above `2^53 − 1`. | §14 verify record |
-| A4.1.1 | INVARIANT | `shape` is `match` only when every shape condition holds. Otherwise it is `mismatch`, and later measurements are still recorded. | §14.1 Rule A4.1 |
-| A4.1.2 | INVARIANT | `fill` and the size fields equal the profile in force (a `kind` other than `KIND` is Rule A5), or `shape_item` includes `constant`. The profile in force is section 6, unless the verifier runs `conformance-small`. | §14.1, §16.1 |
-| A4.1.3 | INVARIANT | Shape records the field set, widths, stage-0 `path` key, empty `W_17` path, `stages` length, `leg_count`, `seed_beacon`, and header order. | §14.1 |
-| A4.2.1 | INVARIANT | Verify reads every stored header from the portable index, in order, including `last_interrupt`. One header does not skip a later header. | §14.2 Rule A4.2 |
-| A4.2.2 | INVARIANT | `index_comparison` is `match`, `mismatch`, or `not read`, from hash and height together. Time is not part of that token. | §14.2 |
-| A4.2.3 | INVARIANT | `T` is `header.time` only when `index_comparison` is `match`. On `mismatch`, `T` is `not read`. | §9, §14.2 |
-| A4.3.1 | INVARIANT | Verify recomputes each checkpoint digest and the seed and records `match` or `mismatch`. A missing leg result is `mismatch`. This check does not run a leg. | §14.3 Rule A4.3 |
-| A4.3.2 | INVARIANT | Verify recomputes `W_1` … `W_17` from stored bytes under section 12.2. No waypoint is recomputed from `last_interrupt`. | §14.3 |
-| A4.5.1 | INVARIANT | Empty path bytes on `W_1` … `W_16` are `skip` and plant `n/a`. Any other bytes are `present`. Empty `W_17` is `not fetched by design`. | §14.3 Rule A4.5 |
-| A4.5.2 | INVARIANT | Anchored and fetched is the `anchors` token `anchored`: in the section 13.1 window, an interrupt header stored on the object, and plant `match`. `anchored_total` is that count. This row records it and does not judge it. Rule B4, settled and normative, compares it with 6. | §14.3, §14.5 |
-| A4.5.3 | INVARIANT | `d_g` subtracts index-confirmed heights only, and only when plant is `match` and the index comparison of `I_{g−1}` is `match`. Otherwise `d_g` is `not defined`. | §4, §14.3 |
-| P14.4 | INVARIANT | A present path’s plant is compared with the portable index. A read that does not return a document is `not read`. A document that was read with no plant, or with no matching plant, is `mismatch`. Verify does not GET Bari. | §14.3 |
-| P14.5 | INVARIANT | A returned plant document’s `network` is the string `main` or the string `synthetic`. Any other string, or a missing `network`, is `plant` `mismatch`. There is no verifier input that selects one of those two strings. Accepting `synthetic` does not make the measurement a mainnet fact. Two plants may share a block. `tree_size` is not compared. | §14.3 |
-| P14.6 | INVARIANT | A present path that does not decode, or whose `validate_for` does not succeed, has `plant` `mismatch` and `claimed_block` `not defined`. `block_height` in a body that decodes is in `0 … 2^32 − 1`, which is inside `0 … 2^53 − 1`. A hash-verified canonical path body has no height above `2^53 − 1`. That is not `shape_item` `height_range`. The hike object still decodes. | §14.3 |
-| P14.7 | INVARIANT | An index GET spells the height in the shortest base-10 digits. | §14.2 |
-| P14.8 | INVARIANT | A path on `W_1` … `W_16` is `anchored` only when its inclusion height is in the section 13.1 anchor window, that header is an interrupt header stored on the object, and the plant comparison against that one header is `match`. Otherwise the window record is `not anchored`. Verify does not scan other index heights for that path. | §13.1, §14.3 |
-| A4.6 | INVARIANT | Bookends are the lowest and highest anchored-and-fetched indices among `W_1` … `W_16`. | §14.4 Rule A4.6 |
-| A4.7 | INVARIANT | `N` is the checkpoint count over stages `a` … `b−1`. It does not read `leg_count`. | §14.4 Rule A4.7 |
-| A4.8.1 | INVARIANT | `S` is `T(P_b) − T(I_{a−1})` only when both `T` values were taken on `match`. Otherwise `S` is `not read`. | §14.4 Rule A4.8 |
-| A4.8.2 | INVARIANT | `delta_h` subtracts index-confirmed heights only. Otherwise `delta_h` is `not defined`. | §14.4 Rule A4.8 |
-| A4.9 | INVARIANT | The verify record holds integers `N` and `S` and does not hold a floating-point rate. The bookend display is not a judgment and is not the admission rate. | §14.4 Rule A4.9 |
-| A4.10 | INVARIANT | Analysis records the whole-hike count and span, each per-stage span, checkpoints outside the bookends, `hike_legs`, and `hike_span`. The bookend pair is not `hike_legs` or `hike_span`. | §14.4 Rule A4.10 |
-| A4.11 | INVARIANT | Fewer than two valid paths (Rule A4.11 step 1) among `W_1` … `W_16` records the bookend fields `not defined`. An issued plant GET that returns no document records them `not read`, before the anchored count. A plant `not read` whose GET was not issued does not. Fewer than two `anchored` then records `not defined`. With two `anchored`, an unread `I_{a−1}` header or an unread `P_b` header records every bookend field `not read`. A returned `mismatch` does not. `fixed_start` stays an object. | §14.4 Rule A4.11 |
-| A4.4.1 | CONSTANT | The six-leg draw count is 6. It is not `STAGES` and it is not `AUDIT_K`. | §14.6 Rule A4.4 |
-| A4.4.2 | INVARIANT | The draw is six distinct global checkpoint indices by the unbiased draw in section 14.6. Live verify reads the operating-system CSPRNG. A `conformance-small` vector may supply draw bytes (section 16.1). Fewer than six legs is `not defined`. A short byte source is `not read`. When that draw is `not read`, `six_leg_runs` is `not read`. A short-byte six-leg draw stays re-readable. It is not `not defined`. An 8-byte draw at or above the limit is consumed. | §14.6, §16.1 |
-| A4.4.3 | INVARIANT | Each chosen index is recorded `match` or `mismatch` in draw order. | §14.6 |
-| A4.4.4 | INVARIANT | The index draw finishes before any leg result is recomputed. A verifier may recompute the six leg results concurrently, and may run Rule A4.3 checkpoint comparisons concurrently. How many Rule A4.3 comparisons run at once is a verifier setting. The verify record does not depend on that number. One at a time is conforming. Elements of `six_leg_runs` may execute in parallel. This file does not require a thread pool and does not set a pool size. One at a time is for this measurement record. It does not apply to `thorough_rounds`. | §14.6 |
-| A5 | INVARIANT | An object whose `kind` text is not exactly `KIND` is recorded `kind` `unknown kind`. No other label is recognised. That record is not a decode failure and is not a shape `mismatch`. Sections 14.1–14.6 are not applied. A malformed CBOR value is section 7.3 `malformed cbor`, not this record. | §14.7 Rule A5 |
-| B9 | INVARIANT | Rule B9 names the section 15.2 refuses that do not wait on a configured threshold: decode, waypoint rehash, shape `mismatch` including `height_range`, seed-value `mismatch`, a confirmed plant or header `mismatch`, a checkpoint-digest `mismatch`, a six-leg `mismatch`, and reason `unknown_kind` when section 14 records `kind` `unknown kind`. A cap hit is Rule B7. This row is a section 15 judgment. It is not a Part A measurement. | §15.2 Rule B9 |
+| <a id="rule-p2-2"></a>P2.2 | INVARIANT | Produce and verify perform no signature check. The admission service checks the signature (section 15). | §2, §15 |
+| <a id="rule-p3-1"></a>P3.1 | INVARIANT | Ranges are half-open; `0^n` is `n` zero bytes; `‖` is raw concatenation; `H` is FIPS 180-4 SHA-256. | §3 |
+| <a id="rule-p3-2"></a>P3.2 | RANGE | `le64` and `u64_le` are 8 little-endian bytes of an unsigned integer below `2^64`. | §3 |
+| <a id="rule-p3-3"></a>P3.3 | INVARIANT | `mod` is the non-negative remainder; `mod 2^64` keeps the low 64 bits. | §3 |
+| <a id="rule-p4-1"></a>P4.1 | RANGE | Outcome tokens are the closed lowercase set. There is no token `not obtained`. | §4 |
+| <a id="rule-p4-2"></a>P4.2 | INVARIANT | Part A does not pass, fail, reject, deny, or admit. | §4 |
+| <a id="rule-p6-1"></a>P6.1 | CONSTANT | `SLOT_BYTES` is 16384. | §6 |
+| <a id="rule-p6-2"></a>P6.2 | CONSTANT | `WORDS_PER_SLOT` is 2048. | §6 |
+| <a id="rule-p6-3"></a>P6.3 | CONSTANT | `TERRAIN_BYTES` is 268435456. | §6 |
+| <a id="rule-p6-4"></a>P6.4 | CONSTANT | `N_SLOTS` is 16384. | §6 |
+| <a id="rule-p6-5"></a>P6.5 | CONSTANT | `SAMPLE_BYTES` is 1024. | §6 |
+| <a id="rule-p6-6"></a>P6.6 | CONSTANT | `OFFSET_MODULUS` is 268434433. | §6 |
+| <a id="rule-p6-7"></a>P6.7 | CONSTANT | `STEPS_PER_LEG` is 2000000. | §6 |
+| <a id="rule-p6-8"></a>P6.8 | CONSTANT | `STAGES` is 18. | §6 |
+| <a id="rule-p6-9"></a>P6.9 | CONSTANT | `HASH_BYTES` is 32. | §6 |
+| <a id="rule-p6-10"></a>P6.10 | CONSTANT | `LEG_RESULT_BYTES` is 8. | §6 |
+| <a id="rule-p6-11"></a>P6.11 | CONSTANT | `PUBLIC_KEY_BYTES` is 32. | §6 |
+| <a id="rule-p6-12"></a>P6.12 | CONSTANT | `BEACON_BYTES` is 32. | §6 |
+| <a id="rule-p6-13"></a>P6.13 | CONSTANT | `SEAL_DOMAIN` is the twelve bytes `pcoc-walk-v1`. | §6 |
+| <a id="rule-p6-15"></a>P6.15 | CONSTANT | `KIND` is `v2.2-pcoc-object`. | §6 |
+| <a id="rule-p6-16"></a>P6.16 | CONSTANT | `FILL` is `dag2`. | §6 |
+| <a id="rule-p6-17"></a>P6.17 | CONSTANT | `MIX_ADD` is `0x9E3779B97F4A7C15`. | §6 |
+| <a id="rule-p6-18"></a>P6.18 | CONSTANT | `MIX_MUL1` is `0xBF58476D1CE4E5B9`. | §6 |
+| <a id="rule-p6-19"></a>P6.19 | CONSTANT | `MIX_MUL2` is `0x94D049BB133111EB`. | §6 |
+| <a id="rule-p6-20"></a>P6.20 | CONSTANT | `WORD_XOR` is `0xC0FFEE`. | §6 |
+| <a id="rule-p6-21"></a>P6.21 | CONSTANT | `PARENT_MUL` is `0xD1B54A32D192ED03`. | §6 |
+| <a id="rule-p6-22"></a>P6.22 | CONSTANT | `SLOT_MUL` is `0xA24BAED4963EE407`. | §6 |
+| <a id="rule-p6-23"></a>P6.23 | INVARIANT | `WORDS_PER_SLOT = SLOT_BYTES / 8`, and the division is exact. | §6 |
+| <a id="rule-p6-24"></a>P6.24 | INVARIANT | `N_SLOTS = TERRAIN_BYTES / SLOT_BYTES`, and the division is exact. | §6 |
+| <a id="rule-p6-25"></a>P6.25 | INVARIANT | `OFFSET_MODULUS = TERRAIN_BYTES − SAMPLE_BYTES + 1`. | §6 |
+| <a id="rule-p6-26"></a>P6.26 | INVARIANT | This version has no `AUDIT_K`. The six-leg draw count is not a section 6 constant. | §6 |
+| <a id="rule-p7-1"></a>P7.1 | INVARIANT | The first eight bytes of a digest are `b[0:8]`. `u64_le` does not reverse a digest a second time. | §7.1 |
+| <a id="rule-p7-2"></a>P7.2 | RANGE | Hex uses `0-9`, `a-f`, and `A-F` with no spaces. A 64-digit spelling is 32 bytes, byte 0 first. | §7.2 |
+| <a id="rule-p7-3"></a>P7.3 | INVARIANT | Produce emits one CBOR map in core deterministic encoding. | §7.3 |
+| <a id="rule-p7-4"></a>P7.4 | INVARIANT | Top-level and per-stage key orders are the orders section 7.3 lists. Stage 0 has no `path` key. | §7.3 |
+| <a id="rule-p7-5"></a>P7.5 | RANGE | Text is definite-length UTF-8. Byte fields, unsigned integers, and definite arrays are as section 7.3 states. | §7.3 |
+| <a id="rule-p7-6"></a>P7.6 | RANGE | Verify decodes any definite-length encoding of the same values, including a non-shortest unsigned integer. Key order is not a shape `mismatch`. | §7.3 |
+| <a id="rule-p7-7"></a>P7.7 | INVARIANT | Malformed CBOR is shape `mismatch`, and `shape_item` includes `malformed cbor`. Later measurements are still recorded. | §7.3 |
+| <a id="class-a3"></a>A3 | INVARIANT | The hike object has exactly the top-level fields, types, and lengths in the section 8 table. | §8 Rule A3 |
+| <a id="rule-p8-1"></a>P8.1 | INVARIANT | Evidence is the hash-bound set in section 8. Convenience signposts are checked against the evidence or the index and never relied on. | §8, §14 |
+| <a id="rule-p8-2"></a>P8.2 | INVARIANT | Stored heights are convenience. `d_g` and `delta_h` subtract index-confirmed heights only. | §8, §14.3, §14.4 |
+| <a id="class-a3-1"></a>A3.1 | INVARIANT | The object stores `seed_beacon` and all 18 interrupts, with strictly later heights and differing hashes, and stores no block time. | §8 Rule A3.1 |
+| <a id="class-a3-2"></a>A3.2 | INVARIANT | Each stage map has exactly the listed fields. Array lengths equal `leg_count`. `leg_count` is at least 1. Stage 0’s `waypoint` is the seed. | §8 Rule A3.2 |
+| <a id="rule-a3-3-1"></a>A3.3.1 | INVARIANT | Stage 0 omits `path`. An empty byte string is not a stage-0 path. “not planted by design” is not a token. | §8 Rule A3.3 |
+| <a id="rule-a3-3-2"></a>A3.3.2 | INVARIANT | `stages[17].path` is always empty. `W_17` is not asked, including on a jump. The record is `not fetched by design`. | §8 Rule A3.3 |
+| <a id="rule-a3-3-3"></a>A3.3.3 | CONSTANT | Sixteen waypoints, `W_1` through `W_16`, are fetchable. `W_17` is not. | §8 Rule A3.3 |
+| <a id="rule-a3-3-4"></a>A3.3.4 | INVARIANT | The object has no terrain field. A stored leg result is `le64` of the section 11 `u64`. | §8 |
+| <a id="class-a3-4"></a>A3.4 | INVARIANT | `path_skip <g>` and `not fetched by design 17` are the exact stderr lines, in that order, at the close. That step does not delay the object. Empty bytes are not a silent skip. | §13.3 Rule A3.4 |
+| <a id="rule-p9-1"></a>P9.1 | RANGE | `{tip-url}`, `{index-url}`, and `{bari-url}` are absolute `http` or `https` URLs with no trailing slash. | §9, §13 |
+| <a id="rule-p9-2"></a>P9.2 | INVARIANT | A clock read is one GET, does not follow a redirect, and is successful only on status 200. | §9 |
+| <a id="rule-p9-3"></a>P9.3 | RANGE | A successful body is one UTF-8 JSON object, with no BOM, no second value, and no duplicate member name. | §9 |
+| <a id="rule-p9-4"></a>P9.4 | RANGE | `header.hash` is 64 hex digits in Bitcoin display order. The natural beacon reverses those 32 bytes. | §9 |
+| <a id="rule-p9-5"></a>P9.5 | RANGE | `header.height` is a JSON number in `0 … 2^53 − 1`, not a string and not a non-integer JSON number. An index height above that bound is an unsuccessful read: `not read`. An integer above that bound in `beacon_height` or `last_interrupt_height` is section 14 `shape_item` `height_range`. | §9, §14 |
+| <a id="rule-p9-6"></a>P9.6 | RANGE | `header.time` is a JSON integer in `0 … 2^32 − 1` Unix seconds, not a string and not a non-integer JSON number. | §9 |
+| <a id="rule-p9-7"></a>P9.7 | INVARIANT | On mainnet, `header.time` equals the `nTime` of the block whose hash is `header.hash`. Section 14 measures the portable index. A direct Bitcoin read is outside that procedure. | §9, §14 |
+| <a id="rule-p9-8"></a>P9.8 | CONSTANT | With no named gossip peer, the starting list is the copied Bitcoin Core mainnet DNS seeds, in the listed order, port 8333. | §9 |
+| <a id="rule-p9-10"></a>P9.10 | INVARIANT | Produce Observe reads the plane tip sequence and does not GET an HTTP tip or the portable index. | §9 |
+| <a id="rule-p9-11"></a>P9.11 | INVARIANT | The interrupt is the first post-checkpoint tip read whose hash differs and whose height is strictly greater. The tip read returns at once the latest header the header source holds and never waits. There is no rebinding. | §9, Rule A1 |
+| <a id="rule-p9-12"></a>P9.12 | INVARIANT | No clock-read failure or other transitory network condition stops a run or withholds the object. Produce logs it (section 13.5) and the walk continues. An unsuccessful Hashcash, POST, or path-ask read is a miss, and produce continues. A run ends only at `I_17`, on a producer failure, or on explicit cancellation. | §9, Rule A6 |
+| <a id="rule-p9-13"></a>P9.13 | INVARIANT | Verify does not Observe, does not GET an HTTP tip, and does not GET a Bari path. It reads the portable index at each stored height, and it reads one path inclusion height only when that height is in the anchor window and that header is a stored interrupt. | §9, §14 |
+| <a id="rule-p9-14"></a>P9.14 | INVARIANT | The seed beacon is the natural beacon from the first successful Observe, before any leg. That Observe is the latest header already on the tip sequence. It does not wait for a header mined after produce starts. Until a seed read succeeds the run has not started, so no leg exists to pause. | §9 |
+| <a id="rule-p9-15"></a>P9.15 | INVARIANT | A height is not an input to `SHA-256` in this construction. | §9 |
+| <a id="rule-p9-16"></a>P9.16 | CONSTANT | On the live plane the header source keeps at least `HEADER_PEERS_MIN` 2 gossip peers. A connected peer that has not announced a header within `HEADER_PEER_SILENCE_SECONDS` 120 of another connected peer announcing it is replaced. Below 2 peers the source reconnects asynchronously with backoff and writes an `alert` `header_peers_low`; the walk and the object are unaffected. | §9 |
+| <a id="rule-p9-17"></a>P9.17 | INVARIANT | Every Rule BR1 block-hash comparison (current, before, after) is natural order on both sides: `SHA-256(SHA-256(header))` and the header’s previous-block field in wire order, the same bytes as `header_hash`. A display-hex tip hash is reversed once before comparing. A match only under reversal is a 402. | §9, §13.6 |
+| <a id="rule-p10-1"></a>P10.1 | INVARIANT | The seed preimage is `public_key ‖ seed_beacon`, 64 bytes. The seed is `SHA-256` of that preimage, 32 bytes, no label, read as four little-endian lanes. | §10 |
+| <a id="rule-p10-2"></a>P10.2 | INVARIANT | `mix64`, the NL4 base word, the parent indices, and the dag2 fill are the section 10 construction. Every terrain word depends on all 256 bits of the seed. Terrain is filled once per terrain. The step does not write it. | §10 |
+| <a id="rule-p10-3"></a>P10.3 | INVARIANT | The seed equals `stages[0].waypoint` by design. | §10, §12.1 |
+| <a id="rule-p11-1"></a>P11.1 | INVARIANT | A step folds every word of the selected slot by §11.1 (`acc` starts at 0 and grows by wrapping addition; `mix64` includes `MIX_ADD`) and sets the next state from `SHA-256(SEAL_DOMAIN ‖ le64(S_folded))`. | §11.1 |
+| <a id="rule-p11-2"></a>P11.2 | INVARIANT | The leg result is `STEPS_PER_LEG` steps from the first eight bytes of the previous checkpoint, stored as `le64`. | §11.2 |
+| <a id="rule-p11-3"></a>P11.3 | INVARIANT | The terrain sample is `SAMPLE_BYTES` at the offset taken from the previous checkpoint. It is not the waypoint slot sample. | §11.3 |
+| <a id="class-a2-1"></a>A2.1 | CONSTANT | `seed_beacon` plus the 18 interrupts gives stages numbered 0–17. | §12.1 Rule A2.1 |
+| <a id="class-a2-2"></a>A2.2 | INVARIANT | The seed is `SHA-256(public_key ‖ seed_beacon)`, stored at `stages[0].waypoint`, never posted, and not one of `W_1` … `W_17`. The seed equals that field by design. Leg 0 starts from it or from `W_g`. | §12.1 Rule A2.2 |
+| <a id="class-a2-3"></a>A2.3 | INVARIANT | The checkpoint preimage is the previous checkpoint, the stage limb, the terrain sample, and `le64(leg_result)`, in that order. | §11.4, §12.1 Rule A2.3 |
+| <a id="class-a2-4"></a>A2.4 | INVARIANT | The first Bari post is `W_1`, started after `I_0`, alongside stage 1’s legs. Stage 0 has no plant and no path. | §12.1 Rule A2.4 |
+| <a id="class-a1-3"></a>A1.3 | INVARIANT | `W_{g+1}` is `SHA-256` of `I_g`, its slot sample, `stages[g].waypoint`, and the fold of that stage’s checkpoints. `slot_index` is `u64_le` of the first eight bytes of `I_g`, modulo `N_SLOTS`. No waypoint is built from `I_17`. | §12.2, §13 Rule A1.3 |
+| <a id="class-a1"></a>A1 | INVARIANT | At each stage boundary the order is legs, then the tip read, then the interrupt, then the waypoint bytes, then the pivot. Stage `g+1`’s leg 0 starts at once from the pivot. The post is an asynchronous event started at the pivot and is not ordered before any leg. There is no rebinding. | §13 Rule A1 |
+| <a id="class-a1-1"></a>A1.1 | INVARIANT | Legs in a stage run back to back. The tip is read after each checkpoint; that read returns at once and never waits. A leg already in progress finishes. | §13 Rule A1.1 |
+| <a id="class-a1-2"></a>A1.2 | INVARIANT | When the tip read shows interrupt `I_g`, leg production in stage `g` stops. | §13 Rule A1.2 |
+| <a id="class-a1-4"></a>A1.4 | INVARIANT | When `W_{g+1}` is known the producer starts its post to Bari with the Hashcash fee as an asynchronous event. The post does not delay, order, or pause any leg, and its outcome is not an input to any leg, checkpoint, leg result, or waypoint. | §13 Rule A1.4 |
+| <a id="class-a1-5"></a>A1.5 | INVARIANT | `W_{g+1}` is the pivot. Stage `g+1` leg 0 starts from it at once. | §13 Rule A1.5 |
+| <a id="class-a6"></a>A6 | INVARIANT | No post, Hashcash solve, ask, peer or header-source read, Bari exchange, or log write pauses, orders, delays, or interrupts a leg. Each is an asynchronous event. The post-checkpoint tip read stays on the walk path and never waits. | §13 Rule A6 |
+| <a id="rule-p13-1"></a>P13.1 | INVARIANT | Produce sets no wall-clock bound, no steps-per-second quota, and no leg-count quota. `leg_count ≥ 1` is the drive loop. | §13, §13.3 |
+| <a id="rule-p13-2"></a>P13.2 | CONSTANT | `ANCHOR_WINDOW_OFFSETS` is 2, 3, 4. That list is written once in §13.1. A plant posted at height H is asked only at H plus each offset. The path is gone one header after the last offset. | §13.1 |
+| <a id="rule-p13-3"></a>P13.3 | INVARIANT | Produce never pauses a leg: not before the first leg of a stage and not between legs (Rule A6). A stage that ends at one leg, when the next header is the interrupt, is a world event the producer recorded. | §13.1 |
+| <a id="rule-p13-4"></a>P13.4 | INVARIANT | The Hashcash challenge is `SHA-256("bari-hc-v2" ‖ bari_origin ‖ header_hash)` and the digest is `SHA-256(challenge ‖ waypoint ‖ le64(nonce))`, as section 13.1 defines. Leading zero bits are counted from the first digest byte. | §13.1 |
+| <a id="rule-p13-5"></a>P13.5 | CONSTANT | The Hashcash difficulty is 21 leading zero bits, the one value for produce and for Bari. | §13.1 |
+| <a id="rule-p13-6"></a>P13.6 | INVARIANT | The nonce search starts at 0. Produce sends one waypoint POST as an asynchronous event. Status 204 means Bari holds the waypoint. The only retry is one background resend 30 seconds after a transitory send failure (P13.13). Any other outcome is logged and does not withhold the object. H is the stage beacon height in §13.1. There is no fee bump. | §13.1 |
+| <a id="rule-p13-7"></a>P13.7 | INVARIANT | The leaf is 64 lowercase hex digits, byte 0 first. A due ask is sent, as an asynchronous event, when the producer’s header source learns the due header. There is no wait before an ask. | §13.1 |
+| <a id="rule-p13-8"></a>P13.8 | INVARIANT | A checked path is a status 200 canonical path body that validates for that waypoint and whose block is one height in the anchor window. Every other ask result is a miss. | §13.1 |
+| <a id="rule-p13-9"></a>P13.9 | INVARIANT | The cut-off is `last_interrupt_height`. Production ends when the tip read shows `I_17`, and the object closes at once with the checked paths that have arrived by then. There is no collection window. An ask in flight at the close is abandoned, and no ask is made after it. `W_17` is not asked. | §13.1 |
+| <a id="rule-p13-10"></a>P13.10 | INVARIANT | `leg_count` is a convenience copy of `len(checkpoints)`. Produce does not invent path bytes. No metric reads `leg_count`. | §13.3 |
+| <a id="rule-p13-11"></a>P13.11 | INVARIANT | The live event log is not the hike object and is not an input to a leg, a checkpoint, a leg result, or a waypoint. | §13.5 |
+| <a id="rule-p13-12"></a>P13.12 | RANGE | A public-key input is 32 bytes, or 64 hex digits with an optional leading `0x`. The object stores the 32 bytes. | §13 |
+| <a id="rule-p13-13"></a>P13.13 | INVARIANT | After a transitory send failure (a transport failure, section 13.1) the producer resends the identical waypoint POST exactly once, in the background, 30 seconds later, then drops it if the resend fails. Both attempts are logged. This is the only retry of a waypoint POST. | §13.1 |
+| <a id="rule-p13-14"></a>P13.14 | INVARIANT | Plant height H is `stages[g].beacon_height` for `W_g`, written once in §13.1. The fee header on the POST is not H. | §13.1 |
+| <a id="rule-p13-15"></a>P13.15 | INVARIANT | The live event log uses the six record types in section 13.5, in the key order that section lists. | §13.5 |
+| <a id="rule-p13-17"></a>P13.17 | INVARIANT | Event-log records are appended asynchronously. Produce does not wait for a record to be written, flushed, or synced. | §13.5 |
+| <a id="rule-p13-16"></a>P13.16 | INVARIANT | The waypoint POST is `POST {bari-url}/waypoint`. The body is the 32 waypoint bytes. `Content-Type` is `application/octet-stream`. The headers are `X-Bari-Hashcash-Nonce` and `X-Bari-Hashcash-Header` (the 80-byte fee header). | §13.1 |
+| <a id="class-a4"></a>A4 | INVARIANT | Verify records measurements against the object and the portable index and does not judge. Section 15 is not applied in section 14. | §14 Rule A4 |
+| <a id="rule-p14-1"></a>P14.1 | INVARIANT | Anyone may read Bitcoin directly. That read is outside the section 14 procedure. Section 14 measures the portable index (P9.7). P9.7 is not a conformance-vector check. A LAN match is not a mainnet fact. | §14 |
+| <a id="rule-p14-2"></a>P14.2 | RANGE | The verify record is the JSON object section 14 defines: required keys, no JSON null, decimal integers, and the stated array lengths. | §14 verify record |
+| <a id="rule-p14-3"></a>P14.3 | RANGE | `shape_item` uses only the 14 strings in that table, in that order. Malformed CBOR is exactly `malformed cbor`. `height_range` is an object-byte height above `2^53 − 1`. | §14 verify record |
+| <a id="rule-a4-1-1"></a>A4.1.1 | INVARIANT | `shape` is `match` only when every shape condition holds. Otherwise it is `mismatch`, and later measurements are still recorded. | §14.1 Rule A4.1 |
+| <a id="rule-a4-1-2"></a>A4.1.2 | INVARIANT | `fill` and the size fields equal the profile in force (a `kind` other than `KIND` is Rule A5), or `shape_item` includes `constant`. The profile in force is section 6, unless the verifier runs `conformance-small`. | §14.1, §16.1 |
+| <a id="rule-a4-1-3"></a>A4.1.3 | INVARIANT | Shape records the field set, widths, stage-0 `path` key, empty `W_17` path, `stages` length, `leg_count`, `seed_beacon`, and header order. | §14.1 |
+| <a id="rule-a4-2-1"></a>A4.2.1 | INVARIANT | Verify reads every stored header from the portable index, in order, including `last_interrupt`. One header does not skip a later header. | §14.2 Rule A4.2 |
+| <a id="rule-a4-2-2"></a>A4.2.2 | INVARIANT | `index_comparison` is `match`, `mismatch`, or `not read`, from hash and height together. Time is not part of that token. | §14.2 |
+| <a id="rule-a4-2-3"></a>A4.2.3 | INVARIANT | `T` is `header.time` only when `index_comparison` is `match`. On `mismatch`, `T` is `not read`. | §9, §14.2 |
+| <a id="rule-a4-3-1"></a>A4.3.1 | INVARIANT | Verify recomputes each checkpoint digest and the seed and records `match` or `mismatch`. A missing leg result is `mismatch`. This check does not run a leg. | §14.3 Rule A4.3 |
+| <a id="rule-a4-3-2"></a>A4.3.2 | INVARIANT | Verify recomputes `W_1` … `W_17` from stored bytes under section 12.2. No waypoint is recomputed from `last_interrupt`. | §14.3 |
+| <a id="rule-a4-5-1"></a>A4.5.1 | INVARIANT | Empty path bytes on `W_1` … `W_16` are `skip` and plant `n/a`. Any other bytes are `present`. Empty `W_17` is `not fetched by design`. | §14.3 Rule A4.5 |
+| <a id="rule-a4-5-2"></a>A4.5.2 | INVARIANT | Anchored and fetched is the `anchors` token `anchored`: in the section 13.1 window, an interrupt header stored on the object, and plant `match`. `anchored_total` is that count. This row records it and does not judge it. Rule B4, settled and normative, compares it with 6. | §14.3, §14.5 |
+| <a id="rule-a4-5-3"></a>A4.5.3 | INVARIANT | `d_g` subtracts index-confirmed heights only, and only when plant is `match` and the index comparison of `I_{g−1}` is `match`. Otherwise `d_g` is `not defined`. | §4, §14.3 |
+| <a id="rule-p14-4"></a>P14.4 | INVARIANT | A present path’s plant is compared with the portable index. A read that does not return a document is `not read`. A document that was read with no plant, or with no matching plant, is `mismatch`. Verify does not GET Bari. | §14.3 |
+| <a id="rule-p14-5"></a>P14.5 | INVARIANT | A returned plant document’s `network` is the string `main` or the string `synthetic`. Any other string, or a missing `network`, is `plant` `mismatch`. There is no verifier input that selects one of those two strings. Accepting `synthetic` does not make the measurement a mainnet fact. Two plants may share a block. `tree_size` is not compared. | §14.3 |
+| <a id="rule-p14-6"></a>P14.6 | INVARIANT | A present path that does not decode, or whose `validate_for` does not succeed, has `plant` `mismatch` and `claimed_block` `not defined`. `block_height` in a body that decodes is in `0 … 2^32 − 1`, which is inside `0 … 2^53 − 1`. A hash-verified canonical path body has no height above `2^53 − 1`. That is not `shape_item` `height_range`. The hike object still decodes. | §14.3 |
+| <a id="rule-p14-7"></a>P14.7 | INVARIANT | An index GET spells the height in the shortest base-10 digits. | §14.2 |
+| <a id="rule-p14-8"></a>P14.8 | INVARIANT | A path on `W_1` … `W_16` is `anchored` only when its inclusion height is in the section 13.1 anchor window, that header is an interrupt header stored on the object, and the plant comparison against that one header is `match`. Otherwise the window record is `not anchored`. Verify does not scan other index heights for that path. | §13.1, §14.3 |
+| <a id="class-a4-6"></a>A4.6 | INVARIANT | Bookends are the lowest and highest anchored-and-fetched indices among `W_1` … `W_16`. | §14.4 Rule A4.6 |
+| <a id="class-a4-7"></a>A4.7 | INVARIANT | `N` is the checkpoint count over stages `a` … `b−1`. It does not read `leg_count`. | §14.4 Rule A4.7 |
+| <a id="rule-a4-8-1"></a>A4.8.1 | INVARIANT | `S` is `T(P_b) − T(I_{a−1})` only when both `T` values were taken on `match`. Otherwise `S` is `not read`. | §14.4 Rule A4.8 |
+| <a id="rule-a4-8-2"></a>A4.8.2 | INVARIANT | `delta_h` subtracts index-confirmed heights only. Otherwise `delta_h` is `not defined`. | §14.4 Rule A4.8 |
+| <a id="class-a4-9"></a>A4.9 | INVARIANT | The verify record holds integers `N` and `S` and does not hold a floating-point rate. The bookend display is not a judgment and is not the admission rate. | §14.4 Rule A4.9 |
+| <a id="class-a4-10"></a>A4.10 | INVARIANT | Analysis records the whole-hike count and span, each per-stage span, checkpoints outside the bookends, `hike_legs`, and `hike_span`. The bookend pair is not `hike_legs` or `hike_span`. | §14.4 Rule A4.10 |
+| <a id="class-a4-11"></a>A4.11 | INVARIANT | Fewer than two valid paths (Rule A4.11 step 1) among `W_1` … `W_16` records the bookend fields `not defined`. An issued plant GET that returns no document records them `not read`, before the anchored count. A plant `not read` whose GET was not issued does not. Fewer than two `anchored` then records `not defined`. With two `anchored`, an unread `I_{a−1}` header or an unread `P_b` header records every bookend field `not read`. A returned `mismatch` does not. `fixed_start` stays an object. | §14.4 Rule A4.11 |
+| <a id="rule-a4-4-1"></a>A4.4.1 | CONSTANT | The six-leg draw count is 6. It is not `STAGES` and it is not `AUDIT_K`. | §14.6 Rule A4.4 |
+| <a id="rule-a4-4-2"></a>A4.4.2 | INVARIANT | The draw is six distinct global checkpoint indices by the unbiased draw in section 14.6. Live verify reads the operating-system CSPRNG. A `conformance-small` vector may supply draw bytes (section 16.1). Fewer than six legs is `not defined`. A short byte source is `not read`. When that draw is `not read`, `six_leg_runs` is `not read`. A short-byte six-leg draw stays re-readable. It is not `not defined`. An 8-byte draw at or above the limit is consumed. | §14.6, §16.1 |
+| <a id="rule-a4-4-3"></a>A4.4.3 | INVARIANT | Each chosen index is recorded `match` or `mismatch` in draw order. | §14.6 |
+| <a id="rule-a4-4-4"></a>A4.4.4 | INVARIANT | The index draw finishes before any leg result is recomputed. A verifier may recompute the six leg results concurrently, and may run Rule A4.3 checkpoint comparisons concurrently. How many Rule A4.3 comparisons run at once is a verifier setting. The verify record does not depend on that number. One at a time is conforming. Elements of `six_leg_runs` may execute in parallel. This file does not require a thread pool and does not set a pool size. One at a time is for this measurement record. It does not apply to `thorough_rounds`. | §14.6 |
+| <a id="class-a5"></a>A5 | INVARIANT | An object whose `kind` text is not exactly `KIND` is recorded `kind` `unknown kind`. No other label is recognised. That record is not a decode failure and is not a shape `mismatch`. Sections 14.1–14.6 are not applied. A malformed CBOR value is section 7.3 `malformed cbor`, not this record. | §14.7 Rule A5 |
+| <a id="class-b9"></a>B9 | INVARIANT | Rule B9 names the section 15.2 refuses that do not wait on a configured threshold: decode, waypoint rehash, shape `mismatch` including `height_range`, seed-value `mismatch`, a confirmed plant or header `mismatch`, a checkpoint-digest `mismatch`, a six-leg `mismatch`, and reason `unknown_kind` when section 14 records `kind` `unknown kind`. A cap hit is Rule B7. This row is a section 15 judgment. It is not a Part A measurement. | §15.2 Rule B9 |
 
 **Sentences reviewed for POLICY THRESHOLD.** None of the rows above is a POLICY THRESHOLD. The sentences a reader might take for one are:
 
@@ -239,6 +241,8 @@ This subsection is the normative classification of Part A. It does not add a sec
 
 No Part A sentence is moved into section 15 by this classification. Where section 14 says an admission service may judge a recorded token, the judgment stays in section 15.
 
+<a id="sec-2"></a>
+
 ## 2. Scope
 
 **Normative.**
@@ -248,6 +252,8 @@ This document specifies Satoshi Hike 2.3.
 A hike has exactly eighteen stages (Rule A2.1).
 
 Section 13 produces the object. Section 14 measures it. Section 15 is the admission service. Produce and verify perform no signature check. The admission service checks the signature (section 15.1).
+
+<a id="sec-3"></a>
 
 ## 3. Interpretation
 
@@ -272,6 +278,8 @@ Byte ranges are half-open. `b[i:j]` is bytes `i` through `j-1` of `b`, starting 
 `mod 2^64` on a `u64` quantity is ordinary wrapping arithmetic on a 64-bit unsigned integer. The result is the low 64 bits, and overflow is discarded. That is this `mod` with modulus `2^64`. It is the rule for the NL4 word, the parent indices, the slot mix, and the step’s `u64` state. A `mod` with any other modulus stays the remainder above.
 
 `SHA-256` is the function specified by FIPS 180-4. Its output is 32 bytes. In this document, `H` means `SHA-256`.
+
+<a id="sec-4"></a>
 
 ## 4. Glossary
 
@@ -357,6 +365,8 @@ The public key is the 32-byte string used below. Produce and verify do not test 
 
 Part A (sections 8–14) does not say that verify or the object passes, fails, rejects, denies, or admits, and it does not say `accept`, `refuse`, `revoke`, or `held`. Those outcomes are section 15. Do not say “minimum legs per stage.” A per-stage rate is analysis. It is not an admission test.
 
+<a id="sec-5"></a>
+
 ## 5. Overview
 
 **Informative.**
@@ -385,6 +395,8 @@ hike
 ```
 
 The procedures in the normative sections are the construction.
+
+<a id="sec-6"></a>
 
 ## 6. Constants
 
@@ -432,9 +444,13 @@ There is no seed domain label. A domain label on the seed, or a squeeze of the s
 
 `STAGES` is 18. That count, and the beacon count that goes with it, is a profile constant. It is not a security number. The description of this arbitrary profile size is 18 stages and 19 beacons (`seed_beacon` plus `I_0` … `I_17`). The object stores 18 stage maps, numbered 0–17. Admission does not treat 18, 17, or 19 as a threshold.
 
+<a id="sec-7"></a>
+
 ## 7. Encodings
 
 **Normative.**
+
+<a id="sec-7-1"></a>
 
 ### 7.1 Little-endian integers
 
@@ -442,11 +458,15 @@ There is no seed domain label. A domain label on the seed, or a squeeze of the s
 
 The first eight bytes of a 32-byte string `b` are `b[0:8]`. Those bytes are SHA-256 output order when `b` is a digest: byte 0 is the first byte of the digest. `u64_le` does not reverse a digest a second time.
 
+<a id="sec-7-2"></a>
+
 ### 7.2 Hexadecimal
 
 A hexadecimal spelling uses the digits `0-9`, `a-f`, and `A-F`. Letter case does not change the value. The spelling contains no spaces.
 
 A 64-digit spelling denotes 32 bytes. The first two digits are byte 0. Natural order is that spelling: byte 0 first. Bitcoin display order is the one reversal in section 9. A digest is not reversed a second time.
+
+<a id="sec-7-3"></a>
 
 ### 7.3 CBOR
 
@@ -498,6 +518,8 @@ Text values and map keys are definite-length UTF-8 text strings (CBOR major type
 
 Verification decodes one definite-length CBOR data item and records section 14. These are decoding rules. A definite-length encoding of the section 8 values decodes. A non-shortest definite-length unsigned integer decodes when the numeric value is the same. Map key order is not a shape `mismatch`. Indefinite lengths, tags, floating-point values, simple values, negative integers, a map key that is not a text string, a duplicate key, and any byte after that one data item are a malformed CBOR value. A text string whose bytes are not valid UTF-8 (RFC 3629) is also a malformed CBOR value, including a map key and a `kind` value. It is not Rule A5 and it is not a decode failure. A malformed CBOR value is shape `mismatch`, and `shape_item` includes `malformed cbor`. Later measurements are still recorded. Produce is what fixes the canonical bytes. Verification sorts the input bytes in this order. First, input that is not one definite-length CBOR data item under these rules is a malformed CBOR value, whatever its first data item holds. That includes an empty input, bytes that are not CBOR, bytes that end inside an item, and a malformed item that is not a map. Rule A5 is not applied to a malformed CBOR value, even when a `kind` text can be read from it. Second, one well-formed data item that is not a map, or a map with no `kind` key whose value is a text string, is a decode failure: there is no section 14 record, and the verify CLI exits with code `1` (section 18). Third, a map whose `kind` text is not exactly `KIND` is Rule A5. Every other input is measured by section 14.
 
+<a id="sec-7-4"></a>
+
 ### 7.4 Checks
 
 **Informative.**
@@ -512,9 +534,13 @@ FIPS 180-4’s SHA-256 example for the three bytes `abc` is `ba7816bf8f01cfea414
 
 A seed preimage of 32 bytes of `0x11` followed by 32 bytes of `0x22` has seed `5189c77d29fe5d546a045ec46986852785fea5c13ac7da9c115ff5fb6edf817c` (byte 0 first). The four lanes are `P[0] = 0x545dfe297dc78951`, `P[1] = 0x27858669c45e046a`, `P[2] = 0x9cdac73ac1a5fe85`, `P[3] = 0x7c81df6efbf55f11`. The NL4 base word at `i = 0`, `j = 0` is `0xc7582082a632c2c8`. There is no fill pin.
 
+<a id="sec-8"></a>
+
 ## 8. Hike object
 
 **Normative.**
+
+<a id="rule-a3"></a>
 
 ### Rule A3. What the object stores
 
@@ -536,6 +562,8 @@ The object has exactly these top-level fields:
 
 **Evidence and convenience.** Evidence, the hash-bound values, is the seed preimage (`public_key`, `seed_beacon`), the checkpoints, the leg results, the waypoints `W_1` … `W_17`, the Bitcoin headers (`stages[g].beacon` for `g ≥ 1`, and `last_interrupt`), the path’s leaf, Merkle path and root, which bind the path to the waypoint, `stages[0].waypoint` (the seed, `SHA-256(public_key ‖ seed_beacon)`), and any calculated field whose hash dependencies enforce order and cost. Convenience signposts are the path locators (`txid`, `vout`, `block_hash`, `block_height`), checked against the index, `leg_count`, `beacon_height`, `last_interrupt_height`, the section 6 constants, and `stages[0].beacon` (= `seed_beacon`). Verify records `leg_count` under shape: `shape_item` includes `leg_count` when it differs from `len(checkpoints)` (Rule A4.1). Section 6 constants are recorded as `constant`. Stored heights are recorded as `index_comparison` (Rule A4.2). They are convenience. `d_g` and `delta_h` do not subtract a stored height unless the index comparison that confirms it is `match` (Rules A4.5 and A4.8). Verify checks a convenience signpost against the evidence or the index and never relies on it. A broken signpost is a recorded `mismatch`. Section 15 is where an admission service may judge that recorded mismatch.
 
+<a id="rule-a3-1"></a>
+
 #### Rule A3.1 Headers
 
 The field name `beacon` is kept.
@@ -551,6 +579,8 @@ For `0 ≤ g < 17`, `stages[g+1].beacon_height > stages[g].beacon_height`, and `
 `last_interrupt_height > stages[17].beacon_height`, and `last_interrupt` differs from `stages[17].beacon`.
 
 The object therefore carries `seed_beacon` and all 18 interrupts. The object carries no block time. Section 14 reads each block time from the portable index (sections 9 and 14.2).
+
+<a id="rule-a3-2"></a>
 
 #### Rule A3.2 Per stage
 
@@ -587,6 +617,8 @@ An object-byte height above `2^53 − 1`, including `beacon_height` and `last_in
 
 `stages[0].waypoint = SHA-256(public_key ‖ seed_beacon)`.
 
+<a id="rule-a3-3"></a>
+
 #### Rule A3.3 Paths
 
 Stage 0 has no path. The stage-0 map omits the `path` key. Omission is the encoding. An empty byte string is not a stage-0 path. The words “not planted by design” are not a token in this file.
@@ -602,6 +634,8 @@ A `path` key on stage 0 is a shape **mismatch** (Rule A4.1). Those bytes are not
 The object has no terrain field. A verifier recomputes terrain from `public_key` and `seed_beacon`.
 
 A leg result on the object is `le64` of the `u64` defined in section 11, stored as an 8-byte byte string.
+
+<a id="sec-9"></a>
 
 ## 9. Clock
 
@@ -683,6 +717,8 @@ A clock read that does not succeed never stops the run and never withholds the o
 
 Verification does not Observe the tip sequence and does not GET an HTTP tip. Section 14.2 reads `GET {index-url}/index/{height}` under the body rules in this section, once for each stored header: each stage’s `beacon_height`, then `last_interrupt_height`. It records `index_comparison` and `T` for each. That read is part of the header measurement in section 14.2. It is not the only request verify may send: section 14.3 may read the same index for a present path’s plant facts. Verify does not GET a Bari path. The index is that plane's index. The default profile does not fill `https://index.groundinglab.io`.
 
+<a id="sec-10"></a>
+
 ## 10. Terrain
 
 **Normative.**
@@ -707,6 +743,8 @@ terrain[i × SLOT_BYTES : (i+1) × SLOT_BYTES]
 
 Every load of slot `i` returns those same `SLOT_BYTES` bytes. The step does not write terrain.
 
+<a id="sec-10-1"></a>
+
 ### 10.1 `mix64`
 
 ```text
@@ -719,11 +757,15 @@ mix64(x):
 
 `>>` is a logical right shift of a `u64`: vacated high bits are zero. It does not sign-extend. `<<` is a left shift of a `u64`. The shift count is not reduced modulo 32. `i << 32` is the slot index multiplied by `2^32` in that `u64`, and for every legal `i` the product fits in 64 bits.
 
+<a id="sec-10-2"></a>
+
 ### 10.2 Lanes
 
 The four lanes are `P[0]`, `P[1]`, `P[2]`, and `P[3]` from the seed, as section 10 states. A squeeze of the seed to one 64-bit fill pin is not this construction. Do not compute one. Do not use one.
 
 **Informative.** Conformance does not require computing such a squeeze. The pack may publish a terrain digest made from a squeezed seed as a negative. An implementation that emits that digest does not conform.
+
+<a id="sec-10-3"></a>
 
 ### 10.3 Word rotation and parent indices
 
@@ -744,6 +786,8 @@ mul_parent(i) = floor(h / 2^32) mod i
 ```
 
 Both parent values are integers in `0 … i − 1`.
+
+<a id="sec-10-4"></a>
 
 ### 10.4 dag2 fill
 
@@ -792,11 +836,15 @@ For every slot, including slot 0, write `le64(w[j])` into word `j` of slot `i`.
 
 Terrain is computed once per terrain, from the seed, before the first leg. That is once per PCOC for the producer and once per gate check for a verifier that rebuilds the terrain. It is not once per leg. The public key and the seed beacon enter only through the seed preimage.
 
+<a id="sec-11"></a>
+
 ## 11. Leg
 
 **Normative.**
 
 A leg is `STEPS_PER_LEG` steps. It starts from the previous checkpoint defined in section 12. The leg result is the `u64` end state of the leg. The checkpoint is the digest below. Every leg in a stage uses the same 32-byte second limb: the seed on stage 0, and waypoint `W_g` on stage `g ≥ 1`.
+
+<a id="sec-11-1"></a>
 
 ### 11.1 Step
 
@@ -842,6 +890,8 @@ The fold `S_folded = S XOR (XOR over w of (word(w) XOR w))` is not conforming. T
 
 The step reads terrain and does not write it.
 
+<a id="sec-11-2"></a>
+
 ### 11.2 Leg result
 
 ```text
@@ -851,6 +901,8 @@ leg_result = S_{STEPS_PER_LEG}
 ```
 
 `leg_result` is a `u64`. On the hike object it is the byte string `le64(leg_result)`.
+
+<a id="sec-11-3"></a>
 
 ### 11.3 Terrain sample
 
@@ -864,6 +916,8 @@ terrain_sample = terrain[offset : offset + SAMPLE_BYTES]
 The offset is taken from the first eight bytes of the previous checkpoint. The window itself is the sample.
 
 This window is not the waypoint’s slot sample. The slot sample is defined in section 12.
+
+<a id="sec-11-4"></a>
 
 ### 11.4 Checkpoint
 
@@ -888,6 +942,8 @@ The stage `path` is not a limb of this preimage. Stage 0 has no path.
 
 The checkpoint is the 32-byte digest. The hike object stores that digest and the matching `leg_results` limb. The first limb is the full 32-byte previous checkpoint. The eight bytes that select the terrain sample are not a substitute for that limb. The leg result appears only as the fourth limb.
 
+<a id="sec-12"></a>
+
 ## 12. Stage and waypoint
 
 **Normative.**
@@ -896,13 +952,21 @@ Stages are `stages[0]` through `stages[17]`.
 
 A stage contains one or more legs. The count is how many legs the drive in section 13 recorded before interrupt `I_g`. Every leg in stage 0 uses the seed as its second checkpoint limb. Every leg in stage `g ≥ 1` uses waypoint `W_g`.
 
+<a id="sec-12-1"></a>
+
 ### 12.1 Previous checkpoint
 
+<a id="rule-a2"></a>
+
 #### Rule A2. Stages and where leg 0 starts
+
+<a id="rule-a2-1"></a>
 
 ##### Rule A2.1 Eighteen stages
 
 `seed_beacon` plus the 18 interrupts gives 18 stages, numbered 0–17.
+
+<a id="rule-a2-2"></a>
 
 ##### Rule A2.2 Leg 0
 
@@ -927,13 +991,19 @@ The public key reaches every later checkpoint, fold, and waypoint through the se
 
 A stage does not carry the last checkpoint of the previous stage forward. The previous stage’s checkpoints reach the next stage through the fold in its waypoint (section 12.2).
 
+<a id="rule-a2-3"></a>
+
 ##### Rule A2.3 Checkpoint
 
 The checkpoint preimage is section 11.4. The stage limb is the seed on stage 0 and `W_g` on stage `g ≥ 1`. Leg 0’s previous checkpoint is that same value. Leg `j ≥ 1` uses `checkpoints[j − 1]` of that stage.
 
+<a id="rule-a2-4"></a>
+
 ##### Rule A2.4 First post
 
 The first Bari post is `W_1`, after `I_0`. Stage 0 has no plant and no path.
+
+<a id="sec-12-2"></a>
 
 ### 12.2 Waypoint
 
@@ -968,6 +1038,8 @@ Verify still applies this fold when both stages of the pair are present and the 
 
 Stage 17 ends at `I_17`. No waypoint is computed from stage 17 or from `last_interrupt`. Stage 17’s checkpoints are not folded into a waypoint.
 
+<a id="sec-12-3"></a>
+
 ### 12.3 What a stage stores
 
 When stage `g` ends at `I_g`, the object records the header the stage started from (`beacon` and `beacon_height`), the seed or the waypoint the stage’s legs used, `leg_count`, `checkpoints`, and `leg_results`.
@@ -977,6 +1049,8 @@ For `g` from 0 through 16, `I_g` is stored as `stages[g+1].beacon` and `stages[g
 Stage 0 has no plant and no path key. No ask is made for stage 0.
 
 The path ask window is section 13.1. No ask is made above the cut-off. A waypoint `W_1` … `W_16` with no checked path stores empty bytes and produce writes `path_skip <g>` (Rule A3.4). `W_17` stores empty bytes and produce writes `not fetched by design 17`.
+
+<a id="sec-13"></a>
 
 ## 13. Produce
 
@@ -990,17 +1064,25 @@ A public-key input may be those 32 bytes, or a hexadecimal spelling of them unde
 
 Output is one hike object in the encoding of section 7.3. Every run that reaches the final interrupt `I_17` emits it. A clock-read failure, a header-source stall, any other transitory network condition, a waypoint POST that does not succeed, and an ask that does not complete never withhold the object. Rule A3.4 stores empty path bytes and produce continues. A run that a producer failure ends, or that is cancelled, emits no object. A producer failure is a bug or a resource error in the producer itself; it is not a network, Bari, peer, or clock outcome. On the live profile, produce also appends the event log in section 13.5, asynchronously, while the drive runs. That log is not the hike object. Only the live profile writes it.
 
+<a id="rule-a1"></a>
+
 ### Rule A1. Event order at every stage boundary
 
 Produce is a continuous drive from the seed beacon through `STAGES`. A Bitcoin header interrupts that drive. The interrupt is a world event, unknown in time and value. Each stage boundary is one event, in this order. There is no rebinding. A later header is the next interrupt, read after the next stage’s next checkpoint. Never say a header arrives during the waypoint post.
+
+<a id="rule-a1-1"></a>
 
 #### Rule A1.1 Legs, then the tip
 
 Stage `g`’s legs run back to back. After each checkpoint the producer reads the tip: the latest header its header source already holds. That read returns at once and never waits. A leg already in progress always finishes.
 
+<a id="rule-a1-2"></a>
+
 #### Rule A1.2 The interrupt ends the stage
 
 When that read shows a new interrupt `I_g`, leg production in stage `g` stops.
+
+<a id="rule-a1-3"></a>
 
 #### Rule A1.3 Waypoint byte order
 
@@ -1012,9 +1094,13 @@ W_{g+1} = SHA-256(I_g ‖ slot_sample(I_g) ‖ stages[g].waypoint ‖ fold_g)
 
 The third limb is the seed on `g = 0` and `W_g` on `g ≥ 1`. The seed is not called `W_g`.
 
+<a id="rule-a1-4"></a>
+
 #### Rule A1.4 Post (asynchronous)
 
 When `W_{g+1}` is known, the producer starts the post of `W_{g+1}` to Bari with the Hashcash fee (section 13.1) as an asynchronous event. The post does not delay stage `g+1`’s leg 0 or any later leg. Its outcome is not an input to any leg, checkpoint, leg result, or waypoint.
+
+<a id="rule-a1-5"></a>
 
 #### Rule A1.5 Pivot
 
@@ -1026,9 +1112,13 @@ Between interrupts the drive runs legs of `STEPS_PER_LEG` steps and records a ch
 
 `Observe` performs the read in section 9 and returns `(natural, height)`.
 
+<a id="rule-a6"></a>
+
 #### Rule A6. Nothing pauses a leg
 
 **Normative.** The walk is the back-to-back run of legs from the seed through `I_17`. Every waypoint post, Hashcash solve, path ask, peer or header-source read, Bari exchange, event-log write, and stderr write is an asynchronous event. No such event pauses, delays, orders, or interrupts a leg, and no leg waits for one to finish. The only read on the walk path is the post-checkpoint tip read (Rule A1.1), which returns at once the latest header the header source already holds. A failed read, a stalled header source, a Bari outage, a log that cannot be written, a slow peer, or any other transitory network condition is logged (section 13.5), and the walk continues. A run ends only at `I_17`, on a producer failure, or on explicit cancellation. Bugs are producer failures; they are not covered by this rule. Asynchronous work may share the host’s CPU with legs. This rule does not change what a leg computes, and it does not permit any change to the terrain, the step, the fold, or the slot read.
+
+<a id="sec-13-1"></a>
 
 ### 13.1 Stage path
 
@@ -1082,6 +1172,8 @@ The `path` bytes are not an input to section 11.4 or section 12.2.
 **Close.** The cut-off is `last_interrupt_height`, the height of `I_17`. Production ends when the tip read shows `I_17`, and the object closes at once: produce encodes it with every checked path that has already arrived. There is no collection window. An ask still in flight is abandoned and its waypoint is a skip. An answer that arrives after the close is not used, and no ask is made after the close. An ask made at the cut-off header counts only when its checked answer arrived before the tip read that closes the object. `W_17` is not asked. A jump that puts `H+2`, `H+3`, or `H+4` for `W_17` at or below the cut-off does not create an ask, and produce does not send `GET {bari-url}/path/{leaf}` for `W_17`. Produce stores empty path bytes for stage 17. Produce does not wait for an ask, a post, or a header at the close.
 
 **Informative.** The object closes on the final block, so the last waypoints are normally not fetched; they are skips. That is expected. Sixteen waypoints, `W_1` … `W_16`, are fetchable (Rule A3.3). `W_17` is not.
+
+<a id="sec-13-2"></a>
 
 ### 13.2 Procedure
 
@@ -1148,6 +1240,8 @@ Stage 0 has no plant and no ask. For `W_1` … `W_16`, the ask window is section
 
 When stage 17’s repeat stops at `I_17`, produce records stage 17, stores `last_interrupt` and its height, builds no waypoint, and closes the object at once (section 13.1 **Close**). It does not wait for an ask, a post, or a header.
 
+<a id="sec-13-3"></a>
+
 ### 13.3 Drive, path_skip, and not fetched by design
 
 **Normative.**
@@ -1159,6 +1253,8 @@ A stage-loop test rig checks one production stage of this drive. A result there 
 Produce does not invent path bytes. A checked 200 is stored. Anything else is a miss, and the miss is recorded. That is “no silent skip”. A miss does not stop the hike.
 
 If the POST for `W_g` does not return 204, after the one resend section 13.1 requires, no path ask is due for that waypoint, because there is no plant height. Produce continues. The miss is kept for the final stderr step. If the POST returns 204, produce makes every ask that falls due before the close. At the close, produce writes every stderr line in one step: `path_skip <g>` for each empty path among `W_1` … `W_16`, in ascending `g`, then `not fetched by design 17`. No stderr line for those paths is written before that step. That step does not delay the object.
+
+<a id="rule-a3-4"></a>
 
 #### Rule A3.4 Produce stderr
 
@@ -1180,11 +1276,15 @@ not fetched by design 17
 
 That line is the last line of the final stderr step. It is not `path_skip`. `W_17` is never asked, including when a jump would put `H+2`, `H+3`, or `H+4` at or below the cut-off. Produce does not send `GET {bari-url}/path/{leaf}` for `W_17`. Produce stores empty path bytes for stage 17 and continues to encode the object. It does not authorize waiting for a header above the cut-off. Produce does not write `not fetched by design` for `W_15`, `W_16`, or any other waypoint. Produce writes nothing on stderr for stage 0. Stage 0 has no path.
 
+<a id="sec-13-4"></a>
+
 ### 13.4 Bari restart
 
 **Informative.**
 
 Replacing a live Bari during a running produce is normal. A waypoint already in the pool is retained across a quick restart. A skip is the worst case, not a fee bump.
+
+<a id="sec-13-5"></a>
 
 ### 13.5 Live event log
 
@@ -1221,9 +1321,13 @@ Key order, omitting a key this section says is omitted:
 
 The log does not choose a Bari URL. `{bari-url}` is the URL section 13 uses. A producer may name any Bari operator’s https origin. An SDK default, if an SDK has one, is not a requirement. This section does not define a path that skips Bari.
 
+<a id="sec-13-6"></a>
+
 ### 13.6 Bari waypoint service
 
 **Normative for a Bari operator.** Bari is the service at `{bari-url}`. This section states what a conforming Bari does with a waypoint POST and a path ask. It is the whole Bari rule set for this file. An implementation constant does not add another rule.
+
+<a id="rule-br1"></a>
 
 #### Rule BR1. Paid waypoint
 
@@ -1238,13 +1342,19 @@ Bari only accepts or denies a submitted waypoint. It accepts a POST if and only 
 
 An accepted waypoint is answered 204 and Bari holds it. Nothing else about timing applies: the gap between Bari’s tip and the producer’s tip, the arrival time, and which of the three blocks the fee was solved on do not change the answer. Any other POST, unpaid or invalid in any way, is answered with a plain 402 and nothing more. Bari’s only answers to a waypoint POST are 204 and 402.
 
+<a id="rule-br2"></a>
+
 #### Rule BR2. Dedupe
 
 **Normative.** Dedupe applies only to paid posts. The dedupe key is the 32 waypoint bytes within one pool. A POST that meets Rule BR1 and whose waypoint Bari already holds in the current pool is answered 204 and makes no second entry. Any POST without a valid fee is answered with a plain 402, duplicate or not. Bari checks the fee before dedupe.
 
+<a id="rule-br3"></a>
+
 #### Rule BR3. Pool and tree
 
 **Normative.** Bari appends each accepted waypoint to its pool. When a beacon arrives, that is, a new block on Bari’s best chain, Bari builds the tree from the pool, and that clears the pool for the next stage. Pool capacity, and what happens when a pool is full, are out of scope of this file.
+
+<a id="rule-br4"></a>
 
 #### Rule BR4. Path serve
 
@@ -1252,11 +1362,15 @@ An accepted waypoint is answered 204 and Bari holds it. Nothing else about timin
 
 **Informative.** Bari’s cost per entry is one Hashcash fee. The fee header can only come from a three-block span of the best chain, so precomputed fees are bounded to that span, and the origin binding stops one fee from being reused at a second Bari operator. The 21-bit difficulty is a constant of this file (P13.5).
 
+<a id="sec-14"></a>
+
 ## 14. Verify
 
 **Informative. Summary.** Verify takes one hike object, the portable index, and the profile in force, and outputs one verify record (Rule A4). The record carries the shape (14.1), the header reads (14.2), the waypoint chain and paths (14.3), the bookends and leg rate (14.4), the anchored-and-fetched count (14.5), the six-leg check (14.6), and the unknown-kind measurement (14.7, Rule A5). Verify measures and does not judge. Section 15 is the only judgment.
 
 **Normative.**
+
+<a id="rule-a4"></a>
 
 ### Rule A4. What verify measures against the portable index
 
@@ -1341,9 +1455,13 @@ The raw endpoints are present as their own keys. The read for `P_b` is `GET {ind
 
 `analysis` is an object with `whole_hike_legs`, `whole_hike_span`, `per_stage`, `legs_outside`, `hike_legs`, and `hike_span`, in that order. `hike_legs` and `hike_span` are Rule A4.10. `whole_hike_legs` is the number of checkpoints over stages 1–17, a JSON number in `0 … 2^53 − 1`. `whole_hike_span` is the JSON number `T(I_17) − T(I_0)` in ±(2^53−1), or `not read`. `per_stage` is an array of 18 objects, index `g` from 0 through 17, each with `g`, `checkpoint_count`, and `span`. `checkpoint_count` is the number of checkpoints in the stage. It is not a read of the object’s `leg_count`. `span` is the JSON number of the per-stage span in ±(2^53−1), or `not read`. `legs_outside` is the number of checkpoints over stages outside `a` … `b−1`, a JSON number in `0 … 2^53 − 1`. It is `not defined` when the bookend fields are `not defined`, and `not read` when those fields are `not read`. `whole_hike_legs` counts checkpoints, including a stage whose count is zero. `whole_hike_span` and each `per_stage` span stay `not read` when an endpoint `T` was not taken, including when the bookend fields are `not defined`. `analysis` has no rate key.
 
+<a id="sec-14-1"></a>
+
 ### 14.1 Shape
 
 **Normative.**
+
+<a id="rule-a4-1"></a>
 
 #### Rule A4.1 Shape
 
@@ -1365,9 +1483,13 @@ Shape compares the object with Rule A3. `shape` is `match` when every condition 
 
 Shape does not decode a path on stages 1–17 and does not record **skip** or **present**. Rule A4.5 does. This measurement does not GET a path.
 
+<a id="sec-14-2"></a>
+
 ### 14.2 Headers
 
 **Normative.**
+
+<a id="rule-a4-2"></a>
 
 #### Rule A4.2 Headers
 
@@ -1390,9 +1512,13 @@ The header measurement does not read `network`. The same hash and height compari
 
 This header read does not run a leg and does not recompute terrain. It does not GET an HTTP tip. It is not Observe.
 
+<a id="sec-14-3"></a>
+
 ### 14.3 Waypoints and paths
 
 **Normative.**
+
+<a id="rule-a4-3"></a>
 
 #### Rule A4.3 Chain
 
@@ -1413,6 +1539,8 @@ Record `match` if `stages[0].waypoint` equals `SHA-256(public_key ‖ seed_beaco
 **Informative.** Stage 0’s checkpoint comparisons use the computed seed. The `W_1` recompute uses the stored `stages[0].waypoint`. So the stored field is measured by this seed-value comparison and through `W_1`.
 
 For `g` from 0 through 16, recompute `W_{g+1}` under section 12.2. Use as `B` the interrupt `I_g`, which is the stored `stages[g+1].beacon`. Use the stored `stages[g].waypoint` and the stored checkpoints of stage `g`. On `g = 0` that stored field is the seed, not a member of `W_1` … `W_17`. Record `match` if the digest equals `stages[g+1].waypoint`. Record `mismatch` otherwise. This uses the stored checkpoint bytes, including an empty list: the fold is `0^32` and the waypoint is still recomputed. A disagreement is `mismatch`. It is not `not defined`. `legs` for that stage is `[]`. `not defined` is only when the stage pair is absent or those bytes are unusable. This recompute does not run a leg. No waypoint is recomputed from stage 17 or from `last_interrupt`. The waypoints recomputed here are `W_1` … `W_17`.
+
+<a id="rule-a4-5"></a>
 
 #### Rule A4.5 Paths
 
@@ -1533,11 +1661,15 @@ The plant comparison uses that one rule on every verify. There is no second mode
 - It does not impose cross-stage uniqueness on path locators or plants; the bind is per waypoint.
 - An index GET, for a stored header and for a plant, is one request under section 9. It does not follow a redirect. It is not retried. A status other than 200, a redirect, a body that breaks section 9, or a request that receives no HTTP status is an unsuccessful read. A header read then records `index_comparison` `not read` and `T` `not read`. A plant read then records `plant` `not read`. The verifier’s wall clock is not an input, and this file sets no timeout.
 
+<a id="sec-14-4"></a>
+
 ### 14.4 Bookends
 
 **Normative.**
 
 The verifier’s wall clock is not an input. Verify does not Observe, so it cannot recover an unstored header by assuming the next height. Block times are `T` from Rule A4.2, read as they are, and a `T` is recorded only when that header’s `index_comparison` is `match`. No clamp and no reordering is applied to a recorded `T`. Bookend `S` uses those raw `header.time` values. `hike_span` does not. Rule A4.10 sets `hike_span` from median-time-past at the first beacon and at the last beacon. No other adjustment is applied. `delta_h` (`Δh`) is recorded in this bookend block when both heights are index-confirmed. `delta_h` stays in the bookend block. Rule B3 does not read it. Rule B3 is not an admission input. It is a raw measurement. It is not analysis and it is not policy.
+
+<a id="rule-a4-6"></a>
 
 #### Rule A4.6 Bookends
 
@@ -1545,9 +1677,13 @@ The verifier’s wall clock is not an input. Verify does not Observe, so it cann
 
 `a` and `b` are those indices. Both are in `1 … 16`. `W_17` is not fetched by design, so it is not a bookend. Stage 0 has no path, so `a` is not 0.
 
+<a id="rule-a4-7"></a>
+
 #### Rule A4.7 Bookend legs
 
 `N` counts the checkpoints in stages `a` through `b−1`. Each stage’s checkpoints are folded into the next waypoint. `N` does not read `leg_count`. `N` is a JSON number in `0 … 2^53 − 1`.
+
+<a id="rule-a4-8"></a>
 
 #### Rule A4.8 Bookend span
 
@@ -1568,6 +1704,8 @@ S = T(P_b) − T(I_{a−1})
 
 `Δh` does not use `stages[a].beacon_height` in place of an index-confirmed height. `Δh` does not require `T`. When `T` is **not read** and both heights are index-confirmed, `S` is **not read** and `delta_h` is still that integer. `N` is still the integer from Rule A4.7 when bookends exist. Both `S` and `delta_h` sit in the bookend block. `delta_h` stays in the bookend block. Rule B3 does not read it. Rule B3 is not an admission input. It is not analysis and it is not policy.
 
+<a id="rule-a4-9"></a>
+
 #### Rule A4.9 Bookend leg rate
 
 The verify record holds the integer `N` and the integer `S` only. It does not hold a floating-point rate. It does not hold any other encoding of the quotient.
@@ -1577,6 +1715,8 @@ The bookend display `N÷S` is not the admission rate. Rule B0 reads `(hike_legs,
 The rate display is `N÷S` when `S > 0`. Otherwise the rate display is `not defined`. `N` and `S` are still shown. `not defined` here is a display token. It is not a floating-point value, and it is not a judgment. Display rounding is not under test. The quotient is not in the verify record. The display is informative. It is not an admission input.
 
 When `S` is **not read**, the rate display is **not defined**, and there is no numeric pair.
+
+<a id="rule-a4-10"></a>
 
 #### Rule A4.10 Analysis
 
@@ -1600,6 +1740,8 @@ Record these beside the bookend block. `hike_legs` and `hike_span` are the admis
 
 `delta_h` is not in this list. It stays in the bookend block (Rule A4.8).
 
+<a id="rule-a4-11"></a>
+
 #### Rule A4.11 Fewer than two anchored and fetched
 
 Apply these steps in order. Stop at the first step that records the bookend fields. `fixed_start` is a JSON object with keys `N`, `S`, and `delta_h` in every step. `fixed_start` itself is not the string `not defined` or `not read`. The bookend fields are `a`, `b`, `N`, `S`, `delta_h`, `P_b`, `height_P_b`, `index_comparison_P_b`, `T_P_b`, `height_I_a_minus_1`, `T_I_a_minus_1`, `fixed_start.N`, `fixed_start.S`, `fixed_start.delta_h`, and `analysis.legs_outside`.
@@ -1616,15 +1758,21 @@ Apply these steps in order. Stop at the first step that records the bookend fiel
 
 **Informative.** The legs in `N` start from `W_a`, which hashes `I_{a−1}`, so they could not begin before `I_{a−1}` existed. They are folded into `W_b`, whose plant is in `P_b`, so they existed by then. Naming an older interrupt only makes `S` longer. The interrupts in between, and any skipped waypoints, do not change `N÷S`, apart from `nTime` effects at the two ends of `S`. An honest `S` includes the gap from `I_{b−1}` to `P_b`, which is two, three, or four blocks when headers arrive one at a time. Miner `nTime` can move either end. That remark is about the bookend display. It is not the admission rate. Rule B3 does not adjust `hike_span`. That remark is not a Part A number. A stored interrupt shows that the header exists. It does not show that produce ran live. Only anchored and fetched shows that the fold existed by the plant’s block.
 
+<a id="sec-14-5"></a>
+
 ### 14.5 Anchored and fetched
 
 **Normative.**
 
 `anchored_total` is Rule A4.5: the count of the `anchors` token `anchored` among `W_1` … `W_16`. A `skip` is not in that count. A present path outside the window is not in that count. A `present` path with `plant` `mismatch` or `not read` is not in that count. `W_17` is not in that count. This section records the count and does not judge it. Rule B4 compares the count with the lever `min_anchored_paths` (section 15.4). That comparison is not a Part A measurement. How many waypoints are fetchable is Rule A3.3.
 
+<a id="sec-14-6"></a>
+
 ### 14.6 Six-leg check
 
 **Normative.**
+
+<a id="rule-a4-4"></a>
 
 #### Rule A4.4 Six-leg check
 
@@ -1660,9 +1808,13 @@ For each chosen index, recompute that leg from section 11.2. The previous checkp
 
 The order of the chosen indices is the order drawn. The order in which the leg computations finish does not change that order. For each chosen index, record `match` if the recomputed leg result equals `u64_le(leg_results[j])`. Record `mismatch` otherwise.
 
+<a id="sec-14-7"></a>
+
 ### 14.7 Unknown kind
 
 **Normative.**
+
+<a id="rule-a5"></a>
 
 #### Rule A5. Unknown kind
 
@@ -1675,6 +1827,8 @@ An object whose `kind` text is not exactly `KIND` (`v2.2-pcoc-object`) is an unk
 `kind` is the measurement `unknown kind`. `kind_text` is the kind text the object carried, as a JSON string. The record is that two-key object, keys in that order, with no insignificant whitespace, and `kind_text` spelled as RFC 8785 spells a JSON string; that is also the RFC 8785 encoding of the object. A conforming verify CLI writes it as it writes the section 14 record, with one trailing newline (U+000A). The newline is not part of the record. The pack’s unknown-kind vector is the record bytes without the newline. The record does not apply sections 14.1–14.6. It is not a decode failure. It is not `shape` `mismatch`. It does not say the object could not be read. An unknown kind is not a fake leg. The admission service refuses it with reason `unknown_kind` (Rule B9) and does not add its key to the ignore record. One well-formed data item that is not a map, or a map that does not yield a `kind` text, is still a decode failure (section 7.3). A malformed CBOR value is not a decode failure and is not Rule A5.
 
 
+<a id="sec-15"></a>
+
 ## 15. Admission service
 
 **Normative for the admission service only. Part B.** This section defines the admission levers and the comparisons that use them. A lever is a name, a unit, an allowed range, and a measuring or comparison rule (section 15.4). A policy sets each lever to a value inside its range. This file sets no lever value. Where section 15.4 gives a default, the default is labelled and applies only to a lever the policy in force does not set. A policy is a separate document. It names the version of this file it targets, its own `policy_version`, and the value of each lever it sets. A value outside a lever’s allowed range does not conform to this file. Admission reads only a section 14 record whose `profile` is `production`, and an admission service on the live plane compares against the mainnet portable index only (Rule B9). Those are rules of this file, not levers, and no policy sets them aside. Rules B0, B2, B3, B4, B6, B8, B9, and B10, the Rule B7 caps and fake-leg ignore, and the re-verify rule in section 15.1 **Binding** are normative. Integrity outcomes beyond Rule B9, any plant-gap comparison, and friendly-entry custody are policy, not rules of this file. A `provisional` state grants no action (`provisional_action_cap`); that is a rule of this file, not a lever. The section 15.1 sign-in wire is normative: the challenge link, `challenge_bytes`, the BIP-340 message, the origin display, the challenge window, the submit request, the client response codes, and the website outcome tokens. The signed origin is the requesting site’s own origin, compared exactly (section 15.1 **Origin**); `https://groundinglab.io` is an example deployment. That wire adds no leg-rate value and no admission bar. Section 15.5 states the thorough leg draw and the floor’s measuring method.
@@ -1686,6 +1840,8 @@ The admission service is the actor in this section. Any service that meets this 
 A threshold here can change without changing section 13 and without changing the measurements in section 14. No order among B0–B10 is fixed.
 
 The Gate decision log is the companion specification Gate decision log, outside this file. This file does not write that log and does not write log JSON. Thorough outcomes are: thorough decides `accept` and the accept stands; `revoke`; `refuse`; or `held`. `held` is a thorough `not read` or a retry. It is not a negative settle. A negative thorough outcome, or a failed policy-version re-verify, is `revoke` if a grant was ever issued (`provisional` or `accept`, including one already ended by the move from `provisional` to `held`), and `refuse` if none was. `provisional` then `held` then a negative thorough outcome is `revoke`. A later `revoke` cites a new policy version or a new measurement. Admission outcomes inside this section are `provisional`, `accept`, `refuse`, `revoke`, and `held`. `held` is an admission outcome. It is not a decision-log event. Section 15.1 names the signing client's response and the website outcome.
+
+<a id="sec-15-1"></a>
 
 ### 15.1 Inputs
 
@@ -1838,6 +1994,8 @@ A friendly-list entry is added only at a thorough `accept`. A friendly list maps
 
 The fast decision and a later `revoke` bind the same submission: the object bytes, the object hash, the challenge, and the signature. This file does not mint a website session and does not add a session field to the hike object or the verify record. The grant defined above is the only session handle this section names. A `provisional` grant is short, read-only access until thorough settles or `async_catch_budget` is hit. The friendly-list entry is added only at a thorough `accept`.
 
+<a id="sec-15-2"></a>
+
 ### 15.2 Outputs and states
 
 The HTTP response outcomes are `provisional`, `accept`, `refuse`, `revoke`, and `held`. Those words are admission outcomes. The signing client does not receive them. Section 15.1 is the client response and the website outcome. **States** are `received`, `provisional`, `accepted`, `refused`, `revoked`, and `held`. `accept` is the thorough outcome whose state is `accepted`. The fast decision token is `provisional`. A fast-phase `accept` is invalid. The fast phase never issues `accept`. It may issue a final `refuse` when a fast rule fails on the object's own bytes: decode (the object bytes fail to decode as a hike object), waypoint rehash, shape `mismatch`, including `shape_item` `height_range`, seed-value `mismatch`, a plant or header `mismatch` confirmed by a fresh read from `{index-url}` that bypasses the local cache, an object-settled refuse-at-once, or a cap on a signed submission. Rule B10 is also that final `refuse` when `tip_height − last_beacon_height > K`. That `refuse` does not start a thorough run and does not issue a grant. Otherwise the fast phase gives `provisional`. A fast-phase `not read` is `held`. Only the thorough phase issues `accept`. `refuse` is the response whose state is `refused`. `revoke` is the response whose state is `revoked`. `held` is both a response outcome and a state. `held` is not a decision-log event. Thorough outcomes are: thorough decides `accept` and the accept stands; `revoke`; `refuse`; or `held`. `held` is a thorough `not read` or a retry. It is not a negative settle. A negative thorough outcome, or a failed policy-version re-verify, is `revoke` if a grant was ever issued (`provisional` or `accept`, including one already ended by the move from `provisional` to `held`), and `refuse` if none was. `provisional` then `held` then a negative thorough outcome is `revoke`. A later `revoke` cites a new policy version or a new measurement. Thorough decides `accept`; the accept stands. Sections 8–14 do not use these words as outcomes. This section does not say that a hike object passes or fails. This file does not write the decision-log JSON.
@@ -1913,6 +2071,8 @@ A height or plant the mirror does not hold is `not read`, and the state is `held
 
 Signature-only sign-in requires state `accepted`. A listed key may sign in again only for that same already-accepted object hash. While a later-policy re-verify is `not read`, including after either reverify budget is hit, signature-only sign-in continues on the earlier accept. Only a re-verify that refuses, other than a B7 cap refuse and other than Rule B10, ends that sign-in as a `revoke`, and it removes the friendly entry only when this object is the key's current friendly entry. That sign-in does not run section 14 again. A new object hash is a new section 15.1 submission. When the policy version changes, a re-verify that refuses under the new policy version revokes an `accepted` object. That refuse is a measured `mismatch` or any B-rule outcome other than a B7 cap refuse and other than Rule B10. A `not read` is not a refuse and does not revoke. That `revoke` cites the new policy version. While that re-verify is `not read` and neither `reverify_max_attempts` nor `max_held_blocks` counted from the first `not read` on that re-verify is hit, the earlier accept stands. It does not suspend the accept, it does not apply `held_bound`, and friendly returns continue. The re-verify is retried later. Both `reverify_max_attempts` and `max_held_blocks` for that re-verify are counted from the first `not read` on that re-verify. `max_held_blocks` starts at the Gate’s `{index-url}` tip height at that first `not read`. It is hit when a retry finds that tip ≥ start + `max_held_blocks` and the re-verify is still `not read`. `reverify_max_attempts` is hit when that many retries of this re-verify, counted from that first `not read`, are still `not read`. Before either budget is hit, the Gate retries within the existing reverify budget. After either budget is hit, the hit is not a `revoke`, does not remove the friendly entry, and does not change sign-in state. Signature-only sign-in continues on the earlier accept. After the hit, the Gate keeps retrying on each later `{index-url}` tip advance: at most one retry per strict increase in that tip height. A jump of several blocks is one retry. An equal or lower tip, including a reorg, is not a retry. These post-budget retries do not restart the spent budget and do not re-arm `held_bound`. The number of such retries is unbounded. A re-verify that refuses, other than a B7 cap refuse and other than Rule B10, is a `revoke` and removes the friendly entry only when this object is the key's current friendly entry. When that re-verify decides `accept`, the entry is kept only when this object is already the key's current friendly entry. If a newer accept B later loses its accept, A is not restored. A re-verify of an older object does not displace a newer entry. This file does not write that log. An index outage does not revoke that accepted object. Thorough decides `accept` and the accept stands.
 
+<a id="rule-b9"></a>
+
 #### Rule B9. Invariant refuses
 
 **Normative.** These outcomes are not Rule B0–B8 candidates. They do not wait on a configured threshold. A `revoke` in this list is `phase` `thorough`. A grant means the fast phase already finished. `fast_seq` is omitted when the line does not cite one. It is never encoded as JSON `null`.
@@ -1927,6 +2087,8 @@ Signature-only sign-in requires state `accepted`. A listed key may sign in again
 - The admission service runs its section 14 verifier under the profile `production`, the section 6 constants, and reads only a section 14 record whose `profile` is `production`. It never runs `conformance-small` and never reads a record of any other profile. An object whose `fill` or size fields differ from section 6 is then shape `mismatch` with `shape_item` `constant` (Rule A4.1.2), an invariant fast final `refuse`. No thorough run. No grant. `phase` `fast`. An admission service on the live plane compares headers and plants against the Bitcoin mainnet portable index only: its `{index-url}`, and every extra index source Rule B10 allows, is a mainnet index. This is not a lever.
 - When the section 14 record’s `kind` is `unknown kind`, the admission service refuses with reason `unknown_kind`. That reason is this policy. It is not a section 14 token. Verify does not record it. No thorough run. No grant. `phase` `fast`. The key is not added to the ignore record.
 
+<a id="sec-15-3"></a>
+
 ### 15.3 Two-phase async
 
 1. **Fast phase.** The fast list is the section 14.1–14.5 measurements, and the cheap checks include the Rule A4.3 checkpoint digest on every checkpoint: shape, the seed, waypoint and fold recompute from stored checkpoint bytes, path and plant comparison, bookends, and the anchored count, plus the signature. Header and plant facts come from the service's local mirror of the portable index. `{index-url}` is the upstream. The local mirror is a cache of `{index-url}` responses and serves the section 9 body rules. The mirror holds only `{index-url}` responses. It is filled from the portable index only. A height or plant the mirror does not hold is `not read`, and the state is `held`. The fast phase does no other network read. A plant or header `mismatch` read from that mirror is `held` until a fresh read from `{index-url}` that bypasses the local cache confirms the same comparison. An operator's own Bitcoin-built index counts as its `{index-url}`. Anyone may still check that index against Bitcoin. Only a `mismatch` confirmed by that fresh read can `refuse`. The fast checkpoint-binding checks are the fold and the waypoint rehash under section 12.2 from stored checkpoints. The fast phase never recomputes a leg. Leg recompute stays thorough-only. The fast phase does not turn a partial view into the finished verify record. Branch on phase. There is no new token for the phase. The Rule A4.3 checkpoint digest is a cheap check on every checkpoint. It hashes the stored sample. It does not recompute a leg. The admission service runs it with the other cheap checks. It is not thorough-only. The fast record is the section 14 record with `six_leg` and `six_leg_runs` omitted. `checkpoints[*].legs[*].result` stays, because the Rule A4.3 digest is a cheap check. Every other section 14 key stays, including `shape_item`, `checkpoints[*].g`, `checkpoints[*].legs[*].j`, `waypoints[*].result`, `seed_value`, `paths`, `anchors`, the bookend keys, and `analysis`. Omitted keys are absent. They are not filled with `not defined`. The full section 14 record, after thorough, has every key present, and `six_leg_runs` holds the thorough draws. Both records are encoded with RFC 8785. The fast record has no placeholders. It does not fill an omitted key with `not defined`. It is not the finished record. The fast decision token is `provisional`. A fast-phase `accept` is invalid. The fast phase never issues `accept`. It may issue a final `refuse` when a fast rule fails on the object's own bytes: decode (the object bytes fail to decode as a hike object), waypoint rehash, shape `mismatch`, including `shape_item` `height_range`, seed-value `mismatch`, a plant or header `mismatch` confirmed by a fresh read from `{index-url}` that bypasses the local cache, an object-settled refuse-at-once, or a cap on a signed submission. Rule B10 is also that final `refuse` when `tip_height − last_beacon_height > K`. That `refuse` does not start a thorough run and does not issue a grant. Otherwise the fast phase gives `provisional`. A fast-phase `not read` is `held`. When profile mode `provisional` is `on`, it returns within `fast_accept_bound`. That bound is a lever (section 15.4). When `provisional` is `off`, the fast phase does not grant `provisional`. `provisional: off` is that mode. It is not a value of `fast_accept_bound`.
@@ -1939,6 +2101,8 @@ Signature-only sign-in requires state `accepted`. A listed key may sign in again
 Which named checks are fast and which are thorough is the profile schema in section 15.4. The fast list does not include a leg.
 
 The hit rule, the `{index-url}` tip clock, and the phase of a `held_bound` line are the Held bound paragraph above. An append-only hash-chained log entry may record that tip height as `bitcoin_tip_height`. That name is the log entry's name for the tip. The entry is unsigned. It is not a signed head. This version has no signed head and no signed receipt. That `held` is not a negative settle. The fast phase itself does not `refuse` for a `not read` gap, or for a height or plant the mirror does not hold. Policy `refuse`s at once only when the waypoint count is settled by bytes already in hand: fewer than `min_anchored_paths` waypoints among `W_1` … `W_16` would be anchored, wherever those waypoints sit, even if every `not read` plant or path read among them came back anchored. If a re-read could bring that count to `min_anchored_paths` or more, the measurement is `not read` and the state is `held`. Bookend `N` `not defined` is not, by itself, an admission refuse. Fewer than six legs for the section 14.6 draw is `not defined` from the object's own bytes and is that same refuse-at-once. That draw is not a leg-count floor. `hike_span` `not read` stays `held`. Bookend `S` `not read` is not this hold. That `not defined` does not go to `held`. A short-byte six-leg draw stays re-readable. The state is `held`. The service re-verifies.
+
+<a id="sec-15-4"></a>
 
 ### 15.4 Admission levers
 
@@ -1969,29 +2133,43 @@ Every lever is below. A lever has a name, a unit, an allowed range, and a measur
 
 These are rules of this file, not levers: `provisional_action_cap` (a `provisional` state grants no action, and no irreversible action is allowed while `provisional`); `revoke_scope`, the pair `(public_key, object_sha256)`; the round size of 6 legs (the section 14.6 draw count); the friendly-list rules in section 15.1 other than custody. `revoke_scope` binds a `revoke` to that pair. It does not end another object's grant. A later-policy re-verify that refuses, other than a B7 cap refuse and other than Rule B10, is a `revoke` and removes the friendly entry only when this object is the key's current friendly entry, by a compare-and-remove on `object_sha256`. A `not read` does not.
 
+<a id="rule-b0"></a>
+
 #### Rule B0. Which rate the admission service reads
 
 **Normative.** The admission service reads `(hike_legs, hike_span)` from Rule A4.10. `leg_rate = hike_legs / hike_span`. That rate is the admission rate. The bookend pair `(N, S)` is a section 14 measurement. It is not this rate. `whole_hike_legs` and `whole_hike_span` stay analysis. When `hike_span` is `not read`, there is no numeric rate. The state is `held` and the read is retried (`no_pair_outcome`). Bookend `S` `not read` is not this hold. Bookend `N` `not defined` is not, by itself, an admission refuse. When fewer than `min_anchored_paths` waypoints among `W_1` … `W_16` would be anchored, wherever those waypoints sit, even if every `not read` plant or path read among them came back anchored, a re-read cannot change that result. Policy `refuse`s it at once. It does not go to `held`. If a re-read could bring that count to `min_anchored_paths` or more, the measurement is `not read` and the state is `held`. A short or missing network read is `not read`. The state is `held`. The service re-verifies.
+
+<a id="rule-b2"></a>
 
 #### Rule B2. Leg-rate floor
 
 **Normative comparison.** `leg_rate_floor` is the lever `p/q` (section 15.4) in checkpoints per second, `hike_legs` over `hike_span`, with `hike_span` in Unix seconds. One checkpoint is one leg. Section 15.5 states the measuring method. The comparison is integer-only: a ratio `p/q` meets the floor when `hike_span` is an integer greater than 0 and `q · hike_legs ≥ p · hike_span`. The comparison result is `meets` when that holds and `refuse` when it does not (section 4, **Comparison result**). `hike_span` ≤ 0 means the rate is undefined. The outcome is `refuse`. It is not `held`. `held` is only `hike_span` `not read`. The policy supplies `p` and `q`. The comparison does not round. Rule B3 does not change `hike_span`. There is no comparison when `hike_span` is `not read`. The fast phase does not issue `provisional` on that gap. The state is `held`. A short or missing network read stays `not read` and the state is `held`. A numeric rate that falls short of the floor is `refuse`. The bookend pair is not an input to this comparison.
 
+<a id="rule-b10"></a>
+
 #### Rule B10. Submission deadline
 
 **Normative.** `K` is the lever `submission_deadline_blocks` (section 15.4). It is not a production parameter. This check is fast-phase. It is decided once per client submission. `tip_height` is the section 15.3 Gate `{index-url}` tip clock, the same clock as the held bound. The gate reads it fresh at receipt, bypassing the local mirror and its cache. It is not a height stored on the object. The tip request is `GET {index-url}/index`, the portable index tip document, the same route the index service answers for its tip. `tip_height` is `header.height` of that document under the section 9 body rules (P9.5). A body that fails those rules is `not read`. A failed read or a stale read is `not read`. The state is `held`. That hold is never a pass. A stale read is a tip answer that was not fetched from `{index-url}` for this receipt or this retry: an answer served from the local mirror, from a cache, or carried over from an earlier read. `{index-url}` is the one normative source. An operator may configure extra index sources, each read the same way. An extra read follows the same section 9 body rules, and a body that fails them is ignored. An operator configures only index sources it trusts as it trusts `{index-url}`. An extra source only ever raises the tip. When the `{index-url}` read succeeds, `tip_height` is the highest of that read and the extra reads that succeeded. A failed or stale extra read is ignored. When the `{index-url}` read fails or is stale, the tip is `not read`, whatever an extra source returns. The held bound uses the same tip. `last_beacon_height` is `last_interrupt_height`, the height of the last beacon. The deciding tip is the first successful tip read for that submission with `tip_height ≥ last_beacon_height`: the receipt read, or the first retry that reads such a tip. Held retries reuse that tip and that decision. A service-started re-verify reuses that tip and that decision. A policy-version bump does not decide this rule again and never revokes on it. A client resubmission is a new receipt only for a pair whose cycle is still open, or for a new pair, and this rule is decided again for that receipt. When the tip read is below `last_beacon_height`, the receipt is not yet at the last beacon. The state is `held`. A deciding `tip_height` below `last_beacon_height` does not decide this rule and is not a Rule B10 refuse. Each retry re-reads the tip fresh from `{index-url}`. The deciding tip is the first read with `tip_height ≥ last_beacon_height`. Later retries and re-verifies reuse it. The section 15.3 held bound still applies to that hold, and `held_bound` may refuse it. Each Rule B10 retry whose tip read is `not read` or below `last_beacon_height` counts toward `reverify_max_attempts`, and a Rule B10 hold is one of the causes `max_held_blocks` applies to. So a Rule B10 hold is bounded even when the index tip stalls. When the deciding `tip_height` is an integer greater than or equal to `last_beacon_height` and `tip_height − last_beacon_height > K`, the gate `refuse`s. `phase` is `fast`. The reason token is `submission_deadline`. The state moves from `received` or `held` to `refused`. That refuse is not a fake leg and does not add the key to the ignore record. A lower tip after a reorg does not reopen that refuse. `K` is in blocks. A gap of `K` is not refused by this rule and a gap of `K + 1` refuses. A gap of `K` or less is the comparison result `meets` (section 4, **Comparison result**). A missing tip read is `not read` and the state is `held`. It is not this refuse. Rule B10 retries run on the `held_retry_seconds` schedule (section 15.3; parameter in section 15.4) and do not wait for a tip advance. Rule B10 is decided, by a tip read with `tip_height ≥ last_beacon_height`, before `provisional` is issued, so the `held` → `refused` Rule B10 row is always a `refuse`, never a `revoke`. A submission held through an `{index-url}` outage longer than about `K` blocks is refused when the index returns, and its pair stays refused under that `policy_version`. Operator note: an honest submitter whose gate index lags may hit `held_bound`. A `held_bound` refuse and a `submission_deadline` refuse are plain refusals, not fake-leg ignores, so the key is not added to the ignore record. A new submission of the same pair `(public_key, object_sha256)` under the same `policy_version` returns the `refused` outcome and opens no new cycle (section 15.2). A new object is a new pair and is decided fresh against the current tip.
+
+<a id="rule-b3"></a>
 
 #### Rule B3. Span sanity
 
 **Normative.** Rule B3 is not the admission rate and is not an admission input. No span adjustment is applied to bookend `S` for admission, and none is applied to `hike_span`. `delta_h` stays the Rule A4.8 measurement.
 
+<a id="rule-b4"></a>
+
 #### Rule B4. Paths minimum
 
 **Normative.** The comparison is `anchored_total ≥ min_anchored_paths`, with `min_anchored_paths` the lever in section 15.4. When `anchored_total ≥ min_anchored_paths`, the comparison result is `meets` (section 4, **Comparison result**). The anchored waypoints sit anywhere among `W_1` … `W_16`. `W_17` is not one of the 16. The count is Rule A4.5. A count settled below `min_anchored_paths` by bytes already in hand is `refuse` at once. If a re-read could bring the count to `min_anchored_paths` or more, the measurement is `not read` and the state is `held`.
 
+<a id="rule-b6"></a>
+
 #### Rule B6. Fixed start
 
 **Normative.** `fixed_start` is not an admission input. Section 14 may still record `fixed_start.N`, `fixed_start.S`, and `fixed_start.delta_h` when bookends are defined. The admission service does not read those three for the rate, for the anchor comparison, or for any other admission comparison. Part A still records the actual `a`, `b`, `N`, and `S`. A `fixed_start` field of `not read` or `not defined` does not, by itself, `refuse` or hold the submission.
+
+<a id="rule-b7"></a>
 
 #### Rule B7. Resubmits
 
@@ -2001,9 +2179,13 @@ These are rules of this file, not levers: `provisional_action_cap` (a `provision
 
 **Normative.** When the policy in force sets a value for `verify_cap_per_object` or `verify_cap_per_door_session` (section 15.4), a hit on that cap, on a valid signature and a fresh challenge, is a fast final `refuse` of that attempt. A `verify_cap_per_object` refuse is final for that `submission_sha256` only. It does not change the pair's state or friendly entry. It is not the pair's thorough decision. A cap refuse (`verify_cap_per_object` or `verify_cap_per_door_session`) does not end the cycle. A `verify_cap_per_door_session` hit stays in `received`. The submission response is `refuse`. `verify_cap_per_door_session` (section 15.4) counts client submissions in the session, so it bounds the fast verifies and the thorough runs those submissions trigger. Held retries are Gate-internal and do not count. These are compute limits. They do not ban the key. The hit does not start a thorough run and does not issue a grant. An unauthenticated rate limit is not this rule. A transport rate limit stays outside this policy.
 
+<a id="rule-b8"></a>
+
 #### Rule B8. Leg count
 
 **Normative.** There is no minimum or maximum leg count as policy. There is no per-stage admission minimum and no whole-hike leg-count minimum. `leg_count ≥ 1` per stage follows from Rule A1.1 and is recorded under shape (Rule A4.1). It is the section 13.2 loop. It is not an admission threshold. A shape `mismatch` is Rule B9. It does not delete the draw rule below. The section 14.6 token `not defined`, when fewer than six checkpoints exist, is the draw’s own token. It is not a leg-count floor. The sample size `D` is a count of legs to recompute. It is not a leg-count floor. When `leg_total` < 6 the section 14.6 draw is `not defined` and the admission service refuses at once. When `leg_total` ≥ `D` the admission service draws `D` distinct global indices once, by the section 14.6 unbiased draw, discarding an index already chosen, and splits that sequence into `thorough_rounds` rounds of 6 in draw order. The 6 indices of one round are distinct. No index repeats across the `D`. When `6 ≤ leg_total < D` the same draw continues for `thorough_rounds` rounds of 6. An index is not repeated while an unused index remains. When no unused index remains, a later draw may repeat an index, and it still discards an index already chosen in the current round. The 6 indices of the current round stay distinct. Each index is one section 14.6 unbiased draw. A discarded candidate is not used and the draw continues. A `mismatch` refuses that submission. The gate does not start the next round. The index draw is one sequence. The rounds are that sequence split into sixes. They are not independent draws.
+
+<a id="sec-15-5"></a>
 
 ### 15.5 Thorough draw and the floor
 
@@ -2055,6 +2237,8 @@ Those three figures are `1 − (1 − 0.25)^n` at `n = 6`, `n = 12`, and `n = 18
 
 **Measuring method.** Measure on an owned commodity host. The low end of that set is the low-end owned host (an Intel Core i7-10610U laptop, no SHA-NI). Use a conforming SDK at the cut tag of this file (section 16.2) that passes the whole pack, including every permanent negative. Run a real beacon-paced hike under this file’s producer rules: nothing pauses a leg (Rule A6), and there is no wait before a path ask. The rate is the first-beacon to last-beacon rate, `hike_legs / hike_span`, Rule A4.10, with `hike_span` the median-time-past difference. The floor is calibrated on the best legal packed rate per machine. That rate is `N` parallel PCOCs with distinct keys. Distinct keys make distinct terrains under this seed. An interleave of those hikes is the packed rate. Shared-terrain packing across distinct PCOCs is impossible under this seed. It is not a legal schedule. Record the host, the CPU, the implementation, the commit, and that packed rate beside the single-hike rate. A policy that follows this method sets the floor a little below the low-end host’s rate. **The floor must be measured under this file.** A rate measured with a producer that paused the walk (for example, with a wait before path asks or a blocking post) is not a measurement for this file: those pauses sat inside `hike_span` and understate the rate a producer of this file reaches at the same cost per leg. This method informs the value a policy sets. It does not set one.
 
+<a id="sec-16"></a>
+
 ## 16. Conformance
 
 **Normative.**
@@ -2092,6 +2276,8 @@ When two implementations follow this file at the production constants in section
 
 Section 10 defines the seed, the seed preimage, the NL4 word, and every terrain byte. There is no fill pin. The checkpoint preimage and the waypoint preimage are defined in sections 11 and 12. The leg is defined in section 11. Path bytes on stages 1–17 are the checked body of the successful fetch in section 13.1, or the empty path bytes section 13.3 stores on `path_skip` or on `not fetched by design`. A verifier does not fetch those bytes again. Section 14.3 records `skip`, `present`, plant `match` or `mismatch` or `not read` or `n/a`, and `d_g`. Each verification draws its own six indices, as section 14.6 states, and records each recomputed leg result against the stored leg result.
 
+<a id="sec-16-1"></a>
+
 ### 16.1 Profile `conformance-small`
 
 The profile in force is the section 6 constants, unless the verifier is running `conformance-small`. That profile may differ only in `SAMPLE_BYTES`, `SLOT_BYTES`, `TERRAIN_BYTES`, and `STEPS_PER_LEG`. The profile name and those four integers are verifier inputs. The hike object gains no new field. The verify record must state the profile, and must state `SAMPLE_BYTES`, `SLOT_BYTES`, `TERRAIN_BYTES`, and `STEPS_PER_LEG` when the profile is `conformance-small`. A live object still carries the section 6 size fields. When the profile name is `conformance-small`, all four integers are required inputs. The verifier does not substitute the section 6 values for an omitted integer. It does not change `KIND`. A verify CLI that passes `--profile conformance-small` without all four integers is a usage error, exit code 2. This file assigns no default integers to that name. The record states the four integers it was given.
@@ -2123,33 +2309,49 @@ The profile does not set `STAGES`, `HASH_BYTES`, `LEG_RESULT_BYTES`, `PUBLIC_KEY
 
 The same profile integers and the same inputs produce the same bytes. The profile does not relax an INVARIANT. QA chooses the integers in the published vectors. This section does not fix a second set of production numbers.
 
+<a id="sec-16-2"></a>
+
 ### 16.2 Implementation requirements
 
 **Normative.**
+
+<a id="rule-i1"></a>
 
 #### Rule I1. SDKs are the reference implementations
 
 The per-language SDKs under `sdk/` (Rust, Go, Java, C, and any SDK added under these rules) are the reference implementations. There is no other reference tree. Bari, the admission service, and the apps use an SDK; they do not carry their own copy of the construction or of the Hashcash rule. An SDK is a reference implementation only while it passes the whole pack. This file and the pack win over every SDK (section 16, **Precedence**).
 
+<a id="rule-i2"></a>
+
 #### Rule I2. Interfaces
 
 Each SDK exposes at least: the seed and terrain fill (section 10); the leg and the step (section 11); the checkpoint (section 11.4); the waypoint (section 12.2); the Hashcash challenge, digest, and solve (section 13.1); the Bari paid-rule check (Rule BR1); the object encode and decode (section 7.3); the section 14 verify record, including Rule A5; the section 14.6 draw and the section 15.5 thorough draw, each from a supplied byte source; the Rule B2 integer comparison; and the integer anchor comparison (section 16.1, **Anchor comparison**). Each public function names the section it implements. Its behaviour is that section. An SDK’s own prose does not add a rule.
+
+<a id="rule-i3"></a>
 
 #### Rule I3. Producer model
 
 An SDK producer runs the walk on its own thread or threads and runs every post, solve, ask, header-source read, Bari exchange, and log write as asynchronous work (Rule A6). The walk reads the tip through a call that returns at once. No SDK producer sleeps, waits on I/O, takes a lock that I/O holds, or syncs a file on the walk path. A failure of asynchronous work becomes an `alert` record or a logged miss; it never propagates into the walk. Only a producer failure or explicit cancellation ends a run before `I_17`. The header source detects a stalled or lagging peer and recovers on its own, asynchronously; a stall never pauses a leg.
 
+<a id="rule-i4"></a>
+
 #### Rule I4. Tests
 
 Each SDK runs, on every change: the whole pack; every permanent negative as a non-match; the production-size leg vector; a producer test that injects a stalled header source, a failed tip read, a Bari that never answers, a Bari that answers 503, and a log that cannot be written, and checks that legs keep running, that exactly one resend is made after a transport failure, and that the object closes at `I_17`; a header-source test, on a mock clock, with one silent peer among `HEADER_PEERS_MIN` or more, which checks that the silent peer is replaced once `HEADER_PEER_SILENCE_SECONDS` have passed after another peer announced a header and not before, that a gap in which no peer announces a header replaces no peer, that a fall below `HEADER_PEERS_MIN` writes a `header_peers_low` alert and reconnects asynchronously, and that legs keep running and the object closes at `I_17` throughout; and a test that a paid waypoint on each of the current, before, and after headers is accepted by its Bari paid-rule check, and that any other POST is answered 402, including a fee header that matches Bari’s tip only when one side is reversed to display order (section 9, P9.17); and, for an SDK that implements the section 15.1 Sign-in door, a nonce-store test on a mock clock in three cases: (a) a submission consumes its nonce, the single-process door restarts while that challenge’s window is still open and drops every row, and the same submission is replayed; (b) the shared nonce-row store is flushed with no process restart, while the window is open, and the same submission is replayed; (c) two door workers with different process starts share one store and receive the same challenge. The test checks that each replay is client `malformed`, consumes nothing, and runs no policy; that a challenge issued at or after `nonce_store_start_unix_s + challenge_clock_skew_seconds` is accepted and one issued earlier is `malformed`; and that both workers in (c) use the one store start and give the same answer for the same challenge.
+
+<a id="rule-i5"></a>
 
 #### Rule I5. Versioning and pin
 
 An SDK version is `MAJOR.MINOR.PATCH`, with `MAJOR.MINOR` equal to this file’s version, 2.3. A `PATCH` release does not change any output byte. Each SDK reads `sdk/SPEC_PIN`, which names the tag of this file and the SHA-256 of the pack manifest, and its test fails when the pack it runs does not match that pin. SDK tags are `sdk-<language>-v2.3.<patch>`. Bari and the admission service depend on the Rust SDK at such a tag or by path in the same tree; they do not pin any other tag.
 
+<a id="rule-i6"></a>
+
 #### Rule I6. Cost
 
 No SDK implements a cache, table, summary, partial read, or any other shortcut in the terrain, the leg, the step, or the fold (section 11.1). Every step reads and folds the full slot of `SLOT_BYTES`. Where the host provides SHA-256 instructions, the SDK uses them (section 11.1). An SDK change that raises the measured leg rate at unchanged hardware is a suspected break. It is reviewed against the permanent negatives before release. A reviewed SIMD kernel that loads all `SLOT_BYTES` bytes of the selected slot and mixes every word may be released. Processing several words of one slot at once (SIMD, or compiler or JIT vectorisation) is the section 11.1 loop and is not an efficiency or a speed-up in the sense of section 11.1, provided that on every step all `SLOT_BYTES` bytes of the selected slot (16 KiB under the section 6 constants) are loaded, each of the `WORDS_PER_SLOT` words is mixed with the current `S` by `mix64` with `MIX_ADD`, and the sum is the section 11.1 wrapping sum. Such a kernel’s rate gain is reported under this rule with equality, mutation and load evidence, and after that review it may be released. Skipping, caching, summarising or reusing any word or value across steps remains a break.
+
+<a id="sec-17"></a>
 
 ## 17. Clarifications
 
@@ -2157,9 +2359,13 @@ No SDK implements a cache, table, summary, partial read, or any other shortcut i
 
 The items below restate parts of the construction in the sections named here. This section does not add a second construction.
 
+<a id="sec-17-1"></a>
+
 ### 17.1 Waypoint path fetch
 
 Section 13.1 posts `W_1` … `W_17`. It does not post the seed. Asks are for `W_1` … `W_16` under section 13.1. `W_17` is posted and is not asked. No ask is made after the close. Asks are asynchronous, and the object closes at `I_17` with the checked paths that have arrived. Test and live use that one rule. On stages 1–17 the field is `path`, a CBOR byte string, in the key order of section 7.3. Stage 0 has no `path` key. Those bytes are not an input to section 11.4 or section 12.2. A POST that does not succeed, and an ask that is not a checked 200, are a miss. Produce stores empty bytes and writes `path_skip <g>` for `W_1` … `W_16`, and continues. It does not withhold the object. `W_17` writes `not fetched by design 17`. A `skip` is a measurement (Rule A4.5). Rule B4 judges it: `anchored_total ≥ min_anchored_paths`, wherever those waypoints sit. A `present` path is measured in section 14.3, including `CanonicalPathBody` `validate_for` and the chain bind. Verify does not GET the path again.
+
+<a id="sec-17-2"></a>
 
 ### 17.2 Portable-index height fetch during verify
 
@@ -2167,23 +2373,33 @@ Verify reads the portable index. For each stored header, including `last_interru
 
 A document whose `network` is `synthetic` can still record **match** on the plant comparison. A header that matches that document is not a **mismatch** for that `network`. A **match** against a synthetic document is not a mainnet fact.
 
+<a id="sec-17-3"></a>
+
 ### 17.3 Path and chain bind
 
 Section 14.3 records `plant` `match`, `mismatch`, or `not read` for each `present` path among `W_1` … `W_16`. The inclusion-height GET is made only when that height is in the window and that header is a stored interrupt. Otherwise `plant` is `not read` and the index is not read for that path. That not-issued `not read` is not a missing GET under Rule A4.11. `not read` also means an issued read that does not return a document. A document that was read and has no plant for that block, or whose plants do not match, or whose `network` is neither `main` nor `synthetic`, is `mismatch`. A document with no `header` member can still be plant `match`. `anchored` requires the inclusion height in the section 13.1 window, that header stored on the object as an interrupt, and plant `match`. Plant `match` alone is not enough. On `mismatch` and on `not read`, `d_g` is `not defined`. `claimed_block` is the path body’s `block_hash` and `block_height` when those fields can be read, otherwise `not defined`. The measurement is distinct from Rule A4.2. A `skip` is not a plant comparison. Verify does not GET the path from Bari again. The pack field `index_reads` lists only those issued plant heights.
 
 A **match** on a document whose `network` is `synthetic` is not a mainnet fact.
 
+<a id="sec-17-4"></a>
+
 ### 17.4 Several words of one slot at once
 
 Section 11.1 folds the `WORDS_PER_SLOT` words of the selected slot with a wrapping sum mod 2^64. That sum is associative and commutative, so a kernel that loads all `SLOT_BYTES` bytes of the slot (16 KiB under the section 6 constants) on every step and mixes several of its words with the current `S` at once, by SIMD or by compiler or JIT vectorisation, gives the same `S_folded`, seal, leg, checkpoint, and waypoint bytes as the one-word-at-a-time loop. It is the section 11.1 loop, not an efficiency (Rule I6). Every step still loads every byte of the slot and mixes every word with that step’s `S`. A kernel that skips, caches, summarises, or reuses any word or value across steps is a break whatever its output on a vector, and the permanent negatives of section 16 stay non-matching.
+
+<a id="sec-17-5"></a>
 
 ### 17.5 Floor baseline and the low-end host
 
 Section 11.1 names the baseline class: commodity hardware with SHA-256 instructions. Section 15.5 names the low end of the owned hosts that a floor measurement covers, a host with no SHA-NI. These are two roles, not two baselines. Every host runs the same section 11.1 step, and only section 15.5 says how a measured rate informs the floor. Neither sentence sets a lever value.
 
+<a id="sec-18"></a>
+
 ## 18. Verify CLI
 
 **Normative.** The verify CLI emits only section 14 record tokens. Stdout for a current object is the one section 14 record, keys in the order section 14 lists. The compact line is not a conformance output and this CLI does not write it. Exit code `0` means the record was produced, whatever it measured, including all `not read` or `mismatch`. Exit code `1` means the object file cannot be read, or its bytes are a decode failure under section 7.3. A malformed CBOR value is a record, exit code `0`. That is the object file, not the `not read` token. Exit code `2` means a usage or invocation error. No other exit code. Stdout and stderr carry no pass, fail, accept, refuse, or admission wording. A named `--profile` is `production` or `conformance-small`. An omitted `--profile`, `test`, and `live` still measure with the section 6 constants. `--profile live` selects the live index only. Admission never runs inside verify. `--profile` is not a Gate policy profile. Profile judgement lives only in the policy library and the Gate. When the profile name is `conformance-small`, all four integers are required inputs. The verifier does not substitute the section 6 values for an omitted integer. It does not change `KIND`. A verify CLI that passes `--profile conformance-small` without all four integers is a usage error, exit code 2. This file assigns no default integers to that name. The record states the four integers it was given.
+
+<a id="sec-19"></a>
 
 ## 19. Fixed issues — do not reintroduce
 
@@ -2191,19 +2407,19 @@ Section 11.1 names the baseline class: commodity hardware with SHA-256 instructi
 
 | # | Defect class | Why it was a defect | Rule that forbids it |
 |---|---|---|---|
-| F1 | State-free slot fold (“FatSlot”): `S_folded = S XOR (XOR over w of (word(w) XOR w))`. | The inner XOR does not depend on the state, so one 8-byte value per slot stands in for the 16 KiB slot. A table replaces the slot read and the per-step cost collapses. | Section 11.1 fold `acc = (acc + mix64(word(w) XOR S)) mod 2^64`; Rule I6; permanent negative `slot_summary_fold` (section 16). |
-| F2 | Precomputable step term `word(w) XOR w`. | The term does not depend on the state, so it can be computed once per slot and reused on every visit. | Section 11.1: the per-word input is `word(w) XOR S`, with no `w` term; negatives `xor_w_fold`, `s_plus_w_fold`, `prefold_hoist`. |
-| F3 | XOR accumulator fold `acc = acc XOR mix64(…)` (xorshift linearity). | The XOR accumulator is linear across words and across states, so per-slot work separates from the state and a summary can stand in for the read. | Section 11.1 wrapping-add fold; negatives `xor_accumulator_fold`, `final_stage_hoist` (section 16). |
-| F4 | Partial slot reads, lane and seed shortcuts, shared or cached terrain. | Each lets a producer skip bytes or reuse work and so pay less than the full slot every step. | Sections 10 and 11.1; Rule I6; negatives `partial_slot_read`, `partial_slot_read_2047`, `one_lane_flip`, `all4_kernel`, `f3_shared_terrain`, `cached_leg`, and `squeezed_seed_terrain` (section 16). |
-| F5 | Waypoint post before the next stage’s legs (blocking post). | The walk waited on Bari and on the Hashcash solve, so legs paused at every boundary and the measured rate fell. | Rule A1.4 (post is asynchronous); Rule A6; Rule I3. |
-| F6 | The 15–45 s wait before each path ask. | It ran inside the walk and cost about 1,000 s per hike (7.6–8 %). Rates and the floor measured with it understate an honest producer. | Section 13.1 (an ask is sent when due, with no wait); P13.7; Rule A6; section 15.5 (re-measure the floor). |
-| F7 | One-sided tip-retry reject at Bari. | Bari took a fee only on its own tip, retried the previous tip, and rejected a fee on a header one ahead as final. An honest producer that saw a block first lost the plant. | Rule BR1 (current, before, or after block, plain 402 otherwise); P13.13 (one background resend after a transport failure). |
-| F8 | Single-peer header intake. | The producer kept one gossip peer and had no stale-peer check. One silent peer blinded it for 10–20 minutes, and co-located producers failed together. | Section 9 **Header source**; P9.16; P9.12; Rule A6. |
-| F9 | Bari pinned to a separate v2.0 SDK tag. | Bari’s Hashcash, leaf, and path code came from a different construction than the producers it served, so the two could disagree. | Rule I1 (Bari uses an SDK); Rule I5 (one cut tag and `sdk/SPEC_PIN`). |
-| F10 | A clock-read failure, reorg, or stalled source stopping the run or withholding the object. | A network event became a lost hike, and reorg handling invited producer-side judgment. | P9.12; Rule A6; section 13 (producers ignore reorgs). |
-| F11 | A collection window or wait after the final block. | It delayed the close and made the object depend on wall-clock policy inside production. | P13.9 (close at `I_17`, at once). |
-| F12 | Accepting objects of another kind, or more than one pack. | Mixed kinds and packs let two SDKs both claim conformance with different bytes. | Rule A5 and reason `unknown_kind`; section 16 (one pack, `sdk/SPEC_PIN`). |
-| F13 | Policy values written as rules of this file. | A chosen number stated as normative could not change without a new specification, and readers took it for part of the construction. | Section 15.4 (levers with ranges; values belong to a policy). |
-| F14 | Operator re-open of a `refused` pair. | A hand re-open had no state-table row, no deciding tip, and no log rule. It was a discretionary override of Rule B10 and of the held budgets, open to pressure through a claimed outage. | Section 15.2 (`refused` is closed for the pair under that `policy_version`: return that outcome, no new cycle); Rule B10 (a lower tip does not reopen a deadline refuse); section 15.3 **Held bound** (the budgets do not reset). |
-| F15 | Unbounded hold (“a held PCOC is not refused”). | A hold with no finite budget, or a block budget that waited for a tip that never came, kept a submission `held` for ever: never settled, and the gate’s work never ended. | Section 15.3 **Held bound** (`reverify_max_attempts` and `max_held_blocks` are finite integers `≥ 1` that the policy must set; `max_held_blocks` applies to every hold and starts at the first successful tip read; `held_retry_seconds` retries without waiting for a tip advance; reason `held_bound`). |
-| F16 | No submission deadline: tail legs walked after the last beacon. | With no bound after the last beacon, a producer could keep walking legs after the beacons and submit at leisure, so it could claim any rate. | Rule B10 (decided once per submission from a fresh `{index-url}` tip; `tip_height − last_beacon_height > K` refuses); section 15.4 (`K` is an integer `0 … 6`). |
+| <a id="fixed-f1"></a>F1 | State-free slot fold (“FatSlot”): `S_folded = S XOR (XOR over w of (word(w) XOR w))`. | The inner XOR does not depend on the state, so one 8-byte value per slot stands in for the 16 KiB slot. A table replaces the slot read and the per-step cost collapses. | Section 11.1 fold `acc = (acc + mix64(word(w) XOR S)) mod 2^64`; Rule I6; permanent negative `slot_summary_fold` (section 16). |
+| <a id="fixed-f2"></a>F2 | Precomputable step term `word(w) XOR w`. | The term does not depend on the state, so it can be computed once per slot and reused on every visit. | Section 11.1: the per-word input is `word(w) XOR S`, with no `w` term; negatives `xor_w_fold`, `s_plus_w_fold`, `prefold_hoist`. |
+| <a id="fixed-f3"></a>F3 | XOR accumulator fold `acc = acc XOR mix64(…)` (xorshift linearity). | The XOR accumulator is linear across words and across states, so per-slot work separates from the state and a summary can stand in for the read. | Section 11.1 wrapping-add fold; negatives `xor_accumulator_fold`, `final_stage_hoist` (section 16). |
+| <a id="fixed-f4"></a>F4 | Partial slot reads, lane and seed shortcuts, shared or cached terrain. | Each lets a producer skip bytes or reuse work and so pay less than the full slot every step. | Sections 10 and 11.1; Rule I6; negatives `partial_slot_read`, `partial_slot_read_2047`, `one_lane_flip`, `all4_kernel`, `f3_shared_terrain`, `cached_leg`, and `squeezed_seed_terrain` (section 16). |
+| <a id="fixed-f5"></a>F5 | Waypoint post before the next stage’s legs (blocking post). | The walk waited on Bari and on the Hashcash solve, so legs paused at every boundary and the measured rate fell. | Rule A1.4 (post is asynchronous); Rule A6; Rule I3. |
+| <a id="fixed-f6"></a>F6 | The 15–45 s wait before each path ask. | It ran inside the walk and cost about 1,000 s per hike (7.6–8 %). Rates and the floor measured with it understate an honest producer. | Section 13.1 (an ask is sent when due, with no wait); P13.7; Rule A6; section 15.5 (re-measure the floor). |
+| <a id="fixed-f7"></a>F7 | One-sided tip-retry reject at Bari. | Bari took a fee only on its own tip, retried the previous tip, and rejected a fee on a header one ahead as final. An honest producer that saw a block first lost the plant. | Rule BR1 (current, before, or after block, plain 402 otherwise); P13.13 (one background resend after a transport failure). |
+| <a id="fixed-f8"></a>F8 | Single-peer header intake. | The producer kept one gossip peer and had no stale-peer check. One silent peer blinded it for 10–20 minutes, and co-located producers failed together. | Section 9 **Header source**; P9.16; P9.12; Rule A6. |
+| <a id="fixed-f9"></a>F9 | Bari pinned to a separate v2.0 SDK tag. | Bari’s Hashcash, leaf, and path code came from a different construction than the producers it served, so the two could disagree. | Rule I1 (Bari uses an SDK); Rule I5 (one cut tag and `sdk/SPEC_PIN`). |
+| <a id="fixed-f10"></a>F10 | A clock-read failure, reorg, or stalled source stopping the run or withholding the object. | A network event became a lost hike, and reorg handling invited producer-side judgment. | P9.12; Rule A6; section 13 (producers ignore reorgs). |
+| <a id="fixed-f11"></a>F11 | A collection window or wait after the final block. | It delayed the close and made the object depend on wall-clock policy inside production. | P13.9 (close at `I_17`, at once). |
+| <a id="fixed-f12"></a>F12 | Accepting objects of another kind, or more than one pack. | Mixed kinds and packs let two SDKs both claim conformance with different bytes. | Rule A5 and reason `unknown_kind`; section 16 (one pack, `sdk/SPEC_PIN`). |
+| <a id="fixed-f13"></a>F13 | Policy values written as rules of this file. | A chosen number stated as normative could not change without a new specification, and readers took it for part of the construction. | Section 15.4 (levers with ranges; values belong to a policy). |
+| <a id="fixed-f14"></a>F14 | Operator re-open of a `refused` pair. | A hand re-open had no state-table row, no deciding tip, and no log rule. It was a discretionary override of Rule B10 and of the held budgets, open to pressure through a claimed outage. | Section 15.2 (`refused` is closed for the pair under that `policy_version`: return that outcome, no new cycle); Rule B10 (a lower tip does not reopen a deadline refuse); section 15.3 **Held bound** (the budgets do not reset). |
+| <a id="fixed-f15"></a>F15 | Unbounded hold (“a held PCOC is not refused”). | A hold with no finite budget, or a block budget that waited for a tip that never came, kept a submission `held` for ever: never settled, and the gate’s work never ended. | Section 15.3 **Held bound** (`reverify_max_attempts` and `max_held_blocks` are finite integers `≥ 1` that the policy must set; `max_held_blocks` applies to every hold and starts at the first successful tip read; `held_retry_seconds` retries without waiting for a tip advance; reason `held_bound`). |
+| <a id="fixed-f16"></a>F16 | No submission deadline: tail legs walked after the last beacon. | With no bound after the last beacon, a producer could keep walking legs after the beacons and submit at leisure, so it could claim any rate. | Rule B10 (decided once per submission from a fresh `{index-url}` tip; `tip_height − last_beacon_height > K` refuses); section 15.4 (`K` is an integer `0 … 6`). |
