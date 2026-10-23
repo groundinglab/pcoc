@@ -82,10 +82,10 @@ pub fn before_born_record(born_height: u64, lowest: u64) -> String {
 /// and shows a `reason` string that contains a space. This sentence is that
 /// line. It is not "could not be read".
 pub const EARLIER_LINE: &str =
-    "This object is an earlier version. This gate checks Satoshi Hike 2.2 only.";
+    "This object is an earlier version. This gate checks the pinned Satoshi Hike kind only.";
 
 pub const UNREADABLE_REASON: &str = "unreadable";
-pub const UNREADABLE_LINE: &str = "This file is not a Satoshi Hike 2.2 object.";
+pub const UNREADABLE_LINE: &str = "This file is not an object of the pinned Satoshi Hike kind.";
 
 pub const NO_KEY_REASON: &str = "no_public_key";
 pub const NO_KEY_LINE: &str = "This object has no public key the gate can check.";
@@ -146,9 +146,6 @@ pub const WAYPOINTS_TOTAL: u64 = 18;
 
 /// Spec rule: at least this many legs. Labelled as spec, not policy.
 pub const SPEC_MIN_LEGS: u64 = 6;
-
-/// Spec name published with the policy.
-pub const POLICY_SPEC: &str = crate::verifier::SPEC_NAME;
 
 /// A return line for one pair is written at most once per this many seconds.
 pub const RETURN_WINDOW_S: u64 = 300;
@@ -271,7 +268,11 @@ pub struct AdmissionPolicy {
     pub pending_per_source: u64,
     /// `None` means `max_concurrent × 2`, filled when the config is built.
     pub pending_global: u64,
-    pub verify_cap_per_door_session: u64,
+    /// SPEC §15.4. `None` means the key is absent (unset: no session cap).
+    /// [`AdmissionPolicy::default`] uses `Some(3)` to mirror gl-admit-v10.
+    /// That constructor is not a policy-file load path.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verify_cap_per_door_session: Option<u64>,
     /// SPEC §15.4 `K`. `tip − last_beacon > K` is Rule B10.
     pub submission_deadline_blocks: u64,
     /// Seconds between held retries. Read from the policy file.
@@ -299,6 +300,9 @@ pub struct AdmissionPolicy {
 }
 
 impl Default for AdmissionPolicy {
+    /// Mirrors gl-admit-v10, including door-session cap 3. `Config::load` does
+    /// not call this. A policy file goes through `levers::load`, which refuses
+    /// a missing required lever and leaves an absent door-session cap unset.
     fn default() -> Self {
         Self {
             policy_id: DEFAULT_POLICY_ID.to_owned(),
@@ -316,7 +320,7 @@ impl Default for AdmissionPolicy {
             max_held_blocks: 6,
             pending_per_source: DEFAULT_PENDING_PER_SOURCE,
             pending_global: 4,
-            verify_cap_per_door_session: crate::levers::door_session_cap(None),
+            verify_cap_per_door_session: Some(3),
             submission_deadline_blocks: 3,
             held_retry_seconds: 600,
             fast_accept_bound_ms: 2_000,
@@ -714,7 +718,8 @@ pub fn public_document(policy: &AdmissionPolicy) -> Value {
             "source".to_owned(),
             Value::String("recommendation, not specification".to_owned()),
         );
-        map.insert("spec".to_owned(), Value::String(POLICY_SPEC.to_owned()));
+        let (spec_name, _) = crate::verifier::health_spec();
+        map.insert("spec".to_owned(), Value::String(spec_name));
         map.insert("anchored_span".to_owned(), serde_json::json!(ANCHORED_SPAN));
     }
     value

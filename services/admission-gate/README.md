@@ -25,7 +25,7 @@ Any kind other than `v2.2-pcoc-object` is Rule A5. The fast phase's reason is `u
 | Piece | Name |
 |---|---|
 | Service | admission gate (groundinglab runs one instance) |
-| Spec | Satoshi Hike 2.2 (`spec_kind` `2.2`, kind `v2.2-pcoc-object`) |
+| Spec | Health `spec` / `spec_kind` follow `sdk/SPEC_PIN`: Satoshi Hike 2.2 / `2.2` on a spec-2.2.x pin, Satoshi Hike 2.3 / `2.3` on a spec-2.3.x pin. This checkout's pin is `spec-2.2.0`. Object kind stays `v2.2-pcoc-object`. Policy `spec` `2.2` loads on either pin; `2.3` loads on a spec-2.3.x pin. |
 | Cargo package | `pcoc-admission` |
 | Directory | `services/admission-gate/` |
 | Binary | `admission-service` |
@@ -48,7 +48,7 @@ GET  /v1/health            -> version, commit, sdk, spec, spec_kind, config
 
 `POST /v1/verify` runs section 14 (`pcoc::verify`) against `index_url`. Any other kind is Rule A5 (`unknown_kind`) and does not read the index. A shape match whose `hike_span` is `not read` finishes `held`. One whose pair meets the floor finishes `done`. The sign-in fast phase is `pcoc::precheck` plus the header and plant reads in `reads`. The thorough phase calls `pcoc::thorough_draw`.
 
-Policy values come from the policy file, not from the specification. The groundinglab policy is [gl-admit-v10.toml](../../policy/groundinglab-admission/gl-admit-v10.toml). `gl-admit-v9.toml` is `superseded`. A change of any value needs a new id. See [POLICY.md](../../policy/groundinglab-admission/POLICY.md). `born_height` is policy, not a SPEC lever. The current value is 972685. A stored or claimed height below it finishes the verify job as terminal `before_born_height`, with `born_height` and `lowest_height` on the output. That job is not `held`. The index still serves the median-time lookback of `MTP_LOOKBACK` headers below `born_height` (10; `MTP_WINDOW` is 11). Those headers are not production heights. Health and verify output report `born_height` next to `policy_id`. The verifier writes `measures`. The gate writes `policy_id` and `policy_checks`. A refusal carries one `reason_code` and a class. `bitcoin_tip_height` is null when unknown. Public health does not show `log_dir` or `config_path`. Health echoes the policy id.
+Policy values come from the policy file, not from the specification. The gate does not fill a built-in number for a missing lever. A lever whose SPEC default is unset (`verify_cap_per_object`, `verify_cap_per_door_session`, `fake_leg_ignore_seconds`) stays unset when the key is absent. Every other §15.4 lever must be present; a missing key refuses the file and the error names it. The groundinglab policy is [gl-admit-v10.toml](../../policy/groundinglab-admission/gl-admit-v10.toml). `gl-admit-v9.toml` is `superseded`. A change of any value needs a new id. See [POLICY.md](../../policy/groundinglab-admission/POLICY.md). `born_height` is policy, not a SPEC lever. The current value is 972685. A stored or claimed height below it finishes the verify job as terminal `before_born_height`, with `born_height` and `lowest_height` on the output. That job is not `held`. The index still serves the median-time lookback of `MTP_LOOKBACK` headers below `born_height` (10; `MTP_WINDOW` is 11). Those headers are not production heights. Health and verify output report `born_height` next to `policy_id`. The verifier writes `measures`. The gate writes `policy_id` and `policy_checks`. A refusal carries one `reason_code` and a class. `bitcoin_tip_height` is null when unknown. Public health does not show `log_dir` or `config_path`. Health echoes the policy id.
 
 The public log starts empty. The process creates `log_dir`. A chain that is not Satoshi Hike 2.2 is not opened and not served.
 
@@ -72,4 +72,4 @@ cargo test --locked
 
 Test vectors are pinned copies under `tests/vectors/`; `tests/vectors.rs` checks them against `tests/vectors/SHA256SUMS`.
 
-`GET /v1/health` on the bind (default `127.0.0.1:8787`) reports what is running, including `sdk`, the Rust SDK version the binary was built against. `admission-service --version` prints the same version, commit and SDK version. The SDK version ends in `(path, dirty)` when the SDK files had uncommitted changes at build time. It does not fetch the index.
+`GET /v1/health` on the bind (default `127.0.0.1:8787`) reports what is running, including `sdk`, the Rust SDK version the binary was built against. `spec` and `spec_kind` follow the SDK pin (`Satoshi Hike 2.2` / `2.2` while `sdk/SPEC_PIN` is `spec-2.2.0`). The JSON keys are unchanged. Decision-log lines stay `spec` `Satoshi Hike 2.2`. `admission-service --version` prints the same version, commit and SDK version. The SDK version ends in `(path, dirty)` when the SDK files had uncommitted changes at build time. It does not fetch the index.

@@ -381,8 +381,13 @@ async fn health_reports_version_commit_spec_and_config() {
     );
     assert_eq!(body["sdk"], sdk, "{body}");
     assert!(pcoc_admission::http::version_line().ends_with(&format!("sdk={sdk}")));
-    assert_eq!(body["spec"], "Satoshi Hike 2.2");
-    assert_eq!(body["spec_kind"], "2.2");
+    let (name, label) =
+        pcoc_admission::verifier::spec_identity(&pcoc::build_info().spec_tag).expect("pin");
+    assert_eq!(pcoc::build_info().spec_tag, "spec-2.2.0");
+    assert_eq!(name, "Satoshi Hike 2.2");
+    assert_eq!(label, "2.2");
+    assert_eq!(body["spec"], name);
+    assert_eq!(body["spec_kind"], label);
     assert_eq!(body["config"]["index_url"], "https://index.example");
     assert!(body["config"].get("log_dir").is_none(), "{body}");
     assert!(body["config"].get("config_path").is_none(), "{body}");
@@ -407,7 +412,7 @@ async fn health_reports_version_commit_spec_and_config() {
     assert_eq!(policy["min_anchored_paths"], 6);
     assert_eq!(policy["born_height"], 0);
     assert_eq!(policy["source"], "recommendation, not specification");
-    assert_eq!(policy["spec"], "Satoshi Hike 2.2");
+    assert_eq!(policy["spec"], name);
     let text = body.to_string();
     assert!(!text.contains("friendly_list"));
     assert!(!text.contains("GL_VERIFY_"));

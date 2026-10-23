@@ -22,7 +22,7 @@ use crate::jobs::{EnqueueError, JobStore};
 use crate::policy::{self, AdmissionPolicy};
 use crate::ratelimit::RateLimiter;
 use crate::upload;
-use crate::verifier::SPEC_KIND_LABEL;
+use crate::verifier::health_spec;
 use crate::wire::{self, LockedParse};
 use axum::body::Bytes;
 use axum::extract::rejection::BytesRejection;
@@ -132,8 +132,8 @@ struct HealthBody {
     version: &'static str,
     commit: &'static str,
     sdk: &'static str,
-    spec: &'static str,
-    spec_kind: &'static str,
+    spec: String,
+    spec_kind: String,
     config: ConfigSummary,
     jobs: JobCounts,
 }
@@ -165,14 +165,15 @@ struct JobCounts {
 
 async fn health(State(svc): State<Service>, headers: HeaderMap) -> Response {
     let (tracked, in_flight) = svc.jobs.counts();
+    let (spec, spec_kind) = health_spec();
     let body = HealthBody {
         ok: true,
         service: SERVICE,
         version: VERSION,
         commit: COMMIT,
         sdk: SDK_VERSION,
-        spec: SPEC_NAME,
-        spec_kind: SPEC_KIND_LABEL,
+        spec,
+        spec_kind,
         config: ConfigSummary {
             bind: svc.cfg.bind.to_string(),
             index_url: svc.cfg.index_url.clone(),
