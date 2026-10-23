@@ -85,6 +85,13 @@ pub fn decide(object: &[u8], policy: &AdmissionPolicy, index: &IndexClient) -> F
             "{}",
         ),
         Precheck::Shape { shape, shape_item } => {
+            if let Some(lowest) = crate::policy::lowest_before_born(object, policy.born_height) {
+                return refuse(
+                    crate::policy::BEFORE_BORN,
+                    &crate::policy::before_born_line(policy.born_height, lowest),
+                    &crate::policy::before_born_record(policy.born_height, lowest),
+                );
+            }
             if shape != "match" {
                 let record = serde_json::json!({
                     "shape": shape,
@@ -141,7 +148,8 @@ fn elapsed_ms(started: Instant) -> u64 {
 }
 
 fn apply_budget(decision: FastDecision, policy: &AdmissionPolicy, elapsed_ms: u64) -> FastDecision {
-    let over = elapsed_ms > policy.fast_accept_bound_ms || elapsed_ms > policy.async_catch_budget_ms;
+    let over =
+        elapsed_ms > policy.fast_accept_bound_ms || elapsed_ms > policy.async_catch_budget_ms;
     if !over {
         return decision;
     }

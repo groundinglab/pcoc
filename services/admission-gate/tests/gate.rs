@@ -389,7 +389,8 @@ async fn health_reports_version_commit_spec_and_config() {
     assert!(!body.to_string().contains("log_dir"), "{body}");
     assert!(!body.to_string().contains("config_path"), "{body}");
     assert!(body["config"].get("leg_rate_floor").is_none(), "{body}");
-    assert_eq!(body["config"]["policy_id"], "gl-admit-v9");
+    assert_eq!(body["config"]["policy_id"], "gl-admit-v10");
+    assert_eq!(body["config"]["born_height"], 0);
     assert_eq!(body["config"]["bind_threads"], 6);
     let origins = body["config"]["allowed_origins"].as_array().unwrap();
     assert!(origins.is_empty(), "the default names no site");
@@ -400,10 +401,11 @@ async fn health_reports_version_commit_spec_and_config() {
     )
     .await;
     assert_eq!(policy_status, StatusCode::OK);
-    assert_eq!(policy["policy_id"], "gl-admit-v9");
+    assert_eq!(policy["policy_id"], "gl-admit-v10");
     assert_eq!(policy["leg_rate_floor"]["p"], 1);
     assert_eq!(policy["leg_rate_floor"]["q"], 5);
     assert_eq!(policy["min_anchored_paths"], 6);
+    assert_eq!(policy["born_height"], 0);
     assert_eq!(policy["source"], "recommendation, not specification");
     assert_eq!(policy["spec"], "Satoshi Hike 2.2");
     let text = body.to_string();
@@ -645,7 +647,7 @@ async fn latest_json_matches_the_chain_after_restart() {
     assert_eq!(status, StatusCode::OK, "{latest}");
     assert_eq!(latest["last_seq"], 1);
     assert_eq!(latest["feed"], "pcoc-gate-feed-v2");
-    assert_eq!(latest["policy"]["policy_id"], "gl-admit-v9");
+    assert_eq!(latest["policy"]["policy_id"], "gl-admit-v10");
     assert_eq!(latest["policy"]["leg_rate_floor"]["p"], 1);
     assert_eq!(latest["policy"]["leg_rate_floor"]["q"], 5);
     assert_eq!(
@@ -692,7 +694,7 @@ async fn verify_over_the_object_cap_is_refused() {
 
 /// A shape match used to invent `hike_span` `not read` without calling the
 /// index, so every current object finished `held`. SPEC §14 reads the index.
-/// When those headers are readable and the pair meets gl-admit-v9's 1/5 floor,
+/// When those headers are readable and the pair meets gl-admit-v10's 1/5 floor,
 /// the job is `done`.
 #[tokio::test]
 async fn a_readable_hike_is_done_not_held() {
@@ -704,6 +706,8 @@ async fn a_readable_hike_is_done_not_held() {
     let dir = scratch("hike-read");
     let router = opened(dir.clone(), &index.base, |cfg| {
         cfg.index_timeout = Duration::from_secs(5);
+        // This test owns its boundary. O3 is below the production value.
+        cfg.policy.born_height = 0;
     });
     let (status, posted) = post_cbor(&router, object).await;
     assert_eq!(status, StatusCode::ACCEPTED, "{posted}");
@@ -719,12 +723,182 @@ async fn a_readable_hike_is_done_not_held() {
     assert_eq!(job["record"]["analysis"]["hike_span"], 90, "{job}");
     assert!(job["record"]["headers"].is_array(), "{job}");
     assert!(job.get("error").is_none(), "{job}");
+    assert_eq!(job["policy_id"], "gl-admit-v10");
+    assert_eq!(job["born_height"], 0);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Every stored height is below the boundary this test sets. The index is a
+/// black hole. The job is terminal `before_born_height` and is not `held`.
+#[tokio::test]
+async fn a_preborn_object_is_rejected_without_the_index() {
+    let object = o3_bytes();
+    let (min, max) = height_span(&object);
+    let index = Index::blackhole();
+    let dir = scratch("preborn");
+    let born = max + 1;
+    let router = opened(dir.clone(), &index.base, |cfg| {
+        cfg.policy.born_height = born;
+        cfg.index_timeout = Duration::from_millis(200);
+    });
+    let started = std::time::Instant::now();
+    let (status, posted) = post_cbor(&router, object).await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{posted}");
+    let job = poll_job_for(
+        &router,
+        posted["job_id"].as_str().unwrap(),
+        Duration::from_secs(3),
+    )
+    .await;
+    assert!(started.elapsed() < Duration::from_secs(3), "{job}");
+    assert_eq!(job["terminal"], true, "{job}");
+    assert_eq!(job["status"], "error", "{job}");
+    assert_ne!(job["status"], "held", "{job}");
+    assert_eq!(job["error"]["code"], "before_born_height", "{job}");
+    assert_eq!(job["reasons"][0], "before_born_height", "{job}");
+    assert_eq!(job["policy_id"], "gl-admit-v10", "{job}");
+    assert_eq!(job["born_height"], born, "{job}");
+    assert_eq!(job["lowest_height"], min, "{job}");
+    assert_eq!(job["record"]["reason"], "before_born_height", "{job}");
+    assert_eq!(job["record"]["born_height"], born, "{job}");
+    assert_eq!(
+        job["record"]["lowest_height"], job["lowest_height"],
+        "{job}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The lowest stored height equals the boundary this test sets. The object
+/// is accepted, the same way a readable hike is accepted at born height 0.
+#[tokio::test]
+async fn an_object_exactly_at_born_height_is_accepted() {
+    let object = o3_bytes();
+    let (min, max) = height_span(&object);
+    assert!(min < max, "O3 spans more than one height");
+    let index = index_for_hike(&object);
+    let dir = scratch("born-exact");
+    let router = opened(dir.clone(), &index.base, |cfg| {
+        cfg.policy.born_height = min;
+        cfg.index_timeout = Duration::from_secs(5);
+    });
+    let (status, posted) = post_cbor(&router, object).await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{posted}");
+    let job = poll_job_for(
+        &router,
+        posted["job_id"].as_str().unwrap(),
+        Duration::from_secs(600),
+    )
+    .await;
+    assert_eq!(job["status"], "done", "{job}");
+    assert_eq!(job["terminal"], true, "{job}");
+    assert!(job.get("error").is_none(), "{job}");
+    assert_eq!(job["policy_id"], "gl-admit-v10", "{job}");
+    assert_eq!(job["born_height"], min, "{job}");
+    assert!(job.get("lowest_height").is_none(), "{job}");
+    assert_eq!(job["record"]["shape"], "match", "{job}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The anchor is exactly this test's born height, so the median-time window
+/// starts below that height. The fake index uses the same header floor as
+/// the production index: it serves `born_height - MTP_LOOKBACK` and up, and
+/// it 404s anything lower. The job reaches `done`.
+#[tokio::test]
+async fn an_object_at_born_height_is_done_when_lookback_is_below_born() {
+    let object = o3_bytes();
+    let (min, max) = height_span(&object);
+    assert!(min < max, "O3 spans more than one height");
+    let lookback = pcoc::constants::MTP_LOOKBACK;
+    assert!(min > lookback, "the window reaches below the anchor");
+    let born = min;
+    let window = born + 1 - born.saturating_add(1).min(pcoc::constants::MTP_WINDOW);
+    assert!(window < born, "lookback lies below born_height");
+    assert_eq!(window, born - lookback);
+    let index = index_for_hike_from(&object, window);
+    let dir = scratch("born-lookback");
+    let router = opened(dir.clone(), &index.base, |cfg| {
+        cfg.policy.born_height = born;
+        cfg.index_timeout = Duration::from_secs(5);
+    });
+    let (status, posted) = post_cbor(&router, object).await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{posted}");
+    let job = poll_job_for(
+        &router,
+        posted["job_id"].as_str().unwrap(),
+        Duration::from_secs(600),
+    )
+    .await;
+    assert_eq!(job["status"], "done", "{job}");
+    assert_ne!(job["status"], "held", "{job}");
+    assert_eq!(job["terminal"], true, "{job}");
+    assert!(job.get("error").is_none(), "{job}");
+    assert_eq!(job["policy_id"], "gl-admit-v10", "{job}");
+    assert_eq!(job["born_height"], born, "{job}");
+    assert!(job.get("lowest_height").is_none(), "{job}");
+    assert_eq!(job["record"]["shape"], "match", "{job}");
+    assert!(
+        job["record"]["analysis"]["hike_span"].as_i64().is_some(),
+        "{job}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// One stored height is below the boundary and another is not.
+#[tokio::test]
+async fn a_mixed_object_is_rejected_before_born_height() {
+    let object = o3_bytes();
+    let (min, max) = height_span(&object);
+    assert!(min < max, "O3 spans more than one height");
+    let index = Index::blackhole();
+    let dir = scratch("born-mixed");
+    let born = min + 1;
+    let router = opened(dir.clone(), &index.base, |cfg| {
+        cfg.policy.born_height = born;
+        cfg.index_timeout = Duration::from_millis(200);
+    });
+    let (status, posted) = post_cbor(&router, object).await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{posted}");
+    let job = poll_job_for(
+        &router,
+        posted["job_id"].as_str().unwrap(),
+        Duration::from_secs(3),
+    )
+    .await;
+    assert_eq!(job["terminal"], true, "{job}");
+    assert_eq!(job["status"], "error", "{job}");
+    assert_ne!(job["status"], "held", "{job}");
+    assert_eq!(job["error"]["code"], "before_born_height", "{job}");
+    assert_eq!(job["born_height"], born, "{job}");
+    assert_eq!(job["lowest_height"], min, "{job}");
+    assert!(job["lowest_height"].as_u64().unwrap() < born);
+    assert!(max >= born, "the object also reaches the boundary");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn o3_bytes() -> Vec<u8> {
+    std::fs::read(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../sdk/rust/objects/O3-PROD.cbor"),
+    )
+    .expect("O3")
+}
+
+fn height_span(object: &[u8]) -> (u64, u64) {
+    let heights = pcoc_admission::policy::object_heights(object);
+    let min = heights.iter().copied().min().expect("heights");
+    let max = heights.iter().copied().max().expect("heights");
+    (min, max)
 }
 
 /// Headers whose natural hash is the object's beacon, 5 s apart, so
 /// `MTP(last) − MTP(first)` is `5 * (last − first)` = 90 s for O3.
 fn index_for_hike(object: &[u8]) -> Index {
+    index_for_hike_from(object, 0)
+}
+
+/// Same documents as [`index_for_hike`], served only at or above `serve_from`.
+/// A lower height is the default 404. That is the production header floor:
+/// `born_height - MTP_LOOKBACK`.
+fn index_for_hike_from(object: &[u8], serve_from: u64) -> Index {
     let obj = pcoc::decode_object(object).expect("object");
     let mut beacons = HashMap::<u64, [u8; 32]>::new();
     for stage in &obj.stages {
@@ -736,13 +910,16 @@ fn index_for_hike(object: &[u8]) -> Index {
     let mut lo = u64::MAX;
     let mut hi = 0u64;
     for &height in beacons.keys() {
-        let n = height.saturating_add(1).min(11);
+        let n = height.saturating_add(1).min(pcoc::constants::MTP_WINDOW);
         let start = height + 1 - n;
         lo = lo.min(start);
         hi = hi.max(height);
     }
     let mut exact = HashMap::new();
     for height in lo..=hi {
+        if height < serve_from {
+            continue;
+        }
         let natural = beacons.get(&height).copied().unwrap_or([0x11; 32]);
         let display = pcoc::hexutil::hex_encode(&pcoc::hexutil::reverse32(&natural));
         let time = 1_600_000_000u64 + 5 * height;

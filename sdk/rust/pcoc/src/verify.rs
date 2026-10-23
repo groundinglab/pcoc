@@ -1,7 +1,7 @@
 //! SPEC §14. The verify record, including Rule A5. No admission judgment.
 
 use crate::checkpoint::checkpoint;
-use crate::constants::{FILL, HEIGHT_MAX, KIND, SIX_LEG_COUNT, STAGES};
+use crate::constants::{FILL, HEIGHT_MAX, KIND, MTP_WINDOW, SIX_LEG_COUNT, STAGES};
 use crate::draw::{self, DrawStop};
 use crate::hexutil::{hex_encode, reverse32};
 use crate::indexdoc::{self, HeaderDoc};
@@ -1280,7 +1280,7 @@ fn mtp_at(
     if height > HEIGHT_MAX {
         return None;
     }
-    let n = std::cmp::min(11, height + 1);
+    let n = std::cmp::min(MTP_WINDOW, height + 1);
     let start = height + 1 - n;
     let mut times = Vec::with_capacity(n as usize);
     let mut docs: HashMap<u64, HeaderDoc> = HashMap::new();

@@ -24,6 +24,22 @@ mod utxo;
 
 pub type Hash32 = [u8; 32];
 
+/// Production admission boundary. Heights below this are testing.
+///
+/// Equal to `born_height` in `policy/groundinglab-admission/gl-admit-v10.toml`.
+/// It is policy, not a SPEC rule. This process does not serve a path below it.
+/// An index blob is served down through `born_height - MTP_LOOKBACK`.
+/// Files already stored stay where they are.
+pub const BORN_HEIGHT: u32 = 972685;
+
+/// Headers before a beacon in a full median-time-past window.
+///
+/// Equal to [`pcoc::constants::MTP_LOOKBACK`], which is
+/// [`pcoc::constants::MTP_WINDOW`] minus one. The beacon itself is inside
+/// the window, so the headers below [`BORN_HEIGHT`] that this process still
+/// returns are this many.
+pub const MTP_LOOKBACK: u32 = pcoc::constants::MTP_LOOKBACK as u32;
+
 /// Decode exactly 32 natural-order bytes from lowercase hexadecimal.
 pub fn decode_hash32(encoded: &str) -> Result<Hash32, String> {
     if encoded.len() != 64

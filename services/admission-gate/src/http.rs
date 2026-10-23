@@ -154,6 +154,7 @@ struct ConfigSummary {
     bind_threads: usize,
     index_timeout_secs: u64,
     policy_id: String,
+    born_height: u64,
 }
 
 #[derive(Serialize)]
@@ -186,6 +187,7 @@ async fn health(State(svc): State<Service>, headers: HeaderMap) -> Response {
             bind_threads: svc.cfg.bind_threads,
             index_timeout_secs: svc.cfg.index_timeout.as_secs(),
             policy_id: svc.cfg.policy.policy_id.clone(),
+            born_height: svc.cfg.policy.born_height,
         },
         jobs: JobCounts { tracked, in_flight },
     };

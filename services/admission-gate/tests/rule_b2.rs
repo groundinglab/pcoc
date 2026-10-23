@@ -9,7 +9,7 @@ use pcoc_admission::verifier::{Measures, Report, SPEC_KIND};
 
 /// Floor `1/5`, the SPEC §15.4 default.
 fn judge(record: &str) -> Judgment {
-    policy::judge(&Report::Read(measured(record)), 1, 5)
+    policy::judge(&Report::Read(measured(record)), 1, 5, 0)
 }
 
 fn measured(record: &str) -> Measured {

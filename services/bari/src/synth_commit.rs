@@ -230,7 +230,7 @@ mod tests {
     #[test]
     fn simulated_commit_serves_on_the_tip_after_plant_without_core() {
         let backend = Arc::new(SynthCommit::new());
-        let (mut clock, _temp) = open(backend.clone(), tip(1, None, 10));
+        let (mut clock, temp) = open(backend.clone(), tip(1, None, 10));
         let leaf = [0x11; 32];
         clock.post_waypoint(leaf).unwrap();
 
@@ -291,6 +291,26 @@ mod tests {
             .expect("confirmed path stays");
         assert_eq!(still_served.block_height, inclusion_tip.height);
         assert_eq!(backend.plant_count(), 1);
+
+        clock.set_born_height(body.block_height);
+        assert_eq!(clock.born_height(), body.block_height);
+        assert!(clock.path_for(&leaf).unwrap().is_some());
+        let kept = temp
+            .path()
+            .join("index")
+            .join(format!("height-{:010}.json", body.block_height));
+        assert!(kept.is_file());
+        // One below the floor: the path is not served. The header is inside
+        // the median-time lookback, so the in-process read still returns it.
+        clock.set_born_height(body.block_height + 1);
+        assert!(clock.path_for(&leaf).unwrap().is_none());
+        assert!(clock.index_at_height(body.block_height).unwrap().is_some());
+        assert!(kept.is_file(), "history below the floor stays on disk");
+        // Past the lookback window the header is not returned. The file stays.
+        clock.set_born_height(body.block_height + crate::MTP_LOOKBACK + 1);
+        assert!(clock.path_for(&leaf).unwrap().is_none());
+        assert!(clock.index_at_height(body.block_height).unwrap().is_none());
+        assert!(kept.is_file(), "history below the lookback stays on disk");
     }
 
     #[test]

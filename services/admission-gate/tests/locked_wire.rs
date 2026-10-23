@@ -666,7 +666,7 @@ async fn the_new_wire_hides_the_floor_and_still_enforces_it() {
     )
     .await;
     assert_eq!(health_status, StatusCode::OK);
-    assert_eq!(health["config"]["policy_id"], "gl-admit-v9");
+    assert_eq!(health["config"]["policy_id"], "gl-admit-v10");
     assert!(health["config"].get("leg_rate_floor").is_none(), "{health}");
     assert!(health["config"].get("log_dir").is_none(), "{health}");
     assert!(health["config"].get("config_path").is_none(), "{health}");

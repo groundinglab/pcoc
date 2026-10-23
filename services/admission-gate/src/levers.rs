@@ -34,7 +34,7 @@ const REQUIRED: &[&str] = &[
 ];
 
 /// SPEC §15.4 default of `verify_cap_per_door_session` is unset. This constant
-/// applies only when the key is absent. `gl-admit-v9.toml` sets the key to 3,
+/// applies only when the key is absent. `gl-admit-v10.toml` sets the key to 3,
 /// and `load` reads that value.
 pub const VERIFY_CAP_PER_DOOR_SESSION_AWAITING_POLICY: u64 = 3;
 
@@ -46,7 +46,8 @@ pub fn door_session_cap(parsed: Option<u64>) -> u64 {
 /// Load a §15.4 file. `max_concurrent` fills the gate's pending-global cap,
 /// which is not a lever.
 pub fn load(raw: &str, max_concurrent: usize) -> Result<AdmissionPolicy, String> {
-    let root: toml::Value = toml::from_str(raw).map_err(|err| format!("policy is not usable: {err}"))?;
+    let root: toml::Value =
+        toml::from_str(raw).map_err(|err| format!("policy is not usable: {err}"))?;
     let spec = root
         .get("spec")
         .and_then(toml::Value::as_str)
@@ -56,9 +57,7 @@ pub fn load(raw: &str, max_concurrent: usize) -> Result<AdmissionPolicy, String>
     }
     let pin = pcoc::build_info().spec_tag;
     if !spec_matches_pin(spec, &pin) {
-        return Err(format!(
-            "policy spec {spec:?} is not the SDK pin {pin}"
-        ));
+        return Err(format!("policy spec {spec:?} is not the SDK pin {pin}"));
     }
     let policy_id = root
         .get("policy_id")
@@ -80,13 +79,7 @@ pub fn load(raw: &str, max_concurrent: usize) -> Result<AdmissionPolicy, String>
             return Err(format!("lever {key} is absent and has no default"));
         }
     }
-    let min_anchored_paths = int_range(
-        levers,
-        "min_anchored_paths",
-        6,
-        2,
-        16,
-    )?;
+    let min_anchored_paths = int_range(levers, "min_anchored_paths", 6, 2, 16)?;
     let (p, q) = floor(levers.get("leg_rate_floor"))?;
     let submission_deadline_blocks = int_range(levers, "submission_deadline_blocks", 3, 0, 6)?;
     let held_retry_seconds = int_at_least(levers, "held_retry_seconds", 600, 1)?;
@@ -106,12 +99,19 @@ pub fn load(raw: &str, max_concurrent: usize) -> Result<AdmissionPolicy, String>
     let challenge_lifetime_seconds = int_at_least(levers, "challenge_lifetime_seconds", 120, 1)?;
     let challenge_clock_skew_seconds = int_at_least(levers, "challenge_clock_skew_seconds", 5, 0)?;
     let result_retention_seconds = int_at_least(levers, "result_retention_seconds", 600, 0)?;
-    let draw_commitment = root
-        .get("policy_rules")
+    let rules = root.get("policy_rules");
+    let draw_commitment = rules
         .and_then(|table| table.get("draw_commitment"))
         .and_then(toml::Value::as_str)
         .unwrap_or("sha256(draw || salt), revealed with the result")
         .to_owned();
+    // Absent means 0 so a partial test file still loads. The shipped file sets it.
+    let born_height = match rules.and_then(|table| table.get("born_height")) {
+        None => 0,
+        Some(toml::Value::Integer(n)) if *n >= 0 => *n as u64,
+        Some(toml::Value::Integer(_)) => return Err("born_height is out of range".to_owned()),
+        Some(_) => return Err("born_height has the wrong type".to_owned()),
+    };
     let expected = root
         .get("policy_rules")
         .and_then(|table| table.get("expected_network"))
@@ -119,10 +119,13 @@ pub fn load(raw: &str, max_concurrent: usize) -> Result<AdmissionPolicy, String>
         .map(str::to_owned);
     if let Some(network) = &expected {
         if !policy::NETWORKS.contains(&network.as_str()) {
-            return Err(format!("expected_network {network:?} is not a known network"));
+            return Err(format!(
+                "expected_network {network:?} is not a known network"
+            ));
         }
     }
-    let pending_global = (max_concurrent as u64).saturating_mul(policy::DEFAULT_PENDING_GLOBAL_FACTOR);
+    let pending_global =
+        (max_concurrent as u64).saturating_mul(policy::DEFAULT_PENDING_GLOBAL_FACTOR);
     Ok(AdmissionPolicy {
         policy_id,
         leg_rate_floor: RateFloor { p, q },
@@ -149,6 +152,7 @@ pub fn load(raw: &str, max_concurrent: usize) -> Result<AdmissionPolicy, String>
         challenge_lifetime_seconds,
         challenge_clock_skew_seconds,
         result_retention_seconds,
+        born_height,
         index: expected.map(|expected_network| IndexPolicy { expected_network }),
     })
 }
@@ -167,7 +171,9 @@ fn int_range(
 ) -> Result<u64, String> {
     let value = match levers.get(key) {
         None => default,
-        Some(toml::Value::Integer(n)) => u64::try_from(*n).map_err(|_| format!("{key} is out of range"))?,
+        Some(toml::Value::Integer(n)) => {
+            u64::try_from(*n).map_err(|_| format!("{key} is out of range"))?
+        }
         Some(_) => return Err(format!("{key} has the wrong type")),
     };
     if value < lo || value > hi {
@@ -184,7 +190,9 @@ fn int_at_least(
 ) -> Result<u64, String> {
     let value = match levers.get(key) {
         None => default,
-        Some(toml::Value::Integer(n)) => u64::try_from(*n).map_err(|_| format!("{key} is out of range"))?,
+        Some(toml::Value::Integer(n)) => {
+            u64::try_from(*n).map_err(|_| format!("{key} is out of range"))?
+        }
         Some(_) => return Err(format!("{key} has the wrong type")),
     };
     if value < lo {
@@ -230,9 +238,7 @@ fn positive_seconds(
         toml::Value::Integer(n) => *n as f64,
         toml::Value::Float(n) => {
             if !fraction_digits_ok(*n) {
-                return Err(format!(
-                    "{key} has more than 3 fractional digits"
-                ));
+                return Err(format!("{key} has more than 3 fractional digits"));
             }
             *n
         }

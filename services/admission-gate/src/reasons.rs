@@ -20,6 +20,8 @@ pub const CLASS_INVALID: &str = "invalid";
 pub const CLASS_OPERATIONAL: &str = "operational";
 
 pub const CODE_BELOW_LEG_RATE: &str = "below_leg_rate";
+/// Policy born height. A stored or anchored height is below it. Terminal.
+pub const CODE_BEFORE_BORN: &str = "before_born_height";
 pub const CODE_BELOW_WAYPOINTS: &str = "below_waypoints";
 pub const CODE_EARLIER_VERSION: &str = "earlier_version";
 /// SPEC §15.4. Any kind other than `v2.2-pcoc-object`, from the fast phase.
@@ -55,6 +57,7 @@ pub const CODE_VERIFY_CAP_OBJECT: &str = "verify_cap_per_object";
 /// Every code this gate writes, in table order. A test covers this list.
 pub const INVENTORY: &[(&str, &str)] = &[
     (CODE_BELOW_LEG_RATE, CLASS_BELOW_POLICY),
+    (CODE_BEFORE_BORN, CLASS_BELOW_POLICY),
     (CODE_BELOW_WAYPOINTS, CLASS_BELOW_POLICY),
     (CODE_EARLIER_VERSION, CLASS_INVALID),
     (CODE_UNKNOWN_KIND, CLASS_INVALID),
@@ -111,6 +114,7 @@ pub fn code_of_note(note: &str) -> &'static str {
         note if note == REFUSE_BOOKENDS => CODE_BOOKENDS_NOT_DEFINED,
         note if note == REFUSE_BOOKENDS_NOT_READ => CODE_BOOKENDS_NOT_READ,
         note if note == REFUSE_LEG_RATE => CODE_BELOW_LEG_RATE,
+        note if note == policy::BEFORE_BORN || note == CODE_BEFORE_BORN => CODE_BEFORE_BORN,
         note if note == OUTCOME_TOO_FEW => CODE_BELOW_WAYPOINTS,
         "verifier_error" => CODE_VERIFIER_ERROR,
         CODE_CHALLENGE_EXPIRED => CODE_CHALLENGE_EXPIRED,
@@ -282,6 +286,10 @@ fn sentence(code: &str, measures: &Measures) -> String {
         CODE_SUCCESSOR_MISMATCH => "Invalid: a successor waypoint differs.".to_owned(),
         CODE_PATHS_INCLUDED => "Invalid: paths included is below the spec minimum.".to_owned(),
         CODE_INDEX_NETWORK_NOT_EXPECTED => policy::NETWORK_NOT_MAIN_LINE.to_owned(),
+        CODE_BEFORE_BORN => {
+            "This object is before the born height. It is not a production object, and the decision is final."
+                .to_owned()
+        }
         CODE_BELOW_LEG_RATE => "Valid, measured below the configured leg rate.".to_owned(),
         CODE_BELOW_WAYPOINTS => "Valid, fewer waypoints than the configured minimum.".to_owned(),
         _ => "Invalid: the proof does not hold.".to_owned(),

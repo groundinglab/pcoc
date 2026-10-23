@@ -1,11 +1,11 @@
-# groundinglab admission policy gl-admit-v9 (DRAFT)
+# groundinglab admission policy gl-admit-v10 (DRAFT)
 
-- **Status.** Draft, 22 Oct 2026. Not deployed. Nothing was committed.
-- **Repo path (agreed layout).** `policy/groundinglab-admission/POLICY.md`, next to `gl-admit-v9.toml`.
+- **Status.** Draft, 23 Oct 2026. Not deployed.
+- **Repo path (agreed layout).** `policy/groundinglab-admission/POLICY.md`, next to `gl-admit-v10.toml`. `gl-admit-v9.toml` stays in this directory and is not edited.
 - **Targets.** Satoshi Hike 2.2, tag `spec-2.2.0` (`spec/satoshi-hike-v2.2/SPEC.md`).
-- **Policy version.** The `policy_version` is the id `gl-admit-v9` plus the SHA-256 of `gl-admit-v9.toml`. Ops pins that SHA-256 in the deployment manifest at deploy time.
+- **Policy version.** The `policy_version` is the id `gl-admit-v10` plus the SHA-256 of `gl-admit-v10.toml`. Ops pins that SHA-256 in the deployment manifest at deploy time.
 
-A policy sets the SPEC's §15.4 levers to values inside their ranges. It never changes a SPEC rule. Section 3 holds the behaviour that SPEC 2.2 leaves to policy. Changing any value or rule here needs a new id; ids are never reused. Old ids are kept only in ops `policy-bind.json`.
+A policy sets the SPEC's §15.4 levers to values inside their ranges. It never changes a SPEC rule. Section 3 holds the behaviour that SPEC 2.2 leaves to policy. Changing any value or rule here needs a new id; ids are never reused. `gl-admit-v9.toml` is the previous id and stays unchanged. Earlier ids are kept only in ops `policy-bind.json`.
 
 ## 1. Levers this policy sets
 
@@ -30,7 +30,7 @@ A policy sets the SPEC's §15.4 levers to values inside their ranges. It never c
 
 ## 2. Fixed by the SPEC, not set here
 
-`provisional_action_cap`, `revoke_scope`, the 6-leg round, the Rule B9 invariant refuses, and the fake-leg ignore itself are fixed by SPEC 2.2. So are: admission reads only a `production`-profile record, and a live-plane gate compares against the mainnet index only (SPEC Rule B9); the consumed-nonce row outlives the challenge window whatever `result_retention_seconds` is (SPEC §15.1 **Single-use**); and the policy-file encoding (SPEC §15.4 **Policy file encoding**), which `gl-admit-v9.toml` follows: exact lever names, `leg_rate_floor` as `{ p, q }`, decimal seconds, absent key means the SPEC default.
+`provisional_action_cap`, `revoke_scope`, the 6-leg round, the Rule B9 invariant refuses, and the fake-leg ignore itself are fixed by SPEC 2.2. So are: admission reads only a `production`-profile record, and a live-plane gate compares against the mainnet index only (SPEC Rule B9); the consumed-nonce row outlives the challenge window whatever `result_retention_seconds` is (SPEC §15.1 **Single-use**); and the policy-file encoding (SPEC §15.4 **Policy file encoding**), which `gl-admit-v10.toml` follows: exact lever names, `leg_rate_floor` as `{ p, q }`, decimal seconds, absent key means the SPEC default.
 
 ## 3. Behaviour SPEC 2.2 leaves to policy
 
@@ -65,6 +65,18 @@ These moved out of the draft SPEC at 11:32 (Rules B1 and B5, and the friendly-li
 ### P4. Draw commitment
 
 The gate logs `H(draw ‖ salt)` at the draw and reveals it with the result, so anyone can check afterwards that the draw was not chosen against the submitter. This is a decision-log extension, not part of the SPEC.
+
+### P5. Born height
+
+`born_height` is **972685**. It lives in `[policy_rules]` of `gl-admit-v10.toml`. It is not a SPEC §15.4 lever, and it is not a change to Satoshi Hike 2.2. The number can change by issuing a new policy id. It does not need a spec release.
+
+A height at or above `born_height` is production. A height below it is testing. If any stored height in the object (`beacon_height`, `last_interrupt_height`) or any claimed path block height is below `born_height`, the gate rejects the object with `before_born_height`. That decision is final. The job is terminal. It is not `held`, and waiting on the index will not change it.
+
+The verify output shows `policy_id`, the `born_height` that applied, and `lowest_height` (the lowest offending height), next to the reason `before_born_height`. Health shows `born_height` next to `policy_id`. An object whose stored and claimed heights are all at or above `born_height` is judged as it was before this rule.
+
+Median-time-past reads `MTP_WINDOW` headers ending at the beacon. `MTP_WINDOW` is 11 in the verifier (`n = min(MTP_WINDOW, h + 1)`). The beacon is one of those headers, so the lookback is `MTP_LOOKBACK` = `MTP_WINDOW - 1` = 10. The index and Bari serve the headers from `born_height - MTP_LOOKBACK` through `born_height - 1` so that window can be read. Those headers are for the timestamp only. They are not production heights: tip selection ignores them, and `GET /index/since` omits them. A height below `born_height - MTP_LOOKBACK` is not served. An object anchored below `born_height` is still `before_born_height`.
+
+A caller who receives `before_born_height` should stop. The object is a testing artefact. Submit an object anchored at or above the born height. Do not retry this object.
 
 ## 4. Open before deploy
 

@@ -5,7 +5,7 @@
 //! [`crate::step::leg_result`]. The median-time rule is the same one §14
 //! uses (erratum E26: do not link previous-hash).
 
-use crate::constants::HEIGHT_MAX;
+use crate::constants::{HEIGHT_MAX, MTP_WINDOW};
 use crate::object::HikeObject;
 
 /// Checkpoint count over stages 0–17. `None` when the object is not 18 stages
@@ -24,7 +24,7 @@ pub fn mtp_at(height: u64, mut read_time: impl FnMut(u64) -> Option<i128>) -> Op
     if height > HEIGHT_MAX {
         return None;
     }
-    let n = std::cmp::min(11u64, height.saturating_add(1));
+    let n = std::cmp::min(MTP_WINDOW, height.saturating_add(1));
     let start = height + 1 - n;
     let mut times = Vec::with_capacity(n as usize);
     for h in start..=height {
