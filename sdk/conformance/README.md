@@ -1,8 +1,8 @@
 # Cross-verify gate
 
-`cross-verify.sh` is the Phase A gate for the four Satoshi Hike 2.2 SDKs (Rust, C, Go, and Java). It builds each verify CLI from this tree and checks that they agree on the CASES v2 objects, the candidate files, the pinned digests, the thirteen permanent negatives, and the malformed inputs.
+`cross-verify.sh` is the Phase A gate for the four Satoshi Hike 2.3 SDKs (Rust, C, Go, and Java). It builds each verify CLI from this tree and checks that they agree on the CASES v2 objects, the candidate files, the pinned digests, the thirteen permanent negatives, and the malformed inputs.
 
-The specification is [spec/satoshi-hike-v2.2/SPEC.md](../../spec/satoshi-hike-v2.2/SPEC.md) read with [ERRATUM-1.md](../../spec/satoshi-hike-v2.2/ERRATUM-1.md). The negative table is parsed from that erratum when the gate runs. It is not copied into this directory.
+The normative specification is [spec/satoshi-hike-v2.3/SPEC.md](../../spec/satoshi-hike-v2.3/SPEC.md). The negative table is parsed from [ERRATUM-1.md](../../spec/satoshi-hike-v2.2/ERRATUM-1.md) when the gate runs. It is not copied into this directory.
 
 ## What it checks
 

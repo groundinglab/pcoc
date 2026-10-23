@@ -83,7 +83,8 @@ def main() -> None:
             "pack_status": json.loads((ROOT / "spec/conformance/pack/manifest.json").read_text())["status"],
         },
         "links": {
-            "interop_evidence": "https://github.com/groundinglab/pcoc/tree/interop/evidence-2.2/spec/conformance/interop",
+            # In-tree evidence, including the 2.3 re-run. Tag spec-2.3.0 predates that re-run.
+            "interop_evidence": "https://github.com/groundinglab/pcoc/tree/sdk-rust-v2.3.1/spec/conformance/interop",
             "policy_page": "https://groundinglab.io/admission-gate/policy/",
             "policy_file": "https://github.com/groundinglab/pcoc/blob/spec-2.3.0/policy/groundinglab-admission/gl-admit-v10.toml",
         },

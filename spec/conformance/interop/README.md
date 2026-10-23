@@ -1,4 +1,4 @@
-# Interop evidence: independent builds of Satoshi Hike SPEC 2.2
+# Interop evidence: independent builds of the Satoshi Hike specification
 
 This folder holds the evidence behind groundinglab's admission policy numbers: independent builds of the SPEC, written by AI models from different providers in different languages, with their prompts, their own reports, and the results of building, cross-verifying and timing them on three commodity reference systems ([REFERENCE-SYSTEMS.md](REFERENCE-SYSTEMS.md)). The web page that argues from this evidence is <https://groundinglab.io/admission-gate/policy/>.
 

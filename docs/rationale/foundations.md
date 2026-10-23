@@ -8,7 +8,7 @@ A key is free. The scarce step sits on the object. [How do you make a digital th
 
 The maker grows a terrain from the key and an opening flag, holds it, and takes the work. A later flag cuts the stretch. The terrain stays resident. The file is the log, not the terrain. [How you make one](how-you-make-one.md)
 
-Binding is in that log. A checkpoint ties the run to the previous bind, to the stage mark, to a piece of the terrain, and to the result. A waypoint ties the stage to the flag that opened it. A prefix of a run is not a second object. The bytes of that bind are the construction's, not this page's. [the SPEC](../../spec/satoshi-hike-v2.2/SPEC.md)
+Binding is in that log. A checkpoint ties the run to the previous bind, to the stage mark, to a piece of the terrain, and to the result. A waypoint ties the stage to the flag that opened it. A prefix of a run is not a second object. The bytes of that bind are the construction's, not this page's. [the SPEC](../../spec/satoshi-hike-v2.3/SPEC.md)
 
 The public sequence is the clock. Bitcoin is one system a construction may name. It does not issue the object, and it is not family law. [How do you prove when the work happened?](../briefs/how-do-you-prove-when-the-work-happened.md)
 
