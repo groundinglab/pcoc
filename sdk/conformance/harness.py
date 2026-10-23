@@ -1194,7 +1194,7 @@ class Gate:
             lines.append("")
             utf_path = os.path.join(work, "utf8.cbor")
             open(utf_path, "wb").write(BAD_UTF8)
-            # Erratum 2 E01: a `kind` that is not valid UTF-8 is malformed CBOR.
+            # Erratum 2 E01: any text string (map key or `kind`) that is not valid UTF-8 is malformed CBOR.
             # The input is a one-pair map whose `kind` text is the byte 0xFF.
             utf_out: dict[str, tuple[int, bytes, bytes]] = {}
             for lang in LANGS:

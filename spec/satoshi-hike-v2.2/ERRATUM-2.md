@@ -65,7 +65,7 @@ Indefinite lengths, tags, floating-point values, simple values, negative integer
 - **Where:** main L1320; erratum E-L1320.
 - **Kind:** insert after the anchor (anchor unchanged).
 - **Class:** clarification.
-- **Status:** CONFIRMED (four SDKs). **Evidence:** cross-verify full tier (PR #78, merged). Before this erratum: 160/160 cells match, 3 malformed cells masked under `PENDING_ERRATUM_2` (empty input, `58 05 01`, invalid UTF-8 `kind`). The SDKs agreed on exit code, `shape` and `shape_item`, and split only on the six fields below.
+- **Status:** CONFIRMED (four SDKs). **Evidence:** cross-verify full tier (PR #78, merged). Before this erratum: 160/160 cells match, 3 malformed cells masked under `PENDING_ERRATUM_2` (empty input, `58 05 01`, invalid UTF-8 `kind`). The SDKs agreed on exit code, `shape` and `shape_item`, and split only on the six fields below. After it the mask is `()` and the three records are byte-identical across Rust, C, Go and Java.
 
 **Anchor (unchanged, verbatim):**
 

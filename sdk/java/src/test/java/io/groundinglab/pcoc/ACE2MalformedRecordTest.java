@@ -16,7 +16,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Erratum 2 (E01, E02). A malformed CBOR value, including an empty input, bytes
- * that end inside an item, and a {@code kind} that is not valid UTF-8, prints one
+ * that end inside an item, and any text string (map key or {@code kind}) that is
+ * not valid UTF-8, prints one
  * verify record. An empty path byte string on a decoded stage stays {@code skip},
  * and a decoded empty checkpoint list stays count 0 (SPEC line 961, Rule A4.5).
  */
