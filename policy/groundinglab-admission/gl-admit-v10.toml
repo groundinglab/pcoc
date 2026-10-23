@@ -1,4 +1,4 @@
-# groundinglab admission policy gl-admit-v10. Live from 2026-10-23. gl-admit-v9.toml is unchanged.
+# groundinglab admission policy gl-admit-v10. Live from 2026-10-23. status is active. Supersedes gl-admit-v9.
 # Repo path (agreed layout): policy/groundinglab-admission/gl-admit-v10.toml
 # Argued in POLICY.md next to this file. Sets SPEC 2.2 section 15.4 levers only.
 # Encoding is SPEC 2.2 section 15.4 "Policy file encoding": keys in [levers] are the

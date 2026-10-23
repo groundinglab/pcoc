@@ -1,11 +1,11 @@
 # groundinglab admission policy gl-admit-v10
 
-- **Status.** Active. Live from 2026-10-23.
-- **Repo path (agreed layout).** `policy/groundinglab-admission/POLICY.md`, next to `gl-admit-v10.toml`. `gl-admit-v9.toml` stays in this directory and is not edited.
+- **Status.** A policy file's `status` is one of `draft`, `active`, or `superseded`. `gl-admit-v10` is `active`. Live from 2026-10-23. `gl-admit-v9` is `superseded`: it was live until 2026-10-23, and `gl-admit-v10` supersedes it.
+- **Repo path (agreed layout).** `policy/groundinglab-admission/POLICY.md`, next to `gl-admit-v10.toml`. `gl-admit-v9.toml` stays in this directory with `status` `superseded`.
 - **Targets.** Satoshi Hike 2.2, tag `spec-2.2.0` (`spec/satoshi-hike-v2.2/SPEC.md`).
 - **Policy version.** The `policy_version` is the id `gl-admit-v10` plus the SHA-256 of `gl-admit-v10.toml`. Ops pins that SHA-256 in the deployment manifest at deploy time.
 
-A policy sets the SPEC's §15.4 levers to values inside their ranges. It never changes a SPEC rule. Section 3 holds the behaviour that SPEC 2.2 leaves to policy. Changing any value or rule here needs a new id; ids are never reused. `gl-admit-v9.toml` is the previous id and stays unchanged. Earlier ids are kept only in ops `policy-bind.json`.
+A policy sets the SPEC's §15.4 levers to values inside their ranges. It never changes a SPEC rule. Section 3 holds the behaviour that SPEC 2.2 leaves to policy. Changing any value or rule here needs a new id; ids are never reused. `gl-admit-v9.toml` is the previous id. Its `status` is `superseded`. Earlier ids are kept only in ops `policy-bind.json`.
 
 ## 1. Levers this policy sets
 

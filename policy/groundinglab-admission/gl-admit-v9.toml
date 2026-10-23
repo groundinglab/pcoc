@@ -1,4 +1,4 @@
-# groundinglab admission policy gl-admit-v9. DRAFT, not deployed.
+# groundinglab admission policy gl-admit-v9. Live until 2026-10-23. Superseded by gl-admit-v10.
 # Repo path (agreed layout): policy/groundinglab-admission/gl-admit-v9.toml
 # Argued in POLICY.md next to this file. Sets SPEC 2.2 section 15.4 levers only.
 # Encoding is SPEC 2.2 section 15.4 "Policy file encoding": keys in [levers] are the
@@ -9,7 +9,7 @@
 
 policy_id = "gl-admit-v9"
 spec      = "2.2"            # Satoshi Hike 2.2, tag spec-2.2.0
-status    = "draft"
+status    = "superseded"
 
 [levers]
 # SPEC labelled defaults, set explicitly.
