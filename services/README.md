@@ -34,9 +34,9 @@ Every service binds to loopback by default. To serve one publicly, put a reverse
 
 | Folder | Process | Default bind | Depends on | Release tag |
 |---|---|---|---|---|
-| [`bari/`](bari/) | `bari` (crate `pcoc-bari`) | `127.0.0.1:38080` | in-repo header source; live mainnet gossip is in the default release build | `bari-v0.6.10` |
-| [`index/`](index/) | `pcoc-index` | `127.0.0.1:38081` | `pcoc-bari` by path (`../bari`) | `index-v0.1.5` |
-| [`admission-gate/`](admission-gate/) | `admission-service` (crate `pcoc-admission`) | `127.0.0.1:8787` | `pcoc` from the in-tree Rust SDK, by path (`sdk/rust/pcoc`; version in `sdk/VERSION`) | `gate-v0.5.7` |
+| [`bari/`](bari/) | `bari` (crate `pcoc-bari`) | `127.0.0.1:38080` | in-repo header source; live mainnet gossip is in the default release build | `bari-v0.6.11` |
+| [`index/`](index/) | `pcoc-index` | `127.0.0.1:38081` | `pcoc-bari` by path (`../bari`) | `index-v0.1.6` |
+| [`admission-gate/`](admission-gate/) | `admission-service` (crate `pcoc-admission`) | `127.0.0.1:8787` | `pcoc` from the in-tree Rust SDK, by path (`sdk/rust/pcoc`; version in `sdk/VERSION`) | `gate-v0.5.8` |
 | [`admission-claims/`](admission-claims/) | `admission-claims` (crate 0.1.0) | `127.0.0.1:8793` | none in this repository (reads the gate at `127.0.0.1:8787` by default) | none yet |
 
 Release tags are `<service>-v<x.y.z>` and point at the commit that ships that release. The table's Release tag column is the release that matches the working tree.

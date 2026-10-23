@@ -1,8 +1,8 @@
 # Changes
 
-## Unreleased
+## 0.5.8
 
-Crate version stays 0.5.7. Gate change #86 did not bump the patch. #89 bumped 0.5.6 to 0.5.7 as version housekeeping, not as the rule for every gate change. `sdk/SPEC_PIN` is unchanged (`spec-2.2.0`).
+Crate `pcoc-admission` is 0.5.8. Tag `gate-v0.5.7` was not moved. This build links Rust SDK 2.3.1 on pin `spec-2.3.0`.
 
 - Policy `spec` `2.2` loads on a spec-2.2.x pin and on a spec-2.3.x pin. Policy `spec` `2.3` loads on a spec-2.3.x pin and is refused on a spec-2.2.x pin. Any other spec string, and any other pin, is refused.
 - `GET /v1/health` `spec` and `spec_kind` follow the pin. On `spec-2.2.0` they stay `Satoshi Hike 2.2` and `2.2`. Object kind stays `v2.2-pcoc-object`. Decision-log lines stay `Satoshi Hike 2.2`.
