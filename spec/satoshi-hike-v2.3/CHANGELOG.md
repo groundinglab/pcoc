@@ -25,8 +25,26 @@ Section, rule (A/B/I/P/BR) and §19 F-label numbering is unchanged. The one exce
 | 4 | Rule I6 | "loads all 16 KiB" → "loads all `SLOT_BYTES` bytes of the selected slot". | Under `conformance-small`, `SLOT_BYTES` is not 16 KiB. §17.4 already says it this way. |
 | 5 | §14 | A three-line Informative summary before the Normative text. | §14 is the longest normative section and had no overview. |
 | 5 | new §17.5 (Informative) | Reconciles the §11.1 baseline class with the §15.5 low-end owned host. | ERRATUM-1 open point 6. Neither section's text changes. |
+| 6 | whole file | Explicit anchors. No text changes. | Lets a rule be quoted and linked by a stable ID that does not depend on heading wording. |
+| 7 | §7, §8, §9, §16 | One-to-three-sentence Informative summaries. | Major sections with no overview. §10–§13 are left without one so their normative text stays byte-identical. §15 already opens with one. |
+| 7 | P4.2, P10.1, P13.10 (§1 class table) | Quotability fixes from a 10-rule random check. P4.2 links "Part A" to §1. P10.1 gives the lane width ("lanes of 8 bytes each, `P[0]` … `P[3]`"). P13.10 says `leg_count` and `len(checkpoints)` are per stage. | Each read ambiguously when quoted alone. Meaning is unchanged; each restates §1, §10 or §8. |
 
-Diff vs 2.2 SPEC.md: 21 lines inserted, 13 deleted (net +8 lines; 2201 → 2209).
+## Anchors
+
+| Anchor | Placed | Count |
+|---|---|---|
+| `sec-<n>` (dots → hyphens), for example `#sec-11-1` | own line before each numbered heading | 59 |
+| `rule-<id>`, for example `#rule-i6`, `#rule-br1`, `#rule-a4-1` | own line before each rule heading (A, B, BR, I) | 49 |
+| `rule-<id>`, for example `#rule-p7-5`, `#rule-a4-2-2` | in the ID cell of a Part A class-table row whose ID has no heading | 108 |
+| `class-<id>`, for example `#class-a2-2` | in the ID cell of a class-table row that shares its ID with a rule heading | 23 |
+| `fixed-<f>`, for example `#fixed-f1` | in the §19 label cell | 16 |
+
+All 255 IDs are unique. Inside §10–§13 the only additions are anchor lines and blank lines. With those removed, the range hashes the same as 2.2.
+
+## Diff vs 2.2 SPEC.md
+
+- With anchors: +392 / −160 lines (2201 → 2433). Of the −160, 147 are table rows that gained an anchor in their first cell.
+- Text only, anchors stripped: +32 / −18 lines.
 
 ## Not in 2.3 (normative; for Christian)
 
