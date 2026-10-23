@@ -3,8 +3,8 @@
   "release": {
     "version": "2.2.0",
     "date": "2026-10-23",
-    "commit": "c295b8534ae827d529bc88134d8b06d43e32fcd0",
-    "notes": "Parent of the commit that adds this file. Tags are not cut."
+    "commit": "9ca6073690e9f94990a6bf06e21b336d2ada41ff",
+    "notes": "Tags are cut on this commit."
   },
   "spec": {
     "version": "2.2",
@@ -39,7 +39,7 @@
       "language": "rust",
       "version": "2.2.0",
       "tag": "sdk-rust-v2.2.0",
-      "tag_status": "not cut",
+      "tag_status": "cut",
       "toolchain_min": "Rust 1.99.0",
       "quickstart": {
         "commands": "cd sdk/rust\ncargo run -p pcoc-cli --release --quiet -- quickstart",
@@ -67,7 +67,7 @@
       "language": "c",
       "version": "2.2.0",
       "tag": "sdk-c-v2.2.0",
-      "tag_status": "not cut",
+      "tag_status": "cut",
       "toolchain_min": "gcc, C11, -march=x86-64",
       "quickstart": {
         "commands": "cd sdk/c\nmake -j4 build/pcoc\n./build/pcoc quickstart",
@@ -95,7 +95,7 @@
       "language": "go",
       "version": "2.2.0",
       "tag": "sdk-go-v2.2.0",
-      "tag_status": "not cut",
+      "tag_status": "cut",
       "toolchain_min": "Go 1.22 or newer",
       "quickstart": {
         "commands": "cd sdk/go\ngo run ./cmd/pcoc quickstart",
@@ -123,7 +123,7 @@
       "language": "java",
       "version": "2.2.0",
       "tag": "sdk-java-v2.2.0",
-      "tag_status": "not cut",
+      "tag_status": "cut",
       "toolchain_min": "JDK 21",
       "quickstart": {
         "commands": "cd sdk/java\n./gradlew run --args=quickstart",
