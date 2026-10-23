@@ -5,7 +5,7 @@
 # Default output: ~/pcoc-build/artifacts/pcoc.flatpak
 # Also writes <output>.sha256 beside it.
 #
-# The host vendors crates. pcoc is the in-tree Rust SDK (sdk/rust, a path dependency). The app targets v2.3.0.
+# The host vendors crates. pcoc is the in-tree Rust SDK (sdk/rust, a path dependency). The app targets v2.3.1.
 # flatpak-builder then compiles offline against the GNOME 50 SDK.
 set -euo pipefail
 
