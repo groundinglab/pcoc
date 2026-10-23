@@ -1254,6 +1254,8 @@ An accepted waypoint is answered 204 and Bari holds it. Nothing else about timin
 
 ## 14. Verify
 
+**Informative. Summary.** Verify takes one hike object, the portable index, and the profile in force, and outputs one verify record (Rule A4). The record carries the shape (14.1), the header reads (14.2), the waypoint chain and paths (14.3), the bookends and leg rate (14.4), the anchored-and-fetched count (14.5), the six-leg check (14.6), and the unknown-kind measurement (14.7, Rule A5). Verify measures and does not judge. Section 15 is the only judgment.
+
 **Normative.**
 
 ### Rule A4. What verify measures against the portable index
@@ -2174,6 +2176,10 @@ A **match** on a document whose `network` is `synthetic` is not a mainnet fact.
 ### 17.4 Several words of one slot at once
 
 Section 11.1 folds the `WORDS_PER_SLOT` words of the selected slot with a wrapping sum mod 2^64. That sum is associative and commutative, so a kernel that loads all `SLOT_BYTES` bytes of the slot (16 KiB under the section 6 constants) on every step and mixes several of its words with the current `S` at once, by SIMD or by compiler or JIT vectorisation, gives the same `S_folded`, seal, leg, checkpoint, and waypoint bytes as the one-word-at-a-time loop. It is the section 11.1 loop, not an efficiency (Rule I6). Every step still loads every byte of the slot and mixes every word with that step’s `S`. A kernel that skips, caches, summarises, or reuses any word or value across steps is a break whatever its output on a vector, and the permanent negatives of section 16 stay non-matching.
+
+### 17.5 Floor baseline and the low-end host
+
+Section 11.1 names the baseline class: commodity hardware with SHA-256 instructions. Section 15.5 names the low end of the owned hosts that a floor measurement covers, a host with no SHA-NI. These are two roles, not two baselines. Every host runs the same section 11.1 step, and only section 15.5 says how a measured rate informs the floor. Neither sentence sets a lever value.
 
 ## 18. Verify CLI
 
