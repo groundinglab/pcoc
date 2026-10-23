@@ -10,6 +10,7 @@
 pub mod bitcoin_rpc;
 pub mod clock;
 mod fee;
+mod gossip;
 pub mod hashcash;
 pub mod header_source;
 pub mod http;

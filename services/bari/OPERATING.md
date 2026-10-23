@@ -127,6 +127,10 @@ cargo test --locked --manifest-path services/bari/Cargo.toml
 
 `BARI_TIP_SOURCE=bitcoin-gossip`. The tip advance is Bitcoin selected-chain gossip (`HeaderClock`, mainnet). `BariClock::on_tip` takes those tips. `BARI_POLL_INTERVAL_MS` is not read. The plant, the inclusion lookup, and the post-check are Bitcoin Core (`BitcoinRpc`). This mode does not call `getbestblockhash` to advance the tip.
 
+That gossip source is in the default release build (`cargo build --locked --release` in `services/bari`, no extra features). `bari --self-check` checks the mainnet arm on recorded headers and in-process peers. It does not dial, and it does not spend. The mainnet arm does not return `live header source is not in this build`.
+
+Startup dials `PCOC_LIVE_GOSSIP_PEER` and one more mainnet peer from the Bitcoin Core DNS seed list, port 8333, so two peers are connected. The clock advances only when those peers agree. It fails closed when a header's proof of work or `nBits` is wrong, when a header does not link, when the peers disagree, or when fewer than two peers stay connected. A quiet gap between blocks is not that failure. Gossip reads headers only. It does not download a block body.
+
 The gossip peer is `PCOC_LIVE_GOSSIP_PEER` (`host:port`). The same variable is the producer live peer. This tree does not fill that host or port. Startup fails when it is unset, empty, or not `host:port`. `BARI_BITCOIN_NETWORK` must be `main`. `regtest`, `testnet4`, and `signet` are rejected on this tip source. `BARI_SYNTH_PEER` and `BARI_SYNTH_NETWORK` are refused. The test tip stays `synth`.
 
 ```sh

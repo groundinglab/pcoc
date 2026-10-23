@@ -42,6 +42,12 @@ async fn main() {
 }
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    if std::env::args().skip(1).any(|arg| arg == "--self-check") {
+        let arm = pcoc_bari::header_source::release_self_check()
+            .map_err(|message| std::io::Error::new(std::io::ErrorKind::Other, message))?;
+        println!("live header source: {arm}");
+        return Ok(());
+    }
     if ops_fixture_requested() {
         return serve_ops_fixture().await;
     }
@@ -620,6 +626,15 @@ mod tests {
         assert!(validate_synth_peer("127.0.0.1:38532").is_ok());
         assert!(validate_synth_peer("127.0.0.1:0").is_err());
         assert!(validate_synth_peer("no-port").is_err());
+    }
+
+    #[test]
+    fn rpc_lab_mode_stays_the_poll_and_is_not_the_live_arm() {
+        assert_eq!(classify_tip_source("").unwrap(), TipKind::Rpc);
+        assert_eq!(classify_tip_source("rpc").unwrap(), TipKind::Rpc);
+        let clock = HeaderClock::start("self-check.invalid:8333", GossipNetwork::Mainnet);
+        assert!(clock.live_source_in_build());
+        assert!(!clock.absent_live_source());
     }
 
     #[test]

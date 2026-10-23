@@ -213,6 +213,17 @@ jobs:
         env:
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
         run: cargo test --locked --release
+      # The release binary, not the test harness. Fails when mainnet still
+      # takes the absent-source arm. No dial.
+      - if: steps.on.outputs.run == 'true' && matrix.key == 'bari'
+        name: release binary includes the live header source
+        working-directory: services/bari
+        run: |
+          cargo build --locked --release --bin bari
+          bin="${CARGO_TARGET_DIR:-target}/release/bari"
+          out="$("$bin" --self-check)"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -q 'bitcoin-gossip'
 
   desktop:
     # Not required: ci-ok ignores this job's result.
