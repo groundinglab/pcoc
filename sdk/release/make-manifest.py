@@ -12,7 +12,8 @@ import subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 OUT = ROOT / "sdk" / "release" / "release-manifest.json"
-COPY = ROOT / "sdk" / "release" / "manifests" / "2.2.0.json"
+COPY = ROOT / "sdk" / "release" / "manifests" / "2.3.0.json"
+LEGACY = ROOT / "sdk" / "release" / "manifests" / "2.2.0.json"
 
 
 def sha256(path: pathlib.Path) -> str:
@@ -51,8 +52,13 @@ def main() -> None:
     manifest_sha = sha256(ROOT / "spec" / "conformance" / "pack" / "manifest.json")
     if pins.get("vector-sha256") != manifest_sha:
         raise SystemExit("SPEC_PIN does not match the pack manifest")
-    if pins.get("erratum") != "2" or pins.get("tag") != "spec-2.2.0":
-        raise SystemExit("SPEC_PIN is not 2.2 erratum 2")
+    sdk_version = (ROOT / "sdk" / "VERSION").read_text().strip()
+    # 2.3 folds errata 1 and 2 into the SPEC. The pin names the tag and the
+    # pack hash. It has no erratum key.
+    if sdk_version != "2.3.0" or pins.get("tag") != "spec-2.3.0" or "erratum" in pins:
+        raise SystemExit("SPEC_PIN is not the 2.3 form (tag spec-2.3.0, no erratum key) or VERSION is not 2.3.0")
+    if not LEGACY.is_file():
+        raise SystemExit("manifests/2.2.0.json is the 2.2 record and must stay")
     fixed = "\n".join([
         "O1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246",
         "O1-S1 six_leg match, checkpoints match, waypoints match",
@@ -62,26 +68,24 @@ def main() -> None:
     doc = {
         "schema": "pcoc-sdk-release/1",
         "release": {
-            "version": "2.2.0",
+            "version": sdk_version,
             "date": "2026-10-23",
             "commit": parent(),
             "notes": "Parent of the commit that adds this file. Tags are not cut.",
         },
         "spec": {
-            "version": "2.2",
-            "erratum": 2,
-            "tag": "spec-2.2.0",
-            # Blob and tree links use the release tag. The old branch names are gone.
-            "url": "https://github.com/groundinglab/pcoc/blob/spec-2.2.0/spec/satoshi-hike-v2.2/SPEC.md",
-            "erratum_url": "https://github.com/groundinglab/pcoc/blob/spec-2.2.0/spec/satoshi-hike-v2.2/ERRATUM-2.md",
-            "pack_url": "https://github.com/groundinglab/pcoc/tree/spec-2.2.0/spec/conformance/pack",
+            "version": "2.3",
+            "tag": "spec-2.3.0",
+            # Blob and tree links use the release tag. Errata are folded into SPEC.md.
+            "url": "https://github.com/groundinglab/pcoc/blob/spec-2.3.0/spec/satoshi-hike-v2.3/SPEC.md",
+            "pack_url": "https://github.com/groundinglab/pcoc/tree/spec-2.3.0/spec/conformance/pack",
             "pack_manifest_sha256": manifest_sha,
             "pack_status": json.loads((ROOT / "spec/conformance/pack/manifest.json").read_text())["status"],
         },
         "links": {
             "interop_evidence": "https://github.com/groundinglab/pcoc/tree/interop/evidence-2.2/spec/conformance/interop",
             "policy_page": "https://groundinglab.io/admission-gate/policy/",
-            "policy_file": "https://github.com/groundinglab/pcoc/blob/spec-2.2.0/policy/groundinglab-admission/gl-admit-v9.toml",
+            "policy_file": "https://github.com/groundinglab/pcoc/blob/spec-2.3.0/policy/groundinglab-admission/gl-admit-v10.toml",
         },
         "conformance": {
             "objects": {
@@ -117,14 +121,14 @@ def main() -> None:
     for lang in ("rust", "c", "go", "java"):
         doc["sdks"].append({
             "language": lang,
-            "version": "2.2.0",
-            "tag": f"sdk-{lang}-v2.2.0",
+            "version": sdk_version,
+            "tag": f"sdk-{lang}-v{sdk_version}",
             "tag_status": "not cut",
             "toolchain_min": toolchains[lang],
             "quickstart": {
                 "commands": commands[lang],
                 "expected_stdout_example": "\n".join([
-                    f"pcoc 2.2.0 ({lang}) spec-2.2.0 erratum 2 pack {prefix}: pin match",
+                    f"pcoc {sdk_version} ({lang}) spec-2.3.0 pack {prefix}: pin match",
                     "kernel scalar, sha256 sha-ni",
                     "O1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246",
                     "O1-S1 six_leg match, checkpoints match, waypoints match",

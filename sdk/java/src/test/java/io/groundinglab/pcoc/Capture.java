@@ -20,7 +20,7 @@ public final class Capture {
 
     public static Capture run(String... args) throws Exception {
         Path root = Repo.javaDir();
-        Path jar = root.resolve("build/libs/pcoc-2.2.0.jar");
+        Path jar = root.resolve("build/libs/pcoc-" + BuildInfo.VERSION + ".jar");
         if (!Files.isRegularFile(jar)) {
             throw new IllegalStateException("missing " + jar);
         }

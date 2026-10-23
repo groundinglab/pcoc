@@ -484,24 +484,28 @@ func TestACA8(t *testing.T) {
 	}
 }
 
-// TestACA9: the library version equals sdk/VERSION.
+// TestACA9: the library version is 2.3.0 and the spec tag is spec-2.3.0.
 func TestACA9(t *testing.T) {
 	root := repoRoot(t)
 	b, err := os.ReadFile(filepath.Join(root, "sdk", "VERSION"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(string(b)) != Version {
-		t.Fatalf("VERSION %q constant %s", strings.TrimSpace(string(b)), Version)
+	fileVer := strings.TrimSpace(string(b))
+	if fileVer != Version {
+		t.Fatalf("VERSION %q constant %s", fileVer, Version)
 	}
-	if Version != "2.2.0" || SpecTag != "spec-2.2.0" {
+	if Version != "2.3.0" || SpecTag != "spec-2.3.0" {
 		t.Fatal(Version, SpecTag)
+	}
+	if Kind != "v2.2-pcoc-object" {
+		t.Fatal(Kind)
 	}
 	pin, err := ReadPin(filepath.Join(root, "sdk", "SPEC_PIN"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if pin.Tag != SpecTag || pin.VectorSHA256 == "" {
-		t.Fatal(pin)
+		t.Fatalf("pin tag %s", pin.Tag)
 	}
 }

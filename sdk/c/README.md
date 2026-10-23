@@ -1,4 +1,4 @@
-# Satoshi Hike 2.2, C
+# Satoshi Hike 2.3, C
 
 Baseline ISA. SHA-NI is selected at runtime.
 

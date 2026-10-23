@@ -1,6 +1,12 @@
 # Go SDK
 
-Module `github.com/groundinglab/pcoc/sdk/go/v2`, package `pcoc`. The command is `pcoc` (`cmd/pcoc`).
+Module `github.com/groundinglab/pcoc/sdk/go/v2`, package `pcoc`, version 2.3.0, spec tag `spec-2.3.0`. The release tag is `sdk/go/v2.3.0`. The wire kind stays `v2.2-pcoc-object`. The command is `pcoc` (`cmd/pcoc`).
+
+```sh
+go install github.com/groundinglab/pcoc/sdk/go/v2/cmd/pcoc@v2.3.0
+```
+
+That selector is the module version carried by the tag `sdk/go/v2.3.0`.
 
 From this directory, the full test command is:
 

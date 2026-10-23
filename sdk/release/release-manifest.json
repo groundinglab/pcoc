@@ -1,25 +1,23 @@
 {
   "schema": "pcoc-sdk-release/1",
   "release": {
-    "version": "2.2.0",
+    "version": "2.3.0",
     "date": "2026-10-23",
-    "commit": "9ca6073690e9f94990a6bf06e21b336d2ada41ff",
-    "notes": "Tags are cut on this commit."
+    "commit": "c689524395df0a983a0b955b5788d03cf0ba2e1e",
+    "notes": "Parent of the commit that adds this file. Tags are not cut."
   },
   "spec": {
-    "version": "2.2",
-    "erratum": 2,
-    "tag": "spec-2.2.0",
-    "url": "https://github.com/groundinglab/pcoc/blob/spec-2.2.0/spec/satoshi-hike-v2.2/SPEC.md",
-    "erratum_url": "https://github.com/groundinglab/pcoc/blob/spec-2.2.0/spec/satoshi-hike-v2.2/ERRATUM-2.md",
-    "pack_url": "https://github.com/groundinglab/pcoc/tree/spec-2.2.0/spec/conformance/pack",
+    "version": "2.3",
+    "tag": "spec-2.3.0",
+    "url": "https://github.com/groundinglab/pcoc/blob/spec-2.3.0/spec/satoshi-hike-v2.3/SPEC.md",
+    "pack_url": "https://github.com/groundinglab/pcoc/tree/spec-2.3.0/spec/conformance/pack",
     "pack_manifest_sha256": "91ded57e5c05b7cb4cd74d313a51d83d2373fa86dc625df41faed9586e9032af",
     "pack_status": "complete"
   },
   "links": {
     "interop_evidence": "https://github.com/groundinglab/pcoc/tree/interop/evidence-2.2/spec/conformance/interop",
     "policy_page": "https://groundinglab.io/admission-gate/policy/",
-    "policy_file": "https://github.com/groundinglab/pcoc/blob/spec-2.2.0/policy/groundinglab-admission/gl-admit-v9.toml"
+    "policy_file": "https://github.com/groundinglab/pcoc/blob/spec-2.3.0/policy/groundinglab-admission/gl-admit-v10.toml"
   },
   "conformance": {
     "objects": {
@@ -37,13 +35,13 @@
   "sdks": [
     {
       "language": "rust",
-      "version": "2.2.0",
-      "tag": "sdk-rust-v2.2.0",
-      "tag_status": "cut",
+      "version": "2.3.0",
+      "tag": "sdk-rust-v2.3.0",
+      "tag_status": "not cut",
       "toolchain_min": "Rust 1.99.0",
       "quickstart": {
         "commands": "cd sdk/rust\ncargo run -p pcoc-cli --release --quiet -- quickstart",
-        "expected_stdout_example": "pcoc 2.2.0 (rust) spec-2.2.0 erratum 2 pack 91ded57e5c05b7cb: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
+        "expected_stdout_example": "pcoc 2.3.0 (rust) spec-2.3.0 pack 91ded57e5c05b7cb: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
         "machine_specific_lines": [
           2
         ],
@@ -65,13 +63,13 @@
     },
     {
       "language": "c",
-      "version": "2.2.0",
-      "tag": "sdk-c-v2.2.0",
-      "tag_status": "cut",
+      "version": "2.3.0",
+      "tag": "sdk-c-v2.3.0",
+      "tag_status": "not cut",
       "toolchain_min": "gcc, C11, -march=x86-64",
       "quickstart": {
         "commands": "cd sdk/c\nmake -j4 build/pcoc\n./build/pcoc quickstart",
-        "expected_stdout_example": "pcoc 2.2.0 (c) spec-2.2.0 erratum 2 pack 91ded57e5c05b7cb: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
+        "expected_stdout_example": "pcoc 2.3.0 (c) spec-2.3.0 pack 91ded57e5c05b7cb: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
         "machine_specific_lines": [
           2
         ],
@@ -93,13 +91,13 @@
     },
     {
       "language": "go",
-      "version": "2.2.0",
-      "tag": "sdk-go-v2.2.0",
-      "tag_status": "cut",
+      "version": "2.3.0",
+      "tag": "sdk-go-v2.3.0",
+      "tag_status": "not cut",
       "toolchain_min": "Go 1.22 or newer",
       "quickstart": {
         "commands": "cd sdk/go\ngo run ./cmd/pcoc quickstart",
-        "expected_stdout_example": "pcoc 2.2.0 (go) spec-2.2.0 erratum 2 pack 91ded57e5c05b7cb: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
+        "expected_stdout_example": "pcoc 2.3.0 (go) spec-2.3.0 pack 91ded57e5c05b7cb: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
         "machine_specific_lines": [
           2
         ],
@@ -121,13 +119,13 @@
     },
     {
       "language": "java",
-      "version": "2.2.0",
-      "tag": "sdk-java-v2.2.0",
-      "tag_status": "cut",
+      "version": "2.3.0",
+      "tag": "sdk-java-v2.3.0",
+      "tag_status": "not cut",
       "toolchain_min": "JDK 21",
       "quickstart": {
         "commands": "cd sdk/java\n./gradlew run --args=quickstart",
-        "expected_stdout_example": "pcoc 2.2.0 (java) spec-2.2.0 erratum 2 pack 91ded57e5c05b7cb: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
+        "expected_stdout_example": "pcoc 2.3.0 (java) spec-2.3.0 pack 91ded57e5c05b7cb: pin match\nkernel scalar, sha256 sha-ni\nO1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246\nO1-S1 six_leg match, checkpoints match, waypoints match\nnegatives 13 non-match\nPROD leg 0 legs_le_hex 88a04ac5beacb8a7\n",
         "machine_specific_lines": [
           2
         ],

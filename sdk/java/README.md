@@ -14,6 +14,8 @@ Each test walks up from the working directory to the directory that holds `sdk/V
 
 The files in `candidates/` and `objects/` are the committed round-2 bytes. The suite regenerates them, checks them byte for byte, and checks each file's SHA-256 against the pins in the tests. Section 14 of the committed objects is measured against the CASES synthetic index, which the test harness serves on loopback.
 
+This SDK is version 2.3.0 (Rule I5). `BuildInfo.VERSION` and `Version.STRING` are `2.3.0`. The wire `KIND` stays `v2.2-pcoc-object`. The release tag for this language is `sdk-java-v2.3.0`. `pcoc --version` prints `2.3.0`, then the `tag=` line of `sdk/SPEC_PIN`, then that file's `vector-sha256`. The release job owns the pin file; this tree does not set it.
+
 ## Quickstart
 
 From this directory:

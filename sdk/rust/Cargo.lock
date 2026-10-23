@@ -64,7 +64,7 @@ checksum = "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484"
 
 [[package]]
 name = "gen"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "pcoc",
  "pcoc-produce",
@@ -101,7 +101,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "pcoc"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "cpufeatures",
  "secp256k1",
@@ -111,7 +111,7 @@ dependencies = [
 
 [[package]]
 name = "pcoc-cli"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "pcoc",
  "pcoc-produce",
@@ -120,14 +120,14 @@ dependencies = [
 
 [[package]]
 name = "pcoc-produce"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "pcoc",
 ]
 
 [[package]]
 name = "pcoc-testing"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "pcoc",
 ]

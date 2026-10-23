@@ -1,4 +1,4 @@
-/* Satoshi Hike 2.2 — C SDK.
+/* Satoshi Hike 2.3 — C SDK.
  * Public functions name the SPEC section they implement (Rule I2).
  * Production sizes are section 6. conformance-small may shrink
  * SAMPLE_BYTES, SLOT_BYTES, TERRAIN_BYTES, and STEPS_PER_LEG (§16.1).
@@ -14,8 +14,8 @@
 extern "C" {
 #endif
 
-#define PCOC_SDK_VERSION "2.2.0" /* Rule I5; equals sdk/VERSION */
-#define PCOC_SPEC_TAG "spec-2.2.0"
+#define PCOC_SDK_VERSION "2.3.0" /* Rule I5; equals sdk/VERSION */
+#define PCOC_SPEC_TAG "spec-2.3.0"
 
 /* §6 constants (production). */
 #define PCOC_SLOT_BYTES 16384u
@@ -86,7 +86,7 @@ void pcoc_sha256d_80(const uint8_t header[80], uint8_t out[32]);
 /* "sha-ni" or "software". */
 const char *pcoc_sha256_backend(void);
 
-const char *pcoc_version(void); /* Rule I5: "2.2.0" */
+const char *pcoc_version(void); /* Rule I5: "2.3.0" */
 
 /* build_info / selftest. spec_tag and pack_sha256 come from sdk/SPEC_PIN
  * when path is non-NULL and the file can be read; otherwise the compiled

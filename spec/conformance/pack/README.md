@@ -2,7 +2,7 @@
 
 Status: complete. The construction files below are the candidate lines on which Rust, C, Go, and Java already agree. `spec/conformance/tools/pack_from_candidates.py` writes a value only when those four files are byte-identical, and it stops if they are not. It does not invent a hash. `sign-in.json` and `sign-in-origins.json` are produced by the Rust SDK (plan decision D7) and checked by the admission gate.
 
-`manifest.json` names this pack, sets `"status": "complete"`, and lists the files present. `sdk/SPEC_PIN` records the SHA-256 of that manifest beside the tag `spec-2.2.0` and `erratum=2`. The maintainers cut that tag on the merge commit. This pack does not create the tag.
+`manifest.json` names this pack, sets `"status": "complete"`, and lists the files present. `sdk/SPEC_PIN` records the SHA-256 of that manifest beside the tag `spec-2.3.0`. The maintainers cut that tag on the merge commit. This pack does not create the tag.
 
 Where a published vector and a sentence of the specification conflict, the conflict is a defect in the specification. Report it and do not pick a side (SPEC §16, Precedence). Evidence is the hash-bound set (SPEC §8). The portable index stands in for Bitcoin. Anyone may bypass the index and read Bitcoin directly (SPEC §9 and §14). Vector bytes in this directory are Apache-2.0. Prose here is CC BY 4.0.
 

@@ -445,12 +445,12 @@ static int cmd_quickstart(void) {
     return 1;
   }
   uint8_t dig[32];
-  char dighex[65], vector[80], erratum[16];
+  char dighex[65], vector[80], tag[64];
   pcoc_sha256(manifest, man_len, dig);
   hex32(dig, dighex);
   if (copy_field((char *)pin, "vector-sha256", vector, sizeof(vector)) != 0 ||
-      copy_field((char *)pin, "erratum", erratum, sizeof(erratum)) != 0 ||
-      strcmp(dighex, vector) != 0 || strcmp(erratum, "2") != 0 || strlen(vector) < 16) {
+      copy_field((char *)pin, "tag", tag, sizeof(tag)) != 0 ||
+      strcmp(dighex, vector) != 0 || strcmp(tag, PCOC_SPEC_TAG) != 0 || strlen(vector) < 16) {
     free(pin);
     free(manifest);
     fprintf(stderr, "pin mismatch\n");
@@ -540,7 +540,7 @@ static int cmd_quickstart(void) {
   char prefix[17];
   memcpy(prefix, vector, 16);
   prefix[16] = 0;
-  printf("pcoc 2.2.0 (c) spec-2.2.0 erratum 2 pack %s: pin match\n", prefix);
+  printf("pcoc %s (c) %s pack %s: pin match\n", PCOC_SDK_VERSION, PCOC_SPEC_TAG, prefix);
   printf("kernel scalar, sha256 %s\n", info.sha256_backend);
   printf("O1-S1 object sha256 %s\n", o1);
   printf("O1-S1 six_leg match, checkpoints match, waypoints match\n");

@@ -16,7 +16,7 @@ pub const OBJECT_KIND: &str = pcoc::constants::KIND;
 
 pub const BITCOIN: &str = "mainnet";
 
-/// `pcoc 2.2.0`: the Rust SDK crate and the version Cargo.lock resolved.
+/// `pcoc 2.3.0`: the Rust SDK crate and the version Cargo.lock resolved.
 pub fn crate_line() -> String {
     format!("pcoc {SDK_VERSION}")
 }
@@ -117,7 +117,7 @@ mod tests {
     fn reports_the_sdk_version_from_sdk_version_file() {
         let want = include_str!("../../../../sdk/VERSION").trim();
         assert_eq!(SDK_VERSION, want);
-        assert_eq!(want, "2.2.0");
+        assert_eq!(want, "2.3.0");
         assert_eq!(crate_line(), format!("pcoc {want}"));
         assert_eq!(sdk_line(), want);
     }

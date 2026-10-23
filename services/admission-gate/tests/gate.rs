@@ -383,9 +383,9 @@ async fn health_reports_version_commit_spec_and_config() {
     assert!(pcoc_admission::http::version_line().ends_with(&format!("sdk={sdk}")));
     let (name, label) =
         pcoc_admission::verifier::spec_identity(&pcoc::build_info().spec_tag).expect("pin");
-    assert_eq!(pcoc::build_info().spec_tag, "spec-2.2.0");
-    assert_eq!(name, "Satoshi Hike 2.2");
-    assert_eq!(label, "2.2");
+    assert_eq!(pcoc::build_info().spec_tag, "spec-2.3.0");
+    assert_eq!(name, "Satoshi Hike 2.3");
+    assert_eq!(label, "2.3");
     assert_eq!(body["spec"], name);
     assert_eq!(body["spec_kind"], label);
     assert_eq!(body["config"]["index_url"], "https://index.example");

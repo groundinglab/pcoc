@@ -1,8 +1,8 @@
 # PCOC SDKs
 
-Satoshi Hike 2.2 with erratum 2. The specification is [spec/satoshi-hike-v2.2/SPEC.md](../spec/satoshi-hike-v2.2/SPEC.md), read with [ERRATUM-1.md](../spec/satoshi-hike-v2.2/ERRATUM-1.md). Erratum 2 is the `erratum=2` line in the pin. Where an SDK and those files disagree, the specification wins.
+Satoshi Hike 2.3. The specification is [spec/satoshi-hike-v2.3/SPEC.md](../spec/satoshi-hike-v2.3/SPEC.md). Errata 1 and 2 are folded into that file. Where an SDK and that file disagree, the specification wins.
 
-The pack pin is [SPEC_PIN](SPEC_PIN): tag `spec-2.2.0`, erratum 2, and the SHA-256 of [spec/conformance/pack/manifest.json](../spec/conformance/pack/manifest.json). The pack lists the vectors the four SDKs agree on, plus the Rust sign-in wire. The SDK version in [VERSION](VERSION) is `2.2.0`.
+The pack pin is [SPEC_PIN](SPEC_PIN): tag `spec-2.3.0` and the SHA-256 of [spec/conformance/pack/manifest.json](../spec/conformance/pack/manifest.json). There is no erratum key. The pack lists the vectors the four SDKs agree on, plus the Rust sign-in wire. The SDK version in [VERSION](VERSION) is `2.3.0`.
 
 ## Which SDK
 

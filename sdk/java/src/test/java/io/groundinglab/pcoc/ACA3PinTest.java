@@ -14,8 +14,9 @@ public class ACA3PinTest {
     public void pinMatchesManifest() throws Exception {
         Path repo = Repo.root();
         Path sdk = repo.resolve("sdk");
-        Pin pin = Pin.read(sdk.resolve("SPEC_PIN"));
-        assertEquals("spec-2.2.0", pin.tag);
+        Path pinFile = sdk.resolve("SPEC_PIN");
+        Pin pin = Pin.read(pinFile);
+        assertEquals("spec-2.3.0", pin.tag);
         Path manifest = repo.resolve("spec").resolve("conformance").resolve("pack").resolve("manifest.json");
         assertTrue(Files.isRegularFile(manifest), manifest.toString());
         assertTrue(pin.matches(manifest), pin.vectorSha256 + " vs " + Pin.sha256(manifest));

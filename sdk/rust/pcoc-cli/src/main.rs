@@ -444,8 +444,9 @@ fn cmd_quickstart() -> ExitCode {
         return ExitCode::from(1);
     }
     let vector = pin_value(&pin_text, "vector-sha256");
-    if pin_value(&pin_text, "erratum") != "2" || vector.len() < 16 {
-        eprintln!("pin is not erratum 2");
+    let tag = pin_value(&pin_text, "tag");
+    if tag != "spec-2.3.0" || vector.len() < 16 {
+        eprintln!("pin tag is not spec-2.3.0");
         return ExitCode::from(1);
     }
     let object = match std::fs::read(root.join("sdk/rust/objects/O1-S1.cbor")) {
@@ -517,7 +518,9 @@ fn cmd_quickstart() -> ExitCode {
     }
     let sha = pcoc::sha_backend();
     println!(
-        "pcoc 2.2.0 (rust) spec-2.2.0 erratum 2 pack {}: pin match",
+        "pcoc {} (rust) {} pack {}: pin match",
+        pcoc::VERSION,
+        tag,
         &vector[..16]
     );
     println!("kernel scalar, sha256 {sha}");
