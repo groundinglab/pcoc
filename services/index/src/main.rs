@@ -49,13 +49,15 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         .parse()?;
 
     let sequencer_dir = env::var_os("PCOC_INDEX_SEQUENCER_DIR").map(PathBuf::from);
-    let service = IndexService::open_with_sequencer(&data_dir, sequencer_dir.as_deref())?;
+    let service = IndexService::open_with_sequencer(&data_dir, sequencer_dir.as_deref())?
+        .with_born_height(pcoc_bari::BORN_HEIGHT);
     let listener = tokio::net::TcpListener::bind(bind).await?;
     eprintln!(
-        "pcoc-index v0.1 bind={} data_dir={} sequencer_clocks={} (read-only height-*.json cache)",
+        "pcoc-index v0.1 bind={} data_dir={} sequencer_clocks={} born_height={} (read-only height-*.json cache; files below born_height stay on disk and are not served)",
         listener.local_addr()?,
         data_dir.display(),
-        service.clock_count()
+        service.clock_count(),
+        pcoc_bari::BORN_HEIGHT
     );
     axum::serve(listener, service.router()).await?;
     Ok(())
@@ -102,7 +104,7 @@ fn run_rebuild(
         Some(height) => height,
         None => source.tip_height()?,
     };
-    let from_height = match (parsed.from_height, parsed.from_txid.as_deref()) {
+    let requested_from = match (parsed.from_height, parsed.from_txid.as_deref()) {
         (Some(height), None) => height,
         (None, Some(txid)) => height_of_txid(source, txid, to_height)?,
         (Some(_), Some(_)) => {
@@ -111,6 +113,9 @@ fn run_rebuild(
         (None, None) => {
             return Err("pass --from-height or --from-txid".into());
         }
+    };
+    let Some((from_height, to_height)) = apply_born_floor(requested_from, to_height) else {
+        return Ok(());
     };
     let report = rebuild(
         source,
@@ -133,6 +138,25 @@ fn run_rebuild(
     Ok(())
 }
 
+/// Do not fetch or require heights below the policy born height.
+/// Files already in the output directory are left in place.
+fn apply_born_floor(from_height: u32, to_height: u32) -> Option<(u32, u32)> {
+    let born = pcoc_bari::BORN_HEIGHT;
+    if to_height < born {
+        eprintln!(
+            "pcoc-index rebuild: to-height {to_height} is below born_height {born}; nothing written; files already stored are left in place"
+        );
+        return None;
+    }
+    if from_height < born {
+        eprintln!(
+            "pcoc-index rebuild: from-height {from_height} is below born_height {born}; starting at {born}; files below that height are left in place"
+        );
+        return Some((born, to_height));
+    }
+    Some((from_height, to_height))
+}
+
 /// Genesis plant: the block that includes this txid and its 39-byte BARI tag.
 ///
 /// The scan walks backward from `to_height`. A public API answers slowly, so
@@ -146,7 +170,16 @@ fn height_of_txid(
         .ok()
         .and_then(|value| value.parse().ok())
         .unwrap_or(2_016);
-    let start = to_height.saturating_sub(lookback);
+    let start = to_height
+        .saturating_sub(lookback)
+        .max(pcoc_bari::BORN_HEIGHT);
+    if start > to_height {
+        return Err(format!(
+            "txid {txid} is below born_height {} and is not required",
+            pcoc_bari::BORN_HEIGHT
+        )
+        .into());
+    }
     for height in (start..=to_height).rev() {
         let header = source.header_at_height(height)?;
         let plants = source.plants_in_block(&header)?;

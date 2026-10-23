@@ -36,9 +36,12 @@ fn other_kind() -> Vec<u8> {
 #[test]
 fn other_kind_is_unknown_kind_from_the_fast_phase() {
     let policy = levers::load(&policy_text(), 2).expect("v9");
-    let index = pcoc_admission::verifier::IndexClient::open("http://127.0.0.1:9", Duration::from_secs(1));
+    let index =
+        pcoc_admission::verifier::IndexClient::open("http://127.0.0.1:9", Duration::from_secs(1));
     match pcoc_admission::fast::decide(&other_kind(), &policy, &index) {
-        FastDecision::Refuse { reasons, website, .. } => {
+        FastDecision::Refuse {
+            reasons, website, ..
+        } => {
             assert_eq!(reasons, vec!["unknown_kind".to_owned()]);
             assert_eq!(website, "rejected");
         }
@@ -66,6 +69,7 @@ fn gl_admit_v9_loads() {
     assert_eq!(policy.reverify_max_attempts, 3);
     assert_eq!(policy.max_held_blocks, 6);
     assert_eq!(policy.expected_network(), Some("main"));
+    assert_eq!(policy.born_height, 972685);
 }
 
 fn base_levers() -> String {

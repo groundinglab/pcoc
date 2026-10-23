@@ -232,10 +232,17 @@ impl Config {
 
     /// A config for tests: empty temp log, limiter off, the given index
     /// origin, and [`TEST_SERVED_ORIGIN`] as the one served origin. The
-    /// policy is [`AdmissionPolicy::default`], which matches gl-admit-v9.
-    /// The plane is `test`. A deploy never uses this, and it does not read
-    /// a policy file from the build tree.
+    /// policy is [`AdmissionPolicy::default`], which matches gl-admit-v9,
+    /// except `born_height` is 0 so fixtures such as O3 stay inside the
+    /// boundary. A test that needs another boundary sets
+    /// `policy.born_height` on the value it owns. The plane is `test`.
+    /// A deploy never uses this, and it does not read a policy file from
+    /// the build tree.
     pub fn for_tests(log_dir: PathBuf, index_url: &str) -> Self {
+        let policy = AdmissionPolicy {
+            born_height: 0,
+            ..AdmissionPolicy::default()
+        };
         Self {
             bind: DEFAULT_BIND.parse().expect("default bind"),
             served_origins: vec![TEST_SERVED_ORIGIN.to_owned()],
@@ -249,7 +256,7 @@ impl Config {
             client_ip_header: None,
             index_url: index_url.to_owned(),
             log_dir,
-            policy: AdmissionPolicy::default(),
+            policy,
             bind_threads: DEFAULT_BIND_THREADS,
             index_timeout: Duration::from_secs(1),
             config_path: None,
@@ -397,6 +404,7 @@ mod tests {
         assert_eq!(cfg.policy.policy_id, "gl-admit-v9");
         assert_eq!(cfg.policy.leg_rate_floor.p, 1);
         assert_eq!(cfg.policy.leg_rate_floor.q, 5);
+        assert_eq!(cfg.policy.born_height, 972685);
         assert_eq!(cfg.policy.min_anchored_paths, 6);
         assert_eq!(cfg.policy.require_first_anchored, None);
         assert_eq!(cfg.policy.require_last_anchored, None);
@@ -556,6 +564,7 @@ mod tests {
         assert_eq!(cfg.policy.challenge_lifetime_seconds, 60);
         assert!(cfg.policy.thorough_early_stop);
         assert!(cfg.policy.require_first_anchored.is_none());
+        assert_eq!(cfg.policy.born_height, 0);
     }
 
     fn load_text(body: &str) -> Result<Config, String> {
@@ -603,10 +612,9 @@ mod tests {
 
     #[test]
     fn an_empty_origin_list_does_not_restore_the_public_sites() {
-        let cfg = load_with_policy(
-            "served_origins = [\"https://site.example\"]\nallowed_origins = []\n",
-        )
-        .unwrap();
+        let cfg =
+            load_with_policy("served_origins = [\"https://site.example\"]\nallowed_origins = []\n")
+                .unwrap();
         assert!(cfg.allowed_origins.is_empty());
     }
 

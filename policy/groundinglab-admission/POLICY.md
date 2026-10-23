@@ -66,6 +66,16 @@ These moved out of the draft SPEC at 11:32 (Rules B1 and B5, and the friendly-li
 
 The gate logs `H(draw ‖ salt)` at the draw and reveals it with the result, so anyone can check afterwards that the draw was not chosen against the submitter. This is a decision-log extension, not part of the SPEC.
 
+### P5. Born height
+
+`born_height` is **972685**. It lives in `[policy_rules]` of `gl-admit-v9.toml`. It is not a SPEC §15.4 lever, and it is not a change to Satoshi Hike 2.2. The number can change by issuing a new policy id. It does not need a spec release.
+
+A height at or above `born_height` is production. A height below it is testing. If any stored height in the object (`beacon_height`, `last_interrupt_height`) or any claimed path block height is below `born_height`, the gate rejects the object with `before_born_height`. That decision is final. The job is terminal. It is not `held`, and waiting on the index will not change it.
+
+The verify output shows `policy_id`, the `born_height` that applied, and `lowest_height` (the lowest offending height), next to the reason `before_born_height`. Health shows `born_height` next to `policy_id`. An object whose stored and claimed heights are all at or above `born_height` is judged as it was before this rule.
+
+A caller who receives `before_born_height` should stop. The object is a testing artefact. Submit an object anchored at or above the born height. Do not retry this object.
+
 ## 4. Open before deploy
 
 - Re-measure `leg_rate_floor` under 2.2 (SPEC §15.5 method) and issue the result as a new id.

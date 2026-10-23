@@ -139,7 +139,15 @@ impl Door {
             policy.result_retention_seconds,
             policy.challenge_clock_skew_seconds,
         ));
-        Self::open_with_rows(dir, policy, index_url, index_timeout, served_origins, build, rows)
+        Self::open_with_rows(
+            dir,
+            policy,
+            index_url,
+            index_timeout,
+            served_origins,
+            build,
+            rows,
+        )
     }
 
     /// Two workers share one nonce store. The store start is the shared one.
@@ -880,12 +888,9 @@ impl Door {
         // thorough, and does not increment the counter.
         if let Some(code) = self.over_verify_cap(&body.object_sha) {
             self.end_pending(&pending_key);
-            let signed = self.rows.consume(
-                &body,
-                ClientClass::DeliveryOk,
-                wire::OUTCOME_PENDING,
-                now,
-            );
+            let signed =
+                self.rows
+                    .consume(&body, ClientClass::DeliveryOk, wire::OUTCOME_PENDING, now);
             if signed.is_ok() {
                 self.rows.note_holder(&body.nonce, public_key);
                 let submission = wire::submission_sha256(
@@ -910,8 +915,7 @@ impl Door {
                     "{}",
                     Value::Null,
                 );
-                self.rows
-                    .settle(&body.nonce, wire::OUTCOME_REJECTED, now);
+                self.rows.settle(&body.nonce, wire::OUTCOME_REJECTED, now);
             }
             return match signed {
                 Ok(()) => locked_client(ClientClass::DeliveryOk, None),
@@ -1061,6 +1065,7 @@ impl Door {
                     report,
                     self.policy.leg_rate_floor.p,
                     self.policy.leg_rate_floor.q,
+                    self.policy.born_height,
                 ),
                 Judgment::Held { .. }
             ),
@@ -1166,7 +1171,9 @@ impl Door {
                     ) =>
             {
                 let tip = match &decision {
-                    FastDecision::Provisional { tip, .. } | FastDecision::Direct { tip, .. } => *tip,
+                    FastDecision::Provisional { tip, .. } | FastDecision::Direct { tip, .. } => {
+                        *tip
+                    }
                     _ => None,
                 };
                 FastDecision::Held {
@@ -1217,7 +1224,11 @@ impl Door {
                 self.rows.settle(&job.nonce, website, self.now_unix_s());
                 FastPhase::Done
             }
-            FastDecision::Held { record, budget, tip } => {
+            FastDecision::Held {
+                record,
+                budget,
+                tip,
+            } => {
                 // Website token stays pending. The locked table has no `held`.
                 self.note_held(job, &record, budget, networks.clone(), tip, None);
                 FastPhase::Held
@@ -1339,12 +1350,7 @@ impl Door {
         }
     }
 
-    fn write_received(
-        &self,
-        job: &LockedThorough,
-        record: &str,
-        networks: Value,
-    ) -> Option<u64> {
+    fn write_received(&self, job: &LockedThorough, record: &str, networks: Value) -> Option<u64> {
         let now = self.now_unix_s();
         let mut write = DecisionWrite::bare(now, None, "fast", "received");
         self.stamp_network(&mut write, networks);
@@ -1388,7 +1394,10 @@ impl Door {
         let now = self.now_unix_s();
         let grant = self.has_provisional(job);
         let mut inner = self.lock();
-        let attempts = if let Some(existing) = inner.held.iter_mut().find(|entry| entry.job.nonce == job.nonce)
+        let attempts = if let Some(existing) = inner
+            .held
+            .iter_mut()
+            .find(|entry| entry.job.nonce == job.nonce)
         {
             existing.attempts = existing.attempts.saturating_add(1);
             existing.last_unix = now;
@@ -1473,11 +1482,7 @@ impl Door {
         let mut inner = self.lock();
         if inner.log.append(&write).is_ok() {
             drop(inner);
-            self.rows.settle(
-                &job.nonce,
-                wire::OUTCOME_REJECTED,
-                now,
-            );
+            self.rows.settle(&job.nonce, wire::OUTCOME_REJECTED, now);
         }
     }
 

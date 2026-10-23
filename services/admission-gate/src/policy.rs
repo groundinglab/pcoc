@@ -53,6 +53,29 @@ pub fn too_few_line(anchored: u64, min: u64) -> String {
 /// Budget exhausted while a measurement stayed `not read`.
 pub const REFUSE_HELD_BOUND: &str = "held_bound";
 
+/// A stored or anchored height is below [`AdmissionPolicy::born_height`].
+/// Terminal. Not `held`.
+pub const BEFORE_BORN: &str = "before_born_height";
+
+/// Sentence for [`BEFORE_BORN`]. The numbers are the policy value that
+/// applied and the lowest offending height.
+pub fn before_born_line(born_height: u64, lowest: u64) -> String {
+    format!(
+        "This object is before the born height {born_height}. The lowest offending height is {lowest}. The decision is final."
+    )
+}
+
+/// Verify-job record for [`BEFORE_BORN`]. Not a section 14 record: the gate
+/// does not read the index for this decision.
+pub fn before_born_record(born_height: u64, lowest: u64) -> String {
+    serde_json::json!({
+        "reason": BEFORE_BORN,
+        "born_height": born_height,
+        "lowest_height": lowest,
+    })
+    .to_string()
+}
+
 /// Sentence the current website shows for [`REFUSE_EARLIER`].
 ///
 /// The website sign-in page blanks a snake_case reason it does not know
@@ -266,6 +289,9 @@ pub struct AdmissionPolicy {
     pub challenge_lifetime_seconds: u64,
     pub challenge_clock_skew_seconds: u64,
     pub result_retention_seconds: u64,
+    /// `[policy_rules] born_height`. Heights below this are testing.
+    /// `0` admits every height. Not a SPEC lever.
+    pub born_height: u64,
     /// `[index]` (gl-admit-v7 on). Absent in gl-admit-v6 and earlier, and
     /// then not serialized, so their bind hash and policy document stay the same.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -300,6 +326,7 @@ impl Default for AdmissionPolicy {
             challenge_lifetime_seconds: 120,
             challenge_clock_skew_seconds: 5,
             result_retention_seconds: 600,
+            born_height: 972685,
             index: Some(IndexPolicy {
                 expected_network: "main".to_owned(),
             }),
@@ -501,14 +528,117 @@ fn spec_int(value: &Value) -> Option<i128> {
     Some(number)
 }
 
-pub fn judge(report: &Report, floor_p: u64, floor_q: u64) -> Judgment {
+/// Stored beacon heights, `last_interrupt_height`, and claimed path block
+/// heights. Absent keys are not heights. A kind other than the current one
+/// yields nothing.
+pub fn object_heights(object: &[u8]) -> Vec<u64> {
+    let Ok((item, _)) = pcoc::cbor::decode_item(object) else {
+        return Vec::new();
+    };
+    let pcoc::cbor::Cbor::Map(map) = item else {
+        return Vec::new();
+    };
+    let Some(pcoc::cbor::Cbor::Text(kind)) = pcoc::cbor::map_get(&map, "kind") else {
+        return Vec::new();
+    };
+    if kind != pcoc::constants::KIND {
+        return Vec::new();
+    }
+    let mut heights = Vec::new();
+    push_height(
+        &mut heights,
+        pcoc::cbor::map_get(&map, "last_interrupt_height"),
+    );
+    if let Some(pcoc::cbor::Cbor::Array(stages)) = pcoc::cbor::map_get(&map, "stages") {
+        for stage in stages {
+            let pcoc::cbor::Cbor::Map(stage) = stage else {
+                continue;
+            };
+            push_height(&mut heights, pcoc::cbor::map_get(stage, "beacon_height"));
+            if let Some(pcoc::cbor::Cbor::Bytes(path)) = pcoc::cbor::map_get(stage, "path") {
+                if let Some((_, height)) = pcoc::path::peek_claimed(path) {
+                    heights.push(u64::from(height));
+                }
+            }
+        }
+    }
+    heights
+}
+
+fn push_height(out: &mut Vec<u64>, value: Option<&pcoc::cbor::Cbor>) {
+    let Some(pcoc::cbor::Cbor::Uint(height)) = value else {
+        return;
+    };
+    if *height <= pcoc::constants::HEIGHT_MAX {
+        out.push(*height);
+    }
+}
+
+/// Lowest stored or claimed height strictly below `born_height`.
+/// `None` when every such height is at or above the boundary, or when the
+/// bytes are not a current object.
+pub fn lowest_before_born(object: &[u8], born_height: u64) -> Option<u64> {
+    object_heights(object)
+        .into_iter()
+        .filter(|height| *height < born_height)
+        .min()
+}
+
+/// Lowest numeric height in a section 14 record that is below `born_height`.
+/// Looks at stored header heights and claimed or anchored path heights.
+pub fn lowest_in_record(record: &str, born_height: u64) -> Option<u64> {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(record) else {
+        return None;
+    };
+    let mut lowest = None;
+    let mut note = |item: &serde_json::Value| {
+        let Some(height) = item.as_u64() else {
+            return;
+        };
+        if height < born_height {
+            lowest = Some(lowest.map_or(height, |cur: u64| cur.min(height)));
+        }
+    };
+    if let Some(headers) = value.get("headers").and_then(|item| item.as_array()) {
+        for header in headers {
+            if let Some(stored) = header.get("stored_height") {
+                note(stored);
+            }
+        }
+    }
+    if let Some(paths) = value.get("paths").and_then(|item| item.as_array()) {
+        for path in paths {
+            if let Some(height) = path.pointer("/claimed_block/block_height") {
+                note(height);
+            }
+            if let Some(height) = path.pointer("/P_g/block_height") {
+                note(height);
+            }
+            if let Some(height) = path.get("height_P_g") {
+                note(height);
+            }
+        }
+    }
+    lowest
+}
+
+pub fn judge(report: &Report, floor_p: u64, floor_q: u64, born_height: u64) -> Judgment {
     match report {
         Report::Unreadable => Judgment::Refuse {
             reasons: vec![UNREADABLE_REASON.to_owned()],
             line: UNREADABLE_LINE.to_owned(),
             record: "{}".to_owned(),
         },
-        Report::Read(measured) => judge_measured(measured, floor_p, floor_q),
+        Report::Read(measured) => {
+            if let Some(lowest) = lowest_in_record(&measured.record, born_height) {
+                return Judgment::Refuse {
+                    reasons: vec![BEFORE_BORN.to_owned()],
+                    line: before_born_line(born_height, lowest),
+                    record: before_born_record(born_height, lowest),
+                };
+            }
+            judge_measured(measured, floor_p, floor_q)
+        }
     }
 }
 

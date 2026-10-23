@@ -42,3 +42,6 @@ plant_gap              = "record-only"             # P2: d_g is recorded, never 
 friendly_entry_custody = "newest-thorough-accept"  # P3
 old_policy_resubmit    = "new-cycle"               # P3
 draw_commitment        = "sha256(draw || salt), revealed with the result"
+# P5. Not a SPEC §15.4 lever. Heights below this are testing, not production.
+# services/bari BORN_HEIGHT must stay equal to this value.
+born_height            = 972685

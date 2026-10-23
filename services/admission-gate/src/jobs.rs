@@ -6,7 +6,7 @@
 
 use crate::config::Config;
 use crate::ids::IdGen;
-use crate::policy::{self, REFUSE_EARLIER, UNREADABLE_LINE, UNREADABLE_REASON};
+use crate::policy::{self, BEFORE_BORN, REFUSE_EARLIER, UNREADABLE_LINE, UNREADABLE_REASON};
 use crate::verifier::{self, Report};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -51,6 +51,10 @@ struct Job {
     reasons: Option<Vec<String>>,
     reason: Option<String>,
     error: Option<(&'static str, String)>,
+    policy_id: String,
+    born_height: u64,
+    /// Lowest offending height. Present only for `before_born_height`.
+    lowest_height: Option<u64>,
 }
 
 impl Job {
@@ -69,11 +73,16 @@ impl Job {
             job_id: &self.id,
             status: self.state.as_str(),
             terminal: self.state.is_terminal(),
+            policy_id: &self.policy_id,
+            born_height: self.born_height,
             created_at_ms: self.created_at_ms,
             updated_at_ms: self.updated_at_ms,
         };
         let mut text = serde_json::to_string(&head).expect("job head");
         text.pop();
+        if let Some(lowest) = self.lowest_height {
+            text.push_str(&format!(",\"lowest_height\":{lowest}"));
+        }
         if let Some(record) = &self.record {
             text.push_str(",\"record\":");
             text.push_str(record);
@@ -105,6 +114,8 @@ struct JobHead<'a> {
     job_id: &'a str,
     status: &'static str,
     terminal: bool,
+    policy_id: &'a str,
+    born_height: u64,
     created_at_ms: u64,
     updated_at_ms: u64,
 }
@@ -160,8 +171,16 @@ impl JobStore {
                     reasons: None,
                     reason: None,
                     error: None,
+                    policy_id: self.cfg.policy.policy_id.clone(),
+                    born_height: self.cfg.policy.born_height,
+                    lowest_height: None,
                 },
             );
+        }
+
+        if let Some(lowest) = policy::lowest_before_born(&object, self.cfg.policy.born_height) {
+            self.finish_before_born(&id, lowest);
+            return Ok(id);
         }
 
         let store = self.clone();
@@ -225,6 +244,7 @@ impl JobStore {
                     &Report::Read(measured.clone()),
                     self.cfg.policy.leg_rate_floor.p,
                     self.cfg.policy.leg_rate_floor.q,
+                    self.cfg.policy.born_height,
                 );
                 let record = measured.record;
                 match judgment {
@@ -256,6 +276,22 @@ impl JobStore {
         }
     }
 
+    /// Terminal refusal. The index is not read. The job is not `held`.
+    fn finish_before_born(&self, job_id: &str, lowest: u64) {
+        let born = self.cfg.policy.born_height;
+        let line = policy::before_born_line(born, lowest);
+        let record = policy::before_born_record(born, lowest);
+        self.mark(job_id, |job| {
+            job.state = JobState::Error;
+            job.record = Some(record);
+            job.reasons = Some(vec![BEFORE_BORN.to_owned()]);
+            job.reason = Some(line.clone());
+            job.error = Some((BEFORE_BORN, line));
+            job.lowest_height = Some(lowest);
+            job.born_height = born;
+        });
+    }
+
     fn finish_error(&self, job_id: &str, code: &'static str, message: String) {
         let line = message.clone();
         eprintln!("admission-service verify job={job_id} code={code}");
@@ -285,7 +321,9 @@ impl JobStore {
 }
 
 fn static_code(reasons: &[String]) -> &'static str {
-    if reasons.iter().any(|reason| reason == REFUSE_EARLIER) {
+    if reasons.iter().any(|reason| reason == BEFORE_BORN) {
+        BEFORE_BORN
+    } else if reasons.iter().any(|reason| reason == REFUSE_EARLIER) {
         REFUSE_EARLIER
     } else if reasons
         .iter()

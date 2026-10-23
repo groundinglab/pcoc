@@ -24,6 +24,13 @@ mod utxo;
 
 pub type Hash32 = [u8; 32];
 
+/// Production admission boundary. Heights below this are testing.
+///
+/// Equal to `born_height` in `policy/groundinglab-admission/gl-admit-v9.toml`.
+/// It is policy, not a SPEC rule. This process does not serve a path or an
+/// index blob below it. Files already stored stay where they are.
+pub const BORN_HEIGHT: u32 = 972685;
+
 /// Decode exactly 32 natural-order bytes from lowercase hexadecimal.
 pub fn decode_hash32(encoded: &str) -> Result<Hash32, String> {
     if encoded.len() != 64

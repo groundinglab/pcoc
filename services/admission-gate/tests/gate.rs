@@ -390,6 +390,7 @@ async fn health_reports_version_commit_spec_and_config() {
     assert!(!body.to_string().contains("config_path"), "{body}");
     assert!(body["config"].get("leg_rate_floor").is_none(), "{body}");
     assert_eq!(body["config"]["policy_id"], "gl-admit-v9");
+    assert_eq!(body["config"]["born_height"], 0);
     assert_eq!(body["config"]["bind_threads"], 6);
     let origins = body["config"]["allowed_origins"].as_array().unwrap();
     assert!(origins.is_empty(), "the default names no site");
@@ -404,6 +405,7 @@ async fn health_reports_version_commit_spec_and_config() {
     assert_eq!(policy["leg_rate_floor"]["p"], 1);
     assert_eq!(policy["leg_rate_floor"]["q"], 5);
     assert_eq!(policy["min_anchored_paths"], 6);
+    assert_eq!(policy["born_height"], 0);
     assert_eq!(policy["source"], "recommendation, not specification");
     assert_eq!(policy["spec"], "Satoshi Hike 2.2");
     let text = body.to_string();
@@ -704,6 +706,8 @@ async fn a_readable_hike_is_done_not_held() {
     let dir = scratch("hike-read");
     let router = opened(dir.clone(), &index.base, |cfg| {
         cfg.index_timeout = Duration::from_secs(5);
+        // This test owns its boundary. O3 is below the production value.
+        cfg.policy.born_height = 0;
     });
     let (status, posted) = post_cbor(&router, object).await;
     assert_eq!(status, StatusCode::ACCEPTED, "{posted}");
@@ -719,7 +723,126 @@ async fn a_readable_hike_is_done_not_held() {
     assert_eq!(job["record"]["analysis"]["hike_span"], 90, "{job}");
     assert!(job["record"]["headers"].is_array(), "{job}");
     assert!(job.get("error").is_none(), "{job}");
+    assert_eq!(job["policy_id"], "gl-admit-v9");
+    assert_eq!(job["born_height"], 0);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Every stored height is below the boundary this test sets. The index is a
+/// black hole. The job is terminal `before_born_height` and is not `held`.
+#[tokio::test]
+async fn a_preborn_object_is_rejected_without_the_index() {
+    let object = o3_bytes();
+    let (min, max) = height_span(&object);
+    let index = Index::blackhole();
+    let dir = scratch("preborn");
+    let born = max + 1;
+    let router = opened(dir.clone(), &index.base, |cfg| {
+        cfg.policy.born_height = born;
+        cfg.index_timeout = Duration::from_millis(200);
+    });
+    let started = std::time::Instant::now();
+    let (status, posted) = post_cbor(&router, object).await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{posted}");
+    let job = poll_job_for(
+        &router,
+        posted["job_id"].as_str().unwrap(),
+        Duration::from_secs(3),
+    )
+    .await;
+    assert!(started.elapsed() < Duration::from_secs(3), "{job}");
+    assert_eq!(job["terminal"], true, "{job}");
+    assert_eq!(job["status"], "error", "{job}");
+    assert_ne!(job["status"], "held", "{job}");
+    assert_eq!(job["error"]["code"], "before_born_height", "{job}");
+    assert_eq!(job["reasons"][0], "before_born_height", "{job}");
+    assert_eq!(job["policy_id"], "gl-admit-v9", "{job}");
+    assert_eq!(job["born_height"], born, "{job}");
+    assert_eq!(job["lowest_height"], min, "{job}");
+    assert_eq!(job["record"]["reason"], "before_born_height", "{job}");
+    assert_eq!(job["record"]["born_height"], born, "{job}");
+    assert_eq!(
+        job["record"]["lowest_height"], job["lowest_height"],
+        "{job}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The lowest stored height equals the boundary this test sets. The object
+/// is accepted, the same way a readable hike is accepted at born height 0.
+#[tokio::test]
+async fn an_object_exactly_at_born_height_is_accepted() {
+    let object = o3_bytes();
+    let (min, max) = height_span(&object);
+    assert!(min < max, "O3 spans more than one height");
+    let index = index_for_hike(&object);
+    let dir = scratch("born-exact");
+    let router = opened(dir.clone(), &index.base, |cfg| {
+        cfg.policy.born_height = min;
+        cfg.index_timeout = Duration::from_secs(5);
+    });
+    let (status, posted) = post_cbor(&router, object).await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{posted}");
+    let job = poll_job_for(
+        &router,
+        posted["job_id"].as_str().unwrap(),
+        Duration::from_secs(600),
+    )
+    .await;
+    assert_eq!(job["status"], "done", "{job}");
+    assert_eq!(job["terminal"], true, "{job}");
+    assert!(job.get("error").is_none(), "{job}");
+    assert_eq!(job["policy_id"], "gl-admit-v9", "{job}");
+    assert_eq!(job["born_height"], min, "{job}");
+    assert!(job.get("lowest_height").is_none(), "{job}");
+    assert_eq!(job["record"]["shape"], "match", "{job}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// One stored height is below the boundary and another is not.
+#[tokio::test]
+async fn a_mixed_object_is_rejected_before_born_height() {
+    let object = o3_bytes();
+    let (min, max) = height_span(&object);
+    assert!(min < max, "O3 spans more than one height");
+    let index = Index::blackhole();
+    let dir = scratch("born-mixed");
+    let born = min + 1;
+    let router = opened(dir.clone(), &index.base, |cfg| {
+        cfg.policy.born_height = born;
+        cfg.index_timeout = Duration::from_millis(200);
+    });
+    let (status, posted) = post_cbor(&router, object).await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{posted}");
+    let job = poll_job_for(
+        &router,
+        posted["job_id"].as_str().unwrap(),
+        Duration::from_secs(3),
+    )
+    .await;
+    assert_eq!(job["terminal"], true, "{job}");
+    assert_eq!(job["status"], "error", "{job}");
+    assert_ne!(job["status"], "held", "{job}");
+    assert_eq!(job["error"]["code"], "before_born_height", "{job}");
+    assert_eq!(job["born_height"], born, "{job}");
+    assert_eq!(job["lowest_height"], min, "{job}");
+    assert!(job["lowest_height"].as_u64().unwrap() < born);
+    assert!(max >= born, "the object also reaches the boundary");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn o3_bytes() -> Vec<u8> {
+    std::fs::read(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../sdk/rust/objects/O3-PROD.cbor"),
+    )
+    .expect("O3")
+}
+
+fn height_span(object: &[u8]) -> (u64, u64) {
+    let heights = pcoc_admission::policy::object_heights(object);
+    let min = heights.iter().copied().min().expect("heights");
+    let max = heights.iter().copied().max().expect("heights");
+    (min, max)
 }
 
 /// Headers whose natural hash is the object's beacon, 5 s apart, so

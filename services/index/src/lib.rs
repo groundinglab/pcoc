@@ -118,6 +118,9 @@ pub struct IndexService {
     /// Not applied when the document already has `header.time` or
     /// `header.timestamp_unix_ms`.
     clocks: Arc<HashMap<u32, u64>>,
+    /// Heights below this are not served. The files stay on disk.
+    /// `0` serves every retained file. The binary sets [`pcoc_bari::BORN_HEIGHT`].
+    born_height: u32,
 }
 
 impl IndexService {
@@ -125,6 +128,7 @@ impl IndexService {
         Self {
             cache: Arc::new(cache),
             clocks: Arc::new(HashMap::new()),
+            born_height: 0,
         }
     }
 
@@ -144,7 +148,15 @@ impl IndexService {
         Ok(Self {
             cache: Arc::new(IndexCache::open(data_dir)?),
             clocks: Arc::new(clocks),
+            born_height: 0,
         })
+    }
+
+    /// Serve floor for this process. A test sets its own. `0` serves the
+    /// whole cache. Stored files below the floor are not deleted.
+    pub fn with_born_height(mut self, born_height: u32) -> Self {
+        self.born_height = born_height;
+        self
     }
 
     pub fn clock_count(&self) -> usize {
@@ -186,6 +198,9 @@ impl IndexService {
     }
 
     pub fn load_at_height(&self, height: u32) -> Result<Option<IndexDocument>, CacheError> {
+        if height < self.born_height {
+            return Ok(None);
+        }
         let path = self.cache.tip_path(height);
         if !path.exists() {
             return Ok(None);
@@ -213,6 +228,9 @@ impl IndexService {
             let Ok(height) = rest.parse::<u32>() else {
                 continue;
             };
+            if height < self.born_height {
+                continue;
+            }
             if best.is_none_or(|current| height > current) {
                 best = Some(height);
             }
@@ -335,6 +353,7 @@ struct SinceLines {
     start: Option<u32>,
     limit: Option<u32>,
     emitted: u32,
+    born_height: u32,
 }
 
 impl Iterator for SinceLines {
@@ -347,6 +366,9 @@ impl Iterator for SinceLines {
             }
             let height = self.heights[self.index];
             self.index += 1;
+            if height < self.born_height {
+                continue;
+            }
             if let Some(start) = self.start {
                 if height < start {
                     continue;
@@ -395,6 +417,7 @@ async fn fetch_index_since(
             return with_index_cors(&headers, StatusCode::INTERNAL_SERVER_ERROR.into_response())
         }
     };
+    let born_height = service.born_height;
     let stream = futures_util::stream::iter(SinceLines {
         service,
         heights,
@@ -402,6 +425,7 @@ async fn fetch_index_since(
         start: query.height,
         limit: query.limit,
         emitted: 0,
+        born_height,
     });
     let response = (
         [(
@@ -1223,6 +1247,41 @@ mod tests {
         assert_eq!(
             from_the_hole[0].as_slice(),
             body_bytes(single).await.as_slice()
+        );
+    }
+
+    /// This test sets its own floor. The file below the floor stays on disk.
+    #[tokio::test]
+    async fn heights_below_born_height_are_not_served() {
+        let temp = tempfile::tempdir().unwrap();
+        let born = 8u32;
+        write_stored(temp.path(), &stored(born - 1, "main", None, Vec::new()));
+        write_stored(temp.path(), &stored(born, "main", None, Vec::new()));
+        let below = temp.path().join(format!("height-{:010}.json", born - 1));
+        assert!(below.is_file());
+        let app = IndexService::open(temp.path())
+            .unwrap()
+            .with_born_height(born)
+            .router();
+
+        let hidden = get(&app, &format!("/index/{}", born - 1)).await;
+        assert_eq!(hidden.status(), StatusCode::NOT_FOUND);
+        assert!(below.is_file(), "the stored file is left in place");
+
+        let served = get(&app, &format!("/index/{born}")).await;
+        assert_eq!(served.status(), StatusCode::OK);
+        let tip = get(&app, "/index").await;
+        assert_eq!(tip.status(), StatusCode::OK);
+        let tip_body = body_bytes(tip).await;
+        let tip_json = serde_json::from_slice::<serde_json::Value>(&tip_body).unwrap();
+        assert_eq!(tip_json["header"]["height"], born);
+
+        let since = get(&app, "/index/since").await;
+        let lines = ndjson_lines(&body_bytes(since).await);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&lines[0]).unwrap()["header"]["height"],
+            born
         );
     }
 }

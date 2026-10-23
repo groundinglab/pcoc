@@ -64,7 +64,11 @@ fn v9() -> AdmissionPolicy {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../policy/groundinglab-admission/gl-admit-v9.toml");
     let raw = std::fs::read_to_string(&path).unwrap();
-    crate::levers::load(&raw, 2).expect("gl-admit-v9")
+    let mut policy = crate::levers::load(&raw, 2).expect("gl-admit-v9");
+    // Fixtures such as O3 sit below the production born height. This value
+    // belongs to the policy this call returns. It is not process state.
+    policy.born_height = 0;
+    policy
 }
 
 struct Pol {
@@ -84,6 +88,7 @@ struct Pol {
     retention: u64,
     session: Option<u64>,
     object_cap: Option<u64>,
+    born_height: u64,
 }
 
 impl Default for Pol {
@@ -105,6 +110,7 @@ impl Default for Pol {
             retention: 600,
             session: None,
             object_cap: None,
+            born_height: 0,
         }
     }
 }
@@ -139,6 +145,7 @@ result_retention_seconds = {retention}
 {extra}
 [policy_rules]
 expected_network = "main"
+born_height = {born}
 "#,
             min = self.min_anchored,
             p = self.p,
@@ -154,6 +161,7 @@ expected_network = "main"
             life = self.lifetime,
             skew = self.skew,
             retention = self.retention,
+            born = self.born_height,
         );
         crate::levers::load(&raw, 2).unwrap_or_else(|err| panic!("{err}\n{raw}"))
     }
@@ -651,7 +659,11 @@ fn write_ok(conn: &mut TcpStream, body: &str) {
     let _ = conn.write_all(body.as_bytes());
 }
 
-fn settle_face(bytes: &[u8], face: Face, policy: AdmissionPolicy) -> (Door, Index, FastPhase, Option<u64>) {
+fn settle_face(
+    bytes: &[u8],
+    face: Face,
+    policy: AdmissionPolicy,
+) -> (Door, Index, FastPhase, Option<u64>) {
     let obj = pcoc::decode_object(bytes).expect("object");
     let index = serve(&obj, face);
     let door = open_door(policy, &index.base);
@@ -662,7 +674,11 @@ fn settle_face(bytes: &[u8], face: Face, policy: AdmissionPolicy) -> (Door, Inde
 
 fn mode_of(path: &Path) -> u32 {
     use std::os::unix::fs::PermissionsExt;
-    std::fs::metadata(path).expect("metadata").permissions().mode() & 0o777
+    std::fs::metadata(path)
+        .expect("metadata")
+        .permissions()
+        .mode()
+        & 0o777
 }
 
 fn signer() -> (Secp256k1<secp256k1::All>, Keypair, [u8; 32]) {
@@ -738,7 +754,10 @@ fn index_down_is_held() {
 fn a_confirmed_plant_mismatch_refuses() {
     let bytes = anchored_o3();
     let obj = pcoc::decode_object(&bytes).unwrap();
-    assert!(first_plant_height(&obj).is_some(), "O3 has no decodable W_1..W_16 path");
+    assert!(
+        first_plant_height(&obj).is_some(),
+        "O3 has no decodable W_1..W_16 path"
+    );
     let (door, _index, phase, _) = settle_face(&bytes, Face::PlantBad, v9());
     assert_eq!(phase, FastPhase::Done, "{:?}", chain(&door));
     assert!(door
@@ -822,7 +841,10 @@ fn interleaved_jobs_each_settle_against_their_own_provisional() {
     wrong.seq = seq_b;
     door.settle_thorough(&job_a, wrong);
     assert_eq!(
-        door.test_decisions().iter().filter(|item| item.as_str() == "accept").count(),
+        door.test_decisions()
+            .iter()
+            .filter(|item| item.as_str() == "accept")
+            .count(),
         0
     );
     let mut own = matched.clone();
@@ -915,7 +937,8 @@ fn a_key_banned_in_flight_is_never_accepted() {
     let door = open_door(v9(), "http://127.0.0.1:9");
     let job = job_for(&bytes, [6u8; 32]);
     let seq = door.test_grant_provisional(&job);
-    let mut out = thorough::recompute_at(&bytes, &[vec![0, 1, 2, 3, 4, 5]], &profile_of(&obj)).unwrap();
+    let mut out =
+        thorough::recompute_at(&bytes, &[vec![0, 1, 2, 3, 4, 5]], &profile_of(&obj)).unwrap();
     assert!(out.matched);
     door.ban_key(&job.public_key, 1);
     out.seq = seq;
@@ -979,7 +1002,10 @@ fn v7_checks_header_plant_and_fresh_reads_and_a_missing_network() {
     let bytes = anchored_o3();
     let (door, _index, phase, _) = settle_face(&bytes, Face::HeaderFresh, v9());
     assert_eq!(phase, FastPhase::Provisional, "{:?}", chain(&door));
-    assert!(door.mirror().bypass_count() >= 1, "fresh read was not counted");
+    assert!(
+        door.mirror().bypass_count() >= 1,
+        "fresh read was not counted"
+    );
     let lines = chain(&door);
     let record = &lines[0]["verify_summary"];
     assert!(record["anchored_total"].is_number(), "{record}");
@@ -998,7 +1024,11 @@ fn honest_legs_recompute_and_a_checkpoint_byte_flip_fails() {
     let bytes = object_bytes("O1-S1.cbor");
     let obj = pcoc::decode_object(&bytes).unwrap();
     let profile = profile_of(&obj);
-    let total: u64 = obj.stages.iter().map(|stage| stage.checkpoints.len() as u64).sum();
+    let total: u64 = obj
+        .stages
+        .iter()
+        .map(|stage| stage.checkpoints.len() as u64)
+        .sum();
     thorough::reset_counts();
     let out = thorough::recompute_at(&bytes, &cover(total), &profile).unwrap();
     assert!(out.matched, "honest legs");
@@ -1015,7 +1045,8 @@ fn honest_legs_recompute_and_a_checkpoint_byte_flip_fails() {
 #[test]
 fn stored_checkpoint_forgeries_from_negatives_fail() {
     let _guard = terrain_lock();
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sdk/rust/candidates/negatives.txt");
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sdk/rust/candidates/negatives.txt");
     let text = std::fs::read_to_string(path).unwrap();
     let mut legs = HashMap::<String, String>::new();
     let mut bad = Vec::<String>::new();
@@ -1133,7 +1164,8 @@ fn provisional_is_not_accept_and_friendly_waits_for_thorough() {
     let friendly = door.log_dir().join("friendly").join(hex32(&job.public_key));
     assert!(!friendly.exists());
     assert!(!door.test_decisions().contains(&"accept".to_owned()));
-    let mut out = thorough::recompute_at(&bytes, &[vec![0, 1, 2, 3, 4, 5]], &profile_of(&obj)).unwrap();
+    let mut out =
+        thorough::recompute_at(&bytes, &[vec![0, 1, 2, 3, 4, 5]], &profile_of(&obj)).unwrap();
     assert!(out.matched);
     out.seq = seq;
     door.settle_thorough(&job, out);
@@ -1186,7 +1218,9 @@ fn held_bound_refuses_without_a_grant_and_revokes_after_one() {
     door.set_now_unix_s(Some(5_060));
     assert!(door.poll_held().is_empty());
     assert!(door.test_decisions().contains(&"refuse".to_owned()));
-    assert!(chain(&door).iter().any(|line| line["reason"] == "reverify_max_attempts"));
+    assert!(chain(&door)
+        .iter()
+        .any(|line| line["reason"] == "reverify_max_attempts"));
 
     let door = open_door(
         Pol {
@@ -1233,8 +1267,18 @@ fn each_loaded_lever_changes_what_the_gate_does() {
     }
     .load();
     let three = Pol::default().load();
-    assert_eq!(thorough::os_draw(18, one.thorough_six_leg_runs as u32).unwrap().len(), 1);
-    assert_eq!(thorough::os_draw(18, three.thorough_six_leg_runs as u32).unwrap().len(), 3);
+    assert_eq!(
+        thorough::os_draw(18, one.thorough_six_leg_runs as u32)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        thorough::os_draw(18, three.thorough_six_leg_runs as u32)
+            .unwrap()
+            .len(),
+        3
+    );
 
     let bytes = anchored_o3();
     let obj = pcoc::decode_object(&bytes).unwrap();
@@ -1254,9 +1298,17 @@ fn each_loaded_lever_changes_what_the_gate_does() {
     };
     let _ = wide;
     assert_eq!(phase, FastPhase::Done, "{:?}", chain(&door));
-    assert!(door.test_reasons().iter().any(|reason| reason.contains("leg_rate")));
+    assert!(door
+        .test_reasons()
+        .iter()
+        .any(|reason| reason.contains("leg_rate")));
     let legs = pcoc::hike_legs(&obj).unwrap();
-    let span = realized(&obj, Clock::Split { last_time: (5 * legs + 1).min(u32::MAX as i128) });
+    let span = realized(
+        &obj,
+        Clock::Split {
+            last_time: (5 * legs + 1).min(u32::MAX as i128),
+        },
+    );
     let q = u64::try_from(span.max(1)).unwrap_or(u64::MAX);
     let meets = Pol {
         p: 1,
@@ -1265,7 +1317,12 @@ fn each_loaded_lever_changes_what_the_gate_does() {
     }
     .load();
     let (door, _index, phase, _) = settle_face(&bytes, Face::Wide, meets);
-    assert_eq!(phase, FastPhase::Provisional, "span {span} legs {legs} {:?}", chain(&door));
+    assert_eq!(
+        phase,
+        FastPhase::Provisional,
+        "span {span} legs {legs} {:?}",
+        chain(&door)
+    );
 
     let anchored = chain(&door)
         .iter()
@@ -1281,15 +1338,42 @@ fn each_loaded_lever_changes_what_the_gate_does() {
     .load();
     let (door, _index, phase, _) = settle_face(&bytes, Face::Wide, tight);
     assert_eq!(phase, FastPhase::Done, "{:?}", chain(&door));
-    assert!(door.test_reasons().iter().any(|reason| reason.contains("too_few")));
+    assert!(door
+        .test_reasons()
+        .iter()
+        .any(|reason| reason.contains("too_few")));
 
     let last = obj.last_interrupt_height;
     let k = 3u64;
-    let (door, _index, phase, _) = settle_face(&bytes, Face::TipGap(k), Pol { k, ..Pol::default() }.load());
-    assert_eq!(phase, FastPhase::Held, "gap K should pass B10 {:?}", chain(&door));
-    let (door, _index, phase, _) = settle_face(&bytes, Face::TipGap(k + 1), Pol { k, ..Pol::default() }.load());
+    let (door, _index, phase, _) = settle_face(
+        &bytes,
+        Face::TipGap(k),
+        Pol {
+            k,
+            ..Pol::default()
+        }
+        .load(),
+    );
+    assert_eq!(
+        phase,
+        FastPhase::Held,
+        "gap K should pass B10 {:?}",
+        chain(&door)
+    );
+    let (door, _index, phase, _) = settle_face(
+        &bytes,
+        Face::TipGap(k + 1),
+        Pol {
+            k,
+            ..Pol::default()
+        }
+        .load(),
+    );
     assert_eq!(phase, FastPhase::Done, "{:?}", chain(&door));
-    assert!(door.test_reasons().iter().any(|reason| reason == "submission_deadline"));
+    assert!(door
+        .test_reasons()
+        .iter()
+        .any(|reason| reason == "submission_deadline"));
     assert!(!door.log_dir().join("pending").exists());
     let _ = last;
 
@@ -1315,7 +1399,10 @@ fn each_loaded_lever_changes_what_the_gate_does() {
     late.set_now_unix_s(Some(10_030));
     assert!(early.poll_held().is_empty());
     assert_eq!(early.test_held_attempts(&job.nonce), Some(2));
-    assert_eq!(late.test_held_attempts(&job_for(&bytes, [23u8; 32]).nonce), Some(1));
+    assert_eq!(
+        late.test_held_attempts(&job_for(&bytes, [23u8; 32]).nonce),
+        Some(1)
+    );
 
     let elapsed_hold = Pol {
         fast: "0.001",
@@ -1343,7 +1430,9 @@ fn each_loaded_lever_changes_what_the_gate_does() {
     // The budget hold must not become provisional when the clock is retried.
     let _ = with_fast_elapsed(10, || held.poll_held());
     assert!(!held.test_decisions().contains(&"provisional".to_owned()));
-    let phase = with_fast_elapsed(10, || passed.settle_fast_seq(&job_for(&bytes, [25u8; 32])).0);
+    let phase = with_fast_elapsed(10, || {
+        passed.settle_fast_seq(&job_for(&bytes, [25u8; 32])).0
+    });
     assert_eq!(phase, FastPhase::Provisional, "{:?}", chain(&passed));
 
     let async_hold = Pol {
@@ -1365,11 +1454,15 @@ fn each_loaded_lever_changes_what_the_gate_does() {
     let held = open_door(async_hold, &index.base);
     let passed = open_door(async_ok, &index.base);
     assert_eq!(
-        with_fast_elapsed(5_000, || held.settle_fast_seq(&job_for(&bytes, [26u8; 32])).0),
+        with_fast_elapsed(5_000, || held
+            .settle_fast_seq(&job_for(&bytes, [26u8; 32]))
+            .0),
         FastPhase::Held
     );
     assert_eq!(
-        with_fast_elapsed(5_000, || passed.settle_fast_seq(&job_for(&bytes, [27u8; 32])).0),
+        with_fast_elapsed(5_000, || passed
+            .settle_fast_seq(&job_for(&bytes, [27u8; 32]))
+            .0),
         FastPhase::Provisional
     );
 
@@ -1397,11 +1490,22 @@ fn each_loaded_lever_changes_what_the_gate_does() {
         object: vec![1u8; 40],
         signature: [0u8; 64],
     };
-    assert_eq!(client_code(&a.sign_in_locked(body.clone()).body), "malformed");
+    assert_eq!(
+        client_code(&a.sign_in_locked(body.clone()).body),
+        "malformed"
+    );
     assert_ne!(client_code(&b.sign_in_locked(body).body), "malformed");
 
-    let tight = Pol { skew: 5, ..Pol::default() }.load();
-    let loose = Pol { skew: 0, ..Pol::default() }.load();
+    let tight = Pol {
+        skew: 5,
+        ..Pol::default()
+    }
+    .load();
+    let loose = Pol {
+        skew: 0,
+        ..Pol::default()
+    }
+    .load();
     let a = open_door(tight, "http://127.0.0.1:9");
     let b = open_door(loose, "http://127.0.0.1:9");
     for door in [&a, &b] {
@@ -1416,7 +1520,10 @@ fn each_loaded_lever_changes_what_the_gate_does() {
         object: vec![2u8; 40],
         signature: [0u8; 64],
     };
-    assert_eq!(client_code(&a.sign_in_locked(body.clone()).body), "malformed");
+    assert_eq!(
+        client_code(&a.sign_in_locked(body.clone()).body),
+        "malformed"
+    );
     assert_ne!(client_code(&b.sign_in_locked(body).body), "malformed");
 
     let brief = Pol {
@@ -1433,7 +1540,10 @@ fn each_loaded_lever_changes_what_the_gate_does() {
     let kept_door = open_door(kept, "http://127.0.0.1:9");
     assert_eq!(brief_door.nonce_rows().retention_seconds(), 10);
     assert_eq!(kept_door.nonce_rows().retention_seconds(), 1_000);
-    assert_eq!(brief_door.nonce_rows().skew_seconds(), brief_door.policy().challenge_clock_skew_seconds);
+    assert_eq!(
+        brief_door.nonce_rows().skew_seconds(),
+        brief_door.policy().challenge_clock_skew_seconds
+    );
 
     let cap1 = Pol {
         session: Some(1),
@@ -1451,7 +1561,10 @@ fn each_loaded_lever_changes_what_the_gate_does() {
     let second = signed_unknown(&secp, &keypair, &public, [41u8; 32], 2_100, 1);
     let signed = door.sign_in_locked(second);
     assert!(signed.thorough.is_none());
-    assert!(door.test_reasons().iter().any(|reason| reason == "verify_cap_per_door_session"));
+    assert!(door
+        .test_reasons()
+        .iter()
+        .any(|reason| reason == "verify_cap_per_door_session"));
 
     let per_object = Pol {
         session: Some(8),
@@ -1468,7 +1581,10 @@ fn each_loaded_lever_changes_what_the_gate_does() {
     release_slot(&door, &signed);
     let again = signed_unknown(&secp, &keypair, &public, [43u8; 32], 3_100, 7);
     assert!(door.sign_in_locked(again).thorough.is_none());
-    assert!(door.test_reasons().iter().any(|reason| reason == "verify_cap_per_object"));
+    assert!(door
+        .test_reasons()
+        .iter()
+        .any(|reason| reason == "verify_cap_per_object"));
     let other = signed_unknown(&secp, &keypair, &public, [44u8; 32], 3_100, 8);
     let signed = door.sign_in_locked(other);
     assert!(signed.thorough.is_some(), "{:?}", chain(&door));
@@ -1504,10 +1620,16 @@ fn shipped_policy_reads_verify_cap_per_door_session() {
         let line = line.trim();
         !line.starts_with('#') && line.starts_with("verify_cap_per_door_session")
     });
-    assert!(set, "gl-admit-v9.toml does not set verify_cap_per_door_session");
+    assert!(
+        set,
+        "gl-admit-v9.toml does not set verify_cap_per_door_session"
+    );
     let loaded = crate::levers::load(&raw, 2).expect("shipped policy");
     assert_eq!(loaded.verify_cap_per_door_session, 3);
-    let four = raw.replace("verify_cap_per_door_session  = 3", "verify_cap_per_door_session  = 4");
+    let four = raw.replace(
+        "verify_cap_per_door_session  = 3",
+        "verify_cap_per_door_session  = 4",
+    );
     assert_ne!(four, raw);
     let loaded = crate::levers::load(&four, 2).expect("cap 4");
     assert_eq!(loaded.verify_cap_per_door_session, 4);
@@ -1546,10 +1668,16 @@ fn rule_i4_restart_flush_and_two_workers() {
         object: vec![5u8; 40],
         signature: [0u8; 64],
     };
-    assert_eq!(client_code(&door.sign_in_locked(early.clone()).body), "malformed");
+    assert_eq!(
+        client_code(&door.sign_in_locked(early.clone()).body),
+        "malformed"
+    );
     assert!(!door.consumed_nonce(&early.nonce));
     assert!(door.test_decisions().is_empty());
-    assert_ne!(client_code(&door.sign_in_locked(late.clone()).body), "malformed");
+    assert_ne!(
+        client_code(&door.sign_in_locked(late.clone()).body),
+        "malformed"
+    );
 
     door.test_set_store_start(2_000);
     let replay = door.sign_in_locked(late.clone());
@@ -1560,11 +1688,17 @@ fn rule_i4_restart_flush_and_two_workers() {
     let door = open_door(policy.clone(), "http://127.0.0.1:9");
     door.set_now_unix_s(Some(1_005));
     door.test_set_store_start(1_000);
-    assert_ne!(client_code(&door.sign_in_locked(late.clone()).body), "malformed");
+    assert_ne!(
+        client_code(&door.sign_in_locked(late.clone()).body),
+        "malformed"
+    );
     door.test_flush_nonce_store(3_000);
     door.set_now_unix_s(Some(3_005));
     assert_eq!(door.store_start(), 3_000);
-    assert_eq!(client_code(&door.sign_in_locked(late.clone()).body), "malformed");
+    assert_eq!(
+        client_code(&door.sign_in_locked(late.clone()).body),
+        "malformed"
+    );
     assert!(!door.consumed_nonce(&late.nonce));
     assert!(door.test_decisions().is_empty());
 
@@ -1593,9 +1727,15 @@ fn rule_i4_restart_flush_and_two_workers() {
         door.set_now_unix_s(Some(1_005));
     }
     assert_eq!(left.store_start(), right.store_start());
-    assert_eq!(client_code(&left.sign_in_locked(early.clone()).body), "malformed");
+    assert_eq!(
+        client_code(&left.sign_in_locked(early.clone()).body),
+        "malformed"
+    );
     assert_eq!(client_code(&right.sign_in_locked(early).body), "malformed");
-    assert_ne!(client_code(&left.sign_in_locked(late.clone()).body), "malformed");
+    assert_ne!(
+        client_code(&left.sign_in_locked(late.clone()).body),
+        "malformed"
+    );
     assert_ne!(client_code(&right.sign_in_locked(late).body), "malformed");
 }
 
@@ -1623,7 +1763,9 @@ fn tip_not_read_or_below_the_last_beacon_is_held_and_counted() {
     door.set_now_unix_s(Some(1_000_010));
     assert!(door.poll_held().is_empty());
     assert!(door.test_decisions().iter().any(|item| item == "refuse"));
-    assert!(chain(&door).iter().any(|line| line["reason"] == "reverify_max_attempts"));
+    assert!(chain(&door)
+        .iter()
+        .any(|line| line["reason"] == "reverify_max_attempts"));
 
     let index = serve(&obj, Face::Down);
     let door = open_door(policy, &index.base);
@@ -1632,7 +1774,9 @@ fn tip_not_read_or_below_the_last_beacon_is_held_and_counted() {
     assert_eq!(door.settle_fast_seq(&job).0, FastPhase::Held);
     door.set_now_unix_s(Some(2_000_010));
     door.poll_held();
-    assert!(chain(&door).iter().any(|line| line["reason"] == "reverify_max_attempts"));
+    assert!(chain(&door)
+        .iter()
+        .any(|line| line["reason"] == "reverify_max_attempts"));
 }
 
 /// AC-G14. Encoding faults refuse the whole file. A missing path is a startup error.
@@ -1645,20 +1789,44 @@ fn policy_encoding_faults_refuse_the_whole_file() {
     .unwrap();
     assert!(crate::levers::load(&good, 2).is_ok());
     let cases = [
-        (good.replace("min_anchored_paths", "surprise"), "unknown lever"),
-        (good.replace("submission_deadline_blocks", "K"), "unknown lever"),
         (
-            good.replace("min_anchored_paths           = 6", "min_anchored_paths = \"6\""),
+            good.replace("min_anchored_paths", "surprise"),
+            "unknown lever",
+        ),
+        (
+            good.replace("submission_deadline_blocks", "K"),
+            "unknown lever",
+        ),
+        (
+            good.replace(
+                "min_anchored_paths           = 6",
+                "min_anchored_paths = \"6\"",
+            ),
             "wrong type",
         ),
         (
-            good.replace("submission_deadline_blocks   = 3", "submission_deadline_blocks = 7"),
+            good.replace(
+                "submission_deadline_blocks   = 3",
+                "submission_deadline_blocks = 7",
+            ),
             "out of range",
         ),
         (good.replace("p = 1", "p = 0"), "out of range"),
-        (good.replace("async_catch_budget           = 22.05", "async_catch_budget = 2.0001"), "fractional"),
-        (good.replace("reverify_max_attempts        = 3\n", ""), "absent"),
-        (good.replace("spec      = \"2.2\"", "spec      = \"2.0\""), "2.2"),
+        (
+            good.replace(
+                "async_catch_budget           = 22.05",
+                "async_catch_budget = 2.0001",
+            ),
+            "fractional",
+        ),
+        (
+            good.replace("reverify_max_attempts        = 3\n", ""),
+            "absent",
+        ),
+        (
+            good.replace("spec      = \"2.2\"", "spec      = \"2.0\""),
+            "2.2",
+        ),
     ];
     for (raw, needle) in cases {
         let err = crate::levers::load(&raw, 2).expect_err(&raw);
@@ -1669,7 +1837,8 @@ fn policy_encoding_faults_refuse_the_whole_file() {
     std::fs::write(&path, "served_origins = [\"https://groundinglab.io\"]\n").unwrap();
     let err = crate::config::Config::load(&path).unwrap_err();
     assert!(err.contains("policy path is required"), "{err}");
-    let src = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/config.rs")).unwrap();
+    let src = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/config.rs"))
+        .unwrap();
     let prod = src.split("#[cfg(test)]").next().unwrap();
     assert!(!prod.contains("CARGO_MANIFEST_DIR"));
     assert!(!prod.contains("policy_table"));
@@ -1681,7 +1850,9 @@ fn policy_encoding_faults_refuse_the_whole_file() {
 fn public_lines_do_not_name_v2_0() {
     assert!(crate::policy::EARLIER_LINE.contains("2.2"));
     assert!(crate::policy::UNREADABLE_LINE.contains("2.2"));
-    assert!(crate::reasons::public_sentence(crate::reasons::CODE_SHAPE_MISMATCH).contains("section 6"));
+    assert!(
+        crate::reasons::public_sentence(crate::reasons::CODE_SHAPE_MISMATCH).contains("section 6")
+    );
     for line in crate::reasons::public_reason_lines() {
         assert!(!line.contains("v2.0"), "{line}");
         assert!(!line.contains("2.0"), "{line}");
@@ -1697,7 +1868,10 @@ fn pinned_o3_empty_paths_refuse_under_rule_b4() {
     let (door, _index, phase, seq) = settle_face(&bytes, Face::Honest, v9());
     assert_eq!(phase, FastPhase::Done, "{:?}", chain(&door));
     assert!(seq.is_none());
-    assert!(door.test_reasons().iter().any(|reason| reason.contains("too_few")));
+    assert!(door
+        .test_reasons()
+        .iter()
+        .any(|reason| reason.contains("too_few")));
     assert!(!door.log_dir().join("pending").exists());
     assert!(!door.log_dir().join("friendly").exists());
 }
@@ -1734,7 +1908,10 @@ fn o3_prod_release_door_accepts_and_a_forged_checkpoint_does_not() {
         let (phase, seq) = door.settle_fast_seq(&job_for(&pinned, [69u8; 32]));
         assert_eq!(phase, FastPhase::Done, "{:?}", chain(&door));
         assert!(seq.is_none());
-        assert!(door.test_reasons().iter().any(|reason| reason.contains("too_few")));
+        assert!(door
+            .test_reasons()
+            .iter()
+            .any(|reason| reason.contains("too_few")));
         assert_eq!(thorough::fills(), 0);
         assert_eq!(thorough::draws(), 0);
     }
@@ -1756,7 +1933,8 @@ fn o3_prod_release_door_accepts_and_a_forged_checkpoint_does_not() {
     let seq = seq.expect("provisional seq");
     let fills = thorough::fills();
     let started = std::time::Instant::now();
-    let out = thorough::run(door.log_dir().as_path(), seq, &bytes, &sha, &policy).expect("thorough");
+    let out =
+        thorough::run(door.log_dir().as_path(), seq, &bytes, &sha, &policy).expect("thorough");
     eprintln!(
         "production thorough wall seconds (fact, not a measurement): {}",
         started.elapsed().as_secs()
@@ -1779,7 +1957,10 @@ fn o3_prod_release_door_accepts_and_a_forged_checkpoint_does_not() {
             rest.split_whitespace().next()?.parse::<u64>().ok()
         })
         .unwrap();
-    assert!(kb >= 800 * 1024, "MemAvailable is {kb} KiB before the forged leg");
+    assert!(
+        kb >= 800 * 1024,
+        "MemAvailable is {kb} KiB before the forged leg"
+    );
     let mut forged_obj = pcoc::decode_object(&bytes).unwrap();
     forged_obj.stages[0].checkpoints[0][0] ^= 0xff;
     let forged = pcoc::encode_object(&forged_obj);

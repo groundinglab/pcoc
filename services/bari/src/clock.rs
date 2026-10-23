@@ -1310,6 +1310,9 @@ pub struct BariClock {
     handoff_duplicate: Option<u32>,
     /// Open-since height of the live collecting cohort.
     collecting_since: Option<u32>,
+    /// Paths and index blobs below this height are not served.
+    /// `0` serves every retained height. Production sets [`crate::BORN_HEIGHT`].
+    born_height: u32,
     next_batch_sequence: u64,
     #[cfg(test)]
     fail_next_persist: bool,
@@ -1575,6 +1578,7 @@ impl BariClock {
             handoff_malformed: None,
             handoff_duplicate: None,
             collecting_since: None,
+            born_height: 0,
             next_batch_sequence,
             #[cfg(test)]
             fail_next_persist: false,
@@ -2020,7 +2024,9 @@ impl BariClock {
     /// Batches, seal events, and the in-memory ledger. No chain calls.
     pub fn ops_sources(&self) -> OpsSources {
         let tip = self.current_tip.height;
-        let oldest = tip.saturating_sub(LEDGER_RETAIN_BLOCKS.saturating_add(ANCHOR_WINDOW_BLOCKS));
+        let oldest = tip
+            .saturating_sub(LEDGER_RETAIN_BLOCKS.saturating_add(ANCHOR_WINDOW_BLOCKS))
+            .max(self.born_height);
         let batches = self.store.load_batches().unwrap_or_default();
         let sealed = self
             .store
@@ -2032,14 +2038,16 @@ impl BariClock {
             .unwrap_or_default();
         let mut hash_heights = HashMap::new();
         hash_heights.insert(self.current_tip.hash, self.current_tip.height);
-        for height in oldest..=tip {
-            let Ok(Some(index)) = self.store.load_index_tip(height) else {
-                continue;
-            };
-            let Ok(hash) = decode_bitcoin_id(&index.header.hash) else {
-                continue;
-            };
-            hash_heights.insert(hash, height);
+        if oldest <= tip {
+            for height in oldest..=tip {
+                let Ok(Some(index)) = self.store.load_index_tip(height) else {
+                    continue;
+                };
+                let Ok(hash) = decode_bitcoin_id(&index.header.hash) else {
+                    continue;
+                };
+                hash_heights.insert(hash, height);
+            }
         }
         OpsSources {
             network: self.network.clone(),
@@ -2223,11 +2231,25 @@ impl BariClock {
             .unwrap_or(PathMiss::Unknown)
     }
 
-    /// L1: retained portable-index blob for a tip height, if still on disk.
+    /// The serve floor. Heights below it are not returned. Stored files stay.
+    pub fn set_born_height(&mut self, born_height: u32) {
+        self.born_height = born_height;
+    }
+
+    pub fn born_height(&self) -> u32 {
+        self.born_height
+    }
+
+    /// L1: retained portable-index blob for a tip height, if still on disk
+    /// and at or above [`Self::born_height`]. A lower file is left in place
+    /// and is not served.
     pub fn index_at_height(
         &self,
         height: u32,
     ) -> Result<Option<StoredPortableIndex>, StorageError> {
+        if height < self.born_height {
+            return Ok(None);
+        }
         self.store.load_index_tip(height)
     }
 
@@ -2270,6 +2292,9 @@ impl BariClock {
     pub fn path_for(&self, leaf: &Hash32) -> Result<Option<CanonicalPathBody>, ChainError> {
         for serving in &self.serving {
             let Some(inclusion) = serving.record.inclusion.as_ref() else {
+                continue;
+            };
+            if inclusion.block_height < self.born_height {
                 continue;
             };
             let Ok(path) = serving.tree.path(leaf) else {

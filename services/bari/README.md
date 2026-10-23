@@ -14,6 +14,8 @@ Bari timestamps waypoints by sealing each tip's pool into one Bitcoin transactio
 - `GET /path/{leaf}`
 - `GET /ops`
 
+`born_height` is 972685, the same policy value as `gl-admit-v9.toml`. It is not a SPEC rule. `GET /path/{leaf}` does not return a path whose inclusion height is below that value. An index blob below it is not returned by the in-process height read. The batch record and the `height-*.json` file stay on disk. Bari does not serve `GET /index`. The index reader applies the same floor. Confirmed paths at or above the floor stay servable. Tests set their own floor. The default inside a test clock is 0, so a fixture height is still served. The binary sets 972685.
+
 ## Tip modes
 
 | Mode | What it is |

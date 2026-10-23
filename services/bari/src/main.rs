@@ -57,8 +57,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let network = required_string("BARI_BITCOIN_NETWORK")?;
             let backend = open_bitcoin_backend(network.clone())?;
             let fee_label = backend.fee_log_label();
-            let clock =
-                BariClock::open_for_network_with_soft_max(backend, store, &network, soft_max)?;
+            let clock = with_born_height(BariClock::open_for_network_with_soft_max(
+                backend, store, &network, soft_max,
+            )?);
             let initial_tip = clock.current_tip();
             let confirmation_window_tips = clock.confirmation_window_tips();
             let service = BariService::new(clock, &origin)?;
@@ -99,13 +100,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let opened = first.first().ok_or("synth returned no tip")?;
             let tip = chain_tip(opened)?;
             let opened_hash = opened.hash;
-            let clock = BariClock::open_at_supplied_tip(
+            let clock = with_born_height(BariClock::open_at_supplied_tip(
                 backend,
                 store,
                 tip,
                 SYNTH_INDEX_NETWORK,
                 soft_max,
-            )?;
+            )?);
             let initial_tip = clock.current_tip();
             let confirmation_window_tips = clock.confirmation_window_tips();
             let service = BariService::new(clock, &origin)?;
@@ -148,7 +149,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let opened = first.first().ok_or("bitcoin gossip returned no tip")?;
             let tip = chain_tip(opened)?;
             let opened_hash = opened.hash;
-            let clock = BariClock::open_at_supplied_tip(backend, store, tip, &network, soft_max)?;
+            let clock = with_born_height(BariClock::open_at_supplied_tip(
+                backend, store, tip, &network, soft_max,
+            )?);
             let initial_tip = clock.current_tip();
             let confirmation_window_tips = clock.confirmation_window_tips();
             let service = BariService::new(clock, &origin)?;
@@ -184,6 +187,13 @@ fn public_origin() -> Result<String, Box<dyn std::error::Error>> {
         "BARI_PUBLIC_ORIGIN is required: the public http or https origin of this Bari"
     })?;
     Ok(pcoc_bari::hashcash::bari_origin(&raw)?.into())
+}
+
+/// Production serve floor. Tests build a clock and leave the floor at 0,
+/// or set their own. This is not read from the environment.
+fn with_born_height(mut clock: BariClock) -> BariClock {
+    clock.set_born_height(pcoc_bari::BORN_HEIGHT);
+    clock
 }
 
 fn ops_fixture_requested() -> bool {

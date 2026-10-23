@@ -11,7 +11,10 @@ use pcoc::object::HikeObject;
 use pcoc::path::{self, PathBody};
 
 pub enum ReadStop {
-    Held { record: String, tip: Option<u64> },
+    Held {
+        record: String,
+        tip: Option<u64>,
+    },
     Refuse {
         reasons: Vec<String>,
         line: String,
@@ -36,6 +39,13 @@ pub fn assess(
     policy: &AdmissionPolicy,
     index: &IndexClient,
 ) -> Result<ReadView, ReadStop> {
+    if let Some(lowest) = crate::policy::lowest_before_born(object, policy.born_height) {
+        return Err(ReadStop::Refuse {
+            reasons: vec![crate::policy::BEFORE_BORN.to_owned()],
+            line: crate::policy::before_born_line(policy.born_height, lowest),
+            record: crate::policy::before_born_record(policy.born_height, lowest),
+        });
+    }
     let obj = pcoc::decode_object(object).map_err(|_| ReadStop::Refuse {
         reasons: vec!["malformed".to_owned()],
         line: "The object is not the canonical encoding.".to_owned(),
@@ -55,7 +65,12 @@ pub fn assess(
     {
         return Err(ReadStop::Refuse {
             reasons: vec![crate::policy::REFUSE_LEG_RATE.to_owned()],
-            line: crate::policy::leg_rate_line(legs, span, policy.leg_rate_floor.p, policy.leg_rate_floor.q),
+            line: crate::policy::leg_rate_line(
+                legs,
+                span,
+                policy.leg_rate_floor.p,
+                policy.leg_rate_floor.q,
+            ),
             record: record_json(legs, span, anchored),
         });
     }
@@ -72,7 +87,11 @@ pub fn assess(
     })
 }
 
-fn rule_b10(obj: &HikeObject, policy: &AdmissionPolicy, index: &IndexClient) -> Result<Option<u64>, ReadStop> {
+fn rule_b10(
+    obj: &HikeObject,
+    policy: &AdmissionPolicy,
+    index: &IndexClient,
+) -> Result<Option<u64>, ReadStop> {
     if !obj.has_last_height {
         return Err(held(None));
     }
@@ -104,8 +123,9 @@ fn compare_headers(
 ) -> Result<(), ReadStop> {
     for stage in &obj.stages {
         let path = format!("/index/{}", stage.beacon_height);
-        let body = match load_checked(index, &path, |text| header_matches(text, stage.beacon, stage.beacon_height))
-        {
+        let body = match load_checked(index, &path, |text| {
+            header_matches(text, stage.beacon, stage.beacon_height)
+        }) {
             Ok(body) => body,
             Err(DocFail::NotRead) => return Err(held(None)),
             Err(DocFail::Mismatch) => {
@@ -148,7 +168,11 @@ fn compare_headers(
     Ok(())
 }
 
-fn compare_plants(obj: &HikeObject, policy: &AdmissionPolicy, index: &IndexClient) -> Result<u64, ReadStop> {
+fn compare_plants(
+    obj: &HikeObject,
+    policy: &AdmissionPolicy,
+    index: &IndexClient,
+) -> Result<u64, ReadStop> {
     let mut anchored = 0u64;
     let mut unread = 0u64;
     for stage in obj.stages.iter().skip(1).take(16) {
@@ -173,7 +197,9 @@ fn compare_plants(obj: &HikeObject, policy: &AdmissionPolicy, index: &IndexClien
             continue;
         }
         let path = format!("/index/{block_h}");
-        match load_checked(index, &path, |text| plant_matches(text, &body, &stage.waypoint)) {
+        match load_checked(index, &path, |text| {
+            plant_matches(text, &body, &stage.waypoint)
+        }) {
             Ok(_) => anchored += 1,
             Err(DocFail::NotRead) => unread += 1,
             Err(DocFail::Mismatch) => return Err(plant_refuse()),
@@ -253,7 +279,11 @@ fn fill_times(
     true
 }
 
-fn load_checked(index: &IndexClient, path: &str, check: impl Fn(&str) -> bool) -> Result<String, DocFail> {
+fn load_checked(
+    index: &IndexClient,
+    path: &str,
+    check: impl Fn(&str) -> bool,
+) -> Result<String, DocFail> {
     let body = index.get_cached(path).map_err(|_| DocFail::NotRead)?;
     if check(&body) {
         return Ok(body);

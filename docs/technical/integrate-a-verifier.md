@@ -9,3 +9,5 @@ Only hash-bound values are evidence. A text disagreement with a vector is a defe
 A worked example is any of the three SDKs. Start at [sdk/README.md](../../sdk/README.md). The verify programs write the section 14 record. They do not apply section 15.
 
 Do not call groundinglab to learn the construction. Do not read the services to learn the construction. The services add no Part A rule.
+
+`before_born_height` is not a section 14 result. A SPEC verifier does not emit it. It is an admission-policy decision from the gate. The policy value is `born_height` (972685 in the current groundinglab policy). It is not part of Satoshi Hike 2.2. A caller of the gate who receives `before_born_height` has a final answer: the object carries a height below the born height, so it is testing history. Do not retry it, and do not treat the answer as an index outage or a hold. The verify output names the `born_height` that applied and the lowest offending height.
