@@ -40,13 +40,13 @@ GET  /log/{YYYY-MM-DD}.jsonl
 GET  /log/{YYYY-MM-DD}/{seq}
 GET  /v1/policy            -> the full policy table, plus source
 POST /v1/verify            -> 202 { "job_id" }
-GET  /v1/verify/{job_id}   -> status, and the fast pre-check record
+GET  /v1/verify/{job_id}   -> status, and the section 14 record
 GET  /v1/health            -> version, commit, sdk, spec, spec_kind, config
 ```
 
 `POST /v1/admit` and the other legacy names are HTTP 404.
 
-The fast phase is `pcoc::precheck` (decode, kind, and shape). It does not fill a terrain. Any other kind is Rule A5 (`unknown_kind`). The thorough phase calls `pcoc::thorough_draw` and then holds: leg recompute of those indices is not in this build. Header and plant reads are not in this build.
+`POST /v1/verify` runs section 14 (`pcoc::verify`) against `index_url`. Any other kind is Rule A5 (`unknown_kind`) and does not read the index. A shape match whose `hike_span` is `not read` finishes `held`. One whose pair meets the floor finishes `done`. The sign-in fast phase is `pcoc::precheck` plus the header and plant reads in `reads`. The thorough phase calls `pcoc::thorough_draw`.
 
 Policy values come from the policy file, not from the specification. The groundinglab policy is [gl-admit-v9.toml](../../policy/groundinglab-admission/gl-admit-v9.toml). A change of any value needs a new id. See [POLICY.md](../../policy/groundinglab-admission/POLICY.md). The verifier writes `measures`. The gate writes `policy_id` and `policy_checks`. A refusal carries one `reason_code` and a class. `bitcoin_tip_height` is null when unknown. Public health does not show `log_dir` or `config_path`. Health echoes the policy id.
 

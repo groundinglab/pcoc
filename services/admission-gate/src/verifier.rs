@@ -9,7 +9,7 @@
 use crate::cbor_limit::{self, MAX_CBOR_NESTING};
 use pcoc::cbor::{self, Cbor};
 use pcoc::profile::Profile;
-use pcoc::verify::Precheck;
+use pcoc::verify::{HeightIndex, Precheck, Verified};
 use std::time::Duration;
 
 /// Health name. The object kind is SPEC §6.
@@ -118,11 +118,15 @@ pub fn reference_linked() -> bool {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Class {
     /// Rule A5. Not the current kind.
-    UnknownKind { kind: String },
+    UnknownKind {
+        kind: String,
+    },
     Unreadable,
     NoPublicKey,
     /// Current kind and a 32-byte public key. Shape may still mismatch.
-    Ready { public_key: [u8; 32] },
+    Ready {
+        public_key: [u8; 32],
+    },
 }
 
 /// Kind and key only. Does not fill a terrain and does not draw.
@@ -151,9 +155,10 @@ pub fn classify(object: &[u8]) -> Class {
     }
 }
 
-/// Pre-check only. A full section 14 record would fill the production terrain.
-/// That walk is not this call. Unknown kind is a note `unknown_kind`.
-pub fn measure(object: &[u8], _opts: &MeasureOpts) -> Report {
+/// Section 14 for a current object. Unknown kind is a note `unknown_kind`
+/// and does not read the index. A shape match calls `pcoc::verify` against
+/// `{index-url}` so `hike_span` is `not read` only when that read fails.
+pub fn measure(object: &[u8], opts: &MeasureOpts) -> Report {
     if cbor_limit::nesting_exceeds(object, MAX_CBOR_NESTING) {
         return Report::Unreadable;
     }
@@ -167,34 +172,81 @@ pub fn measure(object: &[u8], _opts: &MeasureOpts) -> Report {
         }),
         Precheck::Malformed | Precheck::DecodeFailure => Report::Unreadable,
         Precheck::Shape { shape, shape_item } => {
-            let record = serde_json::json!({
-                "profile": "production",
-                "shape": shape,
-                "shape_item": shape_item,
-            })
-            .to_string();
-            let (record, notes) = if shape == "match" {
-                // Header, plant, and leg recompute are not this call.
-                // `hike_span` stays `not read`, so the judge holds.
+            if shape != "match" {
                 let record = serde_json::json!({
                     "profile": "production",
                     "shape": shape,
                     "shape_item": shape_item,
-                    "analysis": { "hike_legs": "not read", "hike_span": "not read" },
                 })
                 .to_string();
-                (record, Vec::new())
-            } else {
-                (record, vec!["shape_mismatch".to_owned()])
+                return Report::Read(Measured {
+                    earlier_version: false,
+                    kind: SPEC_KIND.to_owned(),
+                    record,
+                    verifier_notes: vec!["shape_mismatch".to_owned()],
+                    measures: Measures::empty(),
+                });
+            }
+            let mut index = FetchIndex {
+                client: IndexClient::open(&opts.index_url, opts.timeout),
             };
-            Report::Read(Measured {
-                earlier_version: false,
-                kind: SPEC_KIND.to_owned(),
-                record,
-                verifier_notes: notes,
-                measures: Measures::empty(),
-            })
+            match pcoc::verify(object, &Profile::production(), &mut index) {
+                Verified::DecodeFailure => Report::Unreadable,
+                Verified::UnknownKind(record) => Report::Read(Measured {
+                    earlier_version: false,
+                    kind: kind_text(&record),
+                    record,
+                    verifier_notes: vec!["unknown_kind".to_owned()],
+                    measures: Measures::empty(),
+                }),
+                Verified::Record(record) => {
+                    let notes = shape_notes(&record);
+                    let mut record = record;
+                    if !record.ends_with('\n') {
+                        record.push('\n');
+                    }
+                    Report::Read(Measured {
+                        earlier_version: false,
+                        kind: SPEC_KIND.to_owned(),
+                        record,
+                        verifier_notes: notes,
+                        measures: Measures::empty(),
+                    })
+                }
+            }
         }
+    }
+}
+
+/// `shape` other than `match` is a refusal note. A match leaves the notes
+/// empty so Rule B2 can hold a real `hike_span` of `not read`, or admit.
+fn shape_notes(record: &str) -> Vec<String> {
+    let shape = serde_json::from_str::<serde_json::Value>(record)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("shape")
+                .and_then(|item| item.as_str())
+                .map(str::to_owned)
+        });
+    if shape.as_deref() == Some("match") {
+        Vec::new()
+    } else {
+        vec!["shape_mismatch".to_owned()]
+    }
+}
+
+/// `{index-url}/index/{height}` for one section 14 verify. A non-2xx is `None`.
+struct FetchIndex {
+    client: IndexClient,
+}
+
+impl HeightIndex for FetchIndex {
+    fn read_height(&mut self, height: u64) -> Option<Vec<u8>> {
+        self.client
+            .get_cached(&format!("/index/{height}"))
+            .ok()
+            .map(String::into_bytes)
     }
 }
 
@@ -280,11 +332,7 @@ impl Mirror {
     }
 
     fn cached(&self, path: &str) -> Option<String> {
-        self.bodies
-            .lock()
-            .expect("index mirror")
-            .get(path)
-            .cloned()
+        self.bodies.lock().expect("index mirror").get(path).cloned()
     }
 
     fn store(&self, path: &str, body: String) {

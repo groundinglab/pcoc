@@ -11,7 +11,7 @@ GET  /latest.json                   unsigned tip, after a durable line
 GET  /log/{YYYY-MM-DD}.jsonl        lines whose time_unix_s falls on that UTC date
 GET  /log/{YYYY-MM-DD}/{seq}        one decision-log line
 POST /v1/verify                     202 { "job_id" }
-GET  /v1/verify/{job_id}            status; the fast pre-check record
+GET  /v1/verify/{job_id}            status; the section 14 record
 GET  /v1/health                     version, commit, sdk, spec kind, config summary
 GET  /v1/policy                     the policy in force (policy_id and its parameters)
 ```
@@ -157,8 +157,8 @@ Sign-in posts JSON. The transport limit is large enough for the base64 of an obj
 
 ## Verify job
 
-`POST /v1/verify` does not check a signature. `GET /v1/verify/{job_id}` carries `record` from the fast pre-check (`pcoc::precheck`): decode, kind, and shape. It does not fill a production terrain. Any other kind finishes as `error.code` `unknown_kind`. A refusal still carries `record` when the object was classified. `reasons`, `reason`, and `error` follow it.
+`POST /v1/verify` does not check a signature. `GET /v1/verify/{job_id}` carries the section 14 record from `pcoc::verify` against this gate's `index_url`. Any other kind finishes as `error.code` `unknown_kind` and does not read the index. A shape mismatch is `error.code` `shape_mismatch`. A shape match whose `analysis.hike_span` is `not read`, and which has no other verifier note, finishes `held`. A numeric pair under the leg-rate floor finishes `error`. A pair that meets the floor finishes `done`. A refusal still carries `record` when the object was classified. `reasons`, `reason`, and `error` follow it. The job does not admit.
 
 The thorough draw, when a sign-in reaches it, calls `pcoc::thorough_draw` (operating-system CSPRNG, no byte source). Leg recompute of the drawn indices is not in this build, so that phase holds. Header and plant reads are not in this build. The process does not read `PCOC_BIND_THREADS`. `bind_threads` in the config defaults to 6. A restart settles an unsettled provisional the same way. It does not enter an unbounded wait. A second POST is a new check.
 
-A locked sign-in of a `v2.2-pcoc-object` is `{"delivery":"ok"}`, then a website outcome. A verify job returns the fast pre-check record. It does not admit.
+A locked sign-in of a `v2.2-pcoc-object` is `{"delivery":"ok"}`, then a website outcome. A verify job returns the section 14 record. It does not admit.
