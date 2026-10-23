@@ -1,6 +1,7 @@
 //! Reads the `pcoc` pin from the workspace manifest and lock file and
-//! exposes it to the About page. Package name `pcoc`, version 2.3.0.
-//! It reports the pin; it does not refuse one.
+//! exposes it to the About page. The app targets SDK v2.3.0.
+//! A resolved lock entry wins. The fallback is that target when the lock
+//! has no `pcoc` package. It reports the pin; it does not refuse one.
 
 use std::path::PathBuf;
 

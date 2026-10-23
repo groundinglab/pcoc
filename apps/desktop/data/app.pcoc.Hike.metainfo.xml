@@ -4,12 +4,13 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>Apache-2.0</project_license>
   <name>PCOC Hike</name>
-  <summary>Produce, verify and sign in with SDK 2.2 objects</summary>
+  <summary>Produce, verify and sign in with SDK 2.3 objects</summary>
   <description>
     <p>
       PCOC Hike checks kind v2.2-pcoc-object with the in-tree Rust SDK
-      (sdk/rust, version 2.2.0), shows the section 14 record, and submits one
-      groundinglab sign-in. The live header source is not in this build.
+      (sdk/rust). This build targets SDK v2.3.0. It shows the section 14
+      record, and submits one groundinglab sign-in. The live header source
+      is not in this build.
     </p>
     <p>
       An nsec is pasted or generated for the session. It stays in memory and
@@ -26,6 +27,11 @@
     <display_length compare="ge">720</display_length>
   </requires>
   <releases>
+    <release version="0.1.5" date="2026-10-23">
+      <description>
+        <p>Aligns the app to SPEC 2.3 and Rust SDK v2.3.0. Object kind stays v2.2-pcoc-object.</p>
+      </description>
+    </release>
     <release version="0.1.4" date="2026-10-18">
       <description>
         <p>Send to my phone: a finished PCOC goes to its own npub as one encrypted Nostr message (NIP-04), for the phone app signed in with that npub.</p>
