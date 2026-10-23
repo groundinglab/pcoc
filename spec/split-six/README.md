@@ -1,6 +1,6 @@
 # Satoshi Hike 2.3 — Six Document Split
 
-This directory contains a clean separation of the Satoshi Hike 2.3 specification into six documents. Each document has a clear responsibility. Every section of the original 2.3 specification has a single targeted home. No wording has been changed.
+These six documents separate the Satoshi Hike 2.3 specification by responsibility. Each document inherits its content verbatim from the listed sections of `spec/satoshi-hike-v2.3/SPEC.md`. No wording has been changed.
 
 ## Documents
 
@@ -22,4 +22,4 @@ All documents depend on Satoshi Hike Construction.
 - An admission-gate implementer uses Construction and Admission Process.
 - Conformance Process is used by any implementer who wants to claim pack-level conformance.
 
-The original 2.3 specification remains the source of truth. These documents are an extraction for clarity of responsibility.
+The original 2.3 specification remains the source of truth until these documents are confirmed complete.
