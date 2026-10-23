@@ -12,8 +12,8 @@ use std::time::Duration;
 
 fn policy_text() -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../policy/groundinglab-admission/gl-admit-v9.toml");
-    std::fs::read_to_string(path).expect("gl-admit-v9.toml")
+        .join("../../policy/groundinglab-admission/gl-admit-v10.toml");
+    std::fs::read_to_string(path).expect("gl-admit-v10.toml")
 }
 
 fn other_kind() -> Vec<u8> {
@@ -35,7 +35,7 @@ fn other_kind() -> Vec<u8> {
 
 #[test]
 fn other_kind_is_unknown_kind_from_the_fast_phase() {
-    let policy = levers::load(&policy_text(), 2).expect("v9");
+    let policy = levers::load(&policy_text(), 2).expect("v10");
     let index =
         pcoc_admission::verifier::IndexClient::open("http://127.0.0.1:9", Duration::from_secs(1));
     match pcoc_admission::fast::decide(&other_kind(), &policy, &index) {
@@ -58,9 +58,9 @@ fn two_thorough_draws_differ() {
 }
 
 #[test]
-fn gl_admit_v9_loads() {
-    let policy = levers::load(&policy_text(), 2).expect("v9");
-    assert_eq!(policy.policy_id, "gl-admit-v9");
+fn gl_admit_v10_loads() {
+    let policy = levers::load(&policy_text(), 2).expect("v10");
+    assert_eq!(policy.policy_id, "gl-admit-v10");
     assert_eq!(policy.leg_rate_floor.p, 1);
     assert_eq!(policy.leg_rate_floor.q, 5);
     assert_eq!(policy.min_anchored_paths, 6);
@@ -70,6 +70,26 @@ fn gl_admit_v9_loads() {
     assert_eq!(policy.max_held_blocks, 6);
     assert_eq!(policy.expected_network(), Some("main"));
     assert_eq!(policy.born_height, 972685);
+}
+
+/// The previous id stays as it was. It has no `born_height` key, so load
+/// treats that boundary as 0. This test reads the file. It sets nothing
+/// on the process.
+#[test]
+fn gl_admit_v9_file_is_unchanged() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../policy/groundinglab-admission/gl-admit-v9.toml");
+    let text = std::fs::read_to_string(&path).expect("gl-admit-v9.toml");
+    assert!(
+        !text.lines().any(|line| {
+            let line = line.trim();
+            !line.starts_with('#') && line.starts_with("born_height")
+        }),
+        "gl-admit-v9.toml gained a born_height key"
+    );
+    let policy = levers::load(&text, 2).expect("v9");
+    assert_eq!(policy.policy_id, "gl-admit-v9");
+    assert_eq!(policy.born_height, 0);
 }
 
 fn base_levers() -> String {

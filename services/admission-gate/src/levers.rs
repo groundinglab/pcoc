@@ -34,7 +34,7 @@ const REQUIRED: &[&str] = &[
 ];
 
 /// SPEC §15.4 default of `verify_cap_per_door_session` is unset. This constant
-/// applies only when the key is absent. `gl-admit-v9.toml` sets the key to 3,
+/// applies only when the key is absent. `gl-admit-v10.toml` sets the key to 3,
 /// and `load` reads that value.
 pub const VERIFY_CAP_PER_DOOR_SESSION_AWAITING_POLICY: u64 = 3;
 

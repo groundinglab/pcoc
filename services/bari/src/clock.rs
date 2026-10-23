@@ -2240,14 +2240,25 @@ impl BariClock {
         self.born_height
     }
 
-    /// L1: retained portable-index blob for a tip height, if still on disk
-    /// and at or above [`Self::born_height`]. A lower file is left in place
-    /// and is not served.
+    /// Lowest height whose stored header this process returns.
+    ///
+    /// Production heights start at [`Self::born_height`]. The median-time
+    /// lookback is the [`crate::MTP_LOOKBACK`] headers before that, and
+    /// those headers are returned too. A path is not.
+    fn header_floor(&self) -> u32 {
+        self.born_height.saturating_sub(crate::MTP_LOOKBACK)
+    }
+
+    /// L1: retained portable-index blob for a height, if still on disk and
+    /// at or above [`Self::header_floor`]. A file below that floor is left
+    /// in place and is not returned. A header in the lookback window is
+    /// returned. It is not a production height: [`Self::path_for`] still
+    /// requires the inclusion height to be at or above [`Self::born_height`].
     pub fn index_at_height(
         &self,
         height: u32,
     ) -> Result<Option<StoredPortableIndex>, StorageError> {
-        if height < self.born_height {
+        if height < self.header_floor() {
             return Ok(None);
         }
         self.store.load_index_tip(height)

@@ -1,4 +1,4 @@
-//! Gate tests for SPEC 2.2 §14–§15 on the 2.2 record and gl-admit-v9.
+//! Gate tests for SPEC 2.2 §14–§15 on the 2.2 record and gl-admit-v10.
 //!
 //! A production terrain is filled only by `o3_prod_release_door_accepts_and_a_forged_checkpoint_does_not`,
 //! and only in a release build. Every other recompute uses a conformance-small profile.
@@ -60,11 +60,11 @@ fn profile_of(obj: &HikeObject) -> Profile {
     .expect("conformance-small profile")
 }
 
-fn v9() -> AdmissionPolicy {
+fn v10() -> AdmissionPolicy {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../policy/groundinglab-admission/gl-admit-v9.toml");
+        .join("../../policy/groundinglab-admission/gl-admit-v10.toml");
     let raw = std::fs::read_to_string(&path).unwrap();
-    let mut policy = crate::levers::load(&raw, 2).expect("gl-admit-v9");
+    let mut policy = crate::levers::load(&raw, 2).expect("gl-admit-v10");
     // Fixtures such as O3 sit below the production born height. This value
     // belongs to the policy this call returns. It is not process state.
     policy.born_height = 0;
@@ -126,7 +126,7 @@ impl Pol {
         }
         let raw = format!(
             r#"
-policy_id = "gl-admit-v9"
+policy_id = "gl-admit-v10"
 spec = "2.2"
 [levers]
 min_anchored_paths = {min}
@@ -477,7 +477,7 @@ fn needed_heights(obj: &HikeObject) -> BTreeSet<u64> {
         windows.push(obj.last_interrupt_height);
     }
     for height in windows {
-        let n = std::cmp::min(11u64, height.saturating_add(1));
+        let n = std::cmp::min(pcoc::constants::MTP_WINDOW, height.saturating_add(1));
         let start = height + 1 - n;
         for item in start..=height {
             heights.insert(item);
@@ -731,7 +731,7 @@ fn release_slot(door: &Door, signed: &crate::door::LockedSignIn) {
 #[test]
 fn honest_index_reads_are_provisional_and_thorough_is_enqueued() {
     let bytes = anchored_o3();
-    let (door, _index, phase, seq) = settle_face(&bytes, Face::Honest, v9());
+    let (door, _index, phase, seq) = settle_face(&bytes, Face::Honest, v10());
     assert_eq!(phase, FastPhase::Provisional, "{:?}", chain(&door));
     assert!(seq.is_some());
     assert_eq!(door.test_decisions(), vec!["provisional".to_owned()]);
@@ -743,7 +743,7 @@ fn honest_index_reads_are_provisional_and_thorough_is_enqueued() {
 #[test]
 fn index_down_is_held() {
     let bytes = object_bytes("O3-PROD.cbor");
-    let (door, _index, phase, seq) = settle_face(&bytes, Face::Down, v9());
+    let (door, _index, phase, seq) = settle_face(&bytes, Face::Down, v10());
     assert_eq!(phase, FastPhase::Held, "{:?}", chain(&door));
     assert!(seq.is_none());
     assert!(door.test_decisions().is_empty());
@@ -758,7 +758,7 @@ fn a_confirmed_plant_mismatch_refuses() {
         first_plant_height(&obj).is_some(),
         "O3 has no decodable W_1..W_16 path"
     );
-    let (door, _index, phase, _) = settle_face(&bytes, Face::PlantBad, v9());
+    let (door, _index, phase, _) = settle_face(&bytes, Face::PlantBad, v10());
     assert_eq!(phase, FastPhase::Done, "{:?}", chain(&door));
     assert!(door
         .test_reasons()
@@ -770,7 +770,7 @@ fn a_confirmed_plant_mismatch_refuses() {
 #[test]
 fn an_unconfirmed_plant_mismatch_is_held() {
     let bytes = anchored_o3();
-    let (door, _index, phase, _) = settle_face(&bytes, Face::PlantOnce, v9());
+    let (door, _index, phase, _) = settle_face(&bytes, Face::PlantOnce, v10());
     assert_eq!(phase, FastPhase::Held, "{:?}", chain(&door));
     assert!(door.test_decisions().is_empty());
     assert!(door.mirror().bypass_count() >= 1);
@@ -780,7 +780,7 @@ fn an_unconfirmed_plant_mismatch_is_held() {
 #[test]
 fn a_confirmed_header_mismatch_refuses() {
     let bytes = object_bytes("O3-PROD.cbor");
-    let (door, _index, phase, _) = settle_face(&bytes, Face::HeaderBad, v9());
+    let (door, _index, phase, _) = settle_face(&bytes, Face::HeaderBad, v10());
     assert_eq!(phase, FastPhase::Done, "{:?}", chain(&door));
     assert!(door
         .test_reasons()
@@ -792,7 +792,7 @@ fn a_confirmed_header_mismatch_refuses() {
 #[test]
 fn an_unconfirmed_header_mismatch_is_held() {
     let bytes = object_bytes("O3-PROD.cbor");
-    let (door, _index, phase, _) = settle_face(&bytes, Face::HeaderOnce, v9());
+    let (door, _index, phase, _) = settle_face(&bytes, Face::HeaderOnce, v10());
     assert_eq!(phase, FastPhase::Held, "{:?}", chain(&door));
     assert!(door.mirror().bypass_count() >= 1);
     assert!(door.test_decisions().is_empty());
@@ -807,7 +807,7 @@ fn ac3_fake_leg_revokes_bans_the_key_and_ignores_a_resubmit() {
     obj.stages[0].checkpoints[0][0] ^= 0xff;
     let forged = pcoc::encode_object(&obj);
     let profile = profile_of(&obj);
-    let door = open_door(v9(), "http://127.0.0.1:9");
+    let door = open_door(v10(), "http://127.0.0.1:9");
     let job = job_for(&forged, [3u8; 32]);
     let seq = door.test_grant_provisional(&job);
     let mut out = thorough::recompute_at(&forged, &[vec![0, 1, 2, 3, 4, 5]], &profile).unwrap();
@@ -831,7 +831,7 @@ fn interleaved_jobs_each_settle_against_their_own_provisional() {
     let bytes = object_bytes("O1-S1.cbor");
     let obj = pcoc::decode_object(&bytes).unwrap();
     let profile = profile_of(&obj);
-    let door = open_door(v9(), "http://127.0.0.1:9");
+    let door = open_door(v10(), "http://127.0.0.1:9");
     let job_a = job_for(&bytes, [1u8; 32]);
     let job_b = job_for(&bytes, [2u8; 32]);
     let seq_a = door.test_grant_provisional(&job_a);
@@ -868,7 +868,7 @@ fn a_restart_resumes_with_the_stored_draw_and_never_draws_again() {
     let bytes = object_bytes("O1-S1.cbor");
     let obj = pcoc::decode_object(&bytes).unwrap();
     let sha = canon::sha256(&bytes);
-    let door = open_door(v9(), "http://127.0.0.1:9");
+    let door = open_door(v10(), "http://127.0.0.1:9");
     let job = job_for(&bytes, [4u8; 32]);
     let seq = door.test_grant_provisional(&job);
     let runs = vec![vec![0u64, 1, 2, 3, 4, 5]];
@@ -899,7 +899,7 @@ fn a_restart_resumes_with_the_stored_draw_and_never_draws_again() {
 fn the_draw_and_ban_files_are_private() {
     let bytes = object_bytes("O1-S1.cbor");
     let sha = canon::sha256(&bytes);
-    let door = open_door(v9(), "http://127.0.0.1:9");
+    let door = open_door(v10(), "http://127.0.0.1:9");
     let runs = vec![vec![0u64, 1, 2, 3, 4, 5]];
     let salt = [1u8; 32];
     let draw = DrawFile {
@@ -921,7 +921,7 @@ fn the_draw_and_ban_files_are_private() {
 #[test]
 fn a_thorough_error_is_held_and_never_accepts() {
     let bytes = object_bytes("O1-S1.cbor");
-    let door = open_door(v9(), "http://127.0.0.1:9");
+    let door = open_door(v10(), "http://127.0.0.1:9");
     let job = job_for(&bytes, [5u8; 32]);
     door.test_grant_provisional(&job);
     door.finish_thorough(&job, Err("leg worker".to_owned()));
@@ -934,7 +934,7 @@ fn a_key_banned_in_flight_is_never_accepted() {
     let _guard = terrain_lock();
     let bytes = object_bytes("O1-S1.cbor");
     let obj = pcoc::decode_object(&bytes).unwrap();
-    let door = open_door(v9(), "http://127.0.0.1:9");
+    let door = open_door(v10(), "http://127.0.0.1:9");
     let job = job_for(&bytes, [6u8; 32]);
     let seq = door.test_grant_provisional(&job);
     let mut out =
@@ -949,7 +949,7 @@ fn a_key_banned_in_flight_is_never_accepted() {
 /// A banned key takes no slot. A panicking job releases the slot it took.
 #[test]
 fn a_banned_key_takes_no_slot_and_a_panicking_job_releases_its_slot() {
-    let door = open_door(v9(), "http://127.0.0.1:9");
+    let door = open_door(v10(), "http://127.0.0.1:9");
     let key = [9u8; 32];
     door.ban_key(&key, 1);
     let source = hex32(&key);
@@ -969,7 +969,7 @@ fn a_banned_key_takes_no_slot_and_a_panicking_job_releases_its_slot() {
 #[test]
 fn v7_holds_a_provisional_with_no_observed_network() {
     let bytes = object_bytes("O3-PROD.cbor");
-    let (door, _index, phase, _) = settle_face(&bytes, Face::Down, v9());
+    let (door, _index, phase, _) = settle_face(&bytes, Face::Down, v10());
     assert_eq!(phase, FastPhase::Held, "{:?}", chain(&door));
     assert!(door.test_decisions().is_empty());
 }
@@ -978,7 +978,7 @@ fn v7_holds_a_provisional_with_no_observed_network() {
 #[test]
 fn v7_accepts_mainnet_index_evidence() {
     let bytes = anchored_o3();
-    let (door, _index, phase, _) = settle_face(&bytes, Face::Honest, v9());
+    let (door, _index, phase, _) = settle_face(&bytes, Face::Honest, v10());
     assert_eq!(phase, FastPhase::Provisional, "{:?}", chain(&door));
     let lines = chain(&door);
     assert_eq!(lines[0]["index_network"][0], "main");
@@ -988,7 +988,7 @@ fn v7_accepts_mainnet_index_evidence() {
 #[test]
 fn v7_refuses_synthetic_index_evidence() {
     let bytes = object_bytes("O3-PROD.cbor");
-    let (door, _index, phase, _) = settle_face(&bytes, Face::Synthetic, v9());
+    let (door, _index, phase, _) = settle_face(&bytes, Face::Synthetic, v10());
     assert_eq!(phase, FastPhase::Done, "{:?}", chain(&door));
     assert!(door
         .test_reasons()
@@ -1000,7 +1000,7 @@ fn v7_refuses_synthetic_index_evidence() {
 #[test]
 fn v7_checks_header_plant_and_fresh_reads_and_a_missing_network() {
     let bytes = anchored_o3();
-    let (door, _index, phase, _) = settle_face(&bytes, Face::HeaderFresh, v9());
+    let (door, _index, phase, _) = settle_face(&bytes, Face::HeaderFresh, v10());
     assert_eq!(phase, FastPhase::Provisional, "{:?}", chain(&door));
     assert!(
         door.mirror().bypass_count() >= 1,
@@ -1010,7 +1010,7 @@ fn v7_checks_header_plant_and_fresh_reads_and_a_missing_network() {
     let record = &lines[0]["verify_summary"];
     assert!(record["anchored_total"].is_number(), "{record}");
     assert!(record["analysis"]["hike_legs"].is_number(), "{record}");
-    let (door, _index, phase, _) = settle_face(&bytes, Face::NoNetwork, v9());
+    let (door, _index, phase, _) = settle_face(&bytes, Face::NoNetwork, v10());
     assert_eq!(phase, FastPhase::Held, "{:?}", chain(&door));
     assert!(door.test_decisions().is_empty());
 }
@@ -1120,7 +1120,7 @@ fn release_entry_refuses_a_conformance_small_object() {
     let _guard = terrain_lock();
     let bytes = object_bytes("O1-S1.cbor");
     let sha = canon::sha256(&bytes);
-    let door = open_door(v9(), "http://127.0.0.1:9");
+    let door = open_door(v10(), "http://127.0.0.1:9");
     thorough::reset_counts();
     let err = thorough::run(door.log_dir().as_path(), 1, &bytes, &sha, door.policy()).unwrap_err();
     assert_eq!(err, thorough::RELEASE_PRODUCTION_ONLY);
@@ -1158,7 +1158,7 @@ fn provisional_is_not_accept_and_friendly_waits_for_thorough() {
     let _guard = terrain_lock();
     let bytes = object_bytes("O1-S1.cbor");
     let obj = pcoc::decode_object(&bytes).unwrap();
-    let door = open_door(v9(), "http://127.0.0.1:9");
+    let door = open_door(v10(), "http://127.0.0.1:9");
     let job = job_for(&bytes, [8u8; 32]);
     let seq = door.test_grant_provisional(&job);
     let friendly = door.log_dir().join("friendly").join(hex32(&job.public_key));
@@ -1179,7 +1179,7 @@ fn no_network_holds_then_the_same_submission_is_provisional() {
     let bytes = anchored_o3();
     let obj = pcoc::decode_object(&bytes).unwrap();
     let index = serve(&obj, Face::DownThenHonest);
-    let door = open_door(v9(), &index.base);
+    let door = open_door(v10(), &index.base);
     door.set_now_unix_s(Some(1_700_000_000));
     let job = job_for(&bytes, [11u8; 32]);
     let (phase, _) = door.settle_fast_seq(&job);
@@ -1590,7 +1590,7 @@ fn each_loaded_lever_changes_what_the_gate_does() {
     assert!(signed.thorough.is_some(), "{:?}", chain(&door));
     release_slot(&door, &signed);
 
-    let loaded = v9();
+    let loaded = v10();
     assert_eq!(loaded.verify_cap_per_door_session, 3);
     let n = loaded.verify_cap_per_door_session;
     let door = open_door(loaded, "http://127.0.0.1:9");
@@ -1614,7 +1614,7 @@ fn each_loaded_lever_changes_what_the_gate_does() {
 #[test]
 fn shipped_policy_reads_verify_cap_per_door_session() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../policy/groundinglab-admission/gl-admit-v9.toml");
+        .join("../../policy/groundinglab-admission/gl-admit-v10.toml");
     let raw = std::fs::read_to_string(&path).unwrap();
     let set = raw.lines().any(|line| {
         let line = line.trim();
@@ -1622,7 +1622,7 @@ fn shipped_policy_reads_verify_cap_per_door_session() {
     });
     assert!(
         set,
-        "gl-admit-v9.toml does not set verify_cap_per_door_session"
+        "gl-admit-v10.toml does not set verify_cap_per_door_session"
     );
     let loaded = crate::levers::load(&raw, 2).expect("shipped policy");
     assert_eq!(loaded.verify_cap_per_door_session, 3);
@@ -1784,7 +1784,7 @@ fn tip_not_read_or_below_the_last_beacon_is_held_and_counted() {
 fn policy_encoding_faults_refuse_the_whole_file() {
     let good = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../policy/groundinglab-admission/gl-admit-v9.toml"),
+            .join("../../policy/groundinglab-admission/gl-admit-v10.toml"),
     )
     .unwrap();
     assert!(crate::levers::load(&good, 2).is_ok());
@@ -1865,7 +1865,7 @@ fn public_lines_do_not_name_v2_0() {
 fn pinned_o3_empty_paths_refuse_under_rule_b4() {
     let bytes = object_bytes("O3-PROD.cbor");
     assert_eq!(hex::encode(canon::sha256(&bytes)), O3_SHA);
-    let (door, _index, phase, seq) = settle_face(&bytes, Face::Honest, v9());
+    let (door, _index, phase, seq) = settle_face(&bytes, Face::Honest, v10());
     assert_eq!(phase, FastPhase::Done, "{:?}", chain(&door));
     assert!(seq.is_none());
     assert!(door
@@ -1904,7 +1904,7 @@ fn o3_prod_release_door_accepts_and_a_forged_checkpoint_does_not() {
     {
         let obj = pcoc::decode_object(&pinned).unwrap();
         let index = serve(&obj, Face::Honest);
-        let door = open_door(v9(), &index.base);
+        let door = open_door(v10(), &index.base);
         let (phase, seq) = door.settle_fast_seq(&job_for(&pinned, [69u8; 32]));
         assert_eq!(phase, FastPhase::Done, "{:?}", chain(&door));
         assert!(seq.is_none());
@@ -1925,7 +1925,7 @@ fn o3_prod_release_door_accepts_and_a_forged_checkpoint_does_not() {
     let sha = canon::sha256(&bytes);
     let obj = pcoc::decode_object(&bytes).unwrap();
     let index = serve(&obj, Face::Honest);
-    let policy = v9();
+    let policy = v10();
     let door = open_door(policy.clone(), &index.base);
     let job = job_for(&bytes, [70u8; 32]);
     let (phase, seq) = door.settle_fast_seq(&job);

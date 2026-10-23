@@ -126,13 +126,13 @@ A `height` or `limit` that is not a `u32` is **400**. No matching mainnet record
 
 ## Born height
 
-`born_height` is 972685. It is the groundinglab admission policy value in `policy/groundinglab-admission/gl-admit-v9.toml`. It is not a SPEC rule. The serve process uses the same number (`pcoc_bari::BORN_HEIGHT`).
+`born_height` is 972685. It is the groundinglab admission policy value in `policy/groundinglab-admission/gl-admit-v10.toml`. It is not a SPEC rule. The serve process uses the same number (`pcoc_bari::BORN_HEIGHT`).
 
 Before this floor, the process served every `height-XXXXXXXXXX.json` in the cache directory. There is no lower bound in the file format. `GET /index` is the highest filename. `GET /index/{height}` is that file, or 404 when the file is absent. `GET /index/since` with no `height` starts at the lowest stored mainnet filename. The lowest height a deployment serves is therefore the lowest filename in that directory.
 
 That directory is filled by Bari, which writes one file per tip it observes and does not delete older files. The oldest file is the first tip retained when the cache was started. A rebuild writes only the range named by `--from-height`, or the block of `--from-txid` found within `PCOC_INDEX_REBUILD_TXID_LOOKBACK` (default 2016) of the tip. `--from-height` has no default. The example range in this file is an operator example, not a serve floor. Issue 87 records that the live cache's lowest filename is 969394. That number is not a constant in this repository.
 
-This process does not delete those files. A height below `born_height` is not served: `GET /index/{height}` is 404, `GET /index` ignores it when choosing the tip, and `GET /index/since` omits it. The file stays on disk. Rebuild does not fetch a height below `born_height`. A requested start below the floor moves up to the floor. A range that ends below the floor writes nothing. Existing files are left in place. Nothing in this process requires the chain source to answer those heights.
+This process does not delete those files. `GET /index/{height}` serves a stored file at or above `born_height - MTP_LOOKBACK`. `MTP_LOOKBACK` is `pcoc_bari::MTP_LOOKBACK`, equal to `pcoc::constants::MTP_LOOKBACK`. That value is `MTP_WINDOW - 1`. `MTP_WINDOW` is 11, the median-time window (`n = min(MTP_WINDOW, h + 1)`), so the lookback is the 10 headers `born_height - 10` through `born_height - 1`. Those headers are for a timestamp read. `GET /index` does not choose one of them as the tip. `GET /index/since` omits them. A height below `born_height - MTP_LOOKBACK` is 404, and the file stays on disk. Rebuild does not fetch below that header floor. A requested start below the floor moves up to the floor. A range that ends below the floor writes nothing. Existing files are left in place. Nothing in this process requires the chain source to answer a height below the header floor. A height below `born_height` is not a production height.
 
 ## Cache
 

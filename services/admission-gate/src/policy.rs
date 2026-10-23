@@ -11,7 +11,7 @@
 //! `min_leg_rate` of 0.25 leg/s and `min_waypoints` 6 of 18. That float and
 //! the named floors (`strict` 7/20, `default` 1/4, `lenient` 1/8) are gone.
 //! Those three fractions stay informative examples in spec §15.5. They are
-//! not a policy key. The code default is `gl-admit-v9`.
+//! not a policy key. The code default is `gl-admit-v10`.
 //!
 //! `hike_span` ≤ 0 is `refuse`. It is not `held`, and it does not meet the
 //! floor. A numeric shortfall is `refuse`. `hike_span` `not read` (or an
@@ -136,7 +136,7 @@ pub fn leg_rate_floor_line(p: u64, q: u64) -> String {
 }
 
 /// `gl-admit-v` plus a positive integer. Bound to one table for its life.
-pub const DEFAULT_POLICY_ID: &str = "gl-admit-v9";
+pub const DEFAULT_POLICY_ID: &str = "gl-admit-v10";
 
 /// `W_1` … `W_16`. `W_17` is never fetched and is not in the anchored count.
 pub const ANCHORED_SPAN: u64 = 16;

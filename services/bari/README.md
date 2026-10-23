@@ -14,7 +14,7 @@ Bari timestamps waypoints by sealing each tip's pool into one Bitcoin transactio
 - `GET /path/{leaf}`
 - `GET /ops`
 
-`born_height` is 972685, the same policy value as `gl-admit-v9.toml`. It is not a SPEC rule. `GET /path/{leaf}` does not return a path whose inclusion height is below that value. An index blob below it is not returned by the in-process height read. The batch record and the `height-*.json` file stay on disk. Bari does not serve `GET /index`. The index reader applies the same floor. Confirmed paths at or above the floor stay servable. Tests set their own floor. The default inside a test clock is 0, so a fixture height is still served. The binary sets 972685.
+`born_height` is 972685, the same policy value as `gl-admit-v10.toml`. It is not a SPEC rule. `GET /path/{leaf}` does not return a path whose inclusion height is below that value. The in-process height read returns an index blob at or above `born_height - MTP_LOOKBACK` (`pcoc_bari::MTP_LOOKBACK`, 10). `MTP_LOOKBACK` is `pcoc::constants::MTP_WINDOW - 1`, and `MTP_WINDOW` is 11. Those headers are the median-time lookback and are not production heights. A blob below `born_height - MTP_LOOKBACK` is not returned. The batch record and the `height-*.json` file stay on disk. Bari does not serve `GET /index`. The index reader uses the same header floor, and it does not count the lookback headers as the tip or as lines of `/index/since`. Confirmed paths at or above `born_height` stay servable. Tests set their own floor. The default inside a test clock is 0, so a fixture height is still served. The binary sets 972685.
 
 ## Tip modes
 

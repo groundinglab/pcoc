@@ -118,7 +118,9 @@ pub struct IndexService {
     /// Not applied when the document already has `header.time` or
     /// `header.timestamp_unix_ms`.
     clocks: Arc<HashMap<u32, u64>>,
-    /// Heights below this are not served. The files stay on disk.
+    /// Production floor. Tip selection and `/index/since` ignore a lower
+    /// height. `GET /index/{height}` also serves the median-time lookback
+    /// of [`pcoc_bari::MTP_LOOKBACK`] headers below this value.
     /// `0` serves every retained file. The binary sets [`pcoc_bari::BORN_HEIGHT`].
     born_height: u32,
 }
@@ -152,11 +154,18 @@ impl IndexService {
         })
     }
 
-    /// Serve floor for this process. A test sets its own. `0` serves the
-    /// whole cache. Stored files below the floor are not deleted.
+    /// Production floor for this process. A test sets its own. `0` serves the
+    /// whole cache. Stored files below the header floor are not deleted.
     pub fn with_born_height(mut self, born_height: u32) -> Self {
         self.born_height = born_height;
         self
+    }
+
+    /// Lowest height `GET /index/{height}` returns. The
+    /// [`pcoc_bari::MTP_LOOKBACK`] headers below [`Self::born_height`] are
+    /// included. Tip selection and `/index/since` use `born_height` itself.
+    fn header_floor(&self) -> u32 {
+        self.born_height.saturating_sub(pcoc_bari::MTP_LOOKBACK)
     }
 
     pub fn clock_count(&self) -> usize {
@@ -198,7 +207,7 @@ impl IndexService {
     }
 
     pub fn load_at_height(&self, height: u32) -> Result<Option<IndexDocument>, CacheError> {
-        if height < self.born_height {
+        if height < self.header_floor() {
             return Ok(None);
         }
         let path = self.cache.tip_path(height);
@@ -1250,34 +1259,54 @@ mod tests {
         );
     }
 
-    /// This test sets its own floor. The file below the floor stays on disk.
+    /// This test sets its own floor. Lookback headers are served by height
+    /// and are not the tip or a `/index/since` line. A file below the
+    /// lookback stays on disk and is 404.
     #[tokio::test]
-    async fn heights_below_born_height_are_not_served() {
+    async fn lookback_headers_are_served_and_are_not_production_heights() {
         let temp = tempfile::tempdir().unwrap();
-        let born = 8u32;
+        let born = 40u32;
+        let lookback = pcoc_bari::MTP_LOOKBACK;
+        let floor = born - lookback;
+        let below = floor - 1;
+        write_stored(temp.path(), &stored(below, "main", None, Vec::new()));
+        write_stored(temp.path(), &stored(floor, "main", None, Vec::new()));
         write_stored(temp.path(), &stored(born - 1, "main", None, Vec::new()));
         write_stored(temp.path(), &stored(born, "main", None, Vec::new()));
-        let below = temp.path().join(format!("height-{:010}.json", born - 1));
-        assert!(below.is_file());
+        let below_path = temp.path().join(format!("height-{below:010}.json"));
+        assert!(below_path.is_file());
         let app = IndexService::open(temp.path())
             .unwrap()
             .with_born_height(born)
             .router();
 
-        let hidden = get(&app, &format!("/index/{}", born - 1)).await;
+        let hidden = get(&app, &format!("/index/{below}")).await;
         assert_eq!(hidden.status(), StatusCode::NOT_FOUND);
-        assert!(below.is_file(), "the stored file is left in place");
+        assert!(below_path.is_file(), "the stored file is left in place");
 
-        let served = get(&app, &format!("/index/{born}")).await;
-        assert_eq!(served.status(), StatusCode::OK);
+        for height in [floor, born - 1, born] {
+            let served = get(&app, &format!("/index/{height}")).await;
+            assert_eq!(served.status(), StatusCode::OK, "{height}");
+            let body =
+                serde_json::from_slice::<serde_json::Value>(&body_bytes(served).await).unwrap();
+            assert_eq!(body["header"]["height"], height);
+        }
+
         let tip = get(&app, "/index").await;
         assert_eq!(tip.status(), StatusCode::OK);
-        let tip_body = body_bytes(tip).await;
-        let tip_json = serde_json::from_slice::<serde_json::Value>(&tip_body).unwrap();
+        let tip_json = serde_json::from_slice::<serde_json::Value>(&body_bytes(tip).await).unwrap();
         assert_eq!(tip_json["header"]["height"], born);
 
         let since = get(&app, "/index/since").await;
         let lines = ndjson_lines(&body_bytes(since).await);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&lines[0]).unwrap()["header"]["height"],
+            born
+        );
+
+        let since_from_window = get(&app, &format!("/index/since?height={floor}")).await;
+        let lines = ndjson_lines(&body_bytes(since_from_window).await);
         assert_eq!(lines.len(), 1);
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&lines[0]).unwrap()["header"]["height"],

@@ -300,10 +300,17 @@ mod tests {
             .join("index")
             .join(format!("height-{:010}.json", body.block_height));
         assert!(kept.is_file());
+        // One below the floor: the path is not served. The header is inside
+        // the median-time lookback, so the in-process read still returns it.
         clock.set_born_height(body.block_height + 1);
         assert!(clock.path_for(&leaf).unwrap().is_none());
-        assert!(clock.index_at_height(body.block_height).unwrap().is_none());
+        assert!(clock.index_at_height(body.block_height).unwrap().is_some());
         assert!(kept.is_file(), "history below the floor stays on disk");
+        // Past the lookback window the header is not returned. The file stays.
+        clock.set_born_height(body.block_height + crate::MTP_LOOKBACK + 1);
+        assert!(clock.path_for(&leaf).unwrap().is_none());
+        assert!(clock.index_at_height(body.block_height).unwrap().is_none());
+        assert!(kept.is_file(), "history below the lookback stays on disk");
     }
 
     #[test]

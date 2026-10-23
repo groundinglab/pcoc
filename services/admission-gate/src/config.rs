@@ -61,7 +61,7 @@ pub struct Config {
     /// Decision log directory. The process creates it. A v1.35 chain here is
     /// not loaded.
     pub log_dir: PathBuf,
-    /// The full policy table. The shipped file is `gl-admit-v9`.
+    /// The full policy table. The shipped file is `gl-admit-v10`.
     pub policy: AdmissionPolicy,
     /// Checkpoint binding threads. The process does not read `PCOC_BIND_THREADS`.
     pub bind_threads: usize,
@@ -232,7 +232,7 @@ impl Config {
 
     /// A config for tests: empty temp log, limiter off, the given index
     /// origin, and [`TEST_SERVED_ORIGIN`] as the one served origin. The
-    /// policy is [`AdmissionPolicy::default`], which matches gl-admit-v9,
+    /// policy is [`AdmissionPolicy::default`], which matches gl-admit-v10,
     /// except `born_height` is 0 so fixtures such as O3 stay inside the
     /// boundary. A test that needs another boundary sets
     /// `policy.born_height` on the value it owns. The plane is `test`.
@@ -401,7 +401,7 @@ mod tests {
         assert_eq!(cfg.max_object_bytes, DEFAULT_MAX_OBJECT_BYTES);
         assert_eq!(cfg.max_concurrent_verify, 2);
         assert_eq!(cfg.rate_per_min, 12);
-        assert_eq!(cfg.policy.policy_id, "gl-admit-v9");
+        assert_eq!(cfg.policy.policy_id, "gl-admit-v10");
         assert_eq!(cfg.policy.leg_rate_floor.p, 1);
         assert_eq!(cfg.policy.leg_rate_floor.q, 5);
         assert_eq!(cfg.policy.born_height, 972685);
@@ -529,7 +529,7 @@ mod tests {
             "#,
             r#"
             spec = "2.2"
-            policy_id = "gl-admit-v9"
+            policy_id = "gl-admit-v10"
             [levers]
             min_anchored_paths = 8
             leg_rate_floor = { p = 7, q = 20 }
@@ -551,7 +551,7 @@ mod tests {
             "custom.toml",
         )
         .unwrap();
-        assert_eq!(cfg.policy.policy_id, "gl-admit-v9");
+        assert_eq!(cfg.policy.policy_id, "gl-admit-v10");
         assert_eq!(
             (cfg.policy.leg_rate_floor.p, cfg.policy.leg_rate_floor.q),
             (7, 20)
@@ -577,9 +577,9 @@ mod tests {
     }
 
     fn load_with_policy(body: &str) -> Result<Config, String> {
-        let v9 = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../policy/groundinglab-admission/gl-admit-v9.toml");
-        let raw = fs::read_to_string(v9).unwrap();
+        let shipped = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../policy/groundinglab-admission/gl-admit-v10.toml");
+        let raw = fs::read_to_string(shipped).unwrap();
         let mut gate = body.to_owned();
         if !gate.contains("policy") {
             gate.push_str("policy = \"policy.toml\"\n");
@@ -632,7 +632,7 @@ mod tests {
     fn an_unknown_policy_key_is_rejected() {
         let error = load_policy_file(
             "served_origins = [\"https://site.example\"]\npolicy = \"bad.toml\"\n",
-            "spec = \"2.2\"\npolicy_id = \"gl-admit-v9\"\n[levers]\nsurprise = 1\n",
+            "spec = \"2.2\"\npolicy_id = \"gl-admit-v10\"\n[levers]\nsurprise = 1\n",
             "bad.toml",
         )
         .unwrap_err();

@@ -258,7 +258,7 @@ fn fill_times(
     height: u64,
     times: &mut std::collections::HashMap<u64, i128>,
 ) -> bool {
-    let n = std::cmp::min(11u64, height.saturating_add(1));
+    let n = std::cmp::min(pcoc::constants::MTP_WINDOW, height.saturating_add(1));
     let start = height + 1 - n;
     for h in start..=height {
         if times.contains_key(&h) {
