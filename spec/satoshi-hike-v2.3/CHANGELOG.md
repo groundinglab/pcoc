@@ -8,7 +8,7 @@
 
 - `KIND` stays `v2.2-pcoc-object`.
 - `SEAL_DOMAIN`, `bari-hc-v2`, `pcoc-gate-signin-v1` and `/v1` are unchanged.
-- §10–§13 of 2.2, from `## 10. Terrain` through the line before `## 14. Verify`, hash to `30deb162…6a50`. In 2.3 the same span hashes to `e8776876…3a24`. It differs by anchor lines, the blank lines around them, and two wording edits from the GB review: §10 adds "(section 16)" after "as a negative", and §13 changes "its answer may arrive" to "its answer can arrive". With the anchor and blank lines removed, 2.2 hashes to `80eb8317…a637` and 2.3 to `0aaece0f…81a8`. The only differing lines are those two. Neither changes a requirement.
+- §10–§13 of 2.2, from `## 10. Terrain` through the line before `## 14. Verify`, hash to `30deb162…6a50`. In 2.3 the same span hashes to `e8776876…3a24`. It differs by anchor lines, the blank lines around them, and two wording edits from the second review: §10 adds "(section 16)" after "as a negative", and §13 changes "its answer may arrive" to "its answer can arrive". With the anchor and blank lines removed, 2.2 hashes to `80eb8317…a637` and 2.3 to `0aaece0f…81a8`. The only differing lines are those two. Neither changes a requirement.
 
 ## Numbering
 
@@ -28,10 +28,10 @@ Section, rule (A/B/I/P/BR) and §19 F-label numbering is unchanged. The one exce
 | 6 | whole file | Explicit anchors. No text changes. | Lets a rule be quoted and linked by a stable ID that does not depend on heading wording. |
 | 7 | §7, §8, §9, §16 | One-to-three-sentence Informative summaries. | Major sections with no overview. §10–§13 get none, to keep their text as close to 2.2 as possible. §15 already opens with one. |
 | 7 | P4.2, P10.1, P13.10 (§1 class table) | Quotability fixes from a 10-rule random check. P4.2 links "Part A" to §1. P10.1 gives the lane width ("lanes of 8 bytes each, `P[0]` … `P[3]`"). P13.10 says `leg_count` and `len(checkpoints)` are per stage. | Each read ambiguously when quoted alone. Meaning is unchanged; each restates §1, §10 or §8. |
-| 8 | §7, §8, §9, §16 summaries, §17.5, P4.2, P13.10, intro, §10, §13, §14, §15.1, Rule B10, §18 | GB review must-fixes 1–6 and nits N1–N5, in GB's wording. §7 summary: "the order of the decode checks" (it does not sort). §17.5: rewritten (the 2.2 text did not say what the earlier draft claimed). §10 "(section 16)", §13 "can arrive", §14 "(P14.1)", §15.1 challenge "might add", Rule B10 "can hit": the plain *may* sat under the new BCP 14 sentence. Intro "(Rule A4.4.4)". §16 summary: matching the pack is part of conformance, not the whole of it. P4.2 and P13.10 wording, §18 "Profile judgment", and the §8 and §9 summary lists. N6 ("16 KB" in §11.1) is not applied: it is Christian's quote in frozen text. | Review findings. No byte, vector or outcome change. |
+| 8 | §7, §8, §9, §16 summaries, §17.5, P4.2, P13.10, intro, §10, §13, §14, §15.1, Rule B10, §18 | Second-review must-fixes 1–6 and nits N1–N5, in the reviewer's wording. §7 summary: "the order of the decode checks" (it does not sort). §17.5: rewritten (the 2.2 text did not say what the earlier draft claimed). §10 "(section 16)", §13 "can arrive", §14 "(P14.1)", §15.1 challenge "might add", Rule B10 "can hit": the plain *may* sat under the new BCP 14 sentence. Intro "(Rule A4.4.4)". §16 summary: matching the pack is part of conformance, not the whole of it. P4.2 and P13.10 wording, §18 "Profile judgment", and the §8 and §9 summary lists. N6 ("16 KB" in §11.1) is not applied: it is Christian's quote in frozen text. | Review findings. No byte, vector or outcome change. |
 | 9 | Status, §1 overview, intro, glossary, §14, §15 intro, §15.4 (text, lever table, policy encoding), §15.5 | **D2.** The SPEC gives no lever a default. The lever table loses its Default column; names, units, ranges and comparison rules stay. A policy sets every lever. An absent key means unset only where the range lists unset; any other absent key refuses the whole file. An admission service with no policy file, or whose file is refused, admits nothing. It has no built-in lever values. §15.5 no longer states `1/5`. | Christian's rule: the SPEC holds levers and bounds, policy holds values. Outcome change only for a policy file that omitted a lever with a 2.2 default; the Status line says so. |
 | 9 | §15.5 Measuring method | **D5.** Two sentences, no new number. Measure with the fastest conforming producer build available for the host, and record whether its fold ran vectorised or scalar and whether SHA-256 ran in hardware or software. A policy does not set the floor above what the released conforming SDKs reach on the low-end host. That constraint binds whoever sets or raises the floor; it is not a gate check. | Christian's decision. It records which SHA path ran and adds no second SHA requirement (D4 stays deferred). |
-| 9 | Rule I5, §15.4 policy encoding | **D7.** This file's tag is `spec-2.3.0`. `sdk/SPEC_PIN` names it when the SDKs move to 2.3 (SDK tags `sdk-<language>-v2.3.<patch>`). An admission service pinned to `spec-2.3.0` reads a policy file whose `spec` is `"2.2"` or `"2.3"`. | Christian's decision. The gate code does not accept a 2.3 pin today, so a separate GB gate-code PR must land before any `spec-2.3.0` tag. This PR changes neither gate code nor `SPEC_PIN`. |
+| 9 | Rule I5, §15.4 policy encoding | **D7.** This file's tag is `spec-2.3.0`. `sdk/SPEC_PIN` names it when the SDKs move to 2.3 (SDK tags `sdk-<language>-v2.3.<patch>`). An admission service pinned to `spec-2.3.0` reads a policy file whose `spec` is `"2.2"` or `"2.3"`. | Christian's decision. The gate code does not accept a 2.3 pin today, so a separate gate-code PR must land before any `spec-2.3.0` tag. This PR changes neither gate code nor `SPEC_PIN`. |
 
 ## Anchors
 
@@ -43,7 +43,7 @@ Section, rule (A/B/I/P/BR) and §19 F-label numbering is unchanged. The one exce
 | `class-<id>`, for example `#class-a2-2` | in the ID cell of a class-table row that shares its ID with a rule heading | 23 |
 | `fixed-<f>`, for example `#fixed-f1` | in the §19 label cell | 16 |
 
-All 255 IDs are unique. Inside §10–§13 the additions are the anchor lines and blank lines, plus the two GB wording edits above.
+All 255 IDs are unique. Inside §10–§13 the additions are the anchor lines and blank lines, plus the two review wording edits above.
 
 ## Diff vs 2.2 SPEC.md
 
@@ -61,7 +61,7 @@ All 255 IDs are unique. Inside §10–§13 the additions are the anchor lines an
 | §2, §4 row | Version |
 | §3 | BCP 14 boilerplate |
 | §7, §8, §9, §16 | Informative summaries |
-| §10, §13 | Anchors; one wording edit each (GB must-fixes 4, 5) |
+| §10, §13 | Anchors; one wording edit each (review must-fixes 4, 5) |
 | §11, §12 | Anchors only |
 | §14 | Summary; "(P14.1)"; no "default policy" |
 | §15 intro, §15.4 | D2; policy `spec` "2.2"/"2.3" (D7) |
