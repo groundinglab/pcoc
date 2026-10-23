@@ -237,7 +237,9 @@ impl Config {
     /// boundary. A test that needs another boundary sets
     /// `policy.born_height` on the value it owns. The plane is `test`.
     /// A deploy never uses this, and it does not read a policy file from
-    /// the build tree.
+    /// the build tree. Unit tests compile this function. Integration tests
+    /// compile it through the `test-util` feature. A release build does not.
+    #[cfg(any(test, feature = "test-util"))]
     pub fn for_tests(log_dir: PathBuf, index_url: &str) -> Self {
         let policy = AdmissionPolicy {
             born_height: 0,
@@ -547,6 +549,7 @@ mod tests {
             [policy_rules]
             expected_network = "main"
             draw_commitment = "sha256(draw || salt), revealed with the result"
+            born_height = 0
             "#,
             "custom.toml",
         )

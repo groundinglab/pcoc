@@ -145,6 +145,7 @@ result_retention_seconds = {retention}
 {extra}
 [policy_rules]
 expected_network = "main"
+draw_commitment = "sha256(draw || salt), revealed with the result"
 born_height = {born}
 "#,
             min = self.min_anchored,
@@ -1591,8 +1592,10 @@ fn each_loaded_lever_changes_what_the_gate_does() {
     release_slot(&door, &signed);
 
     let loaded = v10();
-    assert_eq!(loaded.verify_cap_per_door_session, 3);
-    let n = loaded.verify_cap_per_door_session;
+    assert_eq!(loaded.verify_cap_per_door_session, Some(3));
+    let n = loaded
+        .verify_cap_per_door_session
+        .expect("v10 sets the door cap");
     let door = open_door(loaded, "http://127.0.0.1:9");
     door.set_now_unix_s(Some(4_000));
     door.test_set_store_start(0);
@@ -1611,6 +1614,7 @@ fn each_loaded_lever_changes_what_the_gate_does() {
 }
 
 /// The shipped policy file sets `verify_cap_per_door_session`, and load reads it.
+/// An absent key is unset. It is not filled with 3.
 #[test]
 fn shipped_policy_reads_verify_cap_per_door_session() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -1625,24 +1629,21 @@ fn shipped_policy_reads_verify_cap_per_door_session() {
         "gl-admit-v10.toml does not set verify_cap_per_door_session"
     );
     let loaded = crate::levers::load(&raw, 2).expect("shipped policy");
-    assert_eq!(loaded.verify_cap_per_door_session, 3);
+    assert_eq!(loaded.verify_cap_per_door_session, Some(3));
     let four = raw.replace(
         "verify_cap_per_door_session  = 3",
         "verify_cap_per_door_session  = 4",
     );
     assert_ne!(four, raw);
     let loaded = crate::levers::load(&four, 2).expect("cap 4");
-    assert_eq!(loaded.verify_cap_per_door_session, 4);
+    assert_eq!(loaded.verify_cap_per_door_session, Some(4));
     let absent = raw
         .lines()
         .filter(|line| !line.trim_start().starts_with("verify_cap_per_door_session"))
         .collect::<Vec<_>>()
         .join("\n");
     let loaded = crate::levers::load(&absent, 2).expect("absent key");
-    assert_eq!(
-        loaded.verify_cap_per_door_session,
-        crate::levers::VERIFY_CAP_PER_DOOR_SESSION_AWAITING_POLICY
-    );
+    assert_eq!(loaded.verify_cap_per_door_session, None);
 }
 
 /// AC-G12. Rule I4 on a mock clock: restart, flush, two workers.
@@ -1848,8 +1849,9 @@ fn policy_encoding_faults_refuse_the_whole_file() {
 /// AC-G15. Public lines do not name v2.0.
 #[test]
 fn public_lines_do_not_name_v2_0() {
-    assert!(crate::policy::EARLIER_LINE.contains("2.2"));
-    assert!(crate::policy::UNREADABLE_LINE.contains("2.2"));
+    assert!(crate::policy::EARLIER_LINE.contains("pinned Satoshi Hike kind"));
+    assert!(crate::policy::UNREADABLE_LINE.contains("pinned Satoshi Hike kind"));
+    assert!(!crate::policy::EARLIER_LINE.contains("2.2 only"));
     assert!(
         crate::reasons::public_sentence(crate::reasons::CODE_SHAPE_MISMATCH).contains("section 6")
     );

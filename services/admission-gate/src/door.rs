@@ -645,8 +645,10 @@ impl Door {
     /// Count a verify that is about to start. `None` means it may start.
     fn over_verify_cap(&self, object_sha: &[u8; 32]) -> Option<&'static str> {
         let mut inner = self.lock();
-        if inner.verify_session >= self.policy.verify_cap_per_door_session {
-            return Some(reasons::CODE_VERIFY_CAP_SESSION);
+        if let Some(cap) = self.policy.verify_cap_per_door_session {
+            if inner.verify_session >= cap {
+                return Some(reasons::CODE_VERIFY_CAP_SESSION);
+            }
         }
         if let Some(cap) = self.policy.verify_cap_per_object {
             if inner.verify_object.get(object_sha).copied().unwrap_or(0) >= cap {

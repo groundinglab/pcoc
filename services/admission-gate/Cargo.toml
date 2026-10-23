@@ -19,6 +19,11 @@ path = "src/main.rs"
 # start under a policy whose [index] expected_network is "main"
 # (policy::check_build); it serves only a synthetic policy.
 testing = []
+# Test-only constructors (`AdmissionPolicy::default`, `Config::for_tests`).
+# Not a default feature. `cargo build --release` does not enable it, so a
+# release build of the service does not compile those constructors.
+# `cargo test` enables it through the dev-dependency below.
+test-util = []
 
 [dependencies]
 axum = "0.8"
@@ -40,3 +45,6 @@ pcoc = { path = "../../sdk/rust/pcoc" }
 [dev-dependencies]
 http-body-util = "0.1"
 tower = { version = "0.5", features = ["util"] }
+# Enables `test-util` only while this package is tested. A normal build,
+# including `cargo build --release`, does not turn that feature on.
+pcoc-admission = { path = ".", features = ["test-util"] }

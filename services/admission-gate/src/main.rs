@@ -19,7 +19,10 @@ async fn main() {
 }
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    if env::args().skip(1).any(|arg| arg == "--version" || arg == "-V") {
+    if env::args()
+        .skip(1)
+        .any(|arg| arg == "--version" || arg == "-V")
+    {
         println!("{}", http::version_line());
         return Ok(());
     }
@@ -31,12 +34,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = service.config().clone();
     let listener = tokio::net::TcpListener::bind(bind).await?;
 
+    let (spec_name, _) = pcoc_admission::verifier::health_spec();
     eprintln!(
         "admission-service v{} commit={} sdk={} spec={} bind={} index={} log={} config={}",
         http::VERSION,
         http::COMMIT,
         http::SDK_VERSION,
-        http::SPEC_NAME,
+        spec_name,
         listener.local_addr()?,
         cfg.index_url,
         cfg.log_dir.display(),

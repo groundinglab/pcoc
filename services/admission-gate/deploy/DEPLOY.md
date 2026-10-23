@@ -2,7 +2,7 @@
 
 > **Do not deploy this tree over the live v2.0 service.** This branch is Satoshi Hike 2.2. The process refuses a live plane unless `allow_2_2_live = true`. That opt-in defaults to off and is not set anywhere in this repo.
 
-One binary, one config file, a log directory the process creates. Satoshi Hike 2.2 only. This page is the whole install. Do not point `log_dir` at an earlier decision log.
+One binary, one config file, a log directory the process creates. The object kind is `v2.2-pcoc-object`. Policy `spec` `2.2` loads on a spec-2.2.x pin and on a spec-2.3.x pin. Policy `spec` `2.3` loads on a spec-2.3.x pin and is refused on a spec-2.2.x pin. This page is the whole install. Do not point `log_dir` at an earlier decision log. A decision-log line is still stamped `Satoshi Hike 2.2`.
 
 ## Build
 
@@ -58,7 +58,7 @@ A user unit drops `User=` and `Group=`, sets `WantedBy=default.target`, and uses
 curl -sS http://127.0.0.1:8787/v1/health
 ```
 
-`version` is the crate version, `commit` is the build SHA, `spec` is `Satoshi Hike 2.2`, `spec_kind` is `2.2`, and `config` repeats the file with no secrets.
+`version` is the crate version, `commit` is the build SHA, and `config` repeats the file with no secrets. `spec` and `spec_kind` follow the SDK pin. This checkout's pin is `spec-2.2.0`, so they are `Satoshi Hike 2.2` and `2.2`. On a spec-2.3.x pin they are `Satoshi Hike 2.3` and `2.3`. The JSON keys do not change.
 
 ## Upgrade
 
@@ -68,4 +68,4 @@ Build the new binary, replace the file in `ExecStart`, then `sudo systemctl rest
 
 `POST /v1/sign-in`, `POST /v1/verify`, `GET /v1/verify/{job_id}`, `GET /v1/health`, `GET /v1/policy`, `GET /latest.json`, `GET /log/{YYYY-MM-DD}.jsonl`, `GET /log/{YYYY-MM-DD}/{seq}`. Anything else, including `POST /v1/admit`, is HTTP 404. Bodies are in [WIRE.md](../WIRE.md).
 
-The groundinglab policy file is `policy/groundinglab-admission/gl-admit-v10.toml`. `gl-admit-v9.toml` is `superseded`. The id is bound to a hash of the full table. Changing any value requires a new id. The process writes that binding to `{log_dir}/policy-bind.json` and exits before it listens when the same id is paired with a different table.
+The groundinglab policy file is `policy/groundinglab-admission/gl-admit-v10.toml`. `gl-admit-v9.toml` is `superseded`. It does not set `born_height`, so this gate refuses that file. A file that omits `policy_id`, `draw_commitment`, or `born_height` does not start; the error names the key. The id is bound to a hash of the full table. Changing any value requires a new id. The process writes that binding to `{log_dir}/policy-bind.json` and exits before it listens when the same id is paired with a different table.

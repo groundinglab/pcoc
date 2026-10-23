@@ -12,14 +12,65 @@ use pcoc::profile::Profile;
 use pcoc::verify::{HeightIndex, Precheck, Verified};
 use std::time::Duration;
 
-/// Health name. The object kind is SPEC §6.
+/// Decision-log spec name. `KIND` stays `v2.2-pcoc-object`, so a chain
+/// stamped with this name still opens on a 2.3 pin. `/v1/health` uses
+/// [`spec_identity`]: this string on a 2.2 pin, `Satoshi Hike 2.3` on a 2.3 pin.
 pub const SPEC_NAME: &str = "Satoshi Hike 2.2";
 
-/// Health field.
+/// `spec_kind` for a 2.2 pin. Health uses [`spec_identity`].
 pub const SPEC_KIND_LABEL: &str = "2.2";
 
-/// Wire KIND exported by the Rust SDK. SPEC §6.
+/// Wire KIND exported by the Rust SDK. SPEC §6. Unchanged in 2.3.
 pub const SPEC_KIND: &str = pcoc::constants::KIND;
+
+/// Major version named by an SDK pin tag.
+/// `spec-2.2` and `spec-2.2.*` are 2.2. `spec-2.3` and `spec-2.3.*` are 2.3.
+pub fn pin_spec_version(tag: &str) -> Option<&'static str> {
+    if tag == "spec-2.2" || tag.starts_with("spec-2.2.") {
+        Some("2.2")
+    } else if tag == "spec-2.3" || tag.starts_with("spec-2.3.") {
+        Some("2.3")
+    } else {
+        None
+    }
+}
+
+/// Health `spec` and `spec_kind` for one pin tag.
+pub fn spec_identity(tag: &str) -> Result<(&'static str, &'static str), String> {
+    match pin_spec_version(tag) {
+        Some("2.2") => Ok((SPEC_NAME, SPEC_KIND_LABEL)),
+        Some("2.3") => Ok(("Satoshi Hike 2.3", "2.3")),
+        _ => Err(format!(
+            "SDK pin {tag:?} is not a known Satoshi Hike pin (spec-2.2.x or spec-2.3.x)"
+        )),
+    }
+}
+
+/// Policy `spec` against the SDK pin.
+/// `"2.2"` loads on a 2.2 pin and on a 2.3 pin. `"2.3"` loads on a 2.3 pin only.
+pub fn accept_policy_spec(spec: &str, tag: &str) -> Result<(), String> {
+    let Some(pin_version) = pin_spec_version(tag) else {
+        return Err(format!(
+            "SDK pin {tag:?} is not a known Satoshi Hike pin (spec-2.2.x or spec-2.3.x)"
+        ));
+    };
+    match (spec, pin_version) {
+        ("2.2", "2.2" | "2.3") => Ok(()),
+        ("2.3", "2.3") => Ok(()),
+        ("2.3", _) => Err(format!(
+            "policy spec \"2.3\" is not accepted by the SDK pin {tag}"
+        )),
+        _ => Err(format!("policy spec {spec:?} is not \"2.2\" or \"2.3\"")),
+    }
+}
+
+/// `spec` and `spec_kind` `/v1/health` reports for the pin this binary was built with.
+pub fn health_spec() -> (String, String) {
+    match spec_identity(&pcoc::build_info().spec_tag) {
+        Ok((name, label)) => (name.to_owned(), label.to_owned()),
+        Err(err) => (err, "unknown".to_owned()),
+    }
+}
 
 /// A one-shot index read did not return a document. Not a retry.
 pub const INDEX_UNREAD_NOTE: &str = "the index did not answer for a stored beacon";
