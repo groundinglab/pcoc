@@ -7,8 +7,8 @@ The SPEC wins where this note and the SPEC differ.
 
 1. **Invalid UTF-8 in a `kind` text.** SPEC §7.3 (the decode-order paragraph)
    says text values are definite-length UTF-8 text strings, and it does not
-   list invalid UTF-8 among the malformed values. ERRATUM-1 open point 4
-   leaves it untouched. Reading implemented: a major-type-3 string whose
+   list invalid UTF-8 among the malformed values. Erratum 2 E01 settles
+   it for every CBOR text string, map keys included. Reading implemented: a major-type-3 string whose
    bytes are not well-formed UTF-8 is not a text string under §7.3, so the
    input is not one definite-length data item. It is a malformed CBOR value:
    `shape_item` is exactly `["malformed cbor"]` and the CLI exits 0.
