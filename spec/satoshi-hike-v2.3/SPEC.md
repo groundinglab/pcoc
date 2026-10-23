@@ -769,7 +769,7 @@ mix64(x):
 
 The four lanes are `P[0]`, `P[1]`, `P[2]`, and `P[3]` from the seed, as section 10 states. A squeeze of the seed to one 64-bit fill pin is not this construction. Do not compute one. Do not use one.
 
-**Informative.** Conformance does not require computing such a squeeze. The pack may publish a terrain digest made from a squeezed seed as a negative (section 16). An implementation that emits that digest does not conform.
+**Informative.** Conformance does not require computing such a squeeze. The pack may publish a terrain digest made from a squeezed seed as a negative. An implementation that emits that digest does not conform.
 
 <a id="sec-10-3"></a>
 
@@ -1136,7 +1136,7 @@ For a stage `g ≥ 1`, when its waypoint `W_g` is known, produce starts the post
 ANCHOR_WINDOW_OFFSETS = 2, 3, 4
 ```
 
-A waypoint posted at height H is asked when the producer’s header source learns each header whose height is H plus one offset in that list, in list order. An ask is an asynchronous event (Rule A6); its answer can arrive while later legs run. If the path is served, it is stored and later headers in the window are not asked. If it is not served, the producer asks at the next offset, and then at the last offset. After the last offset a miss stores an empty path and the stage does not keep waiting. Nothing is asked before the first offset or after the last. One header after the last offset, the path is gone. An ask is made only for a waypoint whose post returned 204. Test and live use this one rule. An operator setting does not change the list.
+A waypoint posted at height H is asked when the producer’s header source learns each header whose height is H plus one offset in that list, in list order. An ask is an asynchronous event (Rule A6); its answer may arrive while later legs run. If the path is served, it is stored and later headers in the window are not asked. If it is not served, the producer asks at the next offset, and then at the last offset. After the last offset a miss stores an empty path and the stage does not keep waiting. Nothing is asked before the first offset or after the last. One header after the last offset, the path is gone. An ask is made only for a waypoint whose post returned 204. Test and live use this one rule. An operator setting does not change the list.
 
 For `W_g` with `g` from 1 through 16, H is `stages[g].beacon_height`. That is the height of the interrupt header the object already stores for that stage: `I_{g−1}` (`stages[g].beacon`). The producer asks at each H plus one offset. The fee header on the POST is not H. The object does not store a second post height.
 
