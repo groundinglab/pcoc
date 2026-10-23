@@ -8,9 +8,8 @@
   <description>
     <p>
       PCOC Hike checks kind v2.2-pcoc-object with the in-tree Rust SDK
-      (sdk/rust). This build targets SDK v2.3.0. It shows the section 14
-      record, and submits one groundinglab sign-in. The live header source
-      is not in this build.
+      (sdk/rust). It shows the section 14 record, and submits one
+      groundinglab sign-in. Start hike reads live headers and posts waypoints.
     </p>
     <p>
       An nsec is pasted or generated for the session. It stays in memory and
@@ -27,6 +26,11 @@
     <display_length compare="ge">720</display_length>
   </requires>
   <releases>
+    <release version="0.1.6" date="2026-10-23">
+      <description>
+        <p>Start hike runs a live producer. Stop cancels the hike and writes no object.</p>
+      </description>
+    </release>
     <release version="0.1.5" date="2026-10-23">
       <description>
         <p>Aligns the app to SPEC 2.3 and Rust SDK v2.3.0. Object kind stays v2.2-pcoc-object.</p>

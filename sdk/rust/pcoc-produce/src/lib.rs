@@ -1,7 +1,16 @@
-//! SPEC §13 offline producer on a scripted header source.
-//! The live header source and the Bari client are Phase C. This crate does not stub them.
-//! The walk reads the tip through a call that returns at once (Rule I3). It does not sleep.
+//! SPEC §13 producer.
+//!
+//! `produce_on_rig` is the scripted offline rig. [`live`] is the live hike:
+//! a gossip header source, an async Bari client, and a `v2.2-pcoc-object`.
+//! The walk reads the tip through a call that returns at once (Rule I3).
+//! It does not sleep.
 #![deny(unsafe_code)]
+
+pub mod bari;
+pub mod live;
+pub mod source;
+
+pub use pcoc_gossip::MAINNET_DNS_SEEDS;
 
 use pcoc::checkpoint::checkpoint;
 use pcoc::constants::{FILL, STAGES};
@@ -46,6 +55,7 @@ pub fn cases_profile(case: Case) -> Profile {
 }
 
 /// CASES.md beacon schedule. Seed at height 1000. `I_k` at height `1001 + k`.
+#[allow(clippy::needless_range_loop)]
 pub fn cases_rig(case: Case) -> ScriptedRig {
     let legs = match case {
         Case::S1 | Case::Prod => [1u32; 18],
@@ -80,6 +90,7 @@ pub enum Progress {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[allow(clippy::large_enum_variant)]
 pub enum ProduceOutcome {
     Object(HikeObject),
     Cancelled,

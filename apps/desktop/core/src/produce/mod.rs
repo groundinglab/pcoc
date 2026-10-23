@@ -1,4 +1,4 @@
-//! Produce. Offline runs use the scripted rig. Live headers are not in this build.
+//! Produce. Offline runs use the scripted rig. Live runs use Bitcoin gossip.
 
 pub mod adapter;
 pub mod cells;

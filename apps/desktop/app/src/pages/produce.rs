@@ -7,7 +7,6 @@ use crate::ui::App;
 use crate::widgets::{self, button, card, hbox, learn, line, mono, text, vbox};
 use gtk::prelude::*;
 use pcoc_hike_core::format::{clock, clock_hm, duration_hm, duration_hms, thousands, tilde};
-use pcoc_hike_core::produce::live::LIVE_HEADER_SOURCE;
 use pcoc_hike_core::produce::cells::{Cell, Row};
 use pcoc_hike_core::produce::events::AskOutcome;
 use pcoc_hike_core::produce::model::{Phase, ProduceView, WaypointChip, READING_THE_TIP};
@@ -183,12 +182,7 @@ fn idle(app: &Rc<App>) -> gtk::Widget {
     let key_error = s.key_error.clone();
     drop(s);
 
-    let c = card(
-        "New hike",
-        &["§13"],
-        &[LIVE_HEADER_SOURCE],
-        on,
-    );
+    let c = card("New hike", &["§13"], &["live"], on);
     c.body.append(&nsec_block(app, key_error.as_deref()));
     let start = button("Start hike", "primary");
     start.set_halign(gtk::Align::Start);
@@ -201,7 +195,7 @@ fn idle(app: &Rc<App>) -> gtk::Widget {
         &c.body,
         &c.root,
         &format!(
-            "{LIVE_HEADER_SOURCE}. Start hike does not dial Bitcoin and writes no object. Phase C owns the live header source. A full production terrain is {} MiB. Kind is v2.2-pcoc-object.",
+            "Start hike reads Bitcoin headers and posts each waypoint to Bari. Stop cancels the hike and writes no object. A full production terrain is {} MiB. Kind is v2.2-pcoc-object.",
             TERRAIN_BYTES >> 20
         ),
         on,
@@ -973,7 +967,7 @@ fn gossip_panel(app: &Rc<App>) -> gtk::Widget {
     learn(
         &c.body,
         &c.root,
-        "live header source is not in this build. This panel does not dial peers and does not read the index.",
+        "Peers come from the named override, or from the DNS seeds when that field is empty. This panel does not read the index.",
         on,
     );
     c.root.upcast()

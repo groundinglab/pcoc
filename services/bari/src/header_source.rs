@@ -18,19 +18,7 @@ use std::net::{TcpListener, TcpStream};
 use std::thread;
 use std::time::Duration;
 
-/// One gossip tip. `height` is the block height. `n_time` is header seconds.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TipTick {
-    pub hash: Hash32,
-    pub height: u64,
-    pub previous: Option<Hash32>,
-    pub n_time: u32,
-    /// The 80-byte header whose SHA-256d is `hash`.
-    pub header: [u8; 80],
-    /// `nTime` of the block at `height - 2015` when `height + 1` is a multiple
-    /// of 2016. Zero otherwise. The live retarget reads only the boundary case.
-    pub period_first_time: u32,
-}
+pub use pcoc_gossip::{HeaderError, TipTick};
 
 /// Which header wire this clock speaks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,12 +27,6 @@ pub enum GossipNetwork {
     Regtest,
     /// Live Bitcoin headers. Bitcoin mainnet gossip, in this build.
     Mainnet,
-}
-
-/// Why a header read stopped.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct HeaderError {
-    pub message: String,
 }
 
 enum ClockState {

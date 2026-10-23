@@ -28,7 +28,7 @@ pub mod verify;
 pub mod waypoint;
 
 /// SPEC Rule I5. SDK version. Equals `sdk/VERSION`.
-pub const VERSION: &str = "2.3.0";
+pub const VERSION: &str = "2.3.1";
 
 const VERSION_FILE: &str = include_str!("../../../VERSION");
 const SPEC_PIN_FILE: &str = include_str!("../../../SPEC_PIN");

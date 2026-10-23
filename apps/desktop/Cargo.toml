@@ -3,13 +3,13 @@ resolver = "2"
 members = ["core", "app"]
 
 [workspace.package]
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 rust-version = "1.83"
 publish = false
 
 [workspace.dependencies]
-# The app targets Rust SDK v2.3.0 (tag sdk-rust-v2.3.0), in-tree at sdk/rust.
+# The Rust SDK 2.3, in-tree at sdk/rust. Package `pcoc` follows sdk/VERSION.
 # About shows the resolved version and pin (core/build.rs reads Cargo.lock).
 pcoc = { path = "../../sdk/rust/pcoc" }
 pcoc-produce = { path = "../../sdk/rust/pcoc-produce" }

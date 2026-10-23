@@ -92,7 +92,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "pcoc"
-version = "2.3.0"
+version = "2.3.1"
 dependencies = [
  "cpufeatures",
  "secp256k1",
@@ -102,7 +102,7 @@ dependencies = [
 
 [[package]]
 name = "pcoc-testing"
-version = "2.3.0"
+version = "2.3.1"
 dependencies = [
  "pcoc",
 ]
@@ -233,7 +233,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "xverify-rust"
-version = "2.3.0"
+version = "2.3.1"
 dependencies = [
  "pcoc",
  "pcoc-testing",

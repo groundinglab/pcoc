@@ -194,7 +194,7 @@ fn network(app: &Rc<App>, on: bool) -> gtk::Widget {
     }
     c.body.append(&setting(
         "Gossip peer override",
-        "live header source is not in this build. A named peer is stored and is not dialed.",
+        "Dialed when Start hike runs. Empty uses the DNS seeds.",
         &peer,
     ));
     c.body
@@ -218,13 +218,13 @@ fn network(app: &Rc<App>, on: bool) -> gtk::Widget {
     c.body.append(&endpoint("Index", endpoints::INDEX));
     c.body.append(&endpoint("Verify", endpoints::VERIFY));
     c.body.append(&text(
-        "These four endpoints are set in one place. Verify reads the index. Sign-in and test admission use the admission gate. The verify host is the public verifier. live header source is not in this build.",
+        "These four endpoints are set in one place. Verify reads the index. Sign-in and test admission use the admission gate. The verify host is the public verifier. Start hike posts waypoints to Bari.",
         &["muted", "small"],
     ));
     learn(
         &c.body,
         &c.root,
-        "live header source is not in this build. A named peer is remembered for a later header source. This build does not dial it.",
+        "A named peer is dialed for the whole hike. An empty field uses the DNS seeds. The producer sends no secret.",
         on,
     );
     c.root.upcast()

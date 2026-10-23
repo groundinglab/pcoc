@@ -23,7 +23,7 @@ pub struct Config {
     pub learn_mode: bool,
     pub data_folder: PathBuf,
     pub threads: u32,
-    /// `host:port`. Stored for a later header source. This build does not dial it.
+    /// `host:port`. Empty selects the DNS seed list. Start hike dials it.
     pub gossip_peer: String,
 }
 

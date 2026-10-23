@@ -1,6 +1,6 @@
 # Rust SDK
 
-Satoshi Hike 2.3. The construction and the verifier are the `pcoc` crate. `pcoc-produce` is the scripted offline producer. The `pcoc` command is `verify`, `selftest`, `candidates`, and `produce --rig`.
+Satoshi Hike 2.3. The construction and the verifier are the `pcoc` crate. `pcoc-produce` is the scripted rig and the live producer. The `pcoc` command is `verify`, `selftest`, `candidates`, and `produce`.
 
 The specification is [spec/satoshi-hike-v2.3/SPEC.md](../../spec/satoshi-hike-v2.3/SPEC.md). Errata 1 and 2 are folded into that file. Where this tree and that file disagree, the specification wins.
 

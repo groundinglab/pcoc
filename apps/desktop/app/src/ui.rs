@@ -582,8 +582,7 @@ impl App {
         let shell = self.shell();
         let state = self.state.borrow();
         let now = state.now_ms();
-        let quiet =
-            "No job running. live header source is not in this build. Verify uses the portable index.";
+        let quiet = "No job running. Verify uses the portable index.";
         let (dot, left, right): (Option<&str>, String, String) = match state.page {
             Page::Produce if state.produce.phase != Phase::Idle => (
                 Some("amber"),
@@ -923,14 +922,7 @@ impl App {
         let emit: live::Emit = Arc::new(move |e| {
             let _ = tx.send_blocking(e);
         });
-        let run = live::start(
-            LiveConfig {
-                public_key,
-                output: output.clone(),
-                gossip_peer: peer,
-            },
-            emit,
-        );
+        let run = live::start(LiveConfig::new(public_key, output.clone(), peer), emit);
         {
             let mut s = self.state.borrow_mut();
             let now = s.now_ms();

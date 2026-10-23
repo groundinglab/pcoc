@@ -1,0 +1,11 @@
+[package]
+name = "pcoc-gossip"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+description = "Bitcoin header gossip shared by Bari and the live producer"
+
+[dependencies]
+pcoc = { path = "../pcoc" }
+sha2 = "=0.10.8"

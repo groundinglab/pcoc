@@ -249,7 +249,8 @@ fn verify_cli() {
 
     let live = pcoc(&["produce"]);
     assert_eq!(live.code, 2);
-    assert!(live.err.contains("live header source is not in this build"));
+    assert!(live.err.contains("--live"), "{}", live.err);
+    assert!(!live.err.contains("not in this build"), "{}", live.err);
     forbid(&live.out);
     forbid(&live.err);
 }
