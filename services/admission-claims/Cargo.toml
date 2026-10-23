@@ -40,6 +40,10 @@ tokio-util = "=0.7.19"
 quinn = "=0.11.9"
 quinn-proto = "=0.11.14"
 quinn-udp = "=0.5.14"
+# url 2.5.2 pulls idna 0.5 (GHSA-h97m-ww89-6jmq). url 2.5.4+ pulls idna 1.
+# idna_adapter 1.1 stays on rustc 1.83. Adapter 1.2 pulls icu and needs a newer rustc.
+url = "2.5.4"
+idna_adapter = "=1.1.0"
 rusqlite = { version = "0.32", features = ["bundled", "backup"] }
 secp256k1 = { version = "0.29.1", default-features = false, features = ["std", "alloc"] }
 serde = { version = "1", features = ["derive"] }
