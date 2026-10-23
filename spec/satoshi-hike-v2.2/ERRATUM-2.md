@@ -1,6 +1,6 @@
 # SPEC 2.2 erratum 2: exact changes
 
-**23 Oct 2026 (ACDT).** 3 clarifications to `spec/satoshi-hike-v2.2/SPEC.md` (main 7b40353, after erratum 1), in 4 edits. Christian approved the content on 23 Oct at 01:11 ACDT (option A for the malformed record; White Hat's D2 wording for vectorisation). At 01:32 ACDT he approved the final polish: Rule I6 matches E03, and E01 covers every CBOR text string. None of them changes the bytes of any valid object, any vector, or any accept/reject outcome. Paths below to `sdk/conformance/` name the cross-verify gate on the Phase A integration branch (draft PR #78); it is not on main yet.
+**23 Oct 2026 (ACDT).** 3 clarifications to `spec/satoshi-hike-v2.2/SPEC.md` (main 7b40353, after erratum 1), in 4 edits. Christian approved the content on 23 Oct at 01:11 ACDT (option A for the malformed record; White Hat's D2 wording for vectorisation). At 01:32 ACDT he approved the final polish: Rule I6 matches E03, and E01 covers every CBOR text string. None of them changes the bytes of any valid object, any vector, or any accept/reject outcome. Paths below to `sdk/conformance/` name the cross-verify gate, on main since PR #78.
 
 **Base and result**
 - Base: pcoc `main` 7b40353, `spec/satoshi-hike-v2.2/SPEC.md`, sha256 `8e591ea02e7c73ac3d1a4e61602f25baaae88cabdc482240d310d2629dfa5889` (2197 lines).
@@ -13,7 +13,7 @@
 2. Invalid UTF-8 in any CBOR text string, including a map key and `kind` (erratum 1 open point 4, widened): a malformed CBOR value.
 3. Malformed-record path and count fields: **option A** (the record the C SDK writes today). Options B and C are recorded under *Dropped and not taken*.
 
-**White Hat review.** White Hat proposed the E03/E04 wording (review of the SDK 2.2 plan, D2) and recommended point 2 be settled as malformed CBOR (Q10). White Hat has not yet reviewed this document as a whole; it is a draft PR.
+**White Hat review.** White Hat proposed the E03/E04 wording (review of the SDK 2.2 plan, D2) and recommended point 2 be settled as malformed CBOR (Q10). White Hat reviewed the merged document as a whole on 23 Oct 2026: PASS-with-nits, all four edits clarifications. The nits were stale wording in this file and in the SDK notes.
 
 ## Version call
 
@@ -29,7 +29,7 @@ All four edits are **clarifications** under the class rule (no byte or outcome o
 | Edit | Item | Section | Main line | Class | Status |
 |---|---|---|---|---|---|
 | E01 | Invalid UTF-8 in any CBOR text string, including a map key | §7.3 CBOR (decoding rules) | L497 | clarification | CONFIRMED (four SDKs) |
-| E02 | Malformed-record path and count fields, option A | §14 Verify record (`paths`) | L1320 | clarification | CONFIRMED (C); Rust, Go, Java change |
+| E02 | Malformed-record path and count fields, option A | §14 Verify record (`paths`) | L1320 | clarification | CONFIRMED (four SDKs) |
 | E03 | Several words of one slot at once (D2) | §16.2 Rule I6 | L2148 | clarification | wording only |
 | E04 | Same, restated | §17.4 (new, informative) | new text (before §18) | clarification | wording only |
 
@@ -65,7 +65,7 @@ Indefinite lengths, tags, floating-point values, simple values, negative integer
 - **Where:** main L1320; erratum E-L1320.
 - **Kind:** insert after the anchor (anchor unchanged).
 - **Class:** clarification.
-- **Status:** CONFIRMED for C; Rust, Go and Java are brought to it on the Phase A branch. **Evidence:** cross-verify full tier on draft PR #78 before this erratum: 160/160 cells match, 3 malformed cells pending under `PENDING_ERRATUM_2` (empty input, `58 05 01`, invalid UTF-8 `kind`). The SDKs agreed on exit code, `shape` and `shape_item`, and split only on the six fields below.
+- **Status:** CONFIRMED (four SDKs). **Evidence:** cross-verify full tier (PR #78, merged). Before this erratum: 160/160 cells match, 3 malformed cells masked under `PENDING_ERRATUM_2` (empty input, `58 05 01`, invalid UTF-8 `kind`). The SDKs agreed on exit code, `shape` and `shape_item`, and split only on the six fields below.
 
 **Anchor (unchanged, verbatim):**
 
@@ -140,7 +140,7 @@ Section 11.1 folds the `WORDS_PER_SLOT` words of the selected slot with a wrappi
 
 ## Reference values (for checking builds, never for CASES)
 
-The record that `verify <file>` (no other arguments, `production` constants) prints for each of the empty input, `58 05 01`, and `a1 64 6b 69 6e 64 61 ff` is one line, identical for all three inputs, sha256 `eb7bff4d55ddcc47e47c600276693db8a406a0083a47c2526462651ffa5bdb8c` (C SDK on the Phase A branch). After this erratum the cross-verify gate (`sdk/conformance/harness.py`) has `PENDING_ERRATUM_2 = ()` and requires those three records byte-identical across Rust, C, Go and Java.
+The record that `verify <file>` (no other arguments, `production` constants) prints for each of the empty input, `58 05 01`, and `a1 64 6b 69 6e 64 61 ff` is one line, identical for all three inputs, sha256 `eb7bff4d55ddcc47e47c600276693db8a406a0083a47c2526462651ffa5bdb8c` (all four SDKs; cross-verify gate on main). After this erratum the cross-verify gate (`sdk/conformance/harness.py`) has `PENDING_ERRATUM_2 = ()` and requires those three records byte-identical across Rust, C, Go and Java.
 
 ## Internal consistency
 

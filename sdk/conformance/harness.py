@@ -396,8 +396,8 @@ def diff_at(left: bytes, right: bytes) -> str:
 # E02, option A) settled the fields it named: on a malformed CBOR value,
 # paths[g].path_state and paths[g].plant for g in 1..16 are `not defined`,
 # skip_list is [], and every per_stage checkpoint_count, whole_hike_legs and
-# hike_legs are `not defined`; a `kind` that is not valid UTF-8 is a malformed
-# CBOR value. The tuple is empty, so the empty input, the truncated bytes and
+# hike_legs are `not defined`; any text string (map key or `kind`) that is not
+# valid UTF-8 is a malformed CBOR value. The tuple is empty, so the empty input, the truncated bytes and
 # the invalid-UTF-8 `kind` are compared byte for byte, and each record must
 # also equal MALFORMED_RECORD_SHA256.
 PENDING_ERRATUM_2: tuple = ()
@@ -691,12 +691,6 @@ def _pending_erratum2_section(tables: list[str], names: list[str]) -> str:
         lines.append("")
     listed = ", ".join(f"`{name}`" for name in names) if names else "(none)"
     lines.append(f"Pending cells: {listed}.")
-    lines.append("")
-    lines.append(
-        "Invalid UTF-8 in `kind` is pending and is not a match. "
-        "The per-verifier output is under Malformed and unknown kind. "
-        "The gate does not fail on that input."
-    )
     lines.append("")
     return "\n".join(lines)
 

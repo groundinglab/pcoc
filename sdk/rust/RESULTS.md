@@ -8,7 +8,7 @@ The generator writes the candidate files, including `br1.txt`. It does not write
 
 ### Invalid UTF-8 in `kind` (erratum 1 open point 4; SPEC §7.3)
 
-§7.3 requires a text string, and a CBOR text string is UTF-8. This SDK's decoder rejects a text item that is not UTF-8 as a malformed item (`cbor.rs`, `str::from_utf8`). That input is the E14 first sort: a `malformed cbor` record, exit 0. It is not Rule A5, because Rule A5 is not applied to a malformed value (E14). Erratum 1 leaves this open for erratum 2.
+§7.3 requires a text string, and a CBOR text string is UTF-8. This SDK's decoder rejects a text item that is not UTF-8 as a malformed item (`cbor.rs`, `str::from_utf8`). That input is the E14 first sort: a `malformed cbor` record, exit 0. It is not Rule A5, because Rule A5 is not applied to a malformed value (E14). Erratum 2 E01 settles it for every CBOR text string, map keys included.
 
 ### Empty input (erratum 1 open point 3; SPEC §7.3, E14)
 

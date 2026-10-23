@@ -4,7 +4,7 @@ The generator writes the CASES v2 keys. Where this file and `spec/satoshi-hike-v
 
 ## SPEC questions
 
-1. **Invalid UTF-8 in a `kind` text** (§7.3, the sentence “Text values and map keys are definite-length UTF-8 text strings”; erratum 1 open point 4). §7.3’s malformed list does not name invalid UTF-8, and RFC 8785 cannot spell it. Reading implemented: a major-type-3 string that is not valid UTF-8 is not a text string under these rules, so the input is not one definite-length CBOR data item. The verifier records `malformed cbor` and the CLI exits 0. It does not apply Rule A5. Erratum 2 is expected to settle this; the reading matches that direction.
+1. **Invalid UTF-8 in a `kind` text** (§7.3, the sentence “Text values and map keys are definite-length UTF-8 text strings”; erratum 1 open point 4). §7.3’s malformed list does not name invalid UTF-8, and RFC 8785 cannot spell it. Reading implemented: a major-type-3 string that is not valid UTF-8 is not a text string under these rules, so the input is not one definite-length CBOR data item. The verifier records `malformed cbor` and the CLI exits 0. It does not apply Rule A5. Erratum 2 E01 settles this for every CBOR text string, map keys included; this reading is that rule.
 
 2. **GET for an over-range stored height** (erratum 1 open point 1; §14.1 Rule A4.1 after E25; §14.2). E25 makes the height `not defined` and absent for the other shape conditions. Reading implemented: a height above `2^53 − 1` is not a usable height, so Rule A4.2 does not GET it. `index_comparison` and `T` are `not read` because there is no height to request, not because a read failed.
 
