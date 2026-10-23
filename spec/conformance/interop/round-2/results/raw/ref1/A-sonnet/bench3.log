@@ -1,0 +1,12 @@
+"AMD Ryzen 5 5600H with Radeon Graphics"
+production terrain fill (256 MiB), wall clock:
+  plain TypeScript, 1 thread, no WebAssembly               10.69 s
+  WebAssembly kernel, 1 thread                             0.42 s
+  WebAssembly kernel, 2 threads                            0.25 s
+  WebAssembly kernel, 4 threads                            0.16 s
+one production leg (2,000,000 steps), wall clock, 1 thread:
+  plain TypeScript (32-bit limbs) + node:crypto SHA-256    139.58 s
+  WebAssembly fold + node:crypto SHA-256 (SHA-NI)          6.40 s
+  WebAssembly fold + WebAssembly software SHA-256          5.00 s
+six production legs at once (the §14.6 recompute), wall clock:
+  WebAssembly fold + node:crypto SHA-256, 6 workers        8.31 s

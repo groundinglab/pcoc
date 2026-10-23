@@ -1,0 +1,50 @@
+[0/1] Planning build
+Building for production...
+[0/2] Write swift-version-5F9EAC4ED275676.txt
+[2/3] Compiling SatoshiHike CBOR.swift
+~/interop-r2/src/F-glm/impl/Sources/SatoshiHike/Index.swift:35:13: warning: variable 'parser' was never mutated; consider changing to 'let' constant
+ 33 |         }
+ 34 |         guard let str = String(validating: bytes, as: UTF8.self) else { return .fail }
+ 35 |         var parser = Parser(scalars: Array(str.unicodeScalars))
+    |             `- warning: variable 'parser' was never mutated; consider changing to 'let' constant
+ 36 |         parser.skipWs()
+ 37 |         guard let v = parser.parseValue(dup: &parser.dup) else { return .fail }
+
+~/interop-r2/src/F-glm/impl/Sources/SatoshiHike/Index.swift:248:20: warning: immutable value 'bytes' was never used; consider replacing with '_' or removing it
+246 |             // header.height (integer 0 … 2^53 − 1). `time` is read separately.
+247 |             if let hs = JSON.asString(JSON.member(h, "hash")),
+248 |                let bytes = Hex.decode(hs, expectBytes: 32) {
+    |                    `- warning: immutable value 'bytes' was never used; consider replacing with '_' or removing it
+249 |                 uHash = hs
+250 |                 if let ht = JSON.asInt(JSON.member(h, "height")), ht >= 0,
+
+~/interop-r2/src/F-glm/impl/Sources/SatoshiHike/Terrain.swift:47:13: warning: variable 'P' was never mutated; consider changing to 'let' constant
+ 45 |         bufSize = profile.terrainBytes
+ 46 |         buf = UnsafeMutableRawPointer.allocate(byteCount: bufSize, alignment: 64)
+ 47 |         var P = lanes
+    |             `- warning: variable 'P' was never mutated; consider changing to 'let' constant
+ 48 |         if scalar {
+ 49 |             TerrainFill.scalarReference(buf, nSlots: nSlots, wordsPerSlot: wordsPerSlot, P: P)
+
+~/interop-r2/src/F-glm/impl/Sources/SatoshiHike/Verify.swift:528:13: warning: variable 'claimedByG' was never used; consider replacing with '_' or removing it
+526 |         }
+527 |         var pathMeas: [PathMeas] = []
+528 |         var claimedByG: [UInt64: CanonicalPathBody] = [:]
+    |             `- warning: variable 'claimedByG' was never used; consider replacing with '_' or removing it
+529 |         for g in 1...16 {
+530 |             var pm = PathMeas()
+
+~/interop-r2/src/F-glm/impl/Sources/SatoshiHike/Verify.swift:795:53: warning: immutable value 'lim' was never used; consider replacing with '_' or removing it
+793 |                         let previous: [UInt8]? = j == 0 ? limb
+794 |                             : (j - 1 < checkpointsByStage[g].count ? checkpointsByStage[g][j - 1] : nil)
+795 |                         if let prev = previous, let lim = limb {
+    |                                                     `- warning: immutable value 'lim' was never used; consider replacing with '_' or removing it
+796 |                             let lr = Leg.result(terrain: terrain!, previousCheckpoint: prev)
+797 |                             result = lr == LE.u64(lrs[j]) ? Outcome.match : Outcome.mismatch
+[3/4] Compiling Negatives Negatives.swift
+[4/5] Compiling GenCandidatesCore CandidateFile.swift
+[5/6] Compiling GenCandidatesCLI main.swift
+[5/7] Write Objects.LinkFileList
+[6/7] Linking GenCandidatesCLI
+Build of product 'GenCandidatesCLI' complete! (14.92s)
+gen-candidates: wrote 14 files to candidates in 4.8s

@@ -1,0 +1,10 @@
+# G1 reviewed false positives. One entry per line: <path from repo root>:<the whole line, exact>.
+# Reviewed 22 Oct 2026: build-log header lines (builder id + local start time), the public Debian 12 Swift download
+# named by the kit, and a Visual Studio solution header. None is a leak.
+spec/conformance/interop/round-2/results/raw/ref1/C-grok/steps.log:== C-grok build 17:22:10
+spec/conformance/interop/round-2/results/raw/ref2/C-grok/steps.log:== C-grok build 17:29:47
+spec/conformance/interop/round-2/results/raw/ref3/C-grok/steps.log:== C-grok build 17:26:34
+spec/conformance/interop/kit/setup.sh:# user-local toolchain install for interop round 2. usage: setup.sh <ubuntu24.04|debian12>
+spec/conformance/interop/kit/setup.sh:  if [ $OS = debian12 ]; then U=https://download.swift.org/swift-6.1.2-release/debian12/swift-6.1.2-RELEASE/swift-6.1.2-RELEASE-debian12.tar.gz
+spec/conformance/interop/kit/README.md:bash ~/interop-r2/kit/setup.sh ubuntu24.04          # or debian12; user-local toolchains, no root
+spec/conformance/interop/round-2/E-kimi-csharp/code/impl/Pcoc.sln:MinimumVisualStudioVersion = 10.0.40219.1

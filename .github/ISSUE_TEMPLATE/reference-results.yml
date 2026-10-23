@@ -1,0 +1,88 @@
+name: Reference results
+description: Share build, cross-verify or timing results from your own hardware for the interop evidence (spec/conformance/interop).
+title: "results: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for testing. Results from any machine are welcome: a laptop, a server, an ARM board, a faster conforming build.
+        The file formats are in spec/conformance/interop/community/SCHEMA.md. Do not paste secrets, private keys, home paths or host names.
+  - type: input
+    id: cpu
+    attributes:
+      label: CPU
+      description: The CPU model as your OS reports it, and cores / threads.
+      placeholder: "AMD Ryzen 5 5600H, 6 cores / 12 threads"
+    validations:
+      required: true
+  - type: input
+    id: memory
+    attributes:
+      label: Memory and cache
+      placeholder: "16 GiB DDR4-3200, 16 MiB L3"
+    validations:
+      required: true
+  - type: checkboxes
+    id: flags
+    attributes:
+      label: CPU features
+      options:
+        - label: SHA instructions (sha_ni on x86, sha2 on ARM)
+        - label: AVX2
+        - label: AVX-512
+        - label: NEON
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "Ubuntu 24.04"
+    validations:
+      required: true
+  - type: input
+    id: spec
+    attributes:
+      label: SPEC version and pcoc commit
+      placeholder: "2.2 + erratum 1 @ 7b40353"
+    validations:
+      required: true
+  - type: dropdown
+    id: build
+    attributes:
+      label: Build
+      multiple: true
+      options:
+        - A-sonnet (TypeScript)
+        - B-sol (Python + C)
+        - C-grok (Zig)
+        - D-gemini (Kotlin)
+        - E-kimi (C#)
+        - F-glm (Swift)
+        - An SDK (sdk/)
+        - My own build from the SPEC (give repo and commit below)
+    validations:
+      required: true
+  - type: textarea
+    id: objects
+    attributes:
+      label: objects.sha256
+      description: sha256sum of the O1-S1, O2-S2 and O3-PROD objects your build produced.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: bench
+    attributes:
+      label: bench.csv
+      description: "Header: machine,build,phase,run,seconds"
+      render: text
+  - type: textarea
+    id: packed
+    attributes:
+      label: packed.csv
+      description: "Header: machine,build,engine,N,instance,legs_total,legs_in_window,window_s,legs_per_s,rss_kb,verify_leg,verify"
+      render: text
+  - type: textarea
+    id: notes
+    attributes:
+      label: Load and notes
+      description: What else was running, anything unusual, your own build's repo and commit.

@@ -1,0 +1,7 @@
+terrain_scalar_s=0.350
+terrain_fast_s=0.239
+terrain_equal=true
+leg_scalar_s=2.510
+leg_fast_s=2.470
+leg_equal=true
+leg_fast_le_hex=88a04ac5beacb8a7

@@ -1,0 +1,16 @@
+== A-sonnet build 17:29:59
+rc=0 wall=2.2s
+== A-sonnet test 17:30:01
+rc=0 wall=17.6s
+== A-sonnet cands 17:30:18
+rc=0 wall=10.1s
+== A-sonnet objects 17:30:28
+rc=0 wall=120.9s
+== A-sonnet done 17:32:29
+== A-sonnet bench1 17:41:24
+rc=0 wall=164.9s
+== A-sonnet bench2 17:44:09
+rc=0 wall=165.7s
+== A-sonnet bench3 17:46:54
+rc=0 wall=165.2s
+== A-sonnet done 17:49:40

@@ -1,0 +1,12 @@
+"AMD Ryzen 5 7430U with Radeon Graphics"
+production terrain fill (256 MiB), wall clock:
+  plain TypeScript, 1 thread, no WebAssembly               9.91 s
+  WebAssembly kernel, 1 thread                             0.41 s
+  WebAssembly kernel, 2 threads                            0.24 s
+  WebAssembly kernel, 4 threads                            0.15 s
+one production leg (2,000,000 steps), wall clock, 1 thread:
+  plain TypeScript (32-bit limbs) + node:crypto SHA-256    133.81 s
+  WebAssembly fold + node:crypto SHA-256 (SHA-NI)          6.48 s
+  WebAssembly fold + WebAssembly software SHA-256          5.14 s
+six production legs at once (the §14.6 recompute), wall clock:
+  WebAssembly fold + node:crypto SHA-256, 6 workers        8.63 s

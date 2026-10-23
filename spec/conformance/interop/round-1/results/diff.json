@@ -1,0 +1,721 @@
+{
+ "seed": {
+  "match": [
+   "seed.pk_A.D",
+   "seed.pk_A.P0_u64",
+   "seed.pk_A.P1_u64",
+   "seed.pk_A.P2_u64",
+   "seed.pk_A.P3_u64",
+   "seed.pk_A.preimage",
+   "seed.pk_B.D",
+   "seed.pk_B.P0_u64",
+   "seed.pk_B.P1_u64",
+   "seed.pk_B.P2_u64",
+   "seed.pk_B.P3_u64",
+   "seed.pk_B.preimage"
+  ],
+  "mismatch": [],
+  "only_b1": [],
+  "only_b2": []
+ },
+ "nl4": {
+  "match": [
+   "nl4.S1.slot.0.word.0.base_u64",
+   "nl4.S1.slot.0.word.0.stored_u64",
+   "nl4.S1.slot.0.word.1.base_u64",
+   "nl4.S1.slot.0.word.1.stored_u64",
+   "nl4.S1.slot.0.word.2.base_u64",
+   "nl4.S1.slot.0.word.2.stored_u64",
+   "nl4.S1.slot.0.word.3.base_u64",
+   "nl4.S1.slot.0.word.3.stored_u64",
+   "nl4.S1.slot.0.word.4.base_u64",
+   "nl4.S1.slot.0.word.4.stored_u64",
+   "nl4.S1.slot.0.word.5.base_u64",
+   "nl4.S1.slot.0.word.5.stored_u64",
+   "nl4.S1.slot.0.word.6.base_u64",
+   "nl4.S1.slot.0.word.6.stored_u64",
+   "nl4.S1.slot.0.word.7.base_u64",
+   "nl4.S1.slot.0.word.7.stored_u64",
+   "nl4.S1.slot.1.word.0.base_u64",
+   "nl4.S1.slot.1.word.0.stored_u64",
+   "nl4.S1.slot.1.word.1.base_u64",
+   "nl4.S1.slot.1.word.1.stored_u64",
+   "nl4.S1.slot.1.word.2.base_u64",
+   "nl4.S1.slot.1.word.2.stored_u64",
+   "nl4.S1.slot.1.word.3.base_u64",
+   "nl4.S1.slot.1.word.3.stored_u64",
+   "nl4.S1.slot.1.word.4.base_u64",
+   "nl4.S1.slot.1.word.4.stored_u64",
+   "nl4.S1.slot.1.word.5.base_u64",
+   "nl4.S1.slot.1.word.5.stored_u64",
+   "nl4.S1.slot.1.word.6.base_u64",
+   "nl4.S1.slot.1.word.6.stored_u64",
+   "nl4.S1.slot.1.word.7.base_u64",
+   "nl4.S1.slot.1.word.7.stored_u64",
+   "nl4.S1.slot.1023.word.0.base_u64",
+   "nl4.S1.slot.1023.word.0.stored_u64",
+   "nl4.S1.slot.1023.word.1.base_u64",
+   "nl4.S1.slot.1023.word.1.stored_u64",
+   "nl4.S1.slot.1023.word.2.base_u64",
+   "nl4.S1.slot.1023.word.2.stored_u64",
+   "nl4.S1.slot.1023.word.3.base_u64",
+   "nl4.S1.slot.1023.word.3.stored_u64",
+   "nl4.S1.slot.1023.word.4.base_u64",
+   "nl4.S1.slot.1023.word.4.stored_u64",
+   "nl4.S1.slot.1023.word.5.base_u64",
+   "nl4.S1.slot.1023.word.5.stored_u64",
+   "nl4.S1.slot.1023.word.6.base_u64",
+   "nl4.S1.slot.1023.word.6.stored_u64",
+   "nl4.S1.slot.1023.word.7.base_u64",
+   "nl4.S1.slot.1023.word.7.stored_u64"
+  ],
+  "mismatch": [],
+  "only_b1": [
+   [
+    "nl4.S1.slot.0.word.10.base_u64",
+    "dc54b82bbb0753f9"
+   ],
+   [
+    "nl4.S1.slot.0.word.11.base_u64",
+    "81e984fe1ba03fae"
+   ],
+   [
+    "nl4.S1.slot.0.word.12.base_u64",
+    "520e6604d20acf0f"
+   ],
+   [
+    "nl4.S1.slot.0.word.13.base_u64",
+    "c3ced43f07dd374c"
+   ],
+   [
+    "nl4.S1.slot.0.word.14.base_u64",
+    "14f762b1d29ffcf7"
+   ],
+   [
+    "nl4.S1.slot.0.word.15.base_u64",
+    "bdaa7792353ac4f7"
+   ],
+   [
+    "nl4.S1.slot.0.word.8.base_u64",
+    "3be9a5eaa5ec713b"
+   ],
+   [
+    "nl4.S1.slot.0.word.9.base_u64",
+    "d1135b41308bce0f"
+   ],
+   [
+    "nl4.S1.slot.1.word.10.base_u64",
+    "195257e9e0df4751"
+   ],
+   [
+    "nl4.S1.slot.1.word.11.base_u64",
+    "7051ac047fc71436"
+   ],
+   [
+    "nl4.S1.slot.1.word.12.base_u64",
+    "8c46e5c95ecdd66a"
+   ],
+   [
+    "nl4.S1.slot.1.word.13.base_u64",
+    "fb4da41cfb45b64c"
+   ],
+   [
+    "nl4.S1.slot.1.word.14.base_u64",
+    "e7b8766a59e6849d"
+   ],
+   [
+    "nl4.S1.slot.1.word.15.base_u64",
+    "5a864920b515ba83"
+   ],
+   [
+    "nl4.S1.slot.1.word.8.base_u64",
+    "2808b6bca1520ebb"
+   ],
+   [
+    "nl4.S1.slot.1.word.9.base_u64",
+    "e9cc4757449d630d"
+   ],
+   [
+    "nl4.S1.slot.1023.word.10.base_u64",
+    "df4aa60dbc9914da"
+   ],
+   [
+    "nl4.S1.slot.1023.word.11.base_u64",
+    "52077769b7203681"
+   ],
+   [
+    "nl4.S1.slot.1023.word.12.base_u64",
+    "b4ab6a9b4c614e83"
+   ],
+   [
+    "nl4.S1.slot.1023.word.13.base_u64",
+    "6a63e550e8e1da6f"
+   ],
+   [
+    "nl4.S1.slot.1023.word.14.base_u64",
+    "71f72b044a47e13a"
+   ],
+   [
+    "nl4.S1.slot.1023.word.15.base_u64",
+    "298d2ba90b748e5a"
+   ],
+   [
+    "nl4.S1.slot.1023.word.8.base_u64",
+    "7e263c1d1a40dd97"
+   ],
+   [
+    "nl4.S1.slot.1023.word.9.base_u64",
+    "12d8c5468b8f2f06"
+   ]
+  ],
+  "only_b2": []
+ },
+ "terrain": {
+  "match": [
+   "terrain.PROD.digest",
+   "terrain.S1.digest",
+   "terrain.S2.digest"
+  ],
+  "mismatch": [],
+  "only_b1": [],
+  "only_b2": []
+ },
+ "fold": {
+  "match": [
+   "fold.S1.leg_result_u64",
+   "fold.S1.step.0.S_next_u64",
+   "fold.S1.step.0.S_u64",
+   "fold.S1.step.0.acc_u64",
+   "fold.S1.step.0.slot_index",
+   "fold.S1.step.1.S_next_u64",
+   "fold.S1.step.1.S_u64",
+   "fold.S1.step.1.acc_u64",
+   "fold.S1.step.1.slot_index",
+   "fold.S1.step.2.S_next_u64",
+   "fold.S1.step.2.S_u64",
+   "fold.S1.step.2.acc_u64",
+   "fold.S1.step.2.slot_index",
+   "fold.S1.step.3.S_next_u64",
+   "fold.S1.step.3.S_u64",
+   "fold.S1.step.3.acc_u64",
+   "fold.S1.step.3.slot_index"
+  ],
+  "mismatch": [],
+  "only_b1": [],
+  "only_b2": []
+ },
+ "kat-small": {
+  "match": [
+   "kat-small.S1.stage.0.leg.0.checkpoint",
+   "kat-small.S1.stage.0.leg.0.legs_le_hex",
+   "kat-small.S1.stage.0.waypoint",
+   "kat-small.S1.stage.1.leg.0.checkpoint",
+   "kat-small.S1.stage.1.leg.0.legs_le_hex",
+   "kat-small.S1.stage.1.waypoint",
+   "kat-small.S1.stage.10.leg.0.checkpoint",
+   "kat-small.S1.stage.10.leg.0.legs_le_hex",
+   "kat-small.S1.stage.10.waypoint",
+   "kat-small.S1.stage.11.leg.0.checkpoint",
+   "kat-small.S1.stage.11.leg.0.legs_le_hex",
+   "kat-small.S1.stage.11.waypoint",
+   "kat-small.S1.stage.12.leg.0.checkpoint",
+   "kat-small.S1.stage.12.leg.0.legs_le_hex",
+   "kat-small.S1.stage.12.waypoint",
+   "kat-small.S1.stage.13.leg.0.checkpoint",
+   "kat-small.S1.stage.13.leg.0.legs_le_hex",
+   "kat-small.S1.stage.13.waypoint",
+   "kat-small.S1.stage.14.leg.0.checkpoint",
+   "kat-small.S1.stage.14.leg.0.legs_le_hex",
+   "kat-small.S1.stage.14.waypoint",
+   "kat-small.S1.stage.15.leg.0.checkpoint",
+   "kat-small.S1.stage.15.leg.0.legs_le_hex",
+   "kat-small.S1.stage.15.waypoint",
+   "kat-small.S1.stage.16.leg.0.checkpoint",
+   "kat-small.S1.stage.16.leg.0.legs_le_hex",
+   "kat-small.S1.stage.16.waypoint",
+   "kat-small.S1.stage.17.leg.0.checkpoint",
+   "kat-small.S1.stage.17.leg.0.legs_le_hex",
+   "kat-small.S1.stage.17.waypoint",
+   "kat-small.S1.stage.2.leg.0.checkpoint",
+   "kat-small.S1.stage.2.leg.0.legs_le_hex",
+   "kat-small.S1.stage.2.waypoint",
+   "kat-small.S1.stage.3.leg.0.checkpoint",
+   "kat-small.S1.stage.3.leg.0.legs_le_hex",
+   "kat-small.S1.stage.3.waypoint",
+   "kat-small.S1.stage.4.leg.0.checkpoint",
+   "kat-small.S1.stage.4.leg.0.legs_le_hex",
+   "kat-small.S1.stage.4.waypoint",
+   "kat-small.S1.stage.5.leg.0.checkpoint",
+   "kat-small.S1.stage.5.leg.0.legs_le_hex",
+   "kat-small.S1.stage.5.waypoint",
+   "kat-small.S1.stage.6.leg.0.checkpoint",
+   "kat-small.S1.stage.6.leg.0.legs_le_hex",
+   "kat-small.S1.stage.6.waypoint",
+   "kat-small.S1.stage.7.leg.0.checkpoint",
+   "kat-small.S1.stage.7.leg.0.legs_le_hex",
+   "kat-small.S1.stage.7.waypoint",
+   "kat-small.S1.stage.8.leg.0.checkpoint",
+   "kat-small.S1.stage.8.leg.0.legs_le_hex",
+   "kat-small.S1.stage.8.waypoint",
+   "kat-small.S1.stage.9.leg.0.checkpoint",
+   "kat-small.S1.stage.9.leg.0.legs_le_hex",
+   "kat-small.S1.stage.9.waypoint"
+  ],
+  "mismatch": [],
+  "only_b1": [],
+  "only_b2": []
+ },
+ "test-3leg": {
+  "match": [
+   "test-3leg.S2.stage.0.leg.0.checkpoint",
+   "test-3leg.S2.stage.0.leg.0.legs_le_hex",
+   "test-3leg.S2.stage.0.leg.1.checkpoint",
+   "test-3leg.S2.stage.0.leg.1.legs_le_hex",
+   "test-3leg.S2.stage.0.leg.2.checkpoint",
+   "test-3leg.S2.stage.0.leg.2.legs_le_hex",
+   "test-3leg.S2.stage.0.waypoint",
+   "test-3leg.S2.stage.1.leg.0.checkpoint",
+   "test-3leg.S2.stage.1.leg.0.legs_le_hex",
+   "test-3leg.S2.stage.1.leg.1.checkpoint",
+   "test-3leg.S2.stage.1.leg.1.legs_le_hex",
+   "test-3leg.S2.stage.1.leg.2.checkpoint",
+   "test-3leg.S2.stage.1.leg.2.legs_le_hex",
+   "test-3leg.S2.stage.1.waypoint",
+   "test-3leg.S2.stage.10.leg.0.checkpoint",
+   "test-3leg.S2.stage.10.leg.0.legs_le_hex",
+   "test-3leg.S2.stage.10.leg.1.checkpoint",
+   "test-3leg.S2.stage.10.leg.1.legs_le_hex",
+   "test-3leg.S2.stage.10.leg.2.checkpoint",
+   "test-3leg.S2.stage.10.leg.2.legs_le_hex",
+   "test-3leg.S2.stage.10.waypoint",
+   "test-3leg.S2.stage.11.leg.0.checkpoint",
+   "test-3leg.S2.stage.11.leg.0.legs_le_hex",
+   "test-3leg.S2.stage.11.leg.1.checkpoint",
+   "test-3leg.S2.stage.11.leg.1.legs_le_hex",
+   "test-3leg.S2.stage.11.leg.2.checkpoint",
+   "test-3leg.S2.stage.11.leg.2.legs_le_hex",
+   "test-3leg.S2.stage.11.waypoint",
+   "test-3leg.S2.stage.12.leg.0.checkpoint",
+   "test-3leg.S2.stage.12.leg.0.legs_le_hex",
+   "test-3leg.S2.stage.12.leg.1.checkpoint",
+   "test-3leg.S2.stage.12.leg.1.legs_le_hex",
+   "test-3leg.S2.stage.12.leg.2.checkpoint",
+   "test-3leg.S2.stage.12.leg.2.legs_le_hex",
+   "test-3leg.S2.stage.12.waypoint",
+   "test-3leg.S2.stage.13.leg.0.checkpoint",
+   "test-3leg.S2.stage.13.leg.0.legs_le_hex",
+   "test-3leg.S2.stage.13.leg.1.checkpoint",
+   "test-3leg.S2.stage.13.leg.1.legs_le_hex",
+   "test-3leg.S2.stage.13.leg.2.checkpoint",
+   "test-3leg.S2.stage.13.leg.2.legs_le_hex",
+   "test-3leg.S2.stage.13.waypoint",
+   "test-3leg.S2.stage.14.leg.0.checkpoint",
+   "test-3leg.S2.stage.14.leg.0.legs_le_hex",
+   "test-3leg.S2.stage.14.leg.1.checkpoint",
+   "test-3leg.S2.stage.14.leg.1.legs_le_hex",
+   "test-3leg.S2.stage.14.leg.2.checkpoint",
+   "test-3leg.S2.stage.14.leg.2.legs_le_hex",
+   "test-3leg.S2.stage.14.waypoint",
+   "test-3leg.S2.stage.15.leg.0.checkpoint",
+   "test-3leg.S2.stage.15.leg.0.legs_le_hex",
+   "test-3leg.S2.stage.15.leg.1.checkpoint",
+   "test-3leg.S2.stage.15.leg.1.legs_le_hex",
+   "test-3leg.S2.stage.15.leg.2.checkpoint",
+   "test-3leg.S2.stage.15.leg.2.legs_le_hex",
+   "test-3leg.S2.stage.15.waypoint",
+   "test-3leg.S2.stage.16.leg.0.checkpoint",
+   "test-3leg.S2.stage.16.leg.0.legs_le_hex",
+   "test-3leg.S2.stage.16.leg.1.checkpoint",
+   "test-3leg.S2.stage.16.leg.1.legs_le_hex",
+   "test-3leg.S2.stage.16.leg.2.checkpoint",
+   "test-3leg.S2.stage.16.leg.2.legs_le_hex",
+   "test-3leg.S2.stage.16.waypoint",
+   "test-3leg.S2.stage.17.leg.0.checkpoint",
+   "test-3leg.S2.stage.17.leg.0.legs_le_hex",
+   "test-3leg.S2.stage.17.leg.1.checkpoint",
+   "test-3leg.S2.stage.17.leg.1.legs_le_hex",
+   "test-3leg.S2.stage.17.leg.2.checkpoint",
+   "test-3leg.S2.stage.17.leg.2.legs_le_hex",
+   "test-3leg.S2.stage.17.waypoint",
+   "test-3leg.S2.stage.2.leg.0.checkpoint",
+   "test-3leg.S2.stage.2.leg.0.legs_le_hex",
+   "test-3leg.S2.stage.2.leg.1.checkpoint",
+   "test-3leg.S2.stage.2.leg.1.legs_le_hex",
+   "test-3leg.S2.stage.2.leg.2.checkpoint",
+   "test-3leg.S2.stage.2.leg.2.legs_le_hex",
+   "test-3leg.S2.stage.2.waypoint",
+   "test-3leg.S2.stage.3.leg.0.checkpoint",
+   "test-3leg.S2.stage.3.leg.0.legs_le_hex",
+   "test-3leg.S2.stage.3.leg.1.checkpoint",
+   "test-3leg.S2.stage.3.leg.1.legs_le_hex",
+   "test-3leg.S2.stage.3.leg.2.checkpoint",
+   "test-3leg.S2.stage.3.leg.2.legs_le_hex",
+   "test-3leg.S2.stage.3.waypoint",
+   "test-3leg.S2.stage.4.leg.0.checkpoint",
+   "test-3leg.S2.stage.4.leg.0.legs_le_hex",
+   "test-3leg.S2.stage.4.leg.1.checkpoint",
+   "test-3leg.S2.stage.4.leg.1.legs_le_hex",
+   "test-3leg.S2.stage.4.leg.2.checkpoint",
+   "test-3leg.S2.stage.4.leg.2.legs_le_hex",
+   "test-3leg.S2.stage.4.waypoint",
+   "test-3leg.S2.stage.5.leg.0.checkpoint",
+   "test-3leg.S2.stage.5.leg.0.legs_le_hex",
+   "test-3leg.S2.stage.5.leg.1.checkpoint",
+   "test-3leg.S2.stage.5.leg.1.legs_le_hex",
+   "test-3leg.S2.stage.5.leg.2.checkpoint",
+   "test-3leg.S2.stage.5.leg.2.legs_le_hex",
+   "test-3leg.S2.stage.5.waypoint",
+   "test-3leg.S2.stage.6.leg.0.checkpoint",
+   "test-3leg.S2.stage.6.leg.0.legs_le_hex",
+   "test-3leg.S2.stage.6.leg.1.checkpoint",
+   "test-3leg.S2.stage.6.leg.1.legs_le_hex",
+   "test-3leg.S2.stage.6.leg.2.checkpoint",
+   "test-3leg.S2.stage.6.leg.2.legs_le_hex",
+   "test-3leg.S2.stage.6.waypoint",
+   "test-3leg.S2.stage.7.leg.0.checkpoint",
+   "test-3leg.S2.stage.7.leg.0.legs_le_hex",
+   "test-3leg.S2.stage.7.leg.1.checkpoint",
+   "test-3leg.S2.stage.7.leg.1.legs_le_hex",
+   "test-3leg.S2.stage.7.leg.2.checkpoint",
+   "test-3leg.S2.stage.7.leg.2.legs_le_hex",
+   "test-3leg.S2.stage.7.waypoint",
+   "test-3leg.S2.stage.8.leg.0.checkpoint",
+   "test-3leg.S2.stage.8.leg.0.legs_le_hex",
+   "test-3leg.S2.stage.8.leg.1.checkpoint",
+   "test-3leg.S2.stage.8.leg.1.legs_le_hex",
+   "test-3leg.S2.stage.8.leg.2.checkpoint",
+   "test-3leg.S2.stage.8.leg.2.legs_le_hex",
+   "test-3leg.S2.stage.8.waypoint",
+   "test-3leg.S2.stage.9.leg.0.checkpoint",
+   "test-3leg.S2.stage.9.leg.0.legs_le_hex",
+   "test-3leg.S2.stage.9.leg.1.checkpoint",
+   "test-3leg.S2.stage.9.leg.1.legs_le_hex",
+   "test-3leg.S2.stage.9.leg.2.checkpoint",
+   "test-3leg.S2.stage.9.leg.2.legs_le_hex",
+   "test-3leg.S2.stage.9.waypoint"
+  ],
+  "mismatch": [],
+  "only_b1": [],
+  "only_b2": []
+ },
+ "prod": {
+  "match": [
+   "prod.PROD.stage.0.leg.0.checkpoint",
+   "prod.PROD.stage.0.leg.0.legs_le_hex",
+   "prod.PROD.terrain_digest"
+  ],
+  "mismatch": [],
+  "only_b1": [],
+  "only_b2": []
+ },
+ "wes": {
+  "match": [
+   "wes.S1.D",
+   "wes.S1.equal",
+   "wes.S1.stage.0.waypoint"
+  ],
+  "mismatch": [],
+  "only_b1": [],
+  "only_b2": []
+ },
+ "rate": {
+  "match": [
+   "rate.legs.0.span.1.floor.1_4",
+   "rate.legs.0.span.1.floor.1_5",
+   "rate.legs.0.span.1.floor.7_20",
+   "rate.legs.0.span.300.floor.1_4",
+   "rate.legs.0.span.300.floor.1_5",
+   "rate.legs.0.span.300.floor.7_20",
+   "rate.legs.0.span.3600.floor.1_4",
+   "rate.legs.0.span.3600.floor.1_5",
+   "rate.legs.0.span.3600.floor.7_20",
+   "rate.legs.1.span.300.floor.1_4",
+   "rate.legs.1.span.300.floor.1_5",
+   "rate.legs.1.span.300.floor.7_20",
+   "rate.legs.1.span.3600.floor.1_4",
+   "rate.legs.1.span.3600.floor.1_5",
+   "rate.legs.1.span.3600.floor.7_20",
+   "rate.legs.1000.span.3600.floor.7_20",
+   "rate.legs.5.span.300.floor.1_4",
+   "rate.legs.5.span.300.floor.1_5",
+   "rate.legs.5.span.300.floor.7_20",
+   "rate.legs.5.span.3600.floor.1_4",
+   "rate.legs.5.span.3600.floor.1_5",
+   "rate.legs.5.span.3600.floor.7_20",
+   "rate.legs.6.span.300.floor.1_4",
+   "rate.legs.6.span.300.floor.1_5",
+   "rate.legs.6.span.300.floor.7_20",
+   "rate.legs.6.span.3600.floor.1_4",
+   "rate.legs.6.span.3600.floor.1_5",
+   "rate.legs.6.span.3600.floor.7_20"
+  ],
+  "mismatch": [
+   [
+    "rate.legs.1.span.1.floor.1_4",
+    "meets",
+    "meet"
+   ],
+   [
+    "rate.legs.1.span.1.floor.1_5",
+    "meets",
+    "meet"
+   ],
+   [
+    "rate.legs.1.span.1.floor.7_20",
+    "meets",
+    "meet"
+   ],
+   [
+    "rate.legs.1000.span.1.floor.1_4",
+    "meets",
+    "meet"
+   ],
+   [
+    "rate.legs.1000.span.1.floor.1_5",
+    "meets",
+    "meet"
+   ],
+   [
+    "rate.legs.1000.span.1.floor.7_20",
+    "meets",
+    "meet"
+   ],
+   [
+    "rate.legs.1000.span.300.floor.1_4",
+    "meets",
+    "meet"
+   ],
+   [
+    "rate.legs.1000.span.300.floor.1_5",
+    "meets",
+    "meet"
+   ],
+   [
+    "rate.legs.1000.span.300.floor.7_20",
+    "meets",
+    "meet"
+   ],
+   [
+    "rate.legs.1000.span.3600.floor.1_4",
+    "meets",
+    "meet"
+   ],
+   [
+    "rate.legs.1000.span.3600.floor.1_5",
+    "meets",
+    "meet"
+   ],
+   [
+    "rate.legs.5.span.1.floor.1_4",
+    "meets",
+    "meet"
+   ],
+   [
+    "rate.legs.5.span.1.floor.1_5",
+    "meets",
+    "meet"
+   ],
+   [
+    "rate.legs.5.span.1.floor.7_20",
+    "meets",
+    "meet"
+   ],
+   [
+    "rate.legs.6.span.1.floor.1_4",
+    "meets",
+    "meet"
+   ],
+   [
+    "rate.legs.6.span.1.floor.1_5",
+    "meets",
+    "meet"
+   ],
+   [
+    "rate.legs.6.span.1.floor.7_20",
+    "meets",
+    "meet"
+   ]
+  ],
+  "only_b1": [],
+  "only_b2": []
+ },
+ "anchor": {
+  "match": [
+   "anchor.H.100.height.100",
+   "anchor.H.100.height.101",
+   "anchor.H.100.height.102",
+   "anchor.H.100.height.103",
+   "anchor.H.100.height.104",
+   "anchor.H.100.height.105",
+   "anchor.H.100.height.106"
+  ],
+  "mismatch": [],
+  "only_b1": [],
+  "only_b2": []
+ },
+ "draw": {
+  "match": [
+   "draw.legs.18.indices",
+   "draw.legs.54.indices",
+   "draw.legs.6.indices"
+  ],
+  "mismatch": [],
+  "only_b1": [
+   [
+    "draw.b0_label",
+    "pcoc-pack-2.2/draw"
+   ],
+   [
+    "draw.legs06.thorough.indices",
+    "1,2,3,4,0,5,5,2,1,3,4,0,5,4,0,2,3,1"
+   ],
+   [
+    "draw.legs18.thorough.indices",
+    "7,2,1,15,10,16,6,11,17,13,3,14,4,12,5,8,9,0"
+   ],
+   [
+    "draw.legs54.thorough.indices",
+    "7,20,1,51,10,16,42,29,17,2,43,49,3,31,39,32,40,30"
+   ],
+   [
+    "draw.thorough_rounds",
+    "3"
+   ]
+  ],
+  "only_b2": []
+ },
+ "unknown-kind": {
+  "match": [
+   "unknown-kind.empty.record",
+   "unknown-kind.satoshi-hike-v2.0-object.record",
+   "unknown-kind.v2.1-pcoc-object.record",
+   "unknown-kind.v2.2-pcoc-objecT.record"
+  ],
+  "mismatch": [],
+  "only_b1": [],
+  "only_b2": []
+ },
+ "hashcash": {
+  "match": [],
+  "mismatch": [
+   [
+    "hashcash.challenge",
+    "d1d65714b910b3c8c4122434b2ddee01113bce6152b4b1a7bcf74aa07d4115fa",
+    "58e405b889824c9ff3444c6e11aea358cc5e216e6fce57d794cb1ef2d3bc4f37"
+   ],
+   [
+    "hashcash.digest",
+    "0000038b74f5f1fd6994ac122b33d322e10a39810660400272679808ce553725",
+    "000002afa0802db0c0dc9a5b1879f9c0311efd883c6d25a686136db6831f3411"
+   ],
+   [
+    "hashcash.header_hash",
+    "9e48d971c25a2c21c95449623e42b620c9037038afb020d12f4126309e849d54",
+    "287c28c72e4a7d23d88e82afbf601cd8740345018abc6ae9a78eec996c44f2a7"
+   ],
+   [
+    "hashcash.nonce",
+    "1548251",
+    "4447969"
+   ],
+   [
+    "hashcash.origin",
+    "https://4a0e0526df729135d43fac93d9548835.invalid",
+    "https://example.com"
+   ],
+   [
+    "hashcash.origin_label",
+    "bari_origin",
+    "bari-origin"
+   ],
+   [
+    "hashcash.waypoint",
+    "76c7a4a699009dd5c52b91ad9b8454282b8020ea86b208c1c57ea0311a7e2c28",
+    "6863fc06e217f9a102ee6f5be8761bc27425c0f0f4c6b722ca03aa4e5fdbd771"
+   ]
+  ],
+  "only_b1": [
+   [
+    "hashcash.difficulty",
+    "21"
+   ],
+   [
+    "hashcash.fee_header",
+    "3ea15674b0a85ce88df08195d1c7c1079ee8842f808899e133163e510cf0f5a92778563e50493b5f0e61645057e894fec66f583a569585c885040c73fe8b251d06dd8e5f27cc8fe353937a8f29acd279"
+   ],
+   [
+    "hashcash.fee_header_labels",
+    "hashcash/fee_header/0,hashcash/fee_header/1,hashcash/fee_header/2[0:16]"
+   ],
+   [
+    "hashcash.waypoint_label",
+    "hashcash/waypoint"
+   ]
+  ],
+  "only_b2": []
+ },
+ "negatives": {
+  "match": [
+   "negatives.all4_kernel.matches_honest",
+   "negatives.cached_leg.matches_honest",
+   "negatives.f3_shared_terrain.matches_honest",
+   "negatives.one_lane_flip.matches_honest",
+   "negatives.partial_slot_read.matches_honest",
+   "negatives.partial_slot_read_2047.matches_honest",
+   "negatives.prefold_hoist.matches_honest",
+   "negatives.s_plus_w_fold.matches_honest",
+   "negatives.s_plus_w_fold.value",
+   "negatives.slot_summary_fold.matches_honest",
+   "negatives.slot_summary_fold.value",
+   "negatives.squeezed_seed_terrain.matches_honest",
+   "negatives.xor_accumulator_fold.matches_honest",
+   "negatives.xor_accumulator_fold.value",
+   "negatives.xor_w_fold.matches_honest",
+   "negatives.xor_w_fold.value"
+  ],
+  "mismatch": [
+   [
+    "negatives.all4_kernel.value",
+    "2d7410d07dc6b0e3f8659345a546f5570499a4c423d3d6f6f1df18f53a5cbb6e",
+    "af0b0f2228b6505d58417d075653d61c6489ef9f23a5c5257d5d549d284926de"
+   ],
+   [
+    "negatives.cached_leg.value",
+    "3b715e2a251a44d9",
+    "4c9a6a98574cbd31"
+   ],
+   [
+    "negatives.f3_shared_terrain.value",
+    "a73019b8a2c43cd1",
+    "3f5d4812c0ad1307d215633817f03cfab9a69bc6a8549e86e08c64846cf112fb"
+   ],
+   [
+    "negatives.one_lane_flip.value",
+    "5c3eaeb82045b81036d39bc59d0390b738951b0ba7fbadda118388d0e3070608",
+    "a0325421bbc38a5ee9f494e957298684084086ccefb7821d3e8b9785923d2a45"
+   ],
+   [
+    "negatives.partial_slot_read.value",
+    "059f134920349f54",
+    "e1ae647ee5a5d7c5"
+   ],
+   [
+    "negatives.partial_slot_read_2047.value",
+    "738755dabac824ab",
+    "4c9a6a98574cbd31"
+   ],
+   [
+    "negatives.prefold_hoist.value",
+    "b1808c8d3927a7d1",
+    "73a4c7fbd105aae1"
+   ],
+   [
+    "negatives.squeezed_seed_terrain.value",
+    "ed0fc97468d0bc1675729776307ee35b9f9a03e2b5f6a671bd7afabf068e5c22",
+    "8f5162aa56660daf391411b219fe4f8141f43a4a58ac131f5ab762809244f04d"
+   ]
+  ],
+  "only_b1": [],
+  "only_b2": []
+ }
+}

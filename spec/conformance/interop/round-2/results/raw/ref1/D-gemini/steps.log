@@ -1,0 +1,12 @@
+== D-gemini build 17:28:43
+rc=0 wall=54.9s
+== D-gemini test 17:29:37
+rc=1 wall=18.0s
+== D-gemini cands 17:29:55
+rc=0 wall=12.3s
+== D-gemini objects 17:30:08
+rc=0 wall=62.3s
+== D-gemini done 17:31:10
+== D-gemini test 17:34:07
+rc=0 wall=16.9s
+== D-gemini done 17:34:24
