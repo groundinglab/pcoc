@@ -10,7 +10,7 @@ if [ -z "${JAVA_HOME:-}" ]; then
     exit 1
 fi
 JAR=$JAVA_HOME/bin/jar
-REL=build/libs/pcoc-2.3.0.jar
+REL=build/libs/pcoc-2.3.1.jar
 NAMES='slot_summary_fold xor_accumulator_fold xor_w_fold s_plus_w_fold prefold_hoist final_stage_hoist partial_slot_read partial_slot_read_2047 f3_shared_terrain cached_leg one_lane_flip all4_kernel squeezed_seed_terrain'
 
 fail() {

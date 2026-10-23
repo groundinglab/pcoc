@@ -4,7 +4,10 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 license.workspace = true
-description = "Satoshi Hike 2.3 offline producer on the scripted rig"
+description = "Satoshi Hike 2.3 producer: scripted rig and live hike"
 
 [dependencies]
 pcoc = { path = "../pcoc" }
+pcoc-gossip = { path = "../pcoc-gossip" }
+# Plain HTTP. No secret is sent. Same pin the desktop app already builds.
+ureq = { version = "=2.12.1", default-features = false, features = ["tls"] }

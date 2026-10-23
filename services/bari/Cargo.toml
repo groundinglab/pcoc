@@ -36,6 +36,8 @@ hyper-util = "=0.1.20"
 tempfile = "=3.24.0"
 # SPEC §13.1 Hashcash. The SDK has no header-source dependency.
 pcoc = { path = "../../sdk/rust/pcoc" }
+# Shared with the live producer. Peer swap and the fail-closed quorum bound.
+pcoc-gossip = { path = "../../sdk/rust/pcoc-gossip" }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 

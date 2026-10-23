@@ -55,8 +55,8 @@ def main() -> None:
     sdk_version = (ROOT / "sdk" / "VERSION").read_text().strip()
     # 2.3 folds errata 1 and 2 into the SPEC. The pin names the tag and the
     # pack hash. It has no erratum key.
-    if sdk_version != "2.3.0" or pins.get("tag") != "spec-2.3.0" or "erratum" in pins:
-        raise SystemExit("SPEC_PIN is not the 2.3 form (tag spec-2.3.0, no erratum key) or VERSION is not 2.3.0")
+    if sdk_version != "2.3.1" or pins.get("tag") != "spec-2.3.0" or "erratum" in pins:
+        raise SystemExit("SPEC_PIN is not the 2.3 form (tag spec-2.3.0, no erratum key) or VERSION is not 2.3.1")
     if not LEGACY.is_file():
         raise SystemExit("manifests/2.2.0.json is the 2.2 record and must stay")
     fixed = "\n".join([

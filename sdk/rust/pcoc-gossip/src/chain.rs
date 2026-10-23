@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use pcoc::br1::{mainnet_next_bits, MAINNET_POW_LIMIT_BITS, SYNTH_NBITS};
 
 use super::wire::sha256d;
-use crate::header_source::TipTick;
+use crate::TipTick;
 
 pub const RETARGET_INTERVAL: u32 = 2016;
 pub const HEADER_PEERS_MIN: usize = 2;
@@ -416,7 +416,7 @@ fn hash_meets(hash_le: &[u8; 32], target_be: &[u8; 32]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gossip::recorded::{
+    use crate::recorded::{
         ANCHOR_HEADER, ANCHOR_HEIGHT, ANCHOR_TIME, GENESIS_TIME, HEADER_2015, HEADER_2016,
         HEADER_30240_TIME, HEADER_32255, HEADER_32256, HEADER_971713,
     };

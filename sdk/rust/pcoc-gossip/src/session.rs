@@ -18,6 +18,7 @@
 use std::collections::{HashSet, VecDeque};
 use std::io::{self, ErrorKind, Read, Write};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -28,7 +29,7 @@ use super::wire::{
     decode_headers, decode_inv, encode_getheaders, encode_headers, encode_inv, encode_message,
     encode_pong, encode_version, is_block_inv, take_message, MAINNET_MAGIC, MAX_HEADERS, MSG_BLOCK,
 };
-use crate::header_source::TipTick;
+use crate::TipTick;
 
 const READ_WAIT: Duration = Duration::from_millis(400);
 const DIAL_WAIT: Duration = Duration::from_secs(8);
@@ -499,6 +500,9 @@ pub struct Session {
     follow_ms: Option<u64>,
     below_since: Option<u64>,
     last_ping: u64,
+    /// Set by a producer Stop. Bari leaves this empty. Checked between reads,
+    /// never inside a header check, so a leg is not paused by the wait itself.
+    cancel: Option<Arc<AtomicBool>>,
 }
 
 impl Session {
@@ -533,6 +537,7 @@ impl Session {
             quorum.as_millis() as u64,
             HEADER_PEER_SILENCE.as_millis() as u64,
             Some(quorum.as_millis() as u64),
+            None,
         )
     }
 
@@ -544,6 +549,7 @@ impl Session {
         quorum_ms: u64,
         silence_ms: u64,
         follow_ms: Option<u64>,
+        cancel: Option<Arc<AtomicBool>>,
     ) -> Self {
         Self {
             peers,
@@ -557,10 +563,11 @@ impl Session {
             follow_ms,
             below_since: None,
             last_ping: 0,
+            cancel,
         }
     }
 
-    pub(super) fn is_open(&self) -> bool {
+    pub(crate) fn is_open(&self) -> bool {
         self.opened
     }
 
@@ -610,11 +617,20 @@ impl Session {
         self.peers.len()
     }
 
+    fn cancelled(&self) -> bool {
+        self.cancel
+            .as_ref()
+            .is_some_and(|flag| flag.load(Ordering::SeqCst))
+    }
+
     fn drive_until(&mut self, stop_at: Option<[u8; 32]>) -> Result<[u8; 32], String> {
         let started = self.now_ms();
         self.below_since = None;
         let follow_deadline = self.follow_ms.map(|budget| started.saturating_add(budget));
         loop {
+            if self.cancelled() {
+                return Err("cancelled".to_owned());
+            }
             self.sweep_silence()?;
             let mut progress = self.pump_all()?;
             self.maybe_ping()?;
@@ -1115,7 +1131,7 @@ impl Session {
     }
 }
 
-pub(super) fn connect_mainnet(peer: &str) -> Result<Session, String> {
+pub(crate) fn connect_mainnet(peer: &str) -> Result<Session, String> {
     let chain = Chain::open_mainnet(ANCHOR_HEADER, ANCHOR_HEIGHT, ANCHOR_TIME)
         .map_err(|fault| fault.message())?;
     let mut supply = SeedSupply::new(peer);
@@ -1134,7 +1150,19 @@ pub(super) fn connect_mainnet(peer: &str) -> Result<Session, String> {
         PEER_QUORUM_BOUND.as_millis() as u64,
         HEADER_PEER_SILENCE.as_millis() as u64,
         None,
+        None,
     ))
+}
+
+/// Same dial as [`connect_mainnet`]. The read returns `cancelled` once `cancel`
+/// is set, so a producer Stop does not wait out a block.
+pub(crate) fn connect_mainnet_cancellable(
+    peer: &str,
+    cancel: Arc<AtomicBool>,
+) -> Result<Session, String> {
+    let mut session = connect_mainnet(peer)?;
+    session.cancel = Some(cancel);
+    Ok(session)
 }
 
 fn resolve_one(peer: &str) -> Option<SocketAddr> {
@@ -1151,7 +1179,7 @@ fn prepare(stream: TcpStream) -> Result<TcpStream, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gossip::chain::{header_hash, mine_header, spoil_proof, synth_bits};
+    use crate::chain::{header_hash, mine_header, spoil_proof, synth_bits};
 
     fn fixed_chain() -> (Chain, [u8; 80], [u8; 32]) {
         let bits = synth_bits();

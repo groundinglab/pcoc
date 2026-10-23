@@ -1,14 +1,14 @@
 // Package pcoc is the Satoshi Hike 2.3 construction (SPEC 2.3).
 //
 // SPEC §16.2 Rule I2. Each exported function names the section it implements.
-// The version is 2.3.0 (Rule I5). The only object kind is v2.2-pcoc-object.
+// The version is 2.3.1 (Rule I5). The only object kind is v2.2-pcoc-object.
 // The module tag is sdk/go/v2.3.0.
 package pcoc
 
 import "github.com/groundinglab/pcoc/sdk/go/v2/internal/fold"
 
 // Version is the SDK version. SPEC §16.2 Rule I5: MAJOR.MINOR is 2.3.
-const Version = "2.3.0"
+const Version = "2.3.1"
 
 // SpecTag is the tag of this specification (SPEC §16).
 const SpecTag = "spec-2.3.0"

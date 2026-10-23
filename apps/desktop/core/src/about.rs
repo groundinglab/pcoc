@@ -77,9 +77,9 @@ pub fn hashcash_bits() -> u32 {
     pcoc::constants::HASHCASH_DIFFICULTY
 }
 
-/// Live produce does not dial. Phase C owns the header source.
+/// Bitcoin Core mainnet DNS seeds, in Core's order. Port 8333.
 pub fn dns_seeds() -> String {
-    crate::produce::live::LIVE_HEADER_SOURCE.to_owned()
+    pcoc_produce::MAINNET_DNS_SEEDS.join(", ")
 }
 
 #[cfg(test)]
@@ -96,7 +96,8 @@ mod tests {
         assert_eq!(OBJECT_KIND, "v2.2-pcoc-object");
         assert_eq!(SPEC, "SDK 2.3");
         assert_eq!(hashcash_bits(), 21);
-        assert_eq!(dns_seeds(), "live header source is not in this build");
+        assert!(dns_seeds().contains("dnsseed.bluematt.me"));
+        assert!(dns_seeds().contains("seed.bitcoin.wiz.biz"));
     }
 
     #[test]

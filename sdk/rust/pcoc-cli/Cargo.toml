@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 license.workspace = true
-description = "pcoc command: verify, selftest, candidates, produce --rig"
+description = "pcoc command: verify, selftest, candidates, produce"
 
 [[bin]]
 name = "pcoc"

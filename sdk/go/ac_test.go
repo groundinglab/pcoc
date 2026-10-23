@@ -495,7 +495,7 @@ func TestACA9(t *testing.T) {
 	if fileVer != Version {
 		t.Fatalf("VERSION %q constant %s", fileVer, Version)
 	}
-	if Version != "2.3.0" || SpecTag != "spec-2.3.0" {
+	if Version != "2.3.1" || SpecTag != "spec-2.3.0" {
 		t.Fatal(Version, SpecTag)
 	}
 	if Kind != "v2.2-pcoc-object" {

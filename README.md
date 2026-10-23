@@ -148,7 +148,7 @@ To produce one offline on the scripted rig:
 sdk/rust/target/release/pcoc produce --rig --case s1 --public-key HEX --out object.cbor
 ```
 
-`pcoc produce` without `--rig` stops. A live header source is not in this build.
+`pcoc produce --live --public-key HEX --out PATH` walks Bitcoin headers and posts waypoints. `--gossip-peer HOST:PORT` and `--bari URL` are optional. Resume is not supported.
 
 ## Repository map
 

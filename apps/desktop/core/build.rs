@@ -41,7 +41,7 @@ fn main() {
     let (version, commit) = std::fs::read_to_string(&lock_path)
         .ok()
         .and_then(|lock| pcoc_in_lock(&lock))
-        .unwrap_or_else(|| ("2.3.0".to_owned(), "unresolved".to_owned()));
+        .unwrap_or_else(|| ("2.3.1".to_owned(), "unresolved".to_owned()));
 
     println!("cargo:rustc-env=PCOC_REF_PIN_KIND={kind}");
     println!("cargo:rustc-env=PCOC_REF_PIN={pin}");

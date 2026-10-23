@@ -3,12 +3,16 @@
 
 use pcoc::profile::Profile;
 use pcoc::verify::{EmptyIndex, Verified};
+use pcoc_produce::bari::{event_json, HttpBari, DEFAULT_BARI_URL, RESEND_AFTER};
+use pcoc_produce::live::{produce_live, write_atomically, LiveRunOpts, LiveStop};
+use pcoc_produce::source::GossipSource;
 use pcoc_produce::{encode_produced, path_skip_stderr, produce_on_rig, Case, Progress};
 use pcoc_testing::LabelChain;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -56,6 +60,7 @@ fn usage() {
          pcoc quickstart\n\
          pcoc candidates [--out DIR]\n\
          pcoc produce --rig --case s1|s2|prod --public-key HEX --out PATH\n\
+         pcoc produce --live --public-key HEX --out PATH [--gossip-peer HOST:PORT] [--bari URL]\n\
          pcoc --version"
     );
 }
@@ -256,9 +261,7 @@ fn cmd_candidates(args: &[String]) -> ExitCode {
         eprintln!("gen-candidates is not built beside this binary");
         return ExitCode::from(2);
     }
-    let status = std::process::Command::new(gen)
-        .args(args)
-        .status();
+    let status = std::process::Command::new(gen).args(args).status();
     match status {
         Ok(st) => ExitCode::from(st.code().unwrap_or(1) as u8),
         Err(_) => ExitCode::from(2),
@@ -267,9 +270,12 @@ fn cmd_candidates(args: &[String]) -> ExitCode {
 
 fn cmd_produce(args: &[String]) -> ExitCode {
     let mut rig = false;
+    let mut live = false;
     let mut case: Option<Case> = None;
     let mut key: Option<[u8; 32]> = None;
     let mut out: Option<PathBuf> = None;
+    let mut peer: Option<String> = None;
+    let mut bari_url: Option<String> = None;
     let mut i = 0;
     while i < args.len() {
         let a = &args[i];
@@ -278,6 +284,26 @@ fn cmd_produce(args: &[String]) -> ExitCode {
             "--rig" => {
                 rig = true;
                 i += 1;
+            }
+            "--live" => {
+                live = true;
+                i += 1;
+            }
+            "--gossip-peer" => {
+                let Some(v) = next else {
+                    eprintln!("--gossip-peer needs HOST:PORT");
+                    return ExitCode::from(2);
+                };
+                peer = Some(v.to_owned());
+                i += 2;
+            }
+            "--bari" => {
+                let Some(v) = next else {
+                    eprintln!("--bari needs a URL");
+                    return ExitCode::from(2);
+                };
+                bari_url = Some(v.to_owned());
+                i += 2;
             }
             "--case" => {
                 let Some(v) = next else {
@@ -321,11 +347,18 @@ fn cmd_produce(args: &[String]) -> ExitCode {
             }
         }
     }
-    if !rig {
-        eprintln!("live header source is not in this build");
+    if live == rig {
+        usage();
         return ExitCode::from(2);
     }
-    let (Some(case), Some(key), Some(out)) = (case, key, out) else {
+    let (Some(key), Some(out)) = (key, out) else {
+        usage();
+        return ExitCode::from(2);
+    };
+    if live {
+        return cmd_produce_live(key, out, peer, bari_url);
+    }
+    let Some(case) = case else {
         usage();
         return ExitCode::from(2);
     };
@@ -335,7 +368,11 @@ fn cmd_produce(args: &[String]) -> ExitCode {
     let outcome = produce_on_rig(&key, &profile, &schedule, &cancel, |ev| {
         let line = match ev {
             Progress::TerrainFilled => "{\"event\":\"terrain\"}\n".to_string(),
-            Progress::Leg { stage, leg, leg_result } => format!(
+            Progress::Leg {
+                stage,
+                leg,
+                leg_result,
+            } => format!(
                 "{{\"event\":\"leg\",\"stage\":{stage},\"leg\":{leg},\"leg_result\":\"{}\"}}\n",
                 pcoc::hexutil::hex_encode(&leg_result.to_le_bytes())
             ),
@@ -356,6 +393,54 @@ fn cmd_produce(args: &[String]) -> ExitCode {
             }
             let _ = std::io::stderr().write_all(path_skip_stderr().as_bytes());
             ExitCode::SUCCESS
+        }
+    }
+}
+
+fn cmd_produce_live(
+    key: [u8; 32],
+    out: PathBuf,
+    peer: Option<String>,
+    bari_url: Option<String>,
+) -> ExitCode {
+    let cancel = Arc::new(AtomicBool::new(false));
+    let source = GossipSource::spawn(peer.as_deref().unwrap_or(""), Arc::clone(&cancel));
+    let progress: pcoc_produce::bari::Progress = Arc::new(|event| {
+        let _ = std::io::stderr().write_all(event_json(&event).as_bytes());
+    });
+    let bari = match HttpBari::open(
+        bari_url.as_deref().unwrap_or(DEFAULT_BARI_URL),
+        RESEND_AFTER,
+        source.tip_fn(),
+        Arc::clone(&progress),
+    ) {
+        Ok(bari) => bari,
+        Err(message) => {
+            eprintln!("{message}");
+            return ExitCode::from(2);
+        }
+    };
+    let profile = Profile::production();
+    let opts = LiveRunOpts {
+        public_key: &key,
+        profile: &profile,
+        out: &out,
+        cancel: &cancel,
+    };
+    match produce_live(&opts, &source, &bari, &progress) {
+        Ok(product) => {
+            if write_atomically(&out, &product.bytes).is_err() {
+                eprintln!("could not write the object");
+                return ExitCode::from(1);
+            }
+            let _ = std::io::stderr().write_all(product.stderr.as_bytes());
+            cancel.store(true, Ordering::SeqCst);
+            ExitCode::SUCCESS
+        }
+        Err(LiveStop::Cancelled) => ExitCode::SUCCESS,
+        Err(LiveStop::Failed(message)) => {
+            eprintln!("{message}");
+            ExitCode::from(1)
         }
     }
 }
