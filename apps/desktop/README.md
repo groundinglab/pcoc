@@ -1,6 +1,6 @@
 # PCOC Hike for Linux
 
-> **Do not deploy this tree over the live v2.0 service.** This branch is Satoshi Hike 2.2 and must not replace the live v2.0 service.
+> **Do not deploy this tree over the live v2.0 service.** This branch is Satoshi Hike 2.3 and must not replace the live v2.0 service.
 
 PCOC Hike for Linux makes a PCOC, checks one, and signs in, on your own machine, using the Rust SDK in this repository (`sdk/rust`, by path in `Cargo.toml`; About shows the resolved SDK version). A demonstrator, not part of the specification.
 
@@ -10,7 +10,7 @@ A full hike is eighteen stages paced by Bitcoin blocks. That is hours, not a but
 
 **Send to my phone.** On a finished hike, Send to my phone sends the `.cbor` to the object's own npub as one NIP-04 direct message (kind 4), encrypted with the nsec pasted in this session. It goes to relay.damus.io, relay.primal.net and nos.lol; one relay accepting is enough, and nos.lol refuses most objects for size. The phone app signed in with that npub offers it for approval. Making a PCOC never sends it by itself, and the send never touches the admission gate. The code is `core/src/dm.rs`.
 
-**SDK 2.2.** The app version is 0.1.4. The Rust SDK is the in-tree `sdk/rust` crate `pcoc` at version 2.2.0. The object kind this app checks is `v2.2-pcoc-object`. Any other kind is an unknown kind (Rule A5). A malformed object is still a section 14 record. A decode failure is not.
+**SDK 2.3.** The app version is 0.1.5. It targets SPEC 2.3 and Rust SDK v2.3.0 (tag `sdk-rust-v2.3.0`). The crate is the in-tree path `sdk/rust`; About shows the version Cargo.lock resolved. The object kind this app checks is `v2.2-pcoc-object`. Any other kind is an unknown kind (Rule A5). A malformed object is still a section 14 record. A decode failure is not.
 
 Needs GTK 4.14+ and libadwaita 1.5+ (Ubuntu 24.04, Debian 13, Fedora 40 or newer). Rust 1.99.0 comes from `rust-toolchain.toml` in this folder.
 

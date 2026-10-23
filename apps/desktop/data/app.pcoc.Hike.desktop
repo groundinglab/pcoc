@@ -2,7 +2,7 @@
 Type=Application
 Name=PCOC Hike
 GenericName=Satoshi Hike
-Comment=Produce, verify and sign in with SDK 2.2 objects (kind v2.2-pcoc-object)
+Comment=Produce, verify and sign in with SDK 2.3 objects (kind v2.2-pcoc-object)
 Exec=pcoc-hike
 Icon=app.pcoc.Hike
 Terminal=false

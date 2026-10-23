@@ -864,7 +864,7 @@ dependencies = [
 
 [[package]]
 name = "pcoc-hike"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "async-channel",
  "getrandom 0.2.17",
@@ -876,7 +876,7 @@ dependencies = [
 
 [[package]]
 name = "pcoc-hike-core"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "aes",
  "base64",

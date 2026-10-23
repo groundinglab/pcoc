@@ -1,7 +1,7 @@
 //! What About shows (DESIGN-v2 section 7.7, US-9). The pin facts come from
 //! `build.rs`, which reads the workspace manifest and the lock file.
 
-pub const SPEC: &str = "SDK 2.2";
+pub const SPEC: &str = "SDK 2.3";
 pub const SPEC_HARD_CUT: &str = "2026-10-08";
 pub const SPEC_SIGN_IN_LOCK: &str = "§15.1 locked 2026-10-10";
 pub const APP_ID: &str = "app.pcoc.Hike";
@@ -16,7 +16,7 @@ pub const OBJECT_KIND: &str = pcoc::constants::KIND;
 
 pub const BITCOIN: &str = "mainnet";
 
-/// `pcoc 2.3.0`: the Rust SDK crate and the version Cargo.lock resolved.
+/// `pcoc <version>`: the Rust SDK crate and the version Cargo.lock resolved.
 pub fn crate_line() -> String {
     format!("pcoc {SDK_VERSION}")
 }
@@ -92,8 +92,9 @@ mod tests {
         assert_eq!(PIN, "../../sdk/rust/pcoc");
         assert_eq!(PIN_COMMIT, "local");
         assert_eq!(pin_line(), "in-tree Rust SDK at ../../sdk/rust/pcoc");
+        // KIND stays v2.2-pcoc-object in SPEC 2.3. This is the object kind, not the SDK version.
         assert_eq!(OBJECT_KIND, "v2.2-pcoc-object");
-        assert_eq!(SPEC, "SDK 2.2");
+        assert_eq!(SPEC, "SDK 2.3");
         assert_eq!(hashcash_bits(), 21);
         assert_eq!(dns_seeds(), "live header source is not in this build");
     }
@@ -115,9 +116,9 @@ mod tests {
 
     #[test]
     fn reports_the_sdk_version_from_sdk_version_file() {
+        // The path dependency follows sdk/VERSION. This test does not freeze 2.2.0.
         let want = include_str!("../../../../sdk/VERSION").trim();
         assert_eq!(SDK_VERSION, want);
-        assert_eq!(want, "2.3.0");
         assert_eq!(crate_line(), format!("pcoc {want}"));
         assert_eq!(sdk_line(), want);
     }
