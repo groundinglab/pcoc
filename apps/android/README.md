@@ -1,12 +1,16 @@
 # PCOC on Android
 
-A demonstrator, not part of the specification. The app is a fork of Primal's Android client. You can make a PCOC on the phone, check one on the phone, and sign in with one. Making and checking use the Rust reference, vendored in the fork and called through JNI. Checking writes a section 14 measurement record. It does not say pass or fail, and it does not apply admission policy.
+A demonstrator, not part of the specification. The app is a fork of Primal's Android client. You can make a PCOC on the phone, check one on the phone, and sign in with one.
+
+The current demonstrator is [groundinglab/primal-pcoc](https://github.com/groundinglab/primal-pcoc) tag [`android-v3.5.49`](https://github.com/groundinglab/primal-pcoc/tree/android-v3.5.49) (commit `7443f44`). It builds on the Rust SDK tag [`sdk-rust-v2.3.1`](https://github.com/groundinglab/pcoc/releases/tag/sdk-rust-v2.3.1). The published debug APK and its SHA-256 are on the [Apps page](https://groundinglab.io/apps/). The current build guide is the fork's [README](https://github.com/groundinglab/primal-pcoc/blob/android-v3.5.49/README.md).
+
+The sections below describe the earlier demonstrator, tag [`android-v3.5.46`](https://github.com/groundinglab/primal-pcoc/tree/android-v3.5.46) (commit `4d35661`), which vendored a Rust `hike` crate. Those paths and the rebuild commands are not the current bridge. Do not check out `android-v3.5.46` to reproduce the published APK.
 
 Sign-in is a different door. The phone signs the enrolled object and POSTs the section 15.1 body to `https://admission.groundinglab.io/v1/sign-in`. The Admission Gate decides. The phone shows that decision. A measurement on the verify screen is not a policy decision, and a policy decision is not a verifier result.
 
-The fork is [groundinglab/primal-pcoc](https://github.com/groundinglab/primal-pcoc). The current demonstrator build is tag [`android-v3.5.46`](https://github.com/groundinglab/primal-pcoc/tree/android-v3.5.46) (commit `4d35661`). Its debug APK is published on the [demonstrations page](https://groundinglab.io/demonstrations/) with SHA-256 `b211a7d0485b0a11e056976cda83036f6dff821f5afd8d0a0be7391021fb5a79`.
-
 ## Three doors
+
+These paths are the 3.5.46 vendored build.
 
 Make. `app/src/main/kotlin/net/primal/android/pcoc/create/CreatePcocViewModel.kt` starts the session (`CreateUiEvent.Start` calls `session.start()`). `create/ProduceSession.kt` calls `PcocNative.startProduce`. `pcoc-bridge/bridge/src/produce.rs` calls `hike::produce_with_settlement_sized`. `app/src/main/kotlin/net/primal/android/pcoc/bridge/PcocNative.kt` sets `BARI_URL` to `https://bari.groundinglab.io`.
 
@@ -20,13 +24,15 @@ primal-pcoc is a fork of [PrimalHQ/primal-android-app](https://github.com/Primal
 
 - Upstream licence: MIT. Copyright (c) 2023 PRIMAL SYSTEMS INC. The fork keeps `LICENSE` and `NOTICE.md`.
 - Product: [primal.net](https://primal.net). This fork is not an official Primal release and is not endorsed by Primal Systems Inc.
-- groundinglab's changes, as shipped on the fork: the `net.primal.android.pcoc` doors (enroll, local produce, local verify, sign-in), the `pcoc-bridge` JNI crate and its vendored `hike`, and `docs/pcoc/`. The complete file list against the upstream commit is in the fork's README. This page does not guess that list.
+- groundinglab's changes, as shipped on the fork at that earlier tag: the `net.primal.android.pcoc` doors (enroll, local produce, local verify, sign-in), the `pcoc-bridge` JNI crate and its vendored `hike`, and `docs/pcoc/`. The complete file list against the upstream commit is in the fork's README. This page does not guess that list.
 
-This repository does not vendor the Android app. The fork's copy is outside this tree. Retarget that fork onto the 2.2 Rust SDK at `sdk/rust`, and onto `pcoc-ffi` when Phase D lands it. That retarget is a follow-up; it is not this change.
+This repository does not vendor the Android app. The fork's copy is outside this tree. The current demonstrator builds on the Rust SDK tag `sdk-rust-v2.3.1`. The paths above are the earlier vendored build.
 
 ## Rebuild and verify
 
-The command below is the fork's debug assemble. It will not reproduce another machine's APK byte for byte. Successive builds already differ. There is no pinned-NDK reproducibility build, and no claim that one is possible today. Builds are not yet reproducible.
+The commands in this section check out `android-v3.5.46`. They rebuild that earlier demonstrator, not the published APK. For the current build, use the primal-pcoc README at tag `android-v3.5.49`.
+
+The command below is that earlier debug assemble. It will not reproduce another machine's APK byte for byte. Successive builds already differ. There is no pinned-NDK reproducibility build, and no claim that one is possible today. Builds are not yet reproducible.
 
 On a machine with the Android SDK, JDK 21, and the NDK:
 
@@ -42,7 +48,7 @@ The APK is the `aospDebug` output under `app/build/outputs/apk/aosp/debug/`. The
 
 When a release is built from a named commit, that release carries the SHA-256 of the APK. Check the asset against the sum published with that release. This directory does not ship a `SHA256SUMS` file, and it does not put an APK in git.
 
-Toolchain read from the fork at the commit this page was written against (versionName 3.5.46; confirm on the remote before treating the table as current):
+This table is the `android-v3.5.46` tree. It is not the current demonstrator.
 
 | Tool | Version | Where it is set |
 |---|---|---|
