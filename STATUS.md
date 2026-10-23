@@ -1,19 +1,20 @@
 # Status
 
-What is specified, what has been measured, and what is open. This page is not the specification. Figures without a label do not belong here. Date of this page: 2026-10-22.
+What is specified, what has been measured, and what is open. This page is not the specification. Figures without a label do not belong here. Date of this page: 2026-10-24.
 
 ## Specified
 
 | Item | Label | Where |
 |---|---|---|
-| Satoshi Hike 2.2 | the specification | [spec/satoshi-hike-v2.2/SPEC.md](spec/satoshi-hike-v2.2/SPEC.md) |
-| Tag `spec-2.2.0` | cut by the maintainers on the merge commit | `sdk/SPEC_PIN` |
-| Pack `pack-2.2.0` | complete | [spec/conformance/pack/](spec/conformance/pack/) |
+| Satoshi Hike 2.3 | the specification | [spec/satoshi-hike-v2.3/SPEC.md](spec/satoshi-hike-v2.3/SPEC.md) |
+| Tag `spec-2.3.0` | cut by the maintainers on the merge commit | `sdk/SPEC_PIN` |
+| Pack `pack-2.2.0` | complete; the pack id is unchanged on the 2.3 pin | [spec/conformance/pack/](spec/conformance/pack/) |
+| Satoshi Hike 2.2 | kept for the record, tag `spec-2.2.0` | [spec/satoshi-hike-v2.2/SPEC.md](spec/satoshi-hike-v2.2/SPEC.md) |
 | groundinglab policy | policy, not the specification | [policy/groundinglab-admission/](policy/groundinglab-admission/) |
 
 ## Measured
 
-No cost figure is published for Satoshi Hike 2.2. Measured produce and verify cost on bare metal is open (see services/admission-gate/STATUS.md).
+No cost figure is published. Measured produce and verify cost on bare metal is open (see services/admission-gate/STATUS.md).
 
 ## One relying party's log
 

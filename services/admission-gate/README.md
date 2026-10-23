@@ -1,6 +1,6 @@
 # Admission gate service
 
-> **Do not deploy this tree over the live v2.0 service.** This branch is Satoshi Hike 2.2. The process refuses a live plane unless `allow_2_2_live = true`. That opt-in defaults to off and is not set anywhere in this repo.
+> This checkout is pinned to `spec-2.3.0` (Satoshi Hike 2.3). Live gate 0.5.8 uses that pin. The process refuses a live plane unless `allow_2_2_live = true`. That opt-in defaults to off and is not set anywhere in this repo.
 
 The admission gate is a standalone service built on the Rust SDK (`sdk/rust`, version in `sdk/VERSION`). It implements the specification's admission service model (Part B, §15) and applies a configured **policy** to the verifier's measurements. It adds no Part A rule. Accept, refuse, and revoke are the operating relying party's decisions. They are not pass or fail.
 
@@ -25,7 +25,7 @@ Any kind other than `v2.2-pcoc-object` is Rule A5. The fast phase's reason is `u
 | Piece | Name |
 |---|---|
 | Service | admission gate (groundinglab runs one instance) |
-| Spec | Health `spec` / `spec_kind` follow `sdk/SPEC_PIN`: Satoshi Hike 2.2 / `2.2` on a spec-2.2.x pin, Satoshi Hike 2.3 / `2.3` on a spec-2.3.x pin. This checkout's pin is `spec-2.2.0`. Object kind stays `v2.2-pcoc-object`. Policy `spec` `2.2` loads on either pin; `2.3` loads on a spec-2.3.x pin. |
+| Spec | Health `spec` / `spec_kind` follow `sdk/SPEC_PIN`: Satoshi Hike 2.2 / `2.2` on a spec-2.2.x pin, Satoshi Hike 2.3 / `2.3` on a spec-2.3.x pin. This checkout's pin is `spec-2.3.0`, so health reports Satoshi Hike 2.3 / `2.3`. Live gate 0.5.8 is that pin. Object kind stays `v2.2-pcoc-object`. Policy `spec` `2.2` loads on either pin; `2.3` loads on a spec-2.3.x pin. |
 | Cargo package | `pcoc-admission` |
 | Directory | `services/admission-gate/` |
 | Binary | `admission-service` |
@@ -72,4 +72,4 @@ cargo test --locked
 
 Test vectors are pinned copies under `tests/vectors/`; `tests/vectors.rs` checks them against `tests/vectors/SHA256SUMS`.
 
-`GET /v1/health` on the bind (default `127.0.0.1:8787`) reports what is running, including `sdk`, the Rust SDK version the binary was built against. `spec` and `spec_kind` follow the SDK pin (`Satoshi Hike 2.2` / `2.2` while `sdk/SPEC_PIN` is `spec-2.2.0`). The JSON keys are unchanged. Decision-log lines stay `spec` `Satoshi Hike 2.2`. `admission-service --version` prints the same version, commit and SDK version. The SDK version ends in `(path, dirty)` when the SDK files had uncommitted changes at build time. It does not fetch the index.
+`GET /v1/health` on the bind (default `127.0.0.1:8787`) reports what is running, including `sdk`, the Rust SDK version the binary was built against. `spec` and `spec_kind` follow the SDK pin (`Satoshi Hike 2.3` / `2.3` while `sdk/SPEC_PIN` is `spec-2.3.0`). The JSON keys are unchanged. Decision-log lines stay `spec` `Satoshi Hike 2.2`. `admission-service --version` prints the same version, commit and SDK version. The SDK version ends in `(path, dirty)` when the SDK files had uncommitted changes at build time. It does not fetch the index.

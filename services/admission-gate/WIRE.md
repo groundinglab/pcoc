@@ -1,6 +1,6 @@
 # Gate wire
 
-Satoshi Hike 2.2. The only kind is `v2.2-pcoc-object`. The `/v1` prefix stays: the website and the phone already call these paths. This process does not mint a session and does not call the website.
+This checkout is pinned to `spec-2.3.0`. Health `spec` is Satoshi Hike 2.3. The only kind is `v2.2-pcoc-object`. Decision-log lines and `/latest.json` stay `spec` `Satoshi Hike 2.2`. The `/v1` prefix stays: the website and the phone already call these paths. This process does not mint a session and does not call the website.
 
 ## Routes
 
@@ -153,7 +153,7 @@ Sign-in posts JSON. The transport limit is large enough for the base64 of an obj
 
 ## Health
 
-`GET /v1/health` returns `version` (crate), `commit` (git SHA baked in at build), `sdk` (the Rust SDK version from Cargo.lock, for example `2.2.0 (path)`, or `2.2.0 (path, dirty)` when the SDK files had uncommitted changes at build time), `spec`, `spec_kind`, and `config` (the file: bind, index, log directory, limits, rate, leg-rate floor). `spec` and `spec_kind` follow the SDK pin: `Satoshi Hike 2.2` and `2.2` on a spec-2.2.x pin (this checkout is `spec-2.2.0`), `Satoshi Hike 2.3` and `2.3` on a spec-2.3.x pin. The JSON keys are unchanged. Decision lines still carry `spec` `Satoshi Hike 2.2`. `config.policy_id` and `config.born_height` are the policy in force (`gl-admit-v10`). `born_height` is policy, not spec. No secrets.
+`GET /v1/health` returns `version` (crate), `commit` (git SHA baked in at build), `sdk` (the Rust SDK version from Cargo.lock, for example `2.3.1 (path)`, or `2.3.1 (path, dirty)` when the SDK files had uncommitted changes at build time), `spec`, `spec_kind`, and `config` (the file: bind, index, log directory, limits, rate, leg-rate floor). `spec` and `spec_kind` follow the SDK pin: `Satoshi Hike 2.2` and `2.2` on a spec-2.2.x pin, `Satoshi Hike 2.3` and `2.3` on a spec-2.3.x pin (this checkout is `spec-2.3.0`). The JSON keys are unchanged. Decision lines still carry `spec` `Satoshi Hike 2.2`. `config.policy_id` and `config.born_height` are the policy in force (`gl-admit-v10`). `born_height` is policy, not spec. No secrets.
 
 ## Verify job
 

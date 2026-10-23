@@ -1,6 +1,6 @@
 # Deploy the admission gate
 
-> **Do not deploy this tree over the live v2.0 service.** This branch is Satoshi Hike 2.2. The process refuses a live plane unless `allow_2_2_live = true`. That opt-in defaults to off and is not set anywhere in this repo.
+> This checkout is pinned to `spec-2.3.0` (Satoshi Hike 2.3). Live gate 0.5.8 uses that pin. The process refuses a live plane unless `allow_2_2_live = true`. That opt-in defaults to off and is not set anywhere in this repo.
 
 One binary, one config file, a log directory the process creates. The object kind is `v2.2-pcoc-object`. Policy `spec` `2.2` loads on a spec-2.2.x pin and on a spec-2.3.x pin. Policy `spec` `2.3` loads on a spec-2.3.x pin and is refused on a spec-2.2.x pin. This page is the whole install. Do not point `log_dir` at an earlier decision log. A decision-log line is still stamped `Satoshi Hike 2.2`.
 
@@ -12,7 +12,7 @@ The gate builds the Rust SDK from this repository by path (`sdk/rust/pcoc`), so 
 git sparse-checkout set services/admission-gate sdk policy
 ```
 
-Build from a clean checkout of a tag (`gate-v…` or `sdk-rust-v2.2.x`), from `services/admission-gate/`, with git present so `commit` is the SHA (`COMMIT` overrides it):
+Build from a clean checkout of a tag (`gate-v…` or `sdk-rust-v2.3.x`), from `services/admission-gate/`, with git present so `commit` is the SHA (`COMMIT` overrides it):
 
 ```bash
 cargo build --locked --release
@@ -58,7 +58,7 @@ A user unit drops `User=` and `Group=`, sets `WantedBy=default.target`, and uses
 curl -sS http://127.0.0.1:8787/v1/health
 ```
 
-`version` is the crate version, `commit` is the build SHA, and `config` repeats the file with no secrets. `spec` and `spec_kind` follow the SDK pin. This checkout's pin is `spec-2.2.0`, so they are `Satoshi Hike 2.2` and `2.2`. On a spec-2.3.x pin they are `Satoshi Hike 2.3` and `2.3`. The JSON keys do not change.
+`version` is the crate version, `commit` is the build SHA, and `config` repeats the file with no secrets. `spec` and `spec_kind` follow the SDK pin. This checkout's pin is `spec-2.3.0`, so they are `Satoshi Hike 2.3` and `2.3`. Live gate 0.5.8 is that pin. On a spec-2.2.x pin they are `Satoshi Hike 2.2` and `2.2`. The JSON keys do not change.
 
 ## Upgrade
 

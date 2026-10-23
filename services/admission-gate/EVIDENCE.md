@@ -6,7 +6,7 @@ This note records evidence and withdrawn claims. It is not the service status ([
 
 **Not fully closed.** Measured produce and verify cost on bare metal is a follow-up. This item is not waived, and it is not treated as unmeasured.
 
-The specification is [SPEC.md](../../spec/satoshi-hike-v2.2/SPEC.md). The program is `pcoc` in `sdk/rust/` (`pcoc verify`, `pcoc produce --rig`).
+The specification is [SPEC.md](../../spec/satoshi-hike-v2.3/SPEC.md). The program is `pcoc` in `sdk/rust/` (`pcoc verify`, `pcoc produce --rig`).
 
 ## Killed slogans
 

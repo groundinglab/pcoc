@@ -15,7 +15,7 @@
     "pack_status": "complete"
   },
   "links": {
-    "interop_evidence": "https://github.com/groundinglab/pcoc/tree/interop/evidence-2.2/spec/conformance/interop",
+    "interop_evidence": "https://github.com/groundinglab/pcoc/tree/sdk-rust-v2.3.1/spec/conformance/interop",
     "policy_page": "https://groundinglab.io/admission-gate/policy/",
     "policy_file": "https://github.com/groundinglab/pcoc/blob/spec-2.3.0/policy/groundinglab-admission/gl-admit-v10.toml"
   },

@@ -1,8 +1,8 @@
 # Service status
 
-> **Do not deploy this tree over the live v2.0 service.** This branch is Satoshi Hike 2.2. The process refuses a live plane unless `allow_2_2_live = true`. That opt-in defaults to off and is not set anywhere in this repo.
+> This checkout is pinned to `spec-2.3.0` (Satoshi Hike 2.3). Live gate 0.5.8 uses that pin. The process refuses a live plane unless `allow_2_2_live = true`. That opt-in defaults to off and is not set anywhere in this repo.
 
-Admission gate service, crate `pcoc-admission` 0.5.4. This page is the service's status. Evidence and withdrawn claims are in [EVIDENCE.md](EVIDENCE.md). Policy is in [POLICY.md](../../policy/groundinglab-admission/POLICY.md). The wire is in [WIRE.md](WIRE.md).
+Admission gate service, crate `pcoc-admission` 0.5.8. This page is the service's status. Evidence and withdrawn claims are in [EVIDENCE.md](EVIDENCE.md). Policy is in [POLICY.md](../../policy/groundinglab-admission/POLICY.md). The wire is in [WIRE.md](WIRE.md).
 
 ## Implemented
 

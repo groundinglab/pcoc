@@ -1,6 +1,6 @@
 # PCOC
 
-**Early prototype.** Specification: Satoshi Hike 2.2 (`spec-2.2.0`, cut by the maintainers on the merge commit). Website: https://groundinglab.io
+**Early prototype.** Specification: Satoshi Hike 2.3 (`spec-2.3.0`, cut by the maintainers on the merge commit). Website: https://groundinglab.io
 
 A PCOC (production-constrained observable commitment) is a self-issued identifier backed by a resource commitment, not a payment. You make it on your own device by holding memory through a hike, the timed making process, paced by Bitcoin blocks. The result is the PCOC object (the specification's hike object): the bytes you keep and present, holding your public key and the record of the hike. Anyone can check the PCOC object cheaply, without trusting you or us. The design aims to give bulk making no discount: copying the PCOC object is cheap, but a new public key means a new hike.
 
@@ -18,7 +18,7 @@ A PCOC is self-issued: you create it on your own device from your own key, with 
 
 ## Three separate steps
 
-1. **Create (the hike).** Your computer fills a block of memory fixed by your public key and a Bitcoin block, then works through it in legs of two million steps, each ending in a leg result. Bitcoin blocks pace the stages: Satoshi Hike 2.2 records eighteen. The cost is your own device's work. Bitcoin only timestamps it: Bari records each tip's pooled waypoints in one Bitcoin transaction. Bitcoin's proof-of-work does not secure a PCOC or pay for it.
+1. **Create (the hike).** Your computer fills a block of memory fixed by your public key and a Bitcoin block, then works through it in legs of two million steps, each ending in a leg result. Bitcoin blocks pace the stages: Satoshi Hike 2.3 records eighteen. The cost is your own device's work. Bitcoin only timestamps it: Bari records each tip's pooled waypoints in one Bitcoin transaction. Bitcoin's proof-of-work does not secure a PCOC or pay for it.
 2. **Check (verify).** A verifier recomputes from the PCOC object and the public index and records measurements: `match`, `mismatch`, `present`, `skip`, `not defined`, `not read`, `not fetched by design`, `n/a`, `anchored`, `not anchored`, and `earlier version`. It never says pass or fail. The index stands in for Bitcoin; anyone can bypass it by checking Bitcoin directly.
 3. **Admit (policy).** Accept, refuse, and revoke are each relying party's own decisions. groundinglab's Admission Gate is one configured instance. Its policy is [policy/groundinglab-admission/POLICY.md](policy/groundinglab-admission/POLICY.md); the specification sets no lever value. Policy can change without changing the PCOC object.
 
@@ -43,8 +43,8 @@ The specification and the conformance vectors are the core deliverable. The poin
 | Layer | Folder | Role |
 |---|---|---|
 | Specification | [spec/](spec/) | The complete, normative definition of how a PCOC is made and checked |
-| Conformance | [spec/conformance/pack/](spec/conformance/pack/) | The one pack. Incomplete until the SDK phase |
-| SDKs | [sdk/](sdk/) | Rust, Go, and Java SDKs, tested against the shared vectors and cross-checked against each other. The specification wins if they disagree |
+| Conformance | [spec/conformance/pack/](spec/conformance/pack/) | The one pack (`pack-2.2.0`, status complete), pinned in `sdk/SPEC_PIN` beside `spec-2.3.0` |
+| SDKs | [sdk/](sdk/) | Rust, C, Go, and Java SDKs at 2.3.1, tested against the shared vectors and cross-checked against each other. The specification wins if they disagree |
 | Services | [services/](services/) | Bari (the plant), the index (its own reader), and the Admission Gate, built on the Rust SDK |
 | Apps | [apps/](apps/) | Desktop demonstrator, and an Android demonstrator described in [apps/android](apps/android/) |
 | Docs | [docs/](docs/README.md) | Plain-language briefs and rationale. Explanatory, not normative |
@@ -65,7 +65,7 @@ git clone https://github.com/groundinglab/pcoc.git
 cd pcoc
 ```
 
-Don't use `--depth 1`. `sdk/SPEC_PIN` names `spec-2.2.0`. The maintainers cut that tag on the merge commit. The pin check looks that tag up in the clone, and a shallow clone has no tags. If you already have a shallow clone, run `git fetch --tags`.
+Don't use `--depth 1`. `sdk/SPEC_PIN` names `spec-2.3.0`. The maintainers cut that tag on the merge commit. The pin check looks that tag up in the clone, and a shallow clone has no tags. If you already have a shallow clone, run `git fetch --tags`.
 
 ### 2. Install the tools
 
@@ -96,7 +96,7 @@ cargo test --workspace --locked
 bash check/negatives.sh
 ```
 
-Go, Java and C test themselves when that 2.2 tree is in the checkout. While `sdk/go/cmd/pcoc`, `sdk/java/check` or `sdk/c` is absent, that language is skipped:
+Go, Java and C are in this tree:
 
 ```sh
 (cd sdk/go && go test ./...)
@@ -154,8 +154,8 @@ sdk/rust/target/release/pcoc produce --rig --case s1 --public-key HEX --out obje
 
 | Folder | What is in it | Test it with |
 |---|---|---|
-| [spec/](spec/) | The Satoshi Hike 2.2 specification and its conformance pack | `python3 spec/conformance/tools/ring1_checks.py` |
-| [sdk/](sdk/) | The 2.2 SDKs. Rust is `sdk/rust`. Go, Java and C land on their own branches | `cargo test --workspace --locked` in `sdk/rust`; `bash sdk/rust/check/negatives.sh` |
+| [spec/](spec/) | The Satoshi Hike 2.3 specification and its conformance pack. Version 2.2 stays in [spec/satoshi-hike-v2.2](spec/satoshi-hike-v2.2/) for the record | `python3 spec/conformance/tools/ring1_checks.py` |
+| [sdk/](sdk/) | The 2.3.1 SDKs. Rust, C, Go, and Java are in this tree | `cargo test --workspace --locked` in `sdk/rust`; `bash sdk/rust/check/negatives.sh` |
 | [services/](services/) | Bari (the anchoring service), the index, the Admission Gate, the claims service, and a Cloudflare Worker. Each builds alone | `cargo test --locked --release` in each Rust service; `node --test test/` in `cf-claims-worker` |
 | [apps/](apps/) | The desktop app (Linux), and notes and checks for the Android app | `cargo test --locked -p pcoc-hike-core` in `apps/desktop` |
 | [docs/](docs/README.md) | Plain-language briefs, rationale, architecture and integration notes. Explanatory, not normative | |
