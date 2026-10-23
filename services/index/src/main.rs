@@ -53,15 +53,32 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         .with_born_height(pcoc_bari::BORN_HEIGHT);
     let listener = tokio::net::TcpListener::bind(bind).await?;
     eprintln!(
-        "pcoc-index v0.1 bind={} data_dir={} sequencer_clocks={} born_height={} (read-only height-*.json cache; median-time headers born_height-{} through born_height-1 are served by height and are not production heights; files below that stay on disk and are not served)",
-        listener.local_addr()?,
-        data_dir.display(),
-        service.clock_count(),
-        pcoc_bari::BORN_HEIGHT,
-        pcoc_bari::MTP_LOOKBACK
+        "{}",
+        startup_line(
+            &listener.local_addr()?.to_string(),
+            &data_dir,
+            service.clock_count(),
+            pcoc_bari::BORN_HEIGHT,
+            pcoc_bari::MTP_LOOKBACK,
+        )
     );
     axum::serve(listener, service.router()).await?;
     Ok(())
+}
+
+/// Startup line. The version is the crate version, not a truncated `v0.1`.
+fn startup_line(
+    bind: &str,
+    data_dir: &std::path::Path,
+    clocks: usize,
+    born: u32,
+    lookback: u32,
+) -> String {
+    format!(
+        "pcoc-index v{version} bind={bind} data_dir={} sequencer_clocks={clocks} born_height={born} (read-only height-*.json cache; median-time headers born_height-{lookback} through born_height-1 are served by height and are not production heights; files below that stay on disk and are not served)",
+        data_dir.display(),
+        version = pcoc_index::VERSION,
+    )
 }
 
 struct RebuildArgs {
@@ -323,4 +340,27 @@ fn rebuild_usage() -> &'static str {
      Auth is PCOC_INDEX_RPC_COOKIE, or PCOC_INDEX_RPC_USER and PCOC_INDEX_RPC_PASSWORD.\n\
      --reorg-depth N (default 6) re-fetches the last N blocks and rewrites a file whose header changed.\n\
      --min-interval-ms (default 250) and --max-retries (default 6) pace the public API. HTTP 429 waits on Retry-After."
+}
+
+#[cfg(test)]
+mod tests {
+    use super::startup_line;
+    use std::path::Path;
+
+    #[test]
+    fn startup_line_names_the_crate_version() {
+        let line = startup_line(
+            "127.0.0.1:38081",
+            Path::new("/var/lib/pcoc-index"),
+            0,
+            972685,
+            10,
+        );
+        let version = pcoc_index::VERSION;
+        assert_eq!(version, "0.1.5");
+        assert!(line.starts_with(&format!("pcoc-index v{version} ")));
+        assert!(!line.starts_with("pcoc-index v0.1 "));
+        assert!(line.contains("born_height=972685"));
+        assert!(line.contains("born_height-10"));
+    }
 }

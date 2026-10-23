@@ -1,6 +1,6 @@
-# groundinglab admission policy gl-admit-v10 (DRAFT)
+# groundinglab admission policy gl-admit-v10
 
-- **Status.** Draft, 23 Oct 2026. Not deployed.
+- **Status.** Active. Live from 2026-10-23.
 - **Repo path (agreed layout).** `policy/groundinglab-admission/POLICY.md`, next to `gl-admit-v10.toml`. `gl-admit-v9.toml` stays in this directory and is not edited.
 - **Targets.** Satoshi Hike 2.2, tag `spec-2.2.0` (`spec/satoshi-hike-v2.2/SPEC.md`).
 - **Policy version.** The `policy_version` is the id `gl-admit-v10` plus the SHA-256 of `gl-admit-v10.toml`. Ops pins that SHA-256 in the deployment manifest at deploy time.
@@ -78,7 +78,7 @@ Median-time-past reads `MTP_WINDOW` headers ending at the beacon. `MTP_WINDOW` i
 
 A caller who receives `before_born_height` should stop. The object is a testing artefact. Submit an object anchored at or above the born height. Do not retry this object.
 
-## 4. Open before deploy
+## 4. Open
 
 - Re-measure `leg_rate_floor` under 2.2 (SPEC §15.5 method) and issue the result as a new id.
 - Confirm the carried-over figures for `reverify_max_attempts`, `max_held_blocks`, `fast_accept_bound` and `async_catch_budget`.
