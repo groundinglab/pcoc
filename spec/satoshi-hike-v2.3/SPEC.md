@@ -103,7 +103,7 @@ This subsection is the normative classification of Part A. It does not add a sec
 | <a id="rule-p3-2"></a>P3.2 | RANGE | `le64` and `u64_le` are 8 little-endian bytes of an unsigned integer below `2^64`. | §3 |
 | <a id="rule-p3-3"></a>P3.3 | INVARIANT | `mod` is the non-negative remainder; `mod 2^64` keeps the low 64 bits. | §3 |
 | <a id="rule-p4-1"></a>P4.1 | RANGE | Outcome tokens are the closed lowercase set. There is no token `not obtained`. | §4 |
-| <a id="rule-p4-2"></a>P4.2 | INVARIANT | Part A does not pass, fail, reject, deny, or admit. | §4 |
+| <a id="rule-p4-2"></a>P4.2 | INVARIANT | [Part A](#sec-1) (the construction) does not pass, fail, reject, deny, or admit. | §4 |
 | <a id="rule-p6-1"></a>P6.1 | CONSTANT | `SLOT_BYTES` is 16384. | §6 |
 | <a id="rule-p6-2"></a>P6.2 | CONSTANT | `WORDS_PER_SLOT` is 2048. | §6 |
 | <a id="rule-p6-3"></a>P6.3 | CONSTANT | `TERRAIN_BYTES` is 268435456. | §6 |
@@ -162,7 +162,7 @@ This subsection is the normative classification of Part A. It does not add a sec
 | <a id="rule-p9-15"></a>P9.15 | INVARIANT | A height is not an input to `SHA-256` in this construction. | §9 |
 | <a id="rule-p9-16"></a>P9.16 | CONSTANT | On the live plane the header source keeps at least `HEADER_PEERS_MIN` 2 gossip peers. A connected peer that has not announced a header within `HEADER_PEER_SILENCE_SECONDS` 120 of another connected peer announcing it is replaced. Below 2 peers the source reconnects asynchronously with backoff and writes an `alert` `header_peers_low`; the walk and the object are unaffected. | §9 |
 | <a id="rule-p9-17"></a>P9.17 | INVARIANT | Every Rule BR1 block-hash comparison (current, before, after) is natural order on both sides: `SHA-256(SHA-256(header))` and the header’s previous-block field in wire order, the same bytes as `header_hash`. A display-hex tip hash is reversed once before comparing. A match only under reversal is a 402. | §9, §13.6 |
-| <a id="rule-p10-1"></a>P10.1 | INVARIANT | The seed preimage is `public_key ‖ seed_beacon`, 64 bytes. The seed is `SHA-256` of that preimage, 32 bytes, no label, read as four little-endian lanes. | §10 |
+| <a id="rule-p10-1"></a>P10.1 | INVARIANT | The seed preimage is `public_key ‖ seed_beacon`, 64 bytes. The seed is `SHA-256` of that preimage, 32 bytes, no label, read as four little-endian lanes of 8 bytes each, `P[0]` … `P[3]`. | §10 |
 | <a id="rule-p10-2"></a>P10.2 | INVARIANT | `mix64`, the NL4 base word, the parent indices, and the dag2 fill are the section 10 construction. Every terrain word depends on all 256 bits of the seed. Terrain is filled once per terrain. The step does not write it. | §10 |
 | <a id="rule-p10-3"></a>P10.3 | INVARIANT | The seed equals `stages[0].waypoint` by design. | §10, §12.1 |
 | <a id="rule-p11-1"></a>P11.1 | INVARIANT | A step folds every word of the selected slot by §11.1 (`acc` starts at 0 and grows by wrapping addition; `mix64` includes `MIX_ADD`) and sets the next state from `SHA-256(SEAL_DOMAIN ‖ le64(S_folded))`. | §11.1 |
@@ -188,7 +188,7 @@ This subsection is the normative classification of Part A. It does not add a sec
 | <a id="rule-p13-7"></a>P13.7 | INVARIANT | The leaf is 64 lowercase hex digits, byte 0 first. A due ask is sent, as an asynchronous event, when the producer’s header source learns the due header. There is no wait before an ask. | §13.1 |
 | <a id="rule-p13-8"></a>P13.8 | INVARIANT | A checked path is a status 200 canonical path body that validates for that waypoint and whose block is one height in the anchor window. Every other ask result is a miss. | §13.1 |
 | <a id="rule-p13-9"></a>P13.9 | INVARIANT | The cut-off is `last_interrupt_height`. Production ends when the tip read shows `I_17`, and the object closes at once with the checked paths that have arrived by then. There is no collection window. An ask in flight at the close is abandoned, and no ask is made after it. `W_17` is not asked. | §13.1 |
-| <a id="rule-p13-10"></a>P13.10 | INVARIANT | `leg_count` is a convenience copy of `len(checkpoints)`. Produce does not invent path bytes. No metric reads `leg_count`. | §13.3 |
+| <a id="rule-p13-10"></a>P13.10 | INVARIANT | A stage’s `leg_count` is a convenience copy of that stage’s `len(checkpoints)`. Produce does not invent path bytes. No metric reads `leg_count`. | §13.3 |
 | <a id="rule-p13-11"></a>P13.11 | INVARIANT | The live event log is not the hike object and is not an input to a leg, a checkpoint, a leg result, or a waypoint. | §13.5 |
 | <a id="rule-p13-12"></a>P13.12 | RANGE | A public-key input is 32 bytes, or 64 hex digits with an optional leading `0x`. The object stores the 32 bytes. | §13 |
 | <a id="rule-p13-13"></a>P13.13 | INVARIANT | After a transitory send failure (a transport failure, section 13.1) the producer resends the identical waypoint POST exactly once, in the background, 30 seconds later, then drops it if the resend fails. Both attempts are logged. This is the only retry of a waypoint POST. | §13.1 |
@@ -448,6 +448,8 @@ There is no seed domain label. A domain label on the seed, or a squeeze of the s
 
 ## 7. Encodings
 
+**Informative. Summary.** How integers, hexadecimal strings, and the hike object are written as bytes. Section 7.1 covers little-endian integers, 7.2 hexadecimal, and 7.3 the deterministic CBOR of the object and the order in which a decoder sorts its input. Section 7.4 gives worked checks.
+
 **Normative.**
 
 <a id="sec-7-1"></a>
@@ -537,6 +539,8 @@ A seed preimage of 32 bytes of `0x11` followed by 32 bytes of `0x22` has seed `5
 <a id="sec-8"></a>
 
 ## 8. Hike object
+
+**Informative. Summary.** The hike object is one CBOR map. It holds the top-level fields, 18 stage maps numbered 0–17 with their beacons, heights, checkpoints, and waypoint (and, on stages 1–17, path), and `last_interrupt` (Rule A3). Verify (section 14) measures it, and section 15 judges it.
 
 **Normative.**
 
@@ -638,6 +642,8 @@ A leg result on the object is `le64` of the `u64` defined in section 11, stored 
 <a id="sec-9"></a>
 
 ## 9. Clock
+
+**Informative. Summary.** The clock is Bitcoin headers. Produce reads its plane’s tip sequence (Observe) for the seed beacon and each stage’s interrupt. Verify reads the stored headers back from the portable index `{index-url}`. This section fixes the read and body rules, the byte order of every hash, and the live-plane header source.
 
 **Normative.**
 
@@ -2240,6 +2246,8 @@ Those three figures are `1 − (1 − 0.25)^n` at `n = 6`, `n = 12`, and `n = 18
 <a id="sec-16"></a>
 
 ## 16. Conformance
+
+**Informative. Summary.** Conformance is per layer. A producer or a verifier conforms by matching the one pack byte for byte and by reproducing every permanent negative as a non-match. The admission service is not a conformance target. Section 16.1 defines the `conformance-small` profile, and 16.2 the SDK requirements (Rules I1–I6).
 
 **Normative.**
 
