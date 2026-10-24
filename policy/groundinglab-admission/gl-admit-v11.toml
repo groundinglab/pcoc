@@ -46,6 +46,11 @@ plant_gap              = "record-only"             # P2: d_g is recorded, never 
 friendly_entry_custody = "newest-thorough-accept"  # P3
 old_policy_resubmit    = "new-cycle"               # P3
 draw_commitment        = "sha256(draw || salt), revealed with the result"
+# Off for testing. A resubmit of a refused (public_key, object, policy_id)
+# is measured again and may append a new refuse line. Set true to restore
+# the stored-outcome short circuit (no new chain line). Not a §15.4 lever.
+# Not part of the policy bind hash, so this flip does not need a new id.
+sticky_refuse          = false
 # P5. Not an Admission Process §15.4 lever. Heights below this are testing, not production.
 # services/bari BORN_HEIGHT must stay equal to this value.
 born_height            = 972685

@@ -12,6 +12,7 @@
 | `leg_rate_floor` | `{ p = 1, q = 5 }` (0.2 legs/s) | `{ p = 1, q = 10 }` (0.1 legs/s) for testing; retune after more produces (#115) |
 | `spec` | `"2.2"` | `"2.3"` |
 | `submission_deadline_blocks` | set on v10 | omitted. [Admission Process](../../spec/04-Admission_Process.md) defines no tip-versus-last-beacon submit deadline (#119). It is not a §15.4 lever. |
+| `sticky_refuse` | no key (the gate always returned a stored refuse) | `false` in `[policy_rules]`. Off for testing. An absent key means the same. |
 
 `min_anchored_paths` stays 6. `born_height` stays 972685. Every other §15.4 lever is carried from v10.
 
@@ -91,9 +92,18 @@ Median-time-past reads `MTP_WINDOW` headers ending at the beacon. `MTP_WINDOW` i
 
 A caller who receives `before_born_height` should stop. The object is a testing artefact. Submit an object anchored at or above the born height. Do not retry this object.
 
+### P6. Sticky refuse (off for testing)
+
+[Admission Process](../../spec/04-Admission_Process.md) §15.2 says a pair closed `refused` or `revoked` under this policy version returns that outcome and does not open a new cycle. The gate's short circuit for that rule scans the chain for the same `public_key`, `object_sha256`, and `policy_id` with decision `refuse` or `revoke`, settles the nonce with the stored reason, and writes no new line.
+
+That short circuit is off. `[policy_rules] sticky_refuse` is `false` in [`gl-admit-v11.toml`](gl-admit-v11.toml). An absent key means the same. `gl-admit-v9.toml` and `gl-admit-v10.toml` do not name it, and their bytes stay pinned. While it is off, a later submission of a refused pair runs the fast phase again. If the object is still below the floor, the gate appends a new refuse line. The same reason text is a fresh decision.
+
+Re-enable later by setting `sticky_refuse = true` in `[policy_rules]` of the policy file the process loads. The key is not a §15.4 lever. A value that is not a boolean refuses the file. The value is not part of the policy bind hash, so the flip does not need a new id and does not make a start fail against an existing `policy-bind.json`. This change does not deploy.
+
 ## 4. Open
 
 - Re-measure `leg_rate_floor` after further produces and issue the result as a new id (#115). The testing value is `{ p = 1, q = 10 }`.
 - Confirm the carried-over figures for `reverify_max_attempts`, `max_held_blocks`, `fast_accept_bound` and `async_catch_budget`.
 - Swap the live gate only after an explicit go. This repository change does not deploy, and it does not edit ops.
+- `sticky_refuse` stays `false` while the same object is resubmitted for testing. Set it `true` when the stored-refuse short circuit should return.
 - The gate strip landed in #120. The loader accepts this file with the key omitted, and it ignores the key on v9 and v10. The live process keeps `gl-admit-v10` until an explicit go.

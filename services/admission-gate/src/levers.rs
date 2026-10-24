@@ -1,10 +1,12 @@
 //! SPEC §15.4 policy file. The SDK has no policy reader. This module is the
 //! gate's. A bad lever refuses the whole file. Keys outside `[levers]`, other
 //! than `spec`, are the policy's (`policy_id`, `status`, `[policy_rules]`).
-//! The loader reads `policy_id`, `draw_commitment`, `born_height`, and
-//! `expected_network`. The first three have no unset meaning and are required.
-//! An absent `expected_network` means no index-network constraint. `status`
-//! and the other `[policy_rules]` keys are not read.
+//! The loader reads `policy_id`, `draw_commitment`, `born_height`,
+//! `expected_network`, and `sticky_refuse`. The first three have no unset
+//! meaning and are required. An absent `expected_network` means no
+//! index-network constraint. An absent `sticky_refuse` means false: a
+//! resubmit of a refused pair is measured again. `status` and the other
+//! `[policy_rules]` keys are not read.
 //!
 //! `submission_deadline_blocks` is retired. SPEC 2.3 has no Rule B10 and no
 //! tip-versus-last-beacon deadline. The key is not required. If a file still
@@ -133,6 +135,12 @@ pub fn load_for_pin(
             ));
         }
     }
+    // Absent means off. Not a §15.4 lever, and not part of the bind hash.
+    let sticky_refuse = match rules.and_then(|table| table.get("sticky_refuse")) {
+        None => false,
+        Some(toml::Value::Boolean(on)) => *on,
+        Some(_) => return Err("sticky_refuse has the wrong type".to_owned()),
+    };
     let pending_global =
         (max_concurrent as u64).saturating_mul(policy::DEFAULT_PENDING_GLOBAL_FACTOR);
     Ok(AdmissionPolicy {
@@ -162,6 +170,7 @@ pub fn load_for_pin(
         result_retention_seconds,
         born_height,
         index: expected.map(|expected_network| IndexPolicy { expected_network }),
+        sticky_refuse,
     })
 }
 
@@ -359,6 +368,12 @@ mod tests {
         std::fs::read_to_string(path).expect("gl-admit-v10.toml")
     }
 
+    fn v11_text() -> String {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../policy/groundinglab-admission/gl-admit-v11.toml");
+        std::fs::read_to_string(path).expect("gl-admit-v11.toml")
+    }
+
     fn complete(spec: &str) -> String {
         format!(
             "\
@@ -397,6 +412,13 @@ born_height = 972685
     #[test]
     fn v10_loads_on_a_2_2_pin_and_a_2_3_pin() {
         let raw = v10_text();
+        assert!(
+            !raw.lines().any(|line| {
+                let line = line.trim();
+                !line.starts_with('#') && line.starts_with("sticky_refuse")
+            }),
+            "gl-admit-v10.toml stays pinned; an absent sticky_refuse means off"
+        );
         for pin in ["spec-2.2.0", "spec-2.2", "spec-2.3.0", "spec-2.3"] {
             let loaded = load_for_pin(&raw, 2, pin).unwrap_or_else(|err| panic!("{pin}: {err}"));
             assert_eq!(loaded.policy_id, "gl-admit-v10", "{pin}");
@@ -421,16 +443,73 @@ born_height = 972685
             assert_eq!(loaded.verify_cap_per_object, None, "{pin}");
             assert_eq!(loaded.fake_leg_ignore_seconds, None, "{pin}");
             assert_eq!(loaded.born_height, 972685, "{pin}");
+            assert!(!loaded.sticky_refuse, "{pin}");
             assert_eq!(
                 loaded.draw_commitment, "sha256(draw || salt), revealed with the result",
                 "{pin}"
             );
             let value = serde_json::to_value(&loaded).expect("policy json");
             assert_eq!(value["verify_cap_per_door_session"], 3, "{pin}");
+            assert!(value.get("sticky_refuse").is_none(), "{pin}");
         }
         let live = load(&raw, 2).expect("compiled pin");
         assert_eq!(live.policy_id, "gl-admit-v10");
+        assert!(!live.sticky_refuse);
         assert_eq!(pcoc::build_info().spec_tag, "spec-2.3.0");
+    }
+
+    /// gl-admit-v11 sets the testing switch off. `true` is the re-enable.
+    /// The value is not part of the bind hash. A non-boolean refuses the file.
+    #[test]
+    fn v11_sticky_refuse_defaults_off_and_stays_out_of_the_bind_hash() {
+        let raw = v11_text();
+        assert!(
+            raw.lines().any(|line| {
+                let line = line.trim();
+                !line.starts_with('#')
+                    && line.split_whitespace().collect::<Vec<_>>().join(" ")
+                        == "sticky_refuse = false"
+            }),
+            "gl-admit-v11.toml must keep sticky_refuse = false"
+        );
+        let loaded = load_for_pin(&raw, 2, "spec-2.3.0").expect("v11");
+        assert_eq!(loaded.policy_id, "gl-admit-v11");
+        assert_eq!(loaded.leg_rate_floor, RateFloor { p: 1, q: 10 });
+        assert!(!loaded.sticky_refuse);
+        assert!(serde_json::to_value(&loaded)
+            .expect("policy json")
+            .get("sticky_refuse")
+            .is_none());
+        let enabled = load_for_pin(&with_sticky(&raw, "true"), 2, "spec-2.3.0").expect("sticky on");
+        assert!(enabled.sticky_refuse);
+        assert_eq!(loaded.bind_key(), enabled.bind_key());
+        let err = load_for_pin(&with_sticky(&raw, "\"off\""), 2, "spec-2.3.0").expect_err("type");
+        assert!(
+            err.contains("sticky_refuse") && err.contains("wrong type"),
+            "{err}"
+        );
+        let absent = raw
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("sticky_refuse"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let omitted = load_for_pin(&absent, 2, "spec-2.3.0").expect("absent");
+        assert!(!omitted.sticky_refuse);
+    }
+
+    fn with_sticky(raw: &str, value: &str) -> String {
+        raw.lines()
+            .map(|line| {
+                if !line.trim_start().starts_with('#')
+                    && line.trim_start().starts_with("sticky_refuse")
+                {
+                    format!("sticky_refuse = {value}")
+                } else {
+                    line.to_owned()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     #[test]

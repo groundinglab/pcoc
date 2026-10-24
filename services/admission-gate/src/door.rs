@@ -1141,8 +1141,13 @@ impl Door {
     /// The thorough phase keys its draw and its line on that seq. A
     /// provisional that was not written returns `Held` and no seq.
     pub fn settle_fast_seq(&self, job: &LockedThorough) -> (FastPhase, Option<u64>) {
-        if let Some(phase) = self.sticky_phase(job) {
-            return (phase, None);
+        // Off unless `[policy_rules] sticky_refuse` is true. A resubmit of a
+        // refused pair is measured again and may append a new refuse line.
+        // `sticky_phase` stays so that flag turns the short circuit back on.
+        if self.policy.sticky_refuse {
+            if let Some(phase) = self.sticky_phase(job) {
+                return (phase, None);
+            }
         }
         let index = self.index_client();
         let decision = fast::decide(&job.object, &self.policy, &index);
@@ -1198,6 +1203,7 @@ impl Door {
     }
 
     /// A stored refuse or revoke for this pair. No index read.
+    /// Called only when [`AdmissionPolicy::sticky_refuse`] is on.
     fn sticky_phase(&self, job: &LockedThorough) -> Option<FastPhase> {
         let stored = self.sticky(&job.public_key, &job.object_sha)?;
         self.rows.settle(&job.nonce, &stored, self.now_unix_s());
@@ -1895,8 +1901,10 @@ pub enum FastPhase {
     Direct,
     /// `not read`. No provisional line. The website stays `pending`.
     Held,
-    /// A settled refuse, or a sticky stored outcome. Thorough does not run.
+    /// A settled refuse written on this submission. Thorough does not run.
     Done,
+    /// A stored refuse or revoke for this pair. Returned only when
+    /// `sticky_refuse` is on. No new line. Thorough does not run.
     Sticky,
 }
 

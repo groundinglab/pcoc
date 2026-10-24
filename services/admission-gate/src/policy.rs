@@ -296,6 +296,13 @@ pub struct AdmissionPolicy {
     /// then not serialized, so their bind hash and policy document stay the same.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub index: Option<IndexPolicy>,
+    /// `[policy_rules] sticky_refuse`. `false` (the default, and an absent
+    /// key) measures a resubmit of a refused pair and may append a new
+    /// refuse line. `true` returns the stored refuse or revoke and writes
+    /// no line. Not a §15.4 lever. Not serialized, so it is not part of
+    /// [`Self::bind_key`] and flipping it does not need a new policy id.
+    #[serde(skip_serializing)]
+    pub sticky_refuse: bool,
 }
 
 /// Mirrors gl-admit-v10, including door-session cap 3. `Config::load` does
@@ -336,6 +343,7 @@ impl Default for AdmissionPolicy {
             index: Some(IndexPolicy {
                 expected_network: "main".to_owned(),
             }),
+            sticky_refuse: false,
         }
     }
 }
@@ -952,5 +960,13 @@ mod tests {
         let mut runs = policy.clone();
         runs.thorough_six_leg_runs = 1;
         assert_ne!(policy.bind_key(), runs.bind_key());
+        let mut sticky = policy.clone();
+        sticky.sticky_refuse = true;
+        assert_ne!(policy, sticky);
+        assert_eq!(policy.bind_key(), sticky.bind_key());
+        assert!(serde_json::to_value(&sticky)
+            .expect("policy json")
+            .get("sticky_refuse")
+            .is_none());
     }
 }

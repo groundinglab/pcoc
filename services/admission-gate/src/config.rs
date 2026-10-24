@@ -570,6 +570,7 @@ mod tests {
         assert!(cfg.policy.thorough_early_stop);
         assert!(cfg.policy.require_first_anchored.is_none());
         assert_eq!(cfg.policy.born_height, 0);
+        assert!(!cfg.policy.sticky_refuse);
     }
 
     fn load_text(body: &str) -> Result<Config, String> {
