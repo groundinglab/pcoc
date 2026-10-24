@@ -1,6 +1,6 @@
 # Glossary and roles — Satoshi Hike / PCOC split-six
 
-**Status.** Framing vocabulary for the six-document pack. Locked 2026-10-24 with Christian. Does not change SPEC body text. See also [FRAMING-REVIEW.md](./FRAMING-REVIEW.md) and [README.md](./README.md).
+**Status.** Framing vocabulary for the six-document pack. Locked 2026-10-24 with Christian. Boundary relocation the same day moved §14 into Measurement and marked K HOLD — see [INTENT.md](./INTENT.md). See also [FRAMING-REVIEW.md](./FRAMING-REVIEW.md) and [README.md](./README.md).
 
 **Language rule.** Prefer **valid** → **measured** → **admitted**. Do not say “verified” when you mean only one of those three.
 
@@ -25,7 +25,7 @@ The **definition** of a PCOC (Satoshi Hike object): cost, terrain, legs, stages,
 - Into the hike: Bitcoin block headers (beacons) observed and folded into stages.
 - Out of the hike: waypoint anchors that commit hike history into Bitcoin.
 
-Construction does **not** set admission thresholds and does **not** own live Bari operator steps.
+Construction does **not** set admission thresholds, does **not** own the §14 measure procedure (that is Measurement), and does **not** own live Bari operator steps (Waypoint Publication).
 
 ### Conformance
 
@@ -57,7 +57,7 @@ Bari **fetchability** (path served or not in the anchor window) is the real incl
 
 ### Measurement / Measurement Record
 
-**Measurement** reads a valid object against Construction (and publication evidence when the Bari-shaped channel was used) and reports facts. The **measurement record** is the fixed serialisation of those facts. No judgment, no policy levers.
+**Measurement** reads a valid object against Construction (and publication evidence when the Bari-shaped channel was used) and reports facts. This pack’s Measurement Record document now holds the full §14 procedure plus the record shape and verify CLI. No judgment, no policy levers.
 
 ### Admission Process vs policy instance
 

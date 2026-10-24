@@ -1,6 +1,6 @@
 # Admission Process
 
-**Responsibility.** Process an admission gate follows after receiving a measurement record. Used by an admission-gate implementer.
+**Responsibility.** Generic, value-free process: consume a measurement record + a policy instance → decide/log. Downstream of Measurement. Used by an admission-gate implementer. Policy *values* live outside this pack (e.g. `gl-admit-*`).
 
 **Source.** Inherited without change of wording from the following sections of Satoshi Hike 2.3 (`spec/satoshi-hike-v2.3/SPEC.md`):
 
@@ -9,7 +9,8 @@
 - §15.3 Two-phase async
 - §15.4 Admission levers
 - §15.5 Thorough draw and the floor
-- §14.7 Unknown kind
+
+**FRAMING (2026-10-24).** Rule A5 unknown-kind *measurement* lives in Measurement Record; Admission only judges with reason `unknown_kind` (Rule B9). Gate/sign-in wire and groundinglab Gate deployment detail in this file are **ops-shaped**; the SPEC intent of this document is the generic consume-then-decide process. Lever *values* are policy. See HOLD markers for K / Rule B10.
 
 ---
 
@@ -19,7 +20,7 @@
 
 Part A records and measures. This section is the only judgment. The producer in section 13 records evidence and does not judge. The verifier in section 14 outputs a verify record of measurements and does not judge. The admission service applies this section.
 
-The admission service is the actor in this section. Any service that meets this section conforms to it. The groundinglab Admission Gate (Gate) is one implementation, run for the example deployment. It is not a second specification. The signing client uses one route, `POST /v1/sign-in`, at the default door named in section 15.1. `POST /v1/sign-in/challenge`, `POST /v1/challenge`, and `POST /v1/admit` are not routes. The website mints the challenge link and owns the browser session. That session is not a field of the hike object and not a field of the verify record. The grant named later in this section is not placed in the link and is not returned to the signing client. A deployment of the admission service may spell `refuse` as `deny` on its wire. The word in this file is `refuse`.
+The admission service is the actor in this section. Any service that meets this section conforms to it. The groundinglab Admission Gate (Gate) is one implementation, run for the example deployment. It is not a second specification. **FRAMING:** Gate/sign-in service detail in this section is ops-shaped; treat the pack intent of Admission Process as value-free consume-measurement-then-decide, with policy instances outside. The signing client uses one route, `POST /v1/sign-in`, at the default door named in section 15.1. `POST /v1/sign-in/challenge`, `POST /v1/challenge`, and `POST /v1/admit` are not routes. The website mints the challenge link and owns the browser session. That session is not a field of the hike object and not a field of the verify record. The grant named later in this section is not placed in the link and is not returned to the signing client. A deployment of the admission service may spell `refuse` as `deny` on its wire. The word in this file is `refuse`.
 
 A threshold here can change without changing section 13 and without changing the measurements in section 14. No order among B0–B10 is fixed.
 
@@ -290,6 +291,8 @@ The hit rule, the `{index-url}` tip clock, and the phase of a `held_bound` line 
 
 ### 15.4 Admission levers
 
+**FRAMING.** Lever *ranges* below are the monolith schema for what a policy file may set; *values* belong in a policy instance outside this pack. K row is HOLD (see above).
+
 **Normative.** A policy profile names its `policy_version`, the version of this file it targets, the value of each lever it sets, and its fast checks and its thorough checks. The fast list is the cheap checks: shape, header match, the Rule A4.3 checkpoint digest on every checkpoint, the seed, waypoint and fold recompute from stored checkpoints, path and plant comparison, bookends, the anchored count, and the signature. The thorough list is the section 15.5 leg sample. The fast checkpoint-binding checks are the fold and the waypoint rehash under section 12.2 from stored checkpoints. The Rule A4.3 checkpoint digest hashes the stored sample and does not recompute a leg. The fast list never recomputes a leg.
 
 Every lever is below. A lever has a name, a unit, an allowed range, and a measuring or comparison rule. A policy sets a value inside the range. This file gives no lever a default. The policy in force sets every lever. The one exception is a lever whose range lists unset: the policy may leave it absent, which means unset. “Unset” is an allowed value only where the range lists it. A lever marked gate-scoped has one value per admission service, not per profile. Integers are compared exactly, with no rounding. A value that disables a comparison is out of range.
@@ -298,7 +301,7 @@ Every lever is below. A lever has a name, a unit, an allowed range, and a measur
 |---|---|---|---|---|
 | `min_anchored_paths` | B4 | waypoints | integer `2 … 16` | `anchored_total` (Rule A4.5) over `W_1` … `W_16`, anywhere among them. Compared `anchored_total ≥ min_anchored_paths`. The lower bound 2 is the two anchored bookends `hike_span` needs (Rule A4.10). |
 | `leg_rate_floor` | B2 | checkpoints per second, as `p/q` | integers `p ≥ 1`, `q ≥ 1` | `(hike_legs, hike_span)` from Rule A4.10, `hike_span` the median-time-past span in seconds. Compared `q · hike_legs ≥ p · hike_span`. Section 15.5 is the measuring method a policy uses to choose `p/q`. |
-| `submission_deadline_blocks` (`K`) | B10 | blocks | integer `0 … 6` | Deciding `tip_height` minus `last_beacon_height` (Rule B10). Refuse when the gap exceeds `K`. The upper bound 6 bounds the work a producer can do after its last beacon. |
+| `submission_deadline_blocks` (`K`) **HOLD — to retire pending Christian; Bari fetch window is the real include window** | B10 | blocks | integer `0 … 6` | Deciding `tip_height` minus `last_beacon_height` (Rule B10). Refuse when the gap exceeds `K`. The upper bound 6 bounds the work a producer can do after its last beacon. **FRAMING:** wrong job; preserved for review, not silently deleted. |
 | `held_retry_seconds` | 15.3 | seconds | integer `≥ 1`; gate-scoped | Wall-clock interval between retries of a held submission. A retry schedule only; not a clock for any budget. |
 | `reverify_max_attempts` | 15.3 | counted retries | integer `≥ 1` | Counted retries as the section 15.3 **Held bound** defines. Hit when that many have been made. |
 | `max_held_blocks` | 15.3 | blocks | integer `≥ 1` | `{index-url}` tip height minus the start tip of the hold, as the section 15.3 **Held bound** defines. Hit when the difference is `≥ max_held_blocks`. |
@@ -328,6 +331,10 @@ These are rules of this file, not levers: `provisional_action_cap` (a `provision
 #### Rule B2. Leg-rate floor
 
 **Normative comparison.** `leg_rate_floor` is the lever `p/q` (section 15.4) in checkpoints per second, `hike_legs` over `hike_span`, with `hike_span` in Unix seconds. One checkpoint is one leg. Section 15.5 states the measuring method. The comparison is integer-only: a ratio `p/q` meets the floor when `hike_span` is an integer greater than 0 and `q · hike_legs ≥ p · hike_span`. The comparison result is `meets` when that holds and `refuse` when it does not (section 4, **Comparison result**). `hike_span` ≤ 0 means the rate is undefined. The outcome is `refuse`. It is not `held`. `held` is only `hike_span` `not read`. The policy supplies `p` and `q`. The comparison does not round. Rule B3 does not change `hike_span`. There is no comparison when `hike_span` is `not read`. The fast phase does not issue `provisional` on that gap. The state is `held`. A short or missing network read stays `not read` and the state is `held`. A numeric rate that falls short of the floor is `refuse`. The bookend pair is not an input to this comparison.
+
+<!-- HOLD (2026-10-24 framing): Rule B10 / tip submit-deadline (K) is the wrong job. Do not treat as Construction or Measurement. Bari fetch window is the real include window. To retire pending Christian — not silently deleted. Body preserved below for review. -->
+
+**HOLD — to retire pending Christian.** Tip-vs-last-beacon submit deadline (K / Rule B10) sits in the wrong job under the locked frame. Bari path fetchability is the real include window for anchored paths. Body left intact below so GB can see what existed; do not invent a SPEC that silently omits K without this note.
 
 <a id="rule-b10"></a>
 
@@ -422,24 +429,3 @@ Those three figures are `1 − (1 − 0.25)^n` at `n = 6`, `n = 12`, and `n = 18
 **Measuring method.** Measure on an owned commodity host. The low end of that set is the low-end owned host (an Intel Core i7-10610U laptop, no SHA-NI). Use a conforming SDK at the cut tag of this file (section 16.2) that passes the whole pack, including every permanent negative. Use the fastest such producer build available for that host, and record with the rate whether its fold ran vectorised or scalar and whether its SHA-256 ran in hardware or software. Run a real beacon-paced hike under this file’s producer rules: nothing pauses a leg (Rule A6), and there is no wait before a path ask. The rate is the first-beacon to last-beacon rate, `hike_legs / hike_span`, Rule A4.10, with `hike_span` the median-time-past difference. The floor is calibrated on the best legal packed rate per machine. That rate is `N` parallel PCOCs with distinct keys. Distinct keys make distinct terrains under this seed. An interleave of those hikes is the packed rate. Shared-terrain packing across distinct PCOCs is impossible under this seed. It is not a legal schedule. Record the host, the CPU, the implementation, the commit, and that packed rate beside the single-hike rate. A policy that follows this method sets the floor a little below the low-end host’s rate. It does not set the floor above the rate that the released conforming SDKs reach on the low-end host. That constraint binds whoever sets or raises the floor. It is not a comparison the admission service makes. **The floor must be measured under this file.** A rate measured with a producer that paused the walk (for example, with a wait before path asks or a blocking post) is not a measurement for this file: those pauses sat inside `hike_span` and understate the rate a producer of this file reaches at the same cost per leg. This method informs the value a policy sets. It does not set one.
 
 <a id="sec-16"></a>
-
-
-### 14.7 Unknown kind
-
-**Normative.**
-
-<a id="rule-a5"></a>
-
-#### Rule A5. Unknown kind
-
-An object whose `kind` text is not exactly `KIND` (`v2.2-pcoc-object`) is an unknown kind. No other label is recognised, and no label names another construction. The check is the kind text. It runs before any terrain fill. Verify records:
-
-```json
-{"kind":"unknown kind","kind_text":"<the kind text>"}
-```
-
-`kind` is the measurement `unknown kind`. `kind_text` is the kind text the object carried, as a JSON string. The record is that two-key object, keys in that order, with no insignificant whitespace, and `kind_text` spelled as RFC 8785 spells a JSON string; that is also the RFC 8785 encoding of the object. A conforming verify CLI writes it as it writes the section 14 record, with one trailing newline (U+000A). The newline is not part of the record. The pack’s unknown-kind vector is the record bytes without the newline. The record does not apply sections 14.1–14.6. It is not a decode failure. It is not `shape` `mismatch`. It does not say the object could not be read. An unknown kind is not a fake leg. The admission service refuses it with reason `unknown_kind` (Rule B9) and does not add its key to the ignore record. One well-formed data item that is not a map, or a map that does not yield a `kind` text, is still a decode failure (section 7.3). A malformed CBOR value is not a decode failure and is not Rule A5.
-
-
-<a id="sec-15"></a>
-

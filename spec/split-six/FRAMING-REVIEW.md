@@ -1,6 +1,8 @@
 # Framing review — split-six vs locked frame (2026-10-24)
 
-**Status.** Framing only. No SPEC body edits in this pass. Christian locked the frame below; this note compares each of the six documents to that frame and flags drift.
+**Status.** Framing locked with Christian 2026-10-24. **Boundary relocation applied** the same day (cut-paste homes; FRAMING/HOLD markers; no new object rules; not merged). See [INTENT.md](./INTENT.md) and [GB-REVIEW-BRIEF.md](./GB-REVIEW-BRIEF.md).
+
+**Earlier status (pre-relocation).** Framing only; the drift notes below described monolith lifts before the move. Post-relocation: §14 lives in Measurement; Producer points at Waypoint for BR; Waypoint dropped plant-measure; Admission marks K HOLD; Conformance flags F16.
 
 **Locked frame (summary).**
 
@@ -92,8 +94,8 @@
 |---|---|
 | Definitional pair | README lists six peers; it does not yet say Construction + Conformance are the definitional pair. |
 | Reader paths | README roles are close but still say “verifier uses Construction + Waypoint/Measurement” without “validate then measure,” and put Admission Process as if it included policy values. |
-| K deadline | Lives in Admission (Rule B10) and is defended in Conformance F16. Wrong job per locked frame; Bari serve window in Producer / Waypoint Publication is the real include window. **No body edit in this pass.** |
-| Verbatim split | README correctly notes bodies are still verbatim section lifts from monolith 2.3 — framing docs (glossary/roles/this review) are the first non-verbatim framing layer. |
+| K deadline | Lives in Admission (Rule B10) and is defended in Conformance F16. Wrong job per locked frame; Bari serve window in Producer / Waypoint Publication is the real include window. **HOLD markers applied 2026-10-24** (body preserved; not silently deleted). |
+| Verbatim split | Bodies remain section lifts; relocation is cut-paste of homes + FRAMING/HOLD notes. Glossary/INTENT/README state the locked frame. |
 
 ## Suggested pack picture (no edits yet)
 

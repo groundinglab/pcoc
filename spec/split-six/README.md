@@ -1,27 +1,43 @@
 # Satoshi Hike 2.3 — Six Document Split
 
-Framing vocabulary (locked 2026-10-24): see [GLOSSARY.md](./GLOSSARY.md) and the drift notes in [FRAMING-REVIEW.md](./FRAMING-REVIEW.md). SPEC body text in 01–06 is unchanged in that framing pass.
+**Status.** Branch `spec/split-six-documents-2026-10-24`. Text relocation 2026-10-24 (boundaries only; no new object rules). Not merged. See [INTENT.md](./INTENT.md), [GLOSSARY.md](./GLOSSARY.md), [FRAMING-REVIEW.md](./FRAMING-REVIEW.md), [GB-REVIEW-BRIEF.md](./GB-REVIEW-BRIEF.md).
 
-These six documents separate the Satoshi Hike 2.3 specification by responsibility. Each document inherits its content verbatim from the listed sections of `spec/satoshi-hike-v2.3/SPEC.md`. No wording has been changed.
+## Definitional pair
+
+**Construction + Conformance** = specification + matching test specification. That pair is fundamental: object cost, encodings, and the two-way Bitcoin commitment bind, plus the yes/no rules and vectors that prove an object (and a tool) matches Construction.
+
+Producer and Measurement are **process** documents constrained by that pair. Waypoint Publication is our **scoped** Bitcoin-anchor batching channel (Construction still owns the bind). Admission Process is **downstream** and value-free; policy instances (`gl-admit-*`) stay outside this pack.
+
+**Language:** **valid** → **measured** → **admitted**. Do not use “verified” loosely.
 
 ## Documents
 
-1. **Satoshi Hike Construction** — object, terrain, leg, stage and waypoint binding, encodings, and measurement procedure.
-2. **Producer Process** — reference live sequence for a producer.
-3. **Waypoint Publication Process** — tree-batching process for waypoints.
-4. **Admission Process** — process an admission gate follows after measurement.
-5. **Conformance Process** — process for claiming pack-level conformance.
-6. **Measurement Record Process** — fixed serialisation of the measurement record and tooling.
+1. **Satoshi Hike Construction** — object, terrain, leg, stage/waypoint slots, encodings, two-way Bitcoin bind. Definitional.
+2. **Producer Process** — live produce sequence that realises Construction (pointer to Waypoint Publication for Bari operator rules).
+3. **Waypoint Publication Process** — scoped batching channel (BR1–BR4). Bind required in Construction; this is how we batch the anchor side.
+4. **Admission Process** — generic consume measurement + policy → decide. Value-free. K tip-deadline marked HOLD (wrong job; Bari fetch window is the real include window).
+5. **Conformance Process** — test specification paired with Construction. F16 (K-defence) flagged for revisit when K retires.
+6. **Measurement Record Process** — full §14 measure procedure + verify-record shape + verify CLI. Fact-only.
 
 ## Dependencies
 
-All documents depend on Satoshi Hike Construction.
+```
+Construction  ↔  Conformance     ← definitional pair
+       ↑                ↑
+   Producer        Measurement     ← realise / read the object
+       \                |
+        Waypoint Publication       ← scoped anchor channel (batching)
+                        |
+                 Admission Process ← generic consumer
+                        ↑
+              policy instance (outside pack, e.g. gl-admit-*)
+```
 
-## Roles
+## Reader paths
 
-- A producer implementer uses Construction (and Producer Process and/or Waypoint Publication Process if those purposes are required).
-- A verifier implementer uses Construction (and Waypoint Publication Process and/or Measurement Record Process if those purposes are required).
-- An admission-gate implementer uses Construction and Admission Process.
-- Conformance Process is used by any implementer who wants to claim pack-level conformance.
+- **Builder (producer implementer):** Construction + Conformance; Producer Process; Waypoint Publication if planting via our channel.
+- **Measurer / verifier implementer:** Construction + Conformance; Measurement Record; Waypoint Publication only to interpret that channel’s evidence.
+- **Gate / admission implementer:** Construction (shape), Measurement Record (inputs), Admission Process (generic consume/decide), then **your** policy instance outside this pack.
+- **Conformance claimant:** Conformance + every document claimed (always Construction).
 
-The original 2.3 specification remains the source of truth until these documents are confirmed complete.
+Bodies remain section lifts from monolith 2.3; this pass relocates homes and adds FRAMING/HOLD markers only. The original 2.3 specification remains source of truth until these documents are confirmed complete and merged.
