@@ -1,5 +1,7 @@
 # Satoshi Hike 2.3 — Six Document Split
 
+Framing vocabulary (locked 2026-10-24): see [GLOSSARY.md](./GLOSSARY.md) and the drift notes in [FRAMING-REVIEW.md](./FRAMING-REVIEW.md). SPEC body text in 01–06 is unchanged in that framing pass.
+
 These six documents separate the Satoshi Hike 2.3 specification by responsibility. Each document inherits its content verbatim from the listed sections of `spec/satoshi-hike-v2.3/SPEC.md`. No wording has been changed.
 
 ## Documents
