@@ -182,7 +182,7 @@ ARGS=(
   --repo "$ROOT"
   --tier "$TIER"
   --input-root "$INPUT_ROOT"
-  --erratum "$ROOT/spec/satoshi-hike-v2.2/ERRATUM-1.md"
+  --erratum "$ROOT/sdk/conformance/erratum-negatives.tsv"
   --rust-cli "$ROOT/sdk/rust/target/release/pcoc"
   --c-cli "$ROOT/sdk/c/build/pcoc"
   --go-cli "$BUILD/pcoc-go"

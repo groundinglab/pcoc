@@ -1,8 +1,0 @@
-
-Build Summary: 5/5 steps succeeded; 13/13 tests passed
-test success
-+- run test 12 passed 6ms MaxRSS:4M
-|  +- compile test ReleaseFast native success 19s MaxRSS:335M
-+- run test 1 passed 19s MaxRSS:269M
-   +- compile test ReleaseFast native success 13s MaxRSS:254M
-

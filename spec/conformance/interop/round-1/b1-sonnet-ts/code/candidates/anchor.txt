@@ -1,7 +1,0 @@
-anchor.H100.height100	not anchored
-anchor.H100.height101	not anchored
-anchor.H100.height102	anchored
-anchor.H100.height103	anchored
-anchor.H100.height104	anchored
-anchor.H100.height105	not anchored
-anchor.H100.height106	not anchored

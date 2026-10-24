@@ -1,8 +1,0 @@
-
-added 3 packages, and audited 4 packages in 696ms
-
-found 0 vulnerabilities
-
-> satoshi-hike-ts@2.2.0 build
-> tsc -p .
-

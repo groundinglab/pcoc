@@ -1,1 +1,0 @@
-cc -O3 -DNDEBUG -fPIC -Wall -Wextra -Wpedantic -march=native  -shared -o impl/native/libhike.so impl/native/hike.c -Wl,-l:libcrypto.so.3

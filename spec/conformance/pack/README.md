@@ -1,8 +1,10 @@
-# pack-2.2.0
+# Conformance pack (`pack-2.2.0`)
 
-Status: complete. The construction files below are the candidate lines on which Rust, C, Go, and Java already agree. `spec/conformance/tools/pack_from_candidates.py` writes a value only when those four files are byte-identical, and it stops if they are not. It does not invent a hash. `sign-in.json` and `sign-in-origins.json` are produced by the Rust SDK (plan decision D7) and checked by the admission gate.
+Status: complete. These bytes are valid for Satoshi Hike **2.3** (tag `spec-2.3.0`). The manifest id `pack-2.2.0` is historical and is left unchanged so the manifest hash pinned beside `spec-2.3.0` stays put. The draw fixture label `pcoc-pack-2.2/draw` inside `draw.json` is part of that vector, not the specification version.
 
-`manifest.json` names this pack, sets `"status": "complete"`, and lists the files present. `sdk/SPEC_PIN` records the SHA-256 of that manifest beside the tag `spec-2.3.0`. The maintainers cut that tag on the merge commit. This pack does not create the tag.
+The construction files below are the candidate lines on which Rust, C, Go, and Java already agree. A value was written only when those four were byte-identical. This pack does not invent a hash. `sign-in.json` and `sign-in-origins.json` are produced by the Rust SDK (plan decision D7) and checked by the admission gate.
+
+`manifest.json` names this pack, sets `"status": "complete"`, and lists the files present. `sdk/SPEC_PIN` records the SHA-256 of that manifest beside the tag `spec-2.3.0`. This pack does not create that tag.
 
 Where a published vector and a sentence of the specification conflict, the conflict is a defect in the specification. Report it and do not pick a side (SPEC §16, Precedence). Evidence is the hash-bound set (SPEC §8). The portable index stands in for Bitcoin. Anyone may bypass the index and read Bitcoin directly (SPEC §9 and §14). Vector bytes in this directory are Apache-2.0. Prose here is CC BY 4.0.
 
@@ -55,6 +57,6 @@ Each JSON file other than `blockhash-display.json` is the tab-separated candidat
 
 The previous `constants.json` names a different `KIND`, includes a seed-domain label, and carries leg-rate pairs. §6 sets `KIND` to `v2.2-pcoc-object`, says there is no seed domain label, and does not put those pairs in the constant table. It was not copied.
 
-## `tools/`
+## What this directory is
 
-`spec/conformance/tools/` stays where it is. The only file is `ring1_checks.py`. The filename is not version-named. The script hardcodes the previous specification path and the previous pack path, so it is specific to that tree. It is not edited in this change.
+Pinned vector files only. Generators and interop kits are not part of this pack.

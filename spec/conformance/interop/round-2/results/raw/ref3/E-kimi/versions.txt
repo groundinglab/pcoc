@@ -1,4 +1,0 @@
-Linux ref3 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 16:37:11 UTC 2 x86_64 x86_64 x86_64 GNU/Linux
-gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
-8.0.426
-~/interop-r2/toolchains/dotnet8/dotnet

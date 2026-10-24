@@ -1,7 +1,0 @@
-mem_before_used=4489080832 avail=11649093632
-T0=1792657476799060421
-mem_mid_used=4753965056 avail=11384209408 swap_note=see_swap
-swap_used=0
-rss_kb_1220248=262244
- 18:55:06 up 3 days,  4:14,  1 user,  load average: 0.74, 0.29, 0.31
-T1=1792657536809511412

@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-JAR_PATH="$SCRIPT_DIR/build/libs/satoshi-hike-all.jar"
-if [ ! -f "$JAR_PATH" ]; then
-    "$SCRIPT_DIR/gradlew" -p "$SCRIPT_DIR" -q fatJar >&2
-fi
-exec java -Xmx2g -XX:+UseSHA -XX:+UnlockDiagnosticVMOptions -XX:+UseSHA256Intrinsics -jar "$JAR_PATH" verify "$@"

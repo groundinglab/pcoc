@@ -1,3 +1,0 @@
-Linux ref1 6.8.0-147-generic #147-Ubuntu SMP PREEMPT_DYNAMIC Thu Sep 24 11:33:16 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
-gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
-0.15.2
