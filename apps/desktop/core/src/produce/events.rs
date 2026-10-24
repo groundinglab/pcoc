@@ -1,7 +1,7 @@
 //! Progress events, DESIGN-v2 section 6.
 //!
-//! Offline produce maps rig progress onto these events. Live produce fails
-//! closed: the header source is not in this build. None of these run inside
+//! Offline produce maps rig progress onto these events. Live produce maps
+//! the gossip header source onto the same events. None of these run inside
 //! a step.
 
 use std::path::PathBuf;
@@ -40,16 +40,28 @@ pub enum ProduceEvent {
         at_ms: u64,
     },
     /// A header newer than the last one seen. `natural_hash` is natural byte order.
+    ///
+    /// `peers` is the handshake-complete count when the session has published
+    /// one. `None` means the count is not known yet. It is not zero.
     Tip {
         height: u64,
         natural_hash: [u8; 32],
         peers: Option<u32>,
         header_seen_unix_ms: u64,
     },
-    /// Peers with a finished handshake. Sent while the tip is still being read.
+    /// Handshake-complete peers (`peers`) and sockets still in the pool
+    /// (`sockets`), including those still in `version`/`verack`. `addrs` names
+    /// the handshake-complete peers when the pipe has an address.
+    ///
+    /// A `peers` of zero is a real empty handshake set. The panel still says
+    /// "connecting…" while `sockets` is non-zero and no tip has been seen.
     Gossip {
         peers: u32,
+        sockets: u32,
+        addrs: Vec<String>,
     },
+    /// The gossip thread ended without Stop. Its sockets are gone.
+    TipFeedStopped,
     StageClosed {
         stage: usize,
         legs: u64,

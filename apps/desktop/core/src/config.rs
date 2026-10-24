@@ -23,7 +23,10 @@ pub struct Config {
     pub learn_mode: bool,
     pub data_folder: PathBuf,
     pub threads: u32,
-    /// `host:port`. Empty selects the DNS seed list. Start hike dials it.
+    /// `host:port`. Empty selects the DNS seed list.
+    /// Loaded when the app starts. Settings writes it to memory and to the file.
+    /// Start hike dials the in-memory value. A running hike does not re-read it,
+    /// and a running app does not re-read the file.
     pub gossip_peer: String,
 }
 

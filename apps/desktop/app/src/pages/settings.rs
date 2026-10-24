@@ -194,7 +194,7 @@ fn network(app: &Rc<App>, on: bool) -> gtk::Widget {
     }
     c.body.append(&setting(
         "Gossip peer override",
-        "Dialed when Start hike runs. Empty uses the DNS seeds.",
+        "Dialed when Start hike runs. Empty uses the DNS seeds. A hike already running keeps the peer it started with. Editing the config file does not change this field until the app starts again.",
         &peer,
     ));
     c.body
@@ -224,7 +224,7 @@ fn network(app: &Rc<App>, on: bool) -> gtk::Widget {
     learn(
         &c.body,
         &c.root,
-        "A named peer is dialed for the whole hike. An empty field uses the DNS seeds. The producer sends no secret.",
+        "A named peer is dialed first for the whole hike. An empty field uses the DNS seeds. Changing this, or the config file, does not reconnect a hike that is already running. The producer sends no secret.",
         on,
     );
     c.root.upcast()

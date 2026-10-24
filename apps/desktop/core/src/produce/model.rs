@@ -75,7 +75,16 @@ pub struct ProduceView {
     pub tip_height: Option<u64>,
     pub tip_natural: Option<[u8; 32]>,
     pub tip_seen_ms: Option<u64>,
+    /// Handshake-complete peers. `None` is unknown, not zero.
     pub peers: Option<u32>,
+    /// Sockets in the pool, including handshakes still in flight. `None` until counted.
+    pub sockets: Option<u32>,
+    /// Addresses of handshake-complete peers. Empty when the pipes are unnamed.
+    pub peer_addrs: Vec<String>,
+    /// Gossip thread ended without Stop.
+    pub feed_stopped: bool,
+    /// Short panel phrase for `header_peers_low` or `header_source_stalled`.
+    pub gossip_alert: Option<String>,
     pub waypoints: BTreeMap<u64, WaypointState>,
     pub bari: Bari,
     pub last_post_status: Option<u16>,
@@ -102,6 +111,10 @@ impl Default for ProduceView {
             tip_natural: None,
             tip_seen_ms: None,
             peers: None,
+            sockets: None,
+            peer_addrs: Vec::new(),
+            feed_stopped: false,
+            gossip_alert: None,
             waypoints: BTreeMap::new(),
             bari: Bari::NotAskedYet,
             last_post_status: None,
@@ -117,6 +130,42 @@ const LOG_LINES: usize = 400;
 /// Shown from Start until the first Observe returns the tip already on the
 /// best chain. §9 P9.14: that header is the seed. It is not a header mined later.
 pub const READING_THE_TIP: &str = "Reading the Bitcoin tip…";
+
+/// Handshake count not published yet, and no tip has arrived.
+pub const GOSSIP_CONNECTING: &str = "connecting…";
+/// Tips are moving but this process has not published a handshake count.
+pub const GOSSIP_PEERS_UNKNOWN: &str = "peer count unknown";
+/// Fewer than two handshake-complete peers. SPEC §9 `HEADER_PEERS_MIN`.
+pub const GOSSIP_NEED_TWO: &str = "Need 2 peers · waiting";
+/// The header source reported a stall that is not a low peer count.
+pub const GOSSIP_TIP_STALLED: &str = "Tip feed stalled";
+/// The gossip thread ended. Sockets are gone. The window may still be open.
+pub const GOSSIP_TIP_STOPPED: &str = "Tip feed stopped";
+pub const GOSSIP_TIP_LIVE: &str = "Tip feed live";
+pub const GOSSIP_READING: &str = "Connected · reading the tip";
+pub const GOSSIP_NO_PEERS: &str = "No peers · reconnecting";
+pub const GOSSIP_AGREE: &str = "Tip advances when 2 peers agree.";
+
+/// Rows of the live Gossip panel. Tones are GTK css classes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GossipPanel {
+    pub status: String,
+    pub status_tone: &'static str,
+    pub peers: String,
+    pub from: String,
+    pub addrs: String,
+    pub header: String,
+    pub seen: String,
+    pub note: String,
+}
+
+/// Where this hike dials. Empty or absent means the DNS seed list.
+pub fn gossip_from(named_peer: Option<&str>) -> String {
+    match named_peer.map(str::trim).filter(|peer| !peer.is_empty()) {
+        Some(peer) => format!("Named override {peer}, then DNS seeds"),
+        None => "DNS seeds".to_owned(),
+    }
+}
 
 /// One chip for a waypoint. The desktop reports the POST and the path fetch.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -227,17 +276,37 @@ impl ProduceView {
                 peers,
                 header_seen_unix_ms,
             } => {
-                if self.tip_height.is_none_or(|h| height >= h) {
+                let advanced = self.tip_height.is_none_or(|h| height >= h);
+                if advanced {
                     self.tip_height = Some(height);
                     self.tip_natural = Some(natural_hash);
                     self.tip_seen_ms = Some(header_seen_unix_ms);
+                    if self.gossip_alert.as_deref() == Some(GOSSIP_TIP_STALLED) {
+                        self.gossip_alert = None;
+                    }
                 }
                 if peers.is_some() {
                     self.peers = peers;
                 }
             }
-            ProduceEvent::Gossip { peers } => {
+            ProduceEvent::Gossip {
+                peers,
+                sockets,
+                addrs,
+            } => {
                 self.peers = Some(peers);
+                self.sockets = Some(sockets);
+                self.peer_addrs = addrs;
+                if peers >= 2 && self.gossip_alert.as_deref() == Some(GOSSIP_NEED_TWO) {
+                    self.gossip_alert = None;
+                }
+            }
+            ProduceEvent::TipFeedStopped => {
+                self.feed_stopped = true;
+                self.peers = Some(0);
+                self.sockets = Some(0);
+                self.peer_addrs.clear();
+                self.gossip_alert = None;
             }
             ProduceEvent::StageClosed {
                 stage,
@@ -317,6 +386,15 @@ impl ProduceView {
                 }
             }
             ProduceEvent::Log(line) => {
+                match line.as_str() {
+                    "header_peers_low" if self.peers.is_none_or(|n| n < 2) => {
+                        self.gossip_alert = Some(GOSSIP_NEED_TWO.to_owned());
+                    }
+                    "header_source_stalled" => {
+                        self.gossip_alert = Some(GOSSIP_TIP_STALLED.to_owned());
+                    }
+                    _ => {}
+                }
                 self.log.push(line);
                 if self.log.len() > LOG_LINES {
                     self.log.remove(0);
@@ -499,8 +577,18 @@ impl ProduceView {
     /// Status bar while producing. Display-order tip, last block age, Bari.
     pub fn status_line(&self, now_ms: u64, narrow: bool) -> (String, String) {
         let mut gossip = String::from("Bitcoin gossip");
-        if let Some(peers) = self.peers {
-            gossip.push_str(&format!(" · {peers} peers"));
+        match self.peers {
+            Some(peers) => gossip.push_str(&format!(" · {peers} peers")),
+            None if self.running() && self.tip_height.is_some() => {
+                gossip.push_str(" · peers unknown");
+            }
+            None => {}
+        }
+        if self.feed_stopped {
+            gossip.push_str(" · tip feed stopped");
+        } else if let Some(alert) = &self.gossip_alert {
+            gossip.push_str(" · ");
+            gossip.push_str(alert);
         }
         match (self.tip_height, self.tip_natural) {
             (Some(height), Some(natural)) => {
@@ -611,12 +699,15 @@ impl ProduceView {
         parts.join(" · ")
     }
 
-    /// Peers, the latest header, and when this process saw it.
-    pub fn gossip_lines(&self) -> (String, String, String) {
-        let peers = match self.peers {
-            Some(n) => format!("{n} connected"),
-            None => "0 connected".to_owned(),
-        };
+    /// What the Network / Gossip panel draws for one live hike.
+    ///
+    /// `named_peer` is the override Start hike dialed. Empty means DNS seeds.
+    /// A running hike keeps the value it started with.
+    pub fn gossip_panel(&self, named_peer: Option<&str>) -> GossipPanel {
+        let (status, status_tone) = self.gossip_status();
+        let peers = self.peer_count_line();
+        let from = gossip_from(named_peer);
+        let addrs = self.peer_addrs.join("\n");
         let header = match (self.tip_height, self.tip_natural) {
             (Some(height), Some(natural)) => {
                 format!("{} · {}", thousands(height), crate::hex::prefix(&natural))
@@ -627,7 +718,79 @@ impl ProduceView {
             Some(ms) => format!("{} UTC", crate::format::clock(ms / 1000)),
             None => "—".to_owned(),
         };
-        (peers, header, seen)
+        let note = self.gossip_note();
+        GossipPanel {
+            status,
+            status_tone,
+            peers,
+            from,
+            addrs,
+            header,
+            seen,
+            note,
+        }
+    }
+
+    fn peer_count_line(&self) -> String {
+        match self.peers {
+            Some(0) if self.zero_is_real() => "0 connected".to_owned(),
+            Some(0) if self.running() => GOSSIP_CONNECTING.to_owned(),
+            Some(0) => "0 connected".to_owned(),
+            Some(n) => format!("{n} connected"),
+            None if self.feed_stopped || (self.running() && self.tip_height.is_some()) => {
+                GOSSIP_PEERS_UNKNOWN.to_owned()
+            }
+            None if self.running() => GOSSIP_CONNECTING.to_owned(),
+            None => "—".to_owned(),
+        }
+    }
+
+    /// Zero handshakes is a settled count once a tip has been seen, the feed
+    /// has stopped, an alert has fired, or the pool itself is empty.
+    /// Sockets still in `version`/`verack` stay "connecting…".
+    fn zero_is_real(&self) -> bool {
+        if self.feed_stopped || self.tip_height.is_some() || self.gossip_alert.is_some() {
+            return true;
+        }
+        self.sockets == Some(0)
+    }
+
+    fn gossip_status(&self) -> (String, &'static str) {
+        if self.feed_stopped {
+            return (GOSSIP_TIP_STOPPED.to_owned(), "magenta");
+        }
+        if let Some(alert) = &self.gossip_alert {
+            let tone = if alert == GOSSIP_TIP_STALLED {
+                "magenta"
+            } else {
+                "amber"
+            };
+            return (alert.clone(), tone);
+        }
+        if !self.running() {
+            return ("—".to_owned(), "muted");
+        }
+        match self.peers {
+            Some(n) if n >= 2 && self.tip_height.is_some() => (GOSSIP_TIP_LIVE.to_owned(), "teal"),
+            Some(n) if n >= 2 => (GOSSIP_READING.to_owned(), "teal"),
+            Some(n) if n > 0 => (GOSSIP_NEED_TWO.to_owned(), "amber"),
+            Some(0) if self.zero_is_real() => (GOSSIP_NO_PEERS.to_owned(), "amber"),
+            None if self.tip_height.is_some() => (GOSSIP_PEERS_UNKNOWN.to_owned(), "amber"),
+            _ => ("Connecting…".to_owned(), "muted"),
+        }
+    }
+
+    fn gossip_note(&self) -> String {
+        if !self.running() || self.feed_stopped {
+            return String::new();
+        }
+        if self.peers.is_some_and(|n| n < 2) && (self.tip_height.is_some() || self.zero_is_real()) {
+            return GOSSIP_AGREE.to_owned();
+        }
+        if self.peers.is_none() && self.tip_height.is_some() {
+            return "Peer count is not in yet. A moving tip is not a peer count.".to_owned();
+        }
+        String::new()
     }
 
     pub fn sidebar_badge(&self) -> Option<String> {
@@ -712,22 +875,122 @@ mod tests {
             phase: Phase::Starting,
             ..ProduceView::default()
         };
-        let (peers, header, seen) = view.gossip_lines();
-        assert_eq!(peers, "0 connected");
-        assert_eq!(header, READING_THE_TIP);
-        assert_eq!(seen, "—");
-        view.apply(ProduceEvent::Gossip { peers: 1 });
+        let panel = view.gossip_panel(None);
+        assert_eq!(panel.peers, GOSSIP_CONNECTING);
+        assert_eq!(panel.status, "Connecting…");
+        assert_eq!(panel.header, READING_THE_TIP);
+        assert_eq!(panel.seen, "—");
+        assert_eq!(panel.from, "DNS seeds");
+        assert_ne!(panel.peers, "0 connected");
+
+        view.apply(ProduceEvent::Gossip {
+            peers: 0,
+            sockets: 2,
+            addrs: Vec::new(),
+        });
+        let panel = view.gossip_panel(Some("203.0.113.10:8333"));
+        assert_eq!(panel.peers, GOSSIP_CONNECTING);
+        assert_eq!(
+            panel.from,
+            "Named override 203.0.113.10:8333, then DNS seeds"
+        );
+
+        view.apply(ProduceEvent::Gossip {
+            peers: 1,
+            sockets: 2,
+            addrs: vec!["203.0.113.10:8333".into()],
+        });
         view.apply(ProduceEvent::Tip {
             height: 971_174,
             natural_hash: [0x11; 32],
             peers: None,
             header_seen_unix_ms: 1_700_000_000_000,
         });
-        let (peers, header, seen) = view.gossip_lines();
-        assert_eq!(peers, "1 connected");
-        assert!(header.starts_with("971,174 · "), "{header}");
-        assert!(header.contains(&crate::hex::prefix(&[0x11; 32])));
-        assert!(seen.ends_with("UTC"), "{seen}");
+        let panel = view.gossip_panel(Some("203.0.113.10:8333"));
+        assert_eq!(panel.peers, "1 connected");
+        assert_eq!(panel.status, GOSSIP_NEED_TWO);
+        assert_eq!(panel.addrs, "203.0.113.10:8333");
+        assert_eq!(panel.note, GOSSIP_AGREE);
+        assert!(panel.header.starts_with("971,174 · "), "{}", panel.header);
+        assert!(panel.header.contains(&crate::hex::prefix(&[0x11; 32])));
+        assert!(panel.seen.ends_with("UTC"), "{}", panel.seen);
+
+        view.apply(ProduceEvent::Gossip {
+            peers: 2,
+            sockets: 2,
+            addrs: vec!["203.0.113.10:8333".into(), "203.0.113.11:8333".into()],
+        });
+        let panel = view.gossip_panel(Some("203.0.113.10:8333"));
+        assert_eq!(panel.peers, "2 connected");
+        assert_eq!(panel.status, GOSSIP_TIP_LIVE);
+        assert_eq!(panel.status_tone, "teal");
+        assert!(panel.note.is_empty());
+    }
+
+    #[test]
+    fn unknown_peer_count_is_not_zero_while_tips_move() {
+        let mut view = ProduceView {
+            phase: Phase::Recording,
+            tip_height: Some(972_907),
+            tip_natural: Some([0xab; 32]),
+            tip_seen_ms: Some(1_700_000_000_000),
+            peers: None,
+            ..ProduceView::default()
+        };
+        let panel = view.gossip_panel(None);
+        assert_eq!(panel.peers, GOSSIP_PEERS_UNKNOWN);
+        assert_eq!(panel.status, GOSSIP_PEERS_UNKNOWN);
+        assert_ne!(panel.peers, "0 connected");
+        assert!(panel.note.contains("not a peer count"));
+        let (gossip, _) = view.status_line(0, false);
+        assert!(gossip.contains("peers unknown"), "{gossip}");
+        assert!(!gossip.contains("0 peers"), "{gossip}");
+
+        view.apply(ProduceEvent::Gossip {
+            peers: 0,
+            sockets: 0,
+            addrs: Vec::new(),
+        });
+        let panel = view.gossip_panel(None);
+        assert_eq!(panel.peers, "0 connected");
+        assert_eq!(panel.status, GOSSIP_NO_PEERS);
+    }
+
+    #[test]
+    fn stalled_feed_is_distinct_from_an_unknown_count() {
+        let mut view = ProduceView {
+            phase: Phase::Recording,
+            tip_height: Some(972_906),
+            tip_natural: Some([0x11; 32]),
+            tip_seen_ms: Some(1),
+            peers: Some(2),
+            sockets: Some(2),
+            ..ProduceView::default()
+        };
+        view.apply(ProduceEvent::Log("header_peers_low".into()));
+        assert!(view.gossip_alert.is_none(), "two peers is not a low count");
+        view.peers = Some(1);
+        view.apply(ProduceEvent::Log("header_peers_low".into()));
+        assert_eq!(view.gossip_panel(None).status, GOSSIP_NEED_TWO);
+        view.apply(ProduceEvent::Log("header_source_stalled".into()));
+        assert_eq!(view.gossip_panel(None).status, GOSSIP_TIP_STALLED);
+        assert_eq!(view.gossip_panel(None).status_tone, "magenta");
+
+        view.apply(ProduceEvent::Tip {
+            height: 972_907,
+            natural_hash: [0x22; 32],
+            peers: Some(2),
+            header_seen_unix_ms: 2,
+        });
+        assert_eq!(view.gossip_panel(None).status, GOSSIP_TIP_LIVE);
+
+        view.apply(ProduceEvent::TipFeedStopped);
+        let panel = view.gossip_panel(None);
+        assert_eq!(panel.status, GOSSIP_TIP_STOPPED);
+        assert_eq!(panel.peers, "0 connected");
+        assert_eq!(panel.status_tone, "magenta");
+        let (gossip, _) = view.status_line(0, false);
+        assert!(gossip.contains("tip feed stopped"), "{gossip}");
     }
 
     /// AC5. One line per state. No header is the connecting sentence, with or

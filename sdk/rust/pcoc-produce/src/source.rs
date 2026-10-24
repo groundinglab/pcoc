@@ -6,6 +6,7 @@
 //! from `pcoc-gossip`.
 
 use pcoc_gossip::{open_cancellable, HeaderError, TipTick, ABSENT_LIVE_SOURCE};
+pub use pcoc_gossip::{PeerCensus, PeerSnapshot};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
@@ -142,6 +143,7 @@ impl Snap {
 /// Live gossip. The walk calls [`TipSource::tip`]. The peer session runs here.
 pub struct GossipSource {
     snap: Arc<Snap>,
+    census: Arc<PeerCensus>,
     stop: Arc<AtomicBool>,
     thread: Mutex<Option<JoinHandle<()>>>,
 }
@@ -150,6 +152,7 @@ impl GossipSource {
     /// `peer` empty selects the Bitcoin Core DNS seed list inside `pcoc-gossip`.
     /// `stop` is the producer's cancel flag. Drop sets it and joins the thread.
     pub fn spawn(peer: &str, stop: Arc<AtomicBool>) -> Self {
+        let census = PeerCensus::new();
         let snap = Arc::new(Snap {
             tip: Mutex::new(None),
             learned: Mutex::new(Vec::new()),
@@ -161,16 +164,23 @@ impl GossipSource {
         });
         let thread_snap = Arc::clone(&snap);
         let thread_stop = Arc::clone(&stop);
+        let thread_census = Arc::clone(&census);
         let peer = peer.to_owned();
         let thread = std::thread::Builder::new()
             .name("pcoc-gossip".into())
-            .spawn(move || gossip_loop(peer, thread_stop, thread_snap))
+            .spawn(move || gossip_loop(peer, thread_stop, thread_snap, thread_census))
             .expect("spawn gossip thread");
         Self {
             snap,
+            census,
             stop,
             thread: Mutex::new(Some(thread)),
         }
+    }
+
+    /// Handshake census the gossip thread updates. `None` until the first count.
+    pub fn census(&self) -> Arc<PeerCensus> {
+        Arc::clone(&self.census)
     }
 
     pub fn tip_fn(&self) -> Arc<dyn Fn() -> Option<HeldTip> + Send + Sync> {
@@ -223,8 +233,28 @@ impl TipSource for GossipSource {
     }
 }
 
-fn gossip_loop(peer: String, stop: Arc<AtomicBool>, snap: Arc<Snap>) {
+struct FeedGuard {
+    census: Arc<PeerCensus>,
+    stop: Arc<AtomicBool>,
+}
+
+impl Drop for FeedGuard {
+    fn drop(&mut self) {
+        // A producer Stop sets `stop` before the thread returns. Any other
+        // exit — panic, or the read loop ending — means the sockets are gone.
+        if !self.stop.load(Ordering::SeqCst) {
+            self.census.mark_stopped();
+        }
+    }
+}
+
+fn gossip_loop(peer: String, stop: Arc<AtomicBool>, snap: Arc<Snap>, census: Arc<PeerCensus>) {
+    let _guard = FeedGuard {
+        census: Arc::clone(&census),
+        stop: Arc::clone(&stop),
+    };
     let mut clock = open_cancellable(&peer, Some(Arc::clone(&stop)));
+    clock.watch_peers(census);
     let mut last: Option<[u8; 32]> = None;
     while !stop.load(Ordering::SeqCst) {
         match clock.wait(last) {

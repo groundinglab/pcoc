@@ -31,6 +31,8 @@ pub struct App {
     dirty: Cell<bool>,
     /// The Produce raw-log expander. Kept across refreshes so it stays open.
     pub produce_log: RefCell<Option<gtk::Expander>>,
+    /// First instant a produce thread was finished while the phase was still running.
+    exit_seen: Cell<Option<std::time::Instant>>,
 }
 
 struct Shell {
@@ -75,6 +77,7 @@ impl App {
             tickers: RefCell::new(HashMap::new()),
             dirty: Cell::new(false),
             produce_log: RefCell::new(None),
+            exit_seen: Cell::new(None),
         });
         app.apply_theme();
         app.build_shell();
@@ -359,6 +362,8 @@ impl App {
             let Some(app) = weak.upgrade() else {
                 return glib::ControlFlow::Break;
             };
+            app.sync_gossip_from_run();
+            app.note_produce_liveness();
             let page = app.state.borrow().page;
             if let Some(tickers) = app.tickers.borrow().get(&page) {
                 let state = app.state.borrow();
@@ -369,6 +374,85 @@ impl App {
             app.refresh_status();
             glib::ControlFlow::Continue
         });
+    }
+
+    /// Copy the gossip thread's handshake census into the view. Events usually
+    /// arrive first. This covers a `Started` that reset the view after a count
+    /// was already published.
+    fn sync_gossip_from_run(&self) {
+        let census = {
+            let state = self.state.borrow();
+            state.produce_run.as_ref().and_then(|run| run.census())
+        };
+        let Some(census) = census else {
+            return;
+        };
+        let Some(snap) = census.snapshot() else {
+            return;
+        };
+        let mut state = self.state.borrow_mut();
+        if !state.produce.running() {
+            return;
+        }
+        let same = state.produce.peers == Some(snap.handshake)
+            && state.produce.sockets == Some(snap.sockets)
+            && state.produce.peer_addrs == snap.addrs
+            && state.produce.feed_stopped == snap.feed_stopped;
+        if same {
+            return;
+        }
+        state.produce.apply(ProduceEvent::Gossip {
+            peers: snap.handshake,
+            sockets: snap.sockets,
+            addrs: snap.addrs,
+        });
+        if snap.feed_stopped {
+            state.produce.apply(ProduceEvent::TipFeedStopped);
+        }
+    }
+
+    /// A produce thread that exits without a terminal event must not leave
+    /// the window looking like a live hike. One quiet second covers the
+    /// event already sitting in the channel.
+    fn note_produce_liveness(self: &Rc<Self>) {
+        let (running, finished) = {
+            let state = self.state.borrow();
+            let running = state.produce.running();
+            let finished = state.produce_run.as_ref().is_some_and(|run| run.finished());
+            (running, finished)
+        };
+        if !running || !finished {
+            self.exit_seen.set(None);
+            return;
+        }
+        let now = std::time::Instant::now();
+        let since = match self.exit_seen.get() {
+            Some(seen) => seen,
+            None => {
+                self.exit_seen.set(Some(now));
+                return;
+            }
+        };
+        if !live::produce_exit_is_unexpected(true, true, Some(now.saturating_duration_since(since)))
+        {
+            return;
+        }
+        self.exit_seen.set(None);
+        {
+            let mut state = self.state.borrow_mut();
+            let still = state.produce.running()
+                && state.produce_run.as_ref().is_some_and(|run| run.finished());
+            if !still {
+                return;
+            }
+            state.produce.apply(ProduceEvent::Failed {
+                message: live::PRODUCE_THREAD_EXITED.to_owned(),
+            });
+            state.produce_run = None;
+            state.produce_output = None;
+            state.hike_peer = None;
+        }
+        self.refresh_all();
     }
 
     /// Register a label update that runs once a second while `page` is shown.
@@ -922,7 +1006,10 @@ impl App {
         let emit: live::Emit = Arc::new(move |e| {
             let _ = tx.send_blocking(e);
         });
-        let run = live::start(LiveConfig::new(public_key, output.clone(), peer), emit);
+        let run = live::start(
+            LiveConfig::new(public_key, output.clone(), peer.clone()),
+            emit,
+        );
         {
             let mut s = self.state.borrow_mut();
             let now = s.now_ms();
@@ -937,6 +1024,7 @@ impl App {
             s.produce = produce;
             s.produce_output = Some(output);
             s.produce_run = Some(run);
+            s.hike_peer = Some(peer.unwrap_or_default());
         }
         self.listen_produce(rx);
         self.refresh_all();
@@ -955,6 +1043,7 @@ impl App {
                             let mut s = app.state.borrow_mut();
                             s.produce.phase = Phase::Idle;
                             s.produce_run = None;
+                            s.hike_peer = None;
                             s.result_path = None;
                             s.rescan();
                         }
@@ -968,6 +1057,7 @@ impl App {
                         };
                         s.produce_output = None;
                         s.produce_run = None;
+                        s.hike_peer = None;
                         s.result_path = None;
                         s.rescan();
                         drop(s);
@@ -979,6 +1069,7 @@ impl App {
                         if written {
                             let mut s = app.state.borrow_mut();
                             s.produce_run = None;
+                            s.hike_peer = None;
                             s.result_path = None;
                             s.rescan();
                         }
