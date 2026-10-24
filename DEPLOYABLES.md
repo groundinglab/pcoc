@@ -14,4 +14,4 @@ Everything in this repo that is deployed or published. Each one is released by a
 
 The SDKs are versioned libraries, not deployables. A current SDK tag is `sdk-<lang>-v2.3.x` (Rule I5). The current spec tag is `spec-2.3.0`. Earlier SDK and spec tags stay in the tag history.
 
-The website is deployed from groundinglab ops (`www/`), not from this repo.
+The website is deployed from groundinglab ops (`www/`), not from this repo. Do not copy the site into this repository. The Apps page for handing integration to a coding agent is live at https://groundinglab.io/apps/ai/. Its source is ops `www`.
