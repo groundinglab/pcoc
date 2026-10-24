@@ -1,9 +1,19 @@
-# groundinglab admission policy gl-admit-v11
+# groundinglab admission policy gl-admit-v12
 
-- **Status.** A policy file's `status` is one of `draft`, `active`, or `superseded`. `gl-admit-v11` is `active` in this repository. The live gate stays on `gl-admit-v10` until an explicit go (#115). This change does not deploy. `gl-admit-v10.toml` keeps `status` `active` until that swap, because that file is the live id and its bytes stay pinned. After the swap it becomes `superseded`. `gl-admit-v9` is `superseded`: it was live until 2026-10-23.
-- **Repo path (agreed layout).** `policy/groundinglab-admission/POLICY.md`, next to [`gl-admit-v11.toml`](gl-admit-v11.toml). [`gl-admit-v10.toml`](gl-admit-v10.toml) and [`gl-admit-v9.toml`](gl-admit-v9.toml) stay in this directory.
+- **Status.** A policy file's `status` is one of `draft`, `active`, or `superseded`. `gl-admit-v12` is `active` in this repository. It is the live successor when an ops cutover go lands (#127). It is not live on the host. This change does not deploy. `gl-admit-v11` is the prior id. [`gl-admit-v11.toml`](gl-admit-v11.toml) keeps `status` `active` until that swap, because that file's bytes stay pinned. After the swap it becomes `superseded`. [`gl-admit-v10.toml`](gl-admit-v10.toml) keeps `status` `active` and its bytes stay pinned. This repository's deploy config still names that file. `gl-admit-v9` is `superseded`: it was live until 2026-10-23.
+- **Repo path (agreed layout).** `policy/groundinglab-admission/POLICY.md`, next to [`gl-admit-v12.toml`](gl-admit-v12.toml). [`gl-admit-v11.toml`](gl-admit-v11.toml), [`gl-admit-v10.toml`](gl-admit-v10.toml), and [`gl-admit-v9.toml`](gl-admit-v9.toml) stay in this directory.
 - **Targets.** Satoshi Hike 2.3, tag `spec-2.3.0`. The public face is the six-doc pack under [`spec/`](../../spec/README.md) ([GUIDE](../../spec/GUIDE.md)). Admission levers are [Admission Process §15.4](../../spec/04-Admission_Process.md#sec-15-4). This document does not target `spec/satoshi-hike-v2.2/SPEC.md` or `spec/satoshi-hike-v2.3/SPEC.md`.
-- **Policy version.** The `policy_version` is the id `gl-admit-v11` plus the SHA-256 of `gl-admit-v11.toml`. Ops pins that SHA-256 in the deployment manifest at deploy time. There is no deploy in this change.
+- **Policy version.** The `policy_version` is the id `gl-admit-v12` plus the SHA-256 of `gl-admit-v12.toml`. Ops pins that SHA-256 in the deployment manifest at deploy time. There is no deploy in this change.
+
+## Changes from gl-admit-v11 (Christian, 24 Oct 2026, #127)
+
+| Field | v11 | v12 |
+|---|---|---|
+| `verify_cap_per_door_session` | 3 | unset (the key is omitted) |
+
+A valid PCOC is judged on merit: rate, waypoints, integrity, and a fake leg. It is not judged on how many times this door verified. The SPEC range lists unset. An absent key is that unset. The gate does not fill 3.
+
+Every other §15.4 lever and every `[policy_rules]` value is carried from v11. `leg_rate_floor` stays `{ p = 1, q = 10 }`. `sticky_refuse` stays `false`. `verify_cap_per_object` stays unset. `born_height` stays 972685. `min_anchored_paths` stays 6.
 
 ## Changes from gl-admit-v10 (Christian, 24 Oct 2026)
 
@@ -14,7 +24,7 @@
 | `submission_deadline_blocks` | set on v10 | omitted. [Admission Process](../../spec/04-Admission_Process.md) defines no tip-versus-last-beacon submit deadline (#119). It is not a §15.4 lever. |
 | `sticky_refuse` | no key (the gate always returned a stored refuse) | `false` in `[policy_rules]`. Off for testing. An absent key means the same. |
 
-`min_anchored_paths` stays 6. `born_height` stays 972685. Every other §15.4 lever is carried from v10.
+`min_anchored_paths` stays 6. `born_height` stays 972685. Every other §15.4 lever is carried from v10 into v11. v12 carries that table except `verify_cap_per_door_session`, which v12 omits.
 
 A policy sets the Admission Process §15.4 levers to values inside their ranges. It never changes a SPEC rule. Section 3 holds the behaviour that process leaves to policy. Changing any value or rule here needs a new id; ids are never reused. `gl-admit-v9.toml` is the id before v10. Its `status` is `superseded`. Earlier ids are kept only in ops `policy-bind.json`.
 
@@ -35,14 +45,14 @@ A policy sets the Admission Process §15.4 levers to values inside their ranges.
 | `fast_accept_bound` | 2 s | carried from v10 | Earlier `default`-profile figure. |
 | `async_catch_budget` | 22.05 s | carried from v10 | Times the parallel checkpoint-digest pass. It does not include recomputing legs. |
 | `verify_cap_per_object` | unset | carried from v10 | The earlier candidate was 1. Set it if compute abuse appears. |
-| `verify_cap_per_door_session` | 3 | carried from v10 | The range lists unset. This file sets 3. The gate reads the key. |
+| `verify_cap_per_door_session` | unset | omitted (#127) | v11 set 3. This file omits the key. Absent means unset: no session cap. The gate does not fill 3. A valid PCOC is judged on merit, not on a verify count. |
 | `fake_leg_ignore_seconds` | unset (no expiry) | carried from v10 | A fake leg ignores that key at this gate with no expiry. |
 
-`submission_deadline_blocks` is not a lever v11 sets. SPEC 2.3 dropped the tip-versus-last-beacon deadline (old Rule B10), and this file omits the key. `gl-admit-v9.toml` and `gl-admit-v10.toml` still contain it, so those files stay the bytes of the ids they already are. The gate ignores the key when it is present and does not require it when it is absent. It does not refuse with `submission_deadline`.
+`submission_deadline_blocks` is not a lever v12 sets. v11 omitted it too. SPEC 2.3 dropped the tip-versus-last-beacon deadline (old Rule B10), and this file omits the key. `gl-admit-v9.toml` and `gl-admit-v10.toml` still contain it, so those files stay the bytes of the ids they already are. The gate ignores the key when it is present and does not require it when it is absent. It does not refuse with `submission_deadline`.
 
 ## 2. Fixed by the SPEC, not set here
 
-`provisional_action_cap`, `revoke_scope`, the 6-leg round, the Rule B9 invariant refuses, and the fake-leg ignore itself are fixed by [Admission Process](../../spec/04-Admission_Process.md). So are: admission reads only a `production`-profile record, and a live-plane gate compares against the mainnet index only (Rule B9); the consumed-nonce row outlives the challenge window whatever `result_retention_seconds` is (§15.1 **Single-use**); and the policy-file encoding (§15.4 **Policy file encoding**), which `gl-admit-v11.toml` follows: exact lever names, `leg_rate_floor` as `{ p, q }`, and decimal seconds. Admission Process gives no lever a default. A policy must set every lever the SPEC still lists. An absent key means unset only for `verify_cap_per_object`, `verify_cap_per_door_session` and `fake_leg_ignore_seconds`, whose ranges list unset. `submission_deadline_blocks` is not in that list and is not required: the gate ignores it. Any other absent lever refuses the whole file, and so do an absent `policy_id`, `draw_commitment` or `born_height`. A key in `[levers]` that is not a §15.4 name refuses the whole file, except that retired key, which the gate ignores so `gl-admit-v9` and `gl-admit-v10` still load. With no policy file, or a refused one, the gate admits nothing.
+`provisional_action_cap`, `revoke_scope`, the 6-leg round, the Rule B9 invariant refuses, and the fake-leg ignore itself are fixed by [Admission Process](../../spec/04-Admission_Process.md). So are: admission reads only a `production`-profile record, and a live-plane gate compares against the mainnet index only (Rule B9); the consumed-nonce row outlives the challenge window whatever `result_retention_seconds` is (§15.1 **Single-use**); and the policy-file encoding (§15.4 **Policy file encoding**), which `gl-admit-v12.toml` follows: exact lever names, `leg_rate_floor` as `{ p, q }`, and decimal seconds. Admission Process gives no lever a default. A policy must set every lever the SPEC still lists. An absent key means unset only for `verify_cap_per_object`, `verify_cap_per_door_session` and `fake_leg_ignore_seconds`, whose ranges list unset. `submission_deadline_blocks` is not in that list and is not required: the gate ignores it. Any other absent lever refuses the whole file, and so do an absent `policy_id`, `draw_commitment` or `born_height`. A key in `[levers]` that is not a §15.4 name refuses the whole file, except that retired key, which the gate ignores so `gl-admit-v9` and `gl-admit-v10` still load. With no policy file, or a refused one, the gate admits nothing.
 
 Anchored-path inclusion is Bari's anchor window (offsets 2, 3, and 4). This policy sets no tip-versus-last-beacon submit deadline.
 
@@ -82,7 +92,7 @@ The gate logs `H(draw ‖ salt)` at the draw and reveals it with the result, so 
 
 ### P5. Born height
 
-`born_height` is **972685**. It lives in `[policy_rules]` of `gl-admit-v11.toml`. It is not an Admission Process §15.4 lever, and it is not a change to the Satoshi Hike 2.3 pack. The number can change by issuing a new policy id. It does not need a spec release.
+`born_height` is **972685**. It lives in `[policy_rules]` of `gl-admit-v12.toml`. The same number is in `gl-admit-v11.toml` and `gl-admit-v10.toml`. It is not an Admission Process §15.4 lever, and it is not a change to the Satoshi Hike 2.3 pack. The number can change by issuing a new policy id. It does not need a spec release.
 
 A height at or above `born_height` is production. A height below it is testing. If any stored height in the object (`beacon_height`, `last_interrupt_height`) or any claimed path block height is below `born_height`, the gate rejects the object with `before_born_height`. That decision is final. The job is terminal. It is not `held`, and waiting on the index will not change it.
 
@@ -96,7 +106,7 @@ A caller who receives `before_born_height` should stop. The object is a testing 
 
 [Admission Process](../../spec/04-Admission_Process.md) §15.2 says a pair closed `refused` or `revoked` under this policy version returns that outcome and does not open a new cycle. The gate's short circuit for that rule scans the chain for the same `public_key`, `object_sha256`, and `policy_id` with decision `refuse` or `revoke`, settles the nonce with the stored reason, and writes no new line.
 
-That short circuit is off. `[policy_rules] sticky_refuse` is `false` in [`gl-admit-v11.toml`](gl-admit-v11.toml). An absent key means the same. `gl-admit-v9.toml` and `gl-admit-v10.toml` do not name it, and their bytes stay pinned. While it is off, a later submission of a refused pair runs the fast phase again. If the object is still below the floor, the gate appends a new refuse line. The same reason text is a fresh decision.
+That short circuit is off. `[policy_rules] sticky_refuse` is `false` in [`gl-admit-v12.toml`](gl-admit-v12.toml) and in [`gl-admit-v11.toml`](gl-admit-v11.toml). An absent key means the same. `gl-admit-v9.toml` and `gl-admit-v10.toml` do not name it, and their bytes stay pinned. While it is off, a later submission of a refused pair runs the fast phase again. If the object is still below the floor, the gate appends a new refuse line. The same reason text is a fresh decision.
 
 Re-enable later by setting `sticky_refuse = true` in `[policy_rules]` of the policy file the process loads. The key is not a §15.4 lever. A value that is not a boolean refuses the file. The value is not part of the policy bind hash, so the flip does not need a new id and does not make a start fail against an existing `policy-bind.json`. This change does not deploy.
 
@@ -104,6 +114,6 @@ Re-enable later by setting `sticky_refuse = true` in `[policy_rules]` of the pol
 
 - Re-measure `leg_rate_floor` after further produces and issue the result as a new id (#115). The testing value is `{ p = 1, q = 10 }`.
 - Confirm the carried-over figures for `reverify_max_attempts`, `max_held_blocks`, `fast_accept_bound` and `async_catch_budget`.
-- Swap the live gate only after an explicit go. This repository change does not deploy, and it does not edit ops.
+- Host cutover to `gl-admit-v12` waits on an ops go (#127). `gl-admit-v12` is not live on the host. This repository change does not deploy, and it does not edit ops. `deploy/gate.toml` still names `gl-admit-v10.toml`.
 - `sticky_refuse` stays `false` while the same object is resubmitted for testing. Set it `true` when the stored-refuse short circuit should return.
-- The gate strip landed in #120. The loader accepts this file with the key omitted, and it ignores the key on v9 and v10. The live process keeps `gl-admit-v10` until an explicit go.
+- The gate strip landed in #120. The loader accepts a file with `submission_deadline_blocks` omitted, and it ignores the key on v9 and v10.

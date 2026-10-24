@@ -270,7 +270,8 @@ pub struct AdmissionPolicy {
     pub pending_global: u64,
     /// SPEC §15.4. `None` means the key is absent (unset: no session cap).
     /// [`AdmissionPolicy::default`] uses `Some(3)` to mirror gl-admit-v10.
-    /// That constructor is not a policy-file load path.
+    /// That constructor is not a policy-file load path. `gl-admit-v12`
+    /// omits the key, and `levers::load` of that file is `None`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub verify_cap_per_door_session: Option<u64>,
     /// Seconds between held retries. Read from the policy file.
@@ -308,6 +309,8 @@ pub struct AdmissionPolicy {
 /// Mirrors gl-admit-v10, including door-session cap 3. `Config::load` does
 /// not call this. A policy file goes through `levers::load`, which refuses
 /// a missing required lever and leaves an absent door-session cap unset.
+/// `gl-admit-v12` omits `verify_cap_per_door_session`. Loading that file
+/// yields `None`, not this `Some(3)`.
 /// Unit tests compile this impl. Integration tests compile it through the
 /// `test-util` feature. A release build compiles neither, so the service
 /// has no built-in policy table.

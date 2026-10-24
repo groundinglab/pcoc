@@ -57,6 +57,8 @@ The client sees one of three bodies. There is no `message` field and no field th
 
 Delivery OK is every completed response other than those two HTTP 400 bodies, including HTTP 413, 415, 429, and 503. The client shows `Sign-in submitted` for delivery OK. `unknown_challenge`, `expired`, and `reused` are not client codes.
 
+`POST /v1/sign-in` returns that body after the fast checks. It does not wait for thorough. Thorough runs in the background. A fake leg revokes the grant and bans the key. A thorough accept writes the friendly entry, and the result token becomes `accepted`. Until then the result token stays `pending`. A site should treat `{"delivery":"ok"}`, and a provisional grant that has not settled, as signed in immediately. That reading is for the site. This process does not call the site. This note adds no field to the body or the result (#127).
+
 `GET /v1/sign-in/result/<64 lowercase hex nonce>` returns HTTP 200.
 
 An unknown nonce, a nonce whose row has expired, and any token other than a consumed `pending` or `accepted`, is one field:
