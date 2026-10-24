@@ -2,7 +2,7 @@
 
 Satoshi Hike 2.3. The specification is [spec/satoshi-hike-v2.3/SPEC.md](../spec/satoshi-hike-v2.3/SPEC.md). Errata 1 and 2 are folded into that file. Where an SDK and that file disagree, the specification wins.
 
-The pack pin is [SPEC_PIN](SPEC_PIN): tag `spec-2.3.0` and the SHA-256 of [spec/conformance/pack/manifest.json](../spec/conformance/pack/manifest.json). There is no erratum key. The pack lists the vectors the four SDKs agree on, plus the Rust sign-in wire. The SDK version in [VERSION](VERSION) is `2.3.1`.
+The pack pin is [SPEC_PIN](SPEC_PIN): tag `spec-2.3.0` and the SHA-256 of [spec/conformance/pack/manifest.json](../spec/conformance/pack/manifest.json). There is no erratum key. The pack lists the vectors the four SDKs agree on, plus the Rust sign-in wire. The SDK version in [VERSION](VERSION) is `2.3.1`, a patch version that implements SPEC 2.3. The same file inside tag `spec-2.3.0` still carries the 2.2 pin line and is not the SDK pin; read this one.
 
 ## Which SDK
 

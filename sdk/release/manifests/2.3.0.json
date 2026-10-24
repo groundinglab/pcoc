@@ -4,7 +4,7 @@
     "version": "2.3.0",
     "date": "2026-10-23",
     "commit": "c689524395df0a983a0b955b5788d03cf0ba2e1e",
-    "notes": "Parent of the commit that adds this file. Tags are not cut."
+    "notes": "Tags are cut: spec-2.3.0 and sdk-{rust,go,c,java}-v2.3.0 (Go also sdk/go/v2.3.0). SDK patch tags implementing the same SPEC 2.3: sdk-rust-v2.3.1, sdk/go/v2.3.1, sdk-c-v2.3.1, sdk-java-v2.3.1 (C and Java 2.3.1 change only version strings). sdk/SPEC_PIN inside tag spec-2.3.0 still carries the 2.2 pin line; the current pin is sdk/SPEC_PIN on main and on the SDK tags (tag=spec-2.3.0)."
   },
   "spec": {
     "version": "2.3",
@@ -37,7 +37,7 @@
       "language": "rust",
       "version": "2.3.0",
       "tag": "sdk-rust-v2.3.0",
-      "tag_status": "not cut",
+      "tag_status": "cut",
       "toolchain_min": "Rust 1.99.0",
       "quickstart": {
         "commands": "cd sdk/rust\ncargo run -p pcoc-cli --release --quiet -- quickstart",
@@ -65,7 +65,7 @@
       "language": "c",
       "version": "2.3.0",
       "tag": "sdk-c-v2.3.0",
-      "tag_status": "not cut",
+      "tag_status": "cut",
       "toolchain_min": "gcc, C11, -march=x86-64",
       "quickstart": {
         "commands": "cd sdk/c\nmake -j4 build/pcoc\n./build/pcoc quickstart",
@@ -93,7 +93,7 @@
       "language": "go",
       "version": "2.3.0",
       "tag": "sdk-go-v2.3.0",
-      "tag_status": "not cut",
+      "tag_status": "cut",
       "toolchain_min": "Go 1.22 or newer",
       "quickstart": {
         "commands": "cd sdk/go\ngo run ./cmd/pcoc quickstart",
@@ -121,7 +121,7 @@
       "language": "java",
       "version": "2.3.0",
       "tag": "sdk-java-v2.3.0",
-      "tag_status": "not cut",
+      "tag_status": "cut",
       "toolchain_min": "JDK 21",
       "quickstart": {
         "commands": "cd sdk/java\n./gradlew run --args=quickstart",
