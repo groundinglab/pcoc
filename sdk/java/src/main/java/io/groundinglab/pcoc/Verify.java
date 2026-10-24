@@ -845,7 +845,8 @@ public final class Verify {
     private static String analysis(Stage[] stages, HeaderM[] headers, Reads reads, Long lastHeight, Book book,
                                    boolean malformed) {
         Long whole = sum(stages, 1, 17);
-        Long hike = sum(stages, 0, 17);
+        // Stages 1–17. Stage 0 is before the first interrupt and is not an admission leg.
+        Long hike = sum(stages, 1, 17);
         Json.Arr per = new Json.Arr();
         for (int g = 0; g < Const.STAGES; g++) {
             Json.Obj o = new Json.Obj();
@@ -904,15 +905,19 @@ public final class Verify {
         }
     }
 
-    /** §14.4 MTP. A missing time in the window is {@code not read}. */
+    /**
+     * §14.4 MTP from {@code I_0} ({@code headers[1]}) to {@code last_interrupt}
+     * ({@code headers[18]}). The seed beacon is not an endpoint. A missing time
+     * in the window is {@code not read}.
+     */
     private static String mtpSpan(Reads reads, HeaderM[] headers, Long lastHeight) {
-        if (!"match".equals(headers[0].cmp) || !"match".equals(headers[18].cmp)) {
+        if (!"match".equals(headers[1].cmp) || !"match".equals(headers[18].cmp)) {
             return Json.quote("not read");
         }
         long h0;
         long h1;
         try {
-            h0 = Long.parseLong(headers[0].height);
+            h0 = Long.parseLong(headers[1].height);
             h1 = Long.parseLong(headers[18].height);
         } catch (NumberFormatException e) {
             return Json.quote("not read");

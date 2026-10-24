@@ -707,6 +707,25 @@ async fn a_readable_hike_is_done_not_held() {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../sdk/rust/objects/O3-PROD.cbor"),
     )
     .expect("O3");
+    // Christian relocated the admit start off the seed beacon to I_0
+    // (stages[1].beacon). The old pair was checkpoints over stages 0–17 and
+    // MTP(seed)→MTP(last_interrupt). O3's index times are 5 s per height, so
+    // the span is 5 * (end − start). Stage 0 is not in hike_legs.
+    let parsed = pcoc::decode_object(&object).expect("O3");
+    let seed = parsed.stages[0].beacon_height;
+    let i0 = parsed.stages[1].beacon_height;
+    let last = parsed.last_interrupt_height;
+    let legs_admit: usize = parsed.stages[1..]
+        .iter()
+        .map(|stage| stage.checkpoints.len())
+        .sum();
+    let legs_with_seed: usize = parsed
+        .stages
+        .iter()
+        .map(|stage| stage.checkpoints.len())
+        .sum();
+    assert!(i0 > seed, "the seed sits before the first interrupt");
+    assert!(legs_with_seed > legs_admit, "stage 0 has checkpoints");
     let index = index_for_hike(&object);
     let dir = scratch("hike-read");
     let router = opened(dir.clone(), &index.base, |cfg| {
@@ -724,8 +743,24 @@ async fn a_readable_hike_is_done_not_held() {
     .await;
     assert_eq!(job["status"], "done", "{job}");
     assert_eq!(job["record"]["shape"], "match", "{job}");
-    assert_eq!(job["record"]["analysis"]["hike_legs"], 18, "{job}");
-    assert_eq!(job["record"]["analysis"]["hike_span"], 90, "{job}");
+    assert_eq!(
+        job["record"]["analysis"]["hike_legs"], legs_admit as i64,
+        "{job}"
+    );
+    assert_ne!(
+        job["record"]["analysis"]["hike_legs"], legs_with_seed as i64,
+        "stage 0 is not an admission leg"
+    );
+    assert_eq!(
+        job["record"]["analysis"]["hike_span"],
+        5 * (last as i64 - i0 as i64),
+        "{job}"
+    );
+    assert_ne!(
+        job["record"]["analysis"]["hike_span"],
+        5 * (last as i64 - seed as i64),
+        "seed→last is not the admit span"
+    );
     assert!(job["record"]["headers"].is_array(), "{job}");
     assert!(job.get("error").is_none(), "{job}");
     assert_eq!(job["policy_id"], "gl-admit-v10");
@@ -895,7 +930,7 @@ fn height_span(object: &[u8]) -> (u64, u64) {
 }
 
 /// Headers whose natural hash is the object's beacon, 5 s apart, so
-/// `MTP(last) − MTP(first)` is `5 * (last − first)` = 90 s for O3.
+/// `MTP(end) − MTP(start)` is `5 * (end − start)`.
 fn index_for_hike(object: &[u8]) -> Index {
     index_for_hike_from(object, 0)
 }

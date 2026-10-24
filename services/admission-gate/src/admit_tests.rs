@@ -305,7 +305,9 @@ fn sample(clock: Clock, height: u64, last: u64) -> i128 {
 }
 
 fn realized(obj: &HikeObject, clock: Clock) -> i128 {
-    let first = obj.stages[0].beacon_height;
+    // Christian relocated the admit start off the seed beacon to the first
+    // interrupt. The seed can sit before produce starts; it is not an endpoint.
+    let first = obj.stages[1].beacon_height;
     let last = obj.last_interrupt_height;
     pcoc::hike_span(first, last, |height| Some(sample(clock, height, last))).unwrap_or(0)
 }
@@ -467,7 +469,9 @@ fn needed_heights(obj: &HikeObject) -> BTreeSet<u64> {
         heights.insert(obj.last_interrupt_height);
     }
     let mut windows = Vec::new();
-    if let Some(first) = obj.stages.first() {
+    // MTP windows for the admit endpoints: I_0 and last_interrupt.
+    // Christian relocated the admit start off the seed beacon.
+    if let Some(first) = obj.stages.get(1) {
         windows.push(first.beacon_height);
     }
     if obj.has_last_height {

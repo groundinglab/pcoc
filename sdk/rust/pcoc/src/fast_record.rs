@@ -4,17 +4,25 @@
 //! This module does not fill a terrain, does not draw, and does not call
 //! [`crate::step::leg_result`]. The median-time rule is the same one §14
 //! uses (erratum E26: do not link previous-hash).
+//!
+//! The admit pair starts at the first interrupt `I_0` (`stages[1].beacon`)
+//! and ends at `last_interrupt`. Stage 0 is not in `hike_legs`. The seed
+//! beacon is not an endpoint.
 
 use crate::constants::{HEIGHT_MAX, MTP_WINDOW};
 use crate::object::HikeObject;
 
-/// Checkpoint count over stages 0–17. `None` when the object is not 18 stages
+/// Checkpoint count over stages 1–17. Stage 0 is before the first interrupt
+/// and is not an admission leg. `None` when the object is not 18 stages
 /// (`not defined` on the §14 record).
 pub fn hike_legs(obj: &HikeObject) -> Option<i128> {
     if obj.stages.len() != 18 {
         return None;
     }
-    let n: usize = obj.stages.iter().map(|stage| stage.checkpoints.len()).sum();
+    let n: usize = obj.stages[1..]
+        .iter()
+        .map(|stage| stage.checkpoints.len())
+        .sum();
     Some(n as i128)
 }
 

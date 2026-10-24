@@ -230,7 +230,9 @@ fn hike_pair(
     let Some(legs) = pcoc::hike_legs(obj) else {
         return Err(held(None));
     };
-    let Some(first) = obj.stages.first().map(|stage| stage.beacon_height) else {
+    // Admit clock: I_0 = stages[1].beacon through last_interrupt.
+    // The seed beacon is not an endpoint.
+    let Some(first) = obj.stages.get(1).map(|stage| stage.beacon_height) else {
         return Err(held(None));
     };
     if !obj.has_last_height {

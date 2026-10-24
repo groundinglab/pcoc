@@ -61,6 +61,8 @@ Cites such as “section 14” use these homes:
 
 **Core:** a measurement record plus a policy instance → decide. The Gate/sign-in machine in Admission Process is the consume-then-decide procedure around that core. Lever values stay in the policy instance.
 
+The hike pair the floor reads is `(hike_legs, hike_span)` from Measurement Rule A4.10: checkpoints over stages 1–17, and `MTP(I_17) − MTP(I_0)`. `I_0` is `stages[1].beacon`, the first interrupt. `I_17` is `last_interrupt`. The seed beacon is not an endpoint, and stage 0 is not in `hike_legs`. Bookend `N` and `S`, and `whole_hike_span`, are not this pair.
+
 | Need | Document |
 |---|---|
 | Object shape (inherited) | [01 — Construction](./01-Satoshi_Hike_Construction.md) |

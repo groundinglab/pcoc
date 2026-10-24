@@ -781,7 +781,6 @@ func bookends(rb *recordBody, o *Object, get func(uint64) *IndexDoc) {
 
 func analysis(rb *recordBody, o *Object) {
 	whole := 0
-	hike := 0
 	for g := 0; g < Stages; g++ {
 		st := stageAt(o, g)
 		c := 0
@@ -789,14 +788,14 @@ func analysis(rb *recordBody, o *Object) {
 			c = len(st.Checkpoints)
 		}
 		rb.perCount[g] = c
-		hike += c
+		// Stages 1–17 only. Stage 0 is before the first interrupt.
 		if g >= 1 {
 			whole += c
 		}
 		rb.perSpan[g] = spanOf(rb, g)
 	}
 	rb.wholeLegs = whole
-	rb.hikeLegs = hike
+	rb.hikeLegs = whole
 	// whole span T(I_17) − T(I_0) = headers[18].T − headers[1].T
 	rb.wholeSpan = subT(rb.headers[18], rb.headers[1])
 	rb.hikeSpan = mtp(rb, o)
@@ -820,18 +819,23 @@ func subT(a, b hdr) string {
 	return strconv.FormatInt(a.tInt-b.tInt, 10)
 }
 
-// mtp is Rule A4.10 median-time-past of the first and the last beacon.
-// The beacon's own time is taken only when that header's index_comparison
-// is match and the time follows section 9. Each other window document
-// contributes header.time when the read returned a document, header.height
-// equals the requested height, and the time follows section 9. The window
-// is not linked by previous-hash (SPEC §14.4).
+// mtp is Rule A4.10 median-time-past from the first interrupt (I_0,
+// stages[1].beacon, headers[1]) to the last interrupt (headers[18]).
+// The seed beacon is not an endpoint. The beacon's own time is taken only
+// when that header's index_comparison is match and the time follows
+// section 9. Each other window document contributes header.time when the
+// read returned a document, header.height equals the requested height, and
+// the time follows section 9. The window is not linked by previous-hash
+// (SPEC §14.4).
 func mtp(rb *recordBody, o *Object) string {
-	st0 := stageAt(o, 0)
-	if !st0.HasHeight || st0.HeightAbove || !o.HasLastInterruptHeight || o.LastHeightAbove {
+	firstStage := stageAt(o, 1)
+	if !firstStage.HasHeight || firstStage.HeightAbove || !o.HasLastInterruptHeight || o.LastHeightAbove {
 		return "not read"
 	}
-	first := mtpAt(rb, st0.BeaconHeight, rb.headers[0])
+	if len(rb.headers) < 19 {
+		return "not read"
+	}
+	first := mtpAt(rb, firstStage.BeaconHeight, rb.headers[1])
 	last := mtpAt(rb, o.LastInterruptHeight, rb.headers[18])
 	if first < 0 || last < 0 {
 		return "not read"
