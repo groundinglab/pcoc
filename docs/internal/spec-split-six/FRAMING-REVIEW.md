@@ -1,6 +1,6 @@
 # Framing review — split-six vs locked frame (2026-10-24)
 
-**Status.** Framing locked with Christian 2026-10-24. **Boundary relocation applied** the same day (cut-paste homes; FRAMING/HOLD markers; no new object rules; not merged). GB review on #119: **PASS-with-nits** (FRAMING-only). Developer reader paths: [GUIDE.md](../../../spec/GUIDE.md). See [INTENT.md](../../../spec/INTENT.md) and [GB-REVIEW-BRIEF.md](./GB-REVIEW-BRIEF.md).
+**Status.** Framing locked with Christian 2026-10-24. **Boundary relocation applied** the same day (cut-paste homes; framing notes; no new object rules). GB review on #119: **PASS-with-nits** (framing only). Developer reader paths: [GUIDE.md](../../../spec/GUIDE.md). See [INTENT.md](../../../spec/INTENT.md) and [GB-REVIEW-BRIEF.md](./GB-REVIEW-BRIEF.md).
 
 **How to read this file.** Sections **01–06** below keep historical **(b)/(c)** notes from *before* the relocate commit `8115a6c`. They are **pre-relocation drift notes**, not a claim that the current pack still mixes those homes. **Post-relocation status** for each doc is the short line under the section heading. Cross-cutting and nits at the bottom describe the pack **after** relocate (+ GUIDE / FRAMING nits).
 
@@ -12,7 +12,7 @@
 - **Language:** **valid** → **measured** → **admitted** (do not use “verified” loosely).
 - **Waypoint Publication** = our scoped Bitcoin-anchor channel (batching). **Construction** owns the two-way Bitcoin bind; direct-to-Bitcoin is out of scope here but allowed as a different mechanism.
 - **Admission Process** = generic, value-free consumer of a measurement record + a policy; `gl-admit-*` stays **outside** the pack.
-- **K tip submit-deadline** is the wrong job; Bari fetchability is the real include window. **Do not remove K from body text yet** — only note misplaced placement.
+- **Tip-versus-last-beacon submit deadline** is not part of this specification. Bari fetchability is the include window. That deadline was removed from the public pack.
 
 ---
 
@@ -60,13 +60,13 @@
 
 ## 04 — Admission Process
 
-**Post-relocation.** Value-free framing; K/B10 HOLD (body preserved); lever values → policy; state-table “6” and first B10 row carry FRAMING/HOLD pointers.
+**Post-relocation.** Value-free framing. The tip-versus-last-beacon submit deadline was removed from the public pack. Lever values stay in policy.
 
 **(a) Locked frame says.** Generic, **value-free**: how a gate consumes a measurement record + a policy instance → accept / refuse / log. No groundinglab numbers. Policy instances (`gl-admit-*`) live outside the SPEC pack. Gate *service* runbooks stay ops.
 
 **(b) Pre-relocation note (historical).** Already stated that this file sets **no lever defaults** and that a policy is a separate document — good. **Drift:** it still embeds the full Gate state machine, sign-in wire, groundinglab Gate as the running example, lever **ranges** including **`submission_deadline_blocks` (K) / Rule B10**, and decision vocabulary tied to that service shape. That is far thicker than “generic consumer.”
 
-**(c) Pre-relocation recommended boundary (HOLD applied; thin split still later).** Split mentally: (1) thin Admission Process in the pack; (2) policy instance outside; (3) Gate deployment docs in ops. **K / Rule B10:** under the locked frame this is the wrong job (Bari fetchability is the include window; ≥6 anchors is a policy value). **Note only — do not delete from body yet.** When process allows, retire tip-vs-last-beacon deadline from the generic process (and from F16’s “do not reintroduce” story in Conformance, which currently *defends* K).
+**(c) Pre-relocation recommended boundary (deadline later removed from the public pack; thin split still later).** Split mentally: (1) thin Admission Process in the pack; (2) policy instance outside; (3) Gate deployment docs in ops. **Tip-versus-last-beacon submit deadline:** under the locked frame this is the wrong job (Bari fetchability is the include window; ≥6 anchors is a policy value). It was later removed from Admission and from Conformance (the old F16 row). No replacement deadline.
 
 **Design-time vs runtime blur.** High: normative Gate runtime behaviour and design-time “how to build a gate” are the same huge §15.
 
@@ -74,7 +74,7 @@
 
 ## 05 — Conformance Process
 
-**Post-relocation.** FRAMING states definitional pair; F16 HOLD/revisit when K retires; responsibility line aligned to “test-specification half of the pair” (optional nit).
+**Post-relocation.** FRAMING states the definitional pair. The old F16 row left with the tip deadline. Responsibility line aligned to “test-specification half of the pair”.
 
 **(a) Locked frame says.** Test specification paired with Construction: yes/no rules + vectors. Design-time for **both** producer and verifier authors; same rules used at runtime by a verifier to confirm validity before measuring quantities. Admission is **not** a conformance target.
 
@@ -106,10 +106,10 @@
 |---|---|
 | Definitional pair | README and GUIDE state Construction + Conformance as the definitional pair. |
 | Reader paths | [GUIDE.md](../../../spec/GUIDE.md) gives producer / verifier / gate / policy-tuner document lists. README points at GUIDE. |
-| K deadline | Lives in Admission (Rule B10) and is defended in Conformance F16. Wrong job per locked frame; Bari serve window is the real include window. **HOLD markers applied 2026-10-24** (body preserved; not silently deleted). First B10 state-table row points at the HOLD banner. |
+| Tip deadline | Removed from the public pack. Bari’s anchor window is the include constraint. No replacement deadline. |
 | Hardcoded “6” vs B4 | Pre-existing in ratified 2.3. Construction A4.5.2 and one Admission `received` state cell say “6”; Rule B4 uses lever `min_anchored_paths`. **FRAMING nits only** on those sentences — wording left. |
 | Bari-skip vs direct Bitcoin | Producer §13.1 / §13.5 “does not define a path that skips Bari” + Waypoint/glossary out-of-scope direct-to-Bitcoin agree; FRAMING pointers link them. Inherited sentences unchanged. |
-| Verbatim split | Bodies remain section lifts; relocation is cut-paste of homes + FRAMING/HOLD notes. Glossary/INTENT/README/GUIDE state the locked frame. |
+| Verbatim split | Bodies remain section lifts; relocation is cut-paste of homes plus framing notes. Glossary/INTENT/README/GUIDE state the locked frame. |
 
 ## Pack picture (locked)
 
