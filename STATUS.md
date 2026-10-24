@@ -6,10 +6,10 @@ What is specified, what has been measured, and what is open. This page is not th
 
 | Item | Label | Where |
 |---|---|---|
-| Satoshi Hike 2.3 | the specification | [spec/satoshi-hike-v2.3/SPEC.md](spec/satoshi-hike-v2.3/SPEC.md) |
+| Satoshi Hike 2.3 | the specification pack (six docs + GUIDE) | [spec/](spec/) — start at [spec/GUIDE.md](spec/GUIDE.md) |
 | Tag `spec-2.3.0` | cut by the maintainers on the merge commit | `sdk/SPEC_PIN` |
 | Pack `pack-2.2.0` | complete; the pack id is unchanged on the 2.3 pin | [spec/conformance/pack/](spec/conformance/pack/) |
-| Satoshi Hike 2.2 | kept for the record, tag `spec-2.2.0` | [spec/satoshi-hike-v2.2/SPEC.md](spec/satoshi-hike-v2.2/SPEC.md) |
+| Satoshi Hike 2.2 | kept for the record on `main` / tag `spec-2.2.0` (not on this branch’s public `spec/` face) | tag `spec-2.2.0` |
 | groundinglab policy | policy, not the specification | [policy/groundinglab-admission/](policy/groundinglab-admission/) |
 
 ## Measured

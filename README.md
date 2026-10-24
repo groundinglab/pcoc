@@ -154,7 +154,7 @@ sdk/rust/target/release/pcoc produce --rig --case s1 --public-key HEX --out obje
 
 | Folder | What is in it | Test it with |
 |---|---|---|
-| [spec/](spec/) | The Satoshi Hike 2.3 specification and its conformance pack. Version 2.2 stays in [spec/satoshi-hike-v2.2](spec/satoshi-hike-v2.2/) for the record | `python3 spec/conformance/tools/ring1_checks.py` |
+| [spec/](spec/) | Satoshi Hike 2.3 as six documents + [GUIDE](spec/GUIDE.md); vectors in [spec/conformance/pack/](spec/conformance/pack/) | See [spec/GUIDE.md](spec/GUIDE.md) |
 | [sdk/](sdk/) | The 2.3.1 SDKs. Rust, C, Go, and Java are in this tree | `cargo test --workspace --locked` in `sdk/rust`; `bash sdk/rust/check/negatives.sh` |
 | [services/](services/) | Bari (the anchoring service), the index, the Admission Gate, the claims service, and a Cloudflare Worker. Each builds alone | `cargo test --locked --release` in each Rust service; `node --test test/` in `cf-claims-worker` |
 | [apps/](apps/) | The desktop app (Linux), and notes and checks for the Android app | `cargo test --locked -p pcoc-hike-core` in `apps/desktop` |

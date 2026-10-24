@@ -1,6 +1,0 @@
-fill_scalar_s=0.434 fill_dispatch_s=0.434 identical=1 avx512dq=0 avx2=1
-leg_scalar_s=4.880 leg_avx2_s=3.173 equal=1 leg_le_hex=88a04ac5beacb8a7
-fill_scalar_s=0.437 fill_dispatch_s=0.437 identical=1 avx512dq=0 avx2=1
-leg_scalar_s=4.846 leg_avx2_s=3.195 equal=1 leg_le_hex=88a04ac5beacb8a7
-fill_scalar_s=0.435 fill_dispatch_s=0.437 identical=1 avx512dq=0 avx2=1
-leg_scalar_s=4.834 leg_avx2_s=3.169 equal=1 leg_le_hex=88a04ac5beacb8a7

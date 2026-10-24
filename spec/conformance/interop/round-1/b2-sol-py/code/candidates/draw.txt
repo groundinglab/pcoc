@@ -1,3 +1,0 @@
-draw.legs.18.indices	7,2,1,15,10,16
-draw.legs.54.indices	7,20,1,51,10,16
-draw.legs.6.indices	1,2,3,4,0,5
