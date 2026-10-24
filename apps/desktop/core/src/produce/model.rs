@@ -888,17 +888,17 @@ mod tests {
             sockets: 2,
             addrs: Vec::new(),
         });
-        let panel = view.gossip_panel(Some("192.168.20.153:8333"));
+        let panel = view.gossip_panel(Some("203.0.113.10:8333"));
         assert_eq!(panel.peers, GOSSIP_CONNECTING);
         assert_eq!(
             panel.from,
-            "Named override 192.168.20.153:8333, then DNS seeds"
+            "Named override 203.0.113.10:8333, then DNS seeds"
         );
 
         view.apply(ProduceEvent::Gossip {
             peers: 1,
             sockets: 2,
-            addrs: vec!["192.168.20.153:8333".into()],
+            addrs: vec!["203.0.113.10:8333".into()],
         });
         view.apply(ProduceEvent::Tip {
             height: 971_174,
@@ -906,10 +906,10 @@ mod tests {
             peers: None,
             header_seen_unix_ms: 1_700_000_000_000,
         });
-        let panel = view.gossip_panel(Some("192.168.20.153:8333"));
+        let panel = view.gossip_panel(Some("203.0.113.10:8333"));
         assert_eq!(panel.peers, "1 connected");
         assert_eq!(panel.status, GOSSIP_NEED_TWO);
-        assert_eq!(panel.addrs, "192.168.20.153:8333");
+        assert_eq!(panel.addrs, "203.0.113.10:8333");
         assert_eq!(panel.note, GOSSIP_AGREE);
         assert!(panel.header.starts_with("971,174 · "), "{}", panel.header);
         assert!(panel.header.contains(&crate::hex::prefix(&[0x11; 32])));
@@ -918,9 +918,9 @@ mod tests {
         view.apply(ProduceEvent::Gossip {
             peers: 2,
             sockets: 2,
-            addrs: vec!["192.168.20.153:8333".into(), "173.212.199.219:8333".into()],
+            addrs: vec!["203.0.113.10:8333".into(), "203.0.113.11:8333".into()],
         });
-        let panel = view.gossip_panel(Some("192.168.20.153:8333"));
+        let panel = view.gossip_panel(Some("203.0.113.10:8333"));
         assert_eq!(panel.peers, "2 connected");
         assert_eq!(panel.status, GOSSIP_TIP_LIVE);
         assert_eq!(panel.status_tone, "teal");

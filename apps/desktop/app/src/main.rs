@@ -105,7 +105,7 @@ mod sample {
     /// Paint one Gossip panel state on the sample hike. Not a live dial.
     fn preview_gossip(state: &mut State, mode: &str) {
         use pcoc_hike_core::produce::model::{Phase, GOSSIP_NEED_TWO};
-        let named = "192.168.20.153:8333";
+        let named = "203.0.113.10:8333";
         match mode {
             "connecting" => {
                 state.produce.phase = Phase::Starting;
@@ -140,7 +140,7 @@ mod sample {
             "live" => {
                 state.produce.peers = Some(2);
                 state.produce.sockets = Some(2);
-                state.produce.peer_addrs = vec![named.to_owned(), "173.212.199.219:8333".into()];
+                state.produce.peer_addrs = vec![named.to_owned(), "203.0.113.11:8333".into()];
                 state.produce.feed_stopped = false;
                 state.produce.gossip_alert = None;
                 state.hike_peer = Some(named.to_owned());

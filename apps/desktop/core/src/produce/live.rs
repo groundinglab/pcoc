@@ -530,7 +530,7 @@ mod tests {
             Some(PeerSnapshot {
                 handshake: 2,
                 sockets: 2,
-                addrs: vec!["192.168.20.153:8333".into(), "173.212.199.219:8333".into()],
+                addrs: vec!["203.0.113.10:8333".into(), "203.0.113.11:8333".into()],
                 feed_stopped: false,
             }),
         );
@@ -581,7 +581,7 @@ mod tests {
         census.write(
             2,
             2,
-            vec!["192.168.20.153:8333".into(), "173.212.199.219:8333".into()],
+            vec!["203.0.113.10:8333".into(), "203.0.113.11:8333".into()],
         );
         let event = rx
             .recv_timeout(Duration::from_secs(2))
@@ -597,8 +597,8 @@ mod tests {
                 assert_eq!(
                     addrs,
                     vec![
-                        "192.168.20.153:8333".to_owned(),
-                        "173.212.199.219:8333".to_owned()
+                        "203.0.113.10:8333".to_owned(),
+                        "203.0.113.11:8333".to_owned()
                     ]
                 );
             }
