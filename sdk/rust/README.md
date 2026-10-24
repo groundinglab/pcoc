@@ -2,7 +2,7 @@
 
 Satoshi Hike 2.3. The construction and the verifier are the `pcoc` crate. `pcoc-produce` is the scripted rig and the live producer. The `pcoc` command is `verify`, `selftest`, `candidates`, and `produce`.
 
-The specification is [spec/satoshi-hike-v2.3/SPEC.md](../../spec/satoshi-hike-v2.3/SPEC.md). Errata 1 and 2 are folded into that file. Where this tree and that file disagree, the specification wins.
+The specification is the [Satoshi Hike 2.3 pack](../../spec/README.md). Errata 1 and 2 are folded into that pack. Where this tree and that pack disagree, the specification wins.
 
 Rust 1.99.0 (`rust-toolchain.toml`). Release and test builds target the baseline ISA (`target-cpu=x86-64` in `.cargo/config.toml`). SHA-256 uses the `sha2` crate, which selects SHA-NI at runtime when the host has it.
 

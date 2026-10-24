@@ -3,21 +3,21 @@
 
 Run from the repository root. Exit 1 on any failure. Short and deterministic.
 
-This script reads spec/satoshi-hike-v2.3/SPEC.md, spec/conformance/pack/, and
-sdk/SPEC_PIN. Errata 1 and 2 are folded into that SPEC, so the pin has no
-erratum key. spec/satoshi-hike-v2.2/ERRATUM-1.md remains the negative
-reference table the harness parses; this script checks that file still names
-the 2.2 SPEC.
+This script reads the public six-document pack under spec/, spec/conformance/pack/,
+sdk/SPEC_PIN, and the harness negative table sdk/conformance/erratum-negatives.tsv.
+Section 6 lives in Construction. Section 15.1 lives in Admission. The tag sentence
+lives in Conformance (Rule I5). The negative table is the same rows the cross-verify
+harness used to parse from the removed 2.2 erratum file. It is not a second specification.
 
 Replacements for the four 2.0 checks:
 
-1. Section 6 vs constants.json (22 names). The 2.2 pack has no constants.json:
+1. Section 6 vs constants.json (22 names). The pack has no constants.json:
    the previous file named another KIND and a seed-domain label, and section 6
    says there is no seed-domain label. The replacement parses the section 6
-   table in SPEC.md and checks each name against the value written there.
+   table in Construction and checks each name against the value written there.
 2. sign-in.json locks the wire. The pack publishes sign-in.json and
    sign-in-origins.json. The check reads the section 15.1 sentences in
-   SPEC.md and the example digest in sign-in.json.
+   Admission and the example digest in sign-in.json.
 3. Relative links under spec/ stay inside spec/, with the same spec/README.md
    parent allowlist.
 4. A hash of every file under spec/conformance/ except tools/. Rule I5 pins the
@@ -27,8 +27,10 @@ Replacements for the four 2.0 checks:
 """
 import hashlib, json, os, re, sys
 
-SPEC = "spec/satoshi-hike-v2.3/SPEC.md"
-ERRATUM = "spec/satoshi-hike-v2.2/ERRATUM-1.md"
+CONSTRUCTION = "spec/01-Satoshi_Hike_Construction.md"
+ADMISSION = "spec/04-Admission_Process.md"
+CONFORMANCE = "spec/05-Conformance_Process.md"
+NEGATIVES = "sdk/conformance/erratum-negatives.tsv"
 PACK = "spec/conformance/pack"
 PIN = "sdk/SPEC_PIN"
 # spec/README.md may link these repository parents. No other page under spec/ may.
@@ -81,13 +83,13 @@ def spec_value(raw):
         return m.group(1)
     return int(raw.split()[0])
 
-spec = open(SPEC, encoding="utf-8").read()
-erratum = open(ERRATUM, encoding="utf-8").read()
+construction = open(CONSTRUCTION, encoding="utf-8").read()
+admission = open(ADMISSION, encoding="utf-8").read()
+conformance = open(CONFORMANCE, encoding="utf-8").read()
 
-check("erratum names SPEC.md", "spec/satoshi-hike-v2.2/SPEC.md" in erratum)
-check("SPEC tag sentence", "Its tag is `spec-2.3.0`." in spec)
+check("SPEC tag sentence", "tag is `spec-2.3.0`." in conformance)
 
-sec6 = spec[spec.index("## 6. Constants"):]
+sec6 = construction[construction.index("## 6. Constants"):]
 sec6 = sec6[: sec6.index("\n## 7")]
 rows = re.findall(r"^\| `([A-Z][A-Z0-9_]+)` \| (.+?) \|$", sec6, re.M)
 parsed = {name: spec_value(raw) for name, raw in rows}
@@ -104,7 +106,7 @@ for needle in (
     "`rejected`",
     "`unknown_kind`",
 ):
-    check(f"section15.1 {needle}", needle in spec, needle)
+    check(f"section15.1 {needle}", needle in admission, needle)
 manifest = json.load(open(f"{PACK}/manifest.json", encoding="utf-8"))
 listed = set(manifest.get("files", []))
 check("pack lists sign-in.json", "sign-in.json" in listed and "sign-in-origins.json" in listed)
@@ -142,6 +144,20 @@ manifest_bytes = open(f"{PACK}/manifest.json", "rb").read()
 digest = hashlib.sha256(manifest_bytes).hexdigest()
 check("SPEC_PIN tag", pin.get("tag") == "spec-2.3.0", pin.get("tag", ""))
 check("SPEC_PIN has no erratum key", "erratum" not in pin, pin.get("erratum", ""))
+neg_rows = {}
+for line in open(NEGATIVES, encoding="utf-8"):
+    line = line.strip()
+    if not line or line.startswith("#"):
+        continue
+    key, val = line.split("\t", 1)
+    neg_rows[key] = val
+check(
+    "negative table keys",
+    "honest.legs_le_hex" in neg_rows and "squeezed_seed_terrain.terrain_sha256" in neg_rows,
+)
+pack_neg = json.load(open(f"{PACK}/negatives.json", encoding="utf-8"))["values"]
+for key, val in neg_rows.items():
+    check(f"negative table {key}", pack_neg.get(f"negatives.{key}") == val, key)
 check("SPEC_PIN vector-sha256", pin.get("vector-sha256") == digest, f"pin={pin.get('vector-sha256')} file={digest}")
 for name in sorted(listed):
     check(f"pack file {name}", os.path.isfile(os.path.join(PACK, name)), name)

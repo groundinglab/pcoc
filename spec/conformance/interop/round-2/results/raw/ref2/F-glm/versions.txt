@@ -1,4 +1,0 @@
-Linux ref2 6.1.0-53-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.1.187-1 (2026-09-07) x86_64 GNU/Linux
-gcc (Debian 12.2.0-14+deb12u1) 12.2.0
-Swift version 6.1.2 (swift-6.1.2-RELEASE)
-Target: x86_64-unknown-linux-gnu

@@ -1,1 +1,0 @@
-cc -O3 -DNDEBUG -fPIC -Wall -Wextra -Wpedantic -march=native -I~/interop-r2/toolchains/ssl/usr/include -I~/interop-r2/toolchains/ssl/usr/include/x86_64-linux-gnu -shared -o impl/native/libhike.so impl/native/hike.c -Wl,-l:libcrypto.so.3

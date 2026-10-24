@@ -6,7 +6,7 @@ New here: start with [Where does the trouble start?](briefs/where-does-the-troub
 
 To run the pieces for your own site, see [Run it under your own name](run-under-your-own-name.md).
 
-The normative text is [the specification](../spec/satoshi-hike-v2.3/SPEC.md). The pack is [spec/conformance/pack](../spec/conformance/pack/). The tested SDKs are [sdk/](../sdk/).
+The normative pack is [spec/](../spec/) — start with [GUIDE.md](../spec/GUIDE.md). Vectors are [spec/conformance/pack](../spec/conformance/pack/). The tested SDKs are [sdk/](../sdk/).
 
 ## Briefs: the questions
 
