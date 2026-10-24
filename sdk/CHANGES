@@ -2,7 +2,7 @@
 
 ## 2.3.0
 
-Satoshi Hike 2.3. Errata 1 and 2 are folded into `spec/satoshi-hike-v2.3/SPEC.md`. `sdk/SPEC_PIN` names tag `spec-2.3.0` and the SHA-256 of the pack manifest. There is no `erratum` key.
+Satoshi Hike 2.3. Errata 1 and 2 are folded into the public six-doc face under `spec/` (`README.md`, `GUIDE.md`, and `01`–`06`). `sdk/SPEC_PIN` names tag `spec-2.3.0` and the SHA-256 of the pack manifest. There is no `erratum` key.
 
 No object byte changes. `KIND` stays `v2.2-pcoc-object`. The pack id stays `pack-2.2.0`. The pack manifest bytes and `vector-sha256` `91ded57e5c05b7cb4cd74d313a51d83d2373fa86dc625df41faed9586e9032af` are unchanged.
 

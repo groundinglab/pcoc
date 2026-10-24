@@ -39,7 +39,7 @@ README_PARENTS = {
     "STATUS.md", "SECURITY.md", "CONTRIBUTING.md",
     "LICENSE-DOCS.md", "README.md", "PRINCIPLES.md", "LICENSE",
 }
-# Section 6 table, transcribed from SPEC.md. A byte string is stored as hex.
+# Section 6 table, transcribed from spec/01-Satoshi_Hike_Construction.md. A byte string is stored as hex.
 SECTION6 = {
     "SLOT_BYTES": 16384,
     "WORDS_PER_SLOT": 2048,

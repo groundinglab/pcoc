@@ -10,7 +10,7 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 /**
- * AC-A7. §18 and §7.3 (the decode-failure sentence, SPEC.md line 497):
+ * AC-A7. §18 (spec/06-Measurement_Record_Process.md) and §7.3 (spec/01-Satoshi_Hike_Construction.md):
  * one well-formed data item that is not a map, or a map with no kind text, exits 1
  * with no record. A malformed CBOR value, including an empty input, is a record and exits 0.
  */

@@ -2,7 +2,7 @@
 
 - **Status.** A policy file's `status` is one of `draft`, `active`, or `superseded`. `gl-admit-v10` is `active`. Live from 2026-10-23. `gl-admit-v9` is `superseded`: it was live until 2026-10-23, and `gl-admit-v10` supersedes it.
 - **Repo path (agreed layout).** `policy/groundinglab-admission/POLICY.md`, next to `gl-admit-v10.toml`. `gl-admit-v9.toml` stays in this directory with `status` `superseded`.
-- **Targets.** Satoshi Hike 2.2, tag `spec-2.2.0` (`spec/satoshi-hike-v2.2/SPEC.md`).
+- **Targets.** Satoshi Hike 2.2 (`gl-admit-v10.toml` keeps `spec = "2.2"`; tag `spec-2.2.0`). The public specification face is the 2.3 six-doc pack: [README.md](../../spec/README.md), [GUIDE.md](../../spec/GUIDE.md), and `01`–`06`.
 - **Policy version.** The `policy_version` is the id `gl-admit-v10` plus the SHA-256 of `gl-admit-v10.toml`. Ops pins that SHA-256 in the deployment manifest at deploy time.
 
 A policy sets the SPEC's §15.4 levers to values inside their ranges. It never changes a SPEC rule. Section 3 holds the behaviour that SPEC 2.2 leaves to policy. Changing any value or rule here needs a new id; ids are never reused. `gl-admit-v9.toml` is the previous id. Its `status` is `superseded`. Earlier ids are kept only in ops `policy-bind.json`.
@@ -13,7 +13,7 @@ A policy sets the SPEC's §15.4 levers to values inside their ranges. It never c
 |---|---|---|---|
 | `min_anchored_paths` | 6 | SPEC default | Enough anchored waypoints to time the hike without punishing a weak connection. They can be anywhere among `W_1` … `W_16`. |
 | `leg_rate_floor` | `1/5` | SPEC default (`p ≥ 1`, `q ≥ 1`) | One leg per 5 s over the MTP span. It must be re-measured under 2.2 with async producers (SPEC §15.5). It will rise once the 15–45 s wait no longer sits inside the span. |
-| `submission_deadline_blocks` (K) | 3 | SPEC default (range 0–6) | Submit within 3 blocks of the last beacon. |
+| `submission_deadline_blocks` (K) | 3 | value still in `gl-admit-v10.toml` | SPEC 2.3 defines no tip-versus-last-beacon submit deadline. Bari’s anchor window (offsets 2, 3, and 4) is the include constraint. |
 | `held_retry_seconds` | 600 | SPEC default | Retry a held submission every 10 minutes. |
 | `thorough_rounds` | 3 | SPEC default | 18 legs in 3 rounds of 6, which detects a 25 % fake fraction 99.44 % of the time. |
 | `challenge_lifetime_seconds` | 120 | SPEC default | The website mints with the same value. |

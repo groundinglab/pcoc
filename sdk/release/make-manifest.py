@@ -76,8 +76,9 @@ def main() -> None:
         "spec": {
             "version": "2.3",
             "tag": "spec-2.3.0",
-            # Blob and tree links use the release tag. Errata are folded into SPEC.md.
-            "url": "https://github.com/groundinglab/pcoc/blob/spec-2.3.0/spec/satoshi-hike-v2.3/SPEC.md",
+            # Pack and policy links stay on tag spec-2.3.0. The prose face is the
+            # six-doc pack on main (README, GUIDE, 01–06). Errata 1 and 2 are folded in.
+            "url": "https://github.com/groundinglab/pcoc/blob/main/spec/README.md",
             "pack_url": "https://github.com/groundinglab/pcoc/tree/spec-2.3.0/spec/conformance/pack",
             "pack_manifest_sha256": manifest_sha,
             "pack_status": json.loads((ROOT / "spec/conformance/pack/manifest.json").read_text())["status"],
