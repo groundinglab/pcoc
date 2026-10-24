@@ -3,6 +3,7 @@
 ## Unreleased
 
 - SPEC 2.3 retired the tip-versus-last-beacon deadline (old Rule B10). The gate does not refuse `submission_deadline` when the index tip is past `last_interrupt_height`. `submission_deadline_blocks` is not a required lever. A file that still has the key (`gl-admit-v9`, `gl-admit-v10`) loads, and the value is ignored. A file that omits the key loads. This note does not issue a new policy id and does not deploy.
+- Sticky refuse is off. A resubmit of a refused `(public_key, object_sha256, policy_id)` runs the fast phase again and may append a new refuse line. `[policy_rules] sticky_refuse = true` turns the stored-outcome short circuit back on. An absent key means off, including `gl-admit-v10`. The key is not a §15.4 lever and is not part of the policy bind hash. `gl-admit-v11` sets `false`. This note does not deploy.
 
 ## 0.5.8
 

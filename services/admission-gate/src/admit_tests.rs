@@ -1888,6 +1888,65 @@ fn public_lines_do_not_name_v2_0() {
     }
 }
 
+/// A refused `(public_key, object, policy_id)` is measured again.
+/// Sticky refuse is off by default, so the second submission appends
+/// another refuse line with the same reason. `sticky_refuse = true` is
+/// the stored-outcome short circuit: `Sticky`, and no new line.
+#[test]
+fn a_refused_pair_is_remeasured_unless_sticky_refuse_is_on() {
+    let bytes = unknown_kind_object();
+    let policy = Pol::default().load();
+    assert!(!policy.sticky_refuse);
+    let door = open_door(policy, "http://127.0.0.1:9");
+    let (phase, seq) = door.settle_fast_seq(&job_for(&bytes, [81u8; 32]));
+    assert_eq!(phase, FastPhase::Done, "{:?}", chain(&door));
+    assert!(seq.is_none());
+    let (phase, seq) = door.settle_fast_seq(&job_for(&bytes, [82u8; 32]));
+    assert_eq!(phase, FastPhase::Done, "{:?}", chain(&door));
+    assert!(seq.is_none());
+    let lines = chain(&door);
+    assert_eq!(lines.len(), 2, "{lines:?}");
+    assert_eq!(lines[0]["decision"], "refuse");
+    assert_eq!(lines[1]["decision"], "refuse");
+    assert_eq!(lines[0]["reasons"], lines[1]["reasons"]);
+    assert_eq!(lines[0]["reason"], lines[1]["reason"]);
+    assert_eq!(lines[0]["reasons"][0], "unknown_kind");
+    assert_ne!(lines[0]["seq"], lines[1]["seq"]);
+    assert_eq!(lines[0]["public_key"], lines[1]["public_key"]);
+    assert_eq!(lines[0]["object_sha256"], lines[1]["object_sha256"]);
+    assert_eq!(lines[0]["policy_id"], lines[1]["policy_id"]);
+
+    let mut sticky = Pol::default().load();
+    sticky.sticky_refuse = true;
+    let door = open_door(sticky, "http://127.0.0.1:9");
+    let (phase, _) = door.settle_fast_seq(&job_for(&bytes, [83u8; 32]));
+    assert_eq!(phase, FastPhase::Done, "{:?}", chain(&door));
+    let (phase, seq) = door.settle_fast_seq(&job_for(&bytes, [84u8; 32]));
+    assert_eq!(phase, FastPhase::Sticky, "{:?}", chain(&door));
+    assert!(seq.is_none());
+    assert_eq!(chain(&door).len(), 1, "{:?}", chain(&door));
+    let (phase, _) = door.settle_fast_seq(&job_for(b"a-different-object", [85u8; 32]));
+    assert_eq!(phase, FastPhase::Done, "{:?}", chain(&door));
+    assert_eq!(chain(&door).len(), 2, "{:?}", chain(&door));
+}
+
+fn unknown_kind_object() -> Vec<u8> {
+    fn text(value: &str) -> Vec<u8> {
+        let bytes = value.as_bytes();
+        let mut out = vec![0x78, u8::try_from(bytes.len()).unwrap()];
+        out.extend_from_slice(bytes);
+        out
+    }
+    let mut out = vec![0xa2];
+    out.extend(text("kind"));
+    out.extend(text("not-a-pcoc-object"));
+    out.extend(text("public_key"));
+    out.push(0x58);
+    out.push(32);
+    out.extend_from_slice(&[9u8; 32]);
+    out
+}
+
 /// SPEC Rule B4. The pinned O3 file's empty paths are skips, so the count is
 /// settled below `min_anchored_paths` and the fast phase refuses at once.
 #[test]

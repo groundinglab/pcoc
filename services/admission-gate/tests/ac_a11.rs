@@ -70,6 +70,7 @@ fn gl_admit_v10_loads() {
     assert_eq!(policy.max_held_blocks, 6);
     assert_eq!(policy.expected_network(), Some("main"));
     assert_eq!(policy.born_height, 972685);
+    assert!(!policy.sticky_refuse);
 }
 
 /// The previous id stays as it was. It has no `born_height` key. Load
