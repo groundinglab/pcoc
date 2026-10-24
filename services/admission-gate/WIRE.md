@@ -57,7 +57,7 @@ The client sees one of three bodies. There is no `message` field and no field th
 
 Delivery OK is every completed response other than those two HTTP 400 bodies, including HTTP 413, 415, 429, and 503. The client shows `Sign-in submitted` for delivery OK. `unknown_challenge`, `expired`, and `reused` are not client codes.
 
-`POST /v1/sign-in` returns that body after the fast checks. It does not wait for thorough. Thorough runs in the background. A fake leg revokes the grant and bans the key. A thorough accept writes the friendly entry, and the result token becomes `accepted`. Until then the result token stays `pending`. A site should treat `{"delivery":"ok"}`, and a provisional grant that has not settled, as signed in immediately. That reading is for the site. This process does not call the site. This note adds no field to the body or the result (#127).
+`POST /v1/sign-in` returns that body after the fast checks. It does not wait for thorough. Thorough runs in the background. A fake leg revokes the grant and bans the key. A thorough accept writes the friendly entry, and the result token becomes `accepted`. Until then the result token stays `pending`. A site should treat `{"delivery":"ok"}`, and a provisional grant that has not settled, as signed in immediately. That reading is for the site. This process does not call the site. This note adds no field to the body or the result (#127). A key already on the fake-leg ignore record does not enter that wait. The consuming submit stores `rejected`, and the result does not add `submitted`.
 
 `GET /v1/sign-in/result/<64 lowercase hex nonce>` returns HTTP 200.
 
@@ -75,6 +75,8 @@ A consumed row that is still `pending` adds `submitted`:
 {"outcome":"pending","submitted":true}
 ```
 
+That shape is only a consumed row whose outcome is still `pending`. A banned resubmit is not this shape. It is `{"outcome":"rejected"}`, and a site must not treat it as a provisional grant.
+
 `accepted` adds the measurements the door stored. `public_key` and `object_sha256` are 64 lowercase hex. `legs` is bookend `N` and `span_s` is bookend `S`. Each bookend is present only when that side of the record is a number. Those two fields are measurements. They are not the admission rate: Rule B2 compares `analysis.hike_legs` and `analysis.hike_span`, and a bookend of 0 does not meet or miss the floor. There is no floor, no threshold, and no verifier note. `log_day` and `log_seq` name the decision-log line that opened the claim window; each is present only once that line is written.
 
 ```json
@@ -89,9 +91,11 @@ The check order returns on the first step that decides:
 4. A consumed row exists. The same `object` and the same signature return the original client class and the original website outcome. Policy does not run again. Any other object or signature is client `malformed`, and the stored outcome stays.
 5. The object is shorter than 32 bytes. Website `too_short`. Client delivery OK. The nonce is consumed. No signature check runs.
 6. The bytes yield no 32-byte public key, or the signature does not verify over `bip340_message_32`. Client `bad_signature`. The nonce is not consumed. Website `bad_signature`. A later consuming submit replaces that recorded outcome.
-7. Any kind other than `v2.2-pcoc-object`, after a valid signature, is the fast phase (SPEC §14.7, Rule A5). Website `rejected`. The decision line's reason is `unknown_kind`. Client delivery OK. The nonce is consumed. There is no `earlier_version` outcome for a new submit.
-8. The bytes do not decode. Website `rejected`. Client delivery OK. The nonce is consumed. No fast line.
-9. The bytes are a `v2.2-pcoc-object`. Client `{"delivery":"ok"}` and no other field. The nonce is consumed when this step starts. Website `pending` until the fast phase. A shape mismatch is `rejected`. A shape match writes `provisional`, then the thorough phase draws from the operating-system CSPRNG and holds: leg recompute of those indices is not in this build, so it does not accept and it does not ban the key. This build does not emit `too_few_waypoints_anchored`.
+7. Any kind other than `v2.2-pcoc-object`, after a valid signature, is the fast phase (SPEC §14.7, Rule A5) when the key is not banned. Website `rejected`. The decision line's reason is `unknown_kind`. Client delivery OK. The nonce is consumed. There is no `earlier_version` outcome for a new submit. A banned key does not reach this step.
+8. The bytes do not decode. Website `rejected`. Client delivery OK. The nonce is consumed. No fast line. This refusal is the same whether or not the key is banned.
+9. The bytes are a `v2.2-pcoc-object` and the key is not banned. Client `{"delivery":"ok"}` and no other field. The nonce is consumed when this step starts. Website `pending` until the fast phase. A shape mismatch is `rejected`. A shape match writes `provisional`, then the thorough phase draws from the operating-system CSPRNG and holds: leg recompute of those indices is not in this build, so it does not accept and it does not ban the key. This build does not emit `too_few_waypoints_anchored`.
+
+**Banned key.** After a valid signature, a readable object whose public key is on this gate's persistent fake-leg ignore record is refused before steps 7 and 9. Website `rejected`. Client `{"delivery":"ok"}`. The nonce is consumed. No pending slot is taken. The fast phase does not run, and no decision line is written. `GET /v1/sign-in/result/{nonce}` is `{"outcome":"rejected"}` and does not add `submitted`. The same refusal is returned for every later submission from that key. A site must not treat that result as a provisional grant.
 
 Before that order, oversize, the wrong content type, and the transport rate are completed responses. The client class is delivery OK. The wrong content type writes no website outcome. Oversize and the rate write website `rejected` and do not consume the nonce only when the body is the JSON object, `nonce` is 64 lowercase hex, the nonce has no consumed row, and the object bytes hash to `object`. Otherwise the outcome stays. An unavailable door writes no website outcome. The transport figures are unchanged and are not on this wire.
 

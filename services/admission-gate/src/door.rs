@@ -855,8 +855,9 @@ impl Door {
         }
 
         // A banned key is ignored after the signature: the nonce is consumed
-        // (the website token stays `pending`), no fast phase, no line, and no
-        // pending slot is taken. Checked before the caps so a banned
+        // with website `rejected` (not `pending`, so the site cannot read
+        // pending+submitted as a provisional grant), no fast phase, no line,
+        // and no pending slot is taken. Checked before the caps so a banned
         // resubmit cannot hold a slot.
         //
         // Pending caps, before the nonce is consumed. Over a cap the website
@@ -871,7 +872,7 @@ impl Door {
                 return match self.rows.consume(
                     &body,
                     ClientClass::DeliveryOk,
-                    wire::OUTCOME_PENDING,
+                    wire::OUTCOME_REJECTED,
                     now,
                 ) {
                     Ok(()) => locked_client(ClientClass::DeliveryOk, None),

@@ -896,9 +896,17 @@ async fn a_banned_resubmit_takes_no_pending_slot() {
         again.nonce[31] = 0xb0 + n as u8;
         let result = lab.door.sign_in_locked(locked_body(&again.body()));
         assert_eq!(result.status, StatusCode::OK);
+        assert_eq!(result.body, json!({"delivery": "ok"}));
         assert!(
             result.thorough.is_none(),
             "a banned key starts no thorough job"
+        );
+        assert!(lab.door.consumed_nonce(&again.nonce));
+        let website = lab.door.sign_in_result(&again.nonce);
+        assert_eq!(
+            website,
+            json!({"outcome": "rejected"}),
+            "a banned resubmit is rejected, not pending+submitted"
         );
     }
     assert_eq!(lab.door.ban_ignored(), global);
@@ -910,6 +918,46 @@ async fn a_banned_resubmit_takes_no_pending_slot() {
         .thorough
         .expect("a legitimate sign-in from the same origin is taken");
     assert_eq!(job.origin, "https://groundinglab.io");
+}
+
+/// Issue #131. A banned resubmit is delivery OK and website `rejected`.
+/// `pending`+`submitted` is the provisional-grant shape. This path must not
+/// produce it, and it must not append a decision line.
+#[tokio::test]
+async fn a_banned_resubmit_is_rejected_not_pending() {
+    let lab = lab();
+    let exp = NOW_2026_10_10 + 60;
+    let mut banned = Signed::fresh(Vec::new(), exp);
+    banned.object = v2_object(&banned.secret);
+    let key = pubkey(&banned.secret);
+    lab.door.ban_key(&key, 0);
+
+    let (status, body, text) = post_json(&lab, &banned.body()).await;
+    assert_delivery(status, &body);
+    assert!(!text.contains("pending"), "{text}");
+    assert!(lab.door.consumed_nonce(&banned.nonce));
+    assert_eq!(lab.door.ban_ignored(), 1);
+    assert_eq!(lab.door.pending_counts(&hex32(&key)), (0, 0));
+
+    let (status, value) = result(&lab, &hex32(&banned.nonce)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(value, json!({"outcome": "rejected"}));
+    assert!(value.get("submitted").is_none(), "{value}");
+
+    // The same submission again keeps the stored refusal. It does not
+    // become pending, and it does not start thorough.
+    let (status, body, _) = post_json(&lab, &banned.body()).await;
+    assert_delivery(status, &body);
+    let (status, value) = result(&lab, &hex32(&banned.nonce)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(value, json!({"outcome": "rejected"}));
+
+    let (latest, _, latest_text) = send(
+        &lab,
+        Request::get("/latest.json").body(Body::empty()).unwrap(),
+    )
+    .await;
+    assert_eq!(latest, StatusCode::NOT_FOUND, "{latest_text}");
 }
 
 /// Defect 26 (gate review r2, finding 26). The served origin comes from the
