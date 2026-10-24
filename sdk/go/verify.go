@@ -82,11 +82,8 @@ type recordBody struct {
 	wholeSpan string
 	perCount  [Stages]int
 	perSpan   [Stages]string
-	hikeLegs  int
-	hikeSpan  string
-	// hikeSpanMTP is filled by the MTP read. hikeSpan is the published token.
-	hikeSpanMTP string
-	mtpGet      func(uint64) *IndexDoc
+	hikeLegs int
+	hikeSpan string
 }
 
 type sixObj struct {
@@ -391,7 +388,6 @@ func measure(in VerifyInput, o *Object) []byte {
 	bookends(&rb, o, get)
 
 	// --- analysis (Rule A4.10), independent of bookends except legs_outside ---
-	rb.mtpGet = get
 	analysis(&rb, o)
 
 	// --- Rule A4.4 six-leg ---
@@ -798,7 +794,8 @@ func analysis(rb *recordBody, o *Object) {
 	rb.hikeLegs = whole
 	// whole span T(I_17) − T(I_0) = headers[18].T − headers[1].T
 	rb.wholeSpan = subT(rb.headers[18], rb.headers[1])
-	rb.hikeSpan = mtp(rb, o)
+	// Same integer: nTime(I_17) − nTime(I_0). Median-time-past is not this span.
+	rb.hikeSpan = rb.wholeSpan
 }
 
 func spanOf(rb *recordBody, g int) string {
@@ -817,69 +814,6 @@ func subT(a, b hdr) string {
 		return "not read"
 	}
 	return strconv.FormatInt(a.tInt-b.tInt, 10)
-}
-
-// mtp is Rule A4.10 median-time-past from the first interrupt (I_0,
-// stages[1].beacon, headers[1]) to the last interrupt (headers[18]).
-// The seed beacon is not an endpoint. The beacon's own time is taken only
-// when that header's index_comparison is match and the time follows
-// section 9. Each other window document contributes header.time when the
-// read returned a document, header.height equals the requested height, and
-// the time follows section 9. The window is not linked by previous-hash
-// (SPEC §14.4).
-func mtp(rb *recordBody, o *Object) string {
-	firstStage := stageAt(o, 1)
-	if !firstStage.HasHeight || firstStage.HeightAbove || !o.HasLastInterruptHeight || o.LastHeightAbove {
-		return "not read"
-	}
-	if len(rb.headers) < 19 {
-		return "not read"
-	}
-	first := mtpAt(rb, firstStage.BeaconHeight, rb.headers[1])
-	last := mtpAt(rb, o.LastInterruptHeight, rb.headers[18])
-	if first < 0 || last < 0 {
-		return "not read"
-	}
-	return strconv.FormatInt(last-first, 10)
-}
-
-// mtpAt returns the median, or -1 when any of the n times is missing.
-func mtpAt(rb *recordBody, h uint64, own hdr) int64 {
-	n := 11
-	if int64(h)+1 < int64(n) {
-		n = int(h) + 1
-	}
-	times := make([]int64, 0, n)
-	for k := 0; k < n; k++ {
-		ht := h - uint64(n-1-k)
-		var t int64
-		var ok bool
-		if ht == h {
-			if own.indexCmp == "match" && own.hasT {
-				t = own.tInt
-				ok = true
-			}
-		} else if rb.mtpGet != nil {
-			doc := rb.mtpGet(ht)
-			if doc != nil && doc.HeaderOK && doc.Header.Height == ht && doc.Header.HasTime {
-				t = int64(doc.Header.Time)
-				ok = true
-			}
-		}
-		if !ok {
-			return -1
-		}
-		times = append(times, t)
-	}
-	// insertion sort, n ≤ 11
-	for i := 1; i < len(times); i++ {
-		j := i
-		for j > 0 && times[j] < times[j-1] {
-			times[j], times[j-1] = times[j-1], times[j]
-			j--
-		}
-	}
-	return times[len(times)/2]
 }
 
 func sixLeg(rb *recordBody, in VerifyInput, o *Object, terrain *Terrain, seed []byte) {

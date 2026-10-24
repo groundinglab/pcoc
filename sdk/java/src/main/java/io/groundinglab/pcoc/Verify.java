@@ -2,7 +2,6 @@ package io.groundinglab.pcoc;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -353,7 +352,7 @@ public final class Verify {
 
         Six six = sixLeg(sha, profile, terrain, seed, stages, draw);
 
-        String analysis = analysis(stages, headers, reads, lastHeight, book, malformed);
+        String analysis = analysis(stages, headers, book, malformed);
 
         Json.Obj rec = new Json.Obj();
         rec.add("profile", Json.quote(profile.name));
@@ -842,8 +841,7 @@ public final class Verify {
         return got == stored ? "match" : "mismatch";
     }
 
-    private static String analysis(Stage[] stages, HeaderM[] headers, Reads reads, Long lastHeight, Book book,
-                                   boolean malformed) {
+    private static String analysis(Stage[] stages, HeaderM[] headers, Book book, boolean malformed) {
         Long whole = sum(stages, 1, 17);
         // Stages 1–17. Stage 0 is before the first interrupt and is not an admission leg.
         Long hike = sum(stages, 1, 17);
@@ -862,7 +860,8 @@ public final class Verify {
             per.add(o.build());
         }
         String wholeSpan = subT(headers[18], headers[1]);
-        String hikeSpan = mtpSpan(reads, headers, lastHeight);
+        // Same integer: nTime(I_17) − nTime(I_0). Median-time-past is not this span.
+        String hikeSpan = wholeSpan;
         Json.Obj o = new Json.Obj();
         o.add("whole_hike_legs", malformed || whole == null ? Json.quote("not defined") : Long.toString(whole));
         o.add("whole_hike_span", wholeSpan);
@@ -903,51 +902,6 @@ public final class Verify {
         } catch (NumberFormatException e) {
             return Json.quote("not read");
         }
-    }
-
-    /**
-     * §14.4 MTP from {@code I_0} ({@code headers[1]}) to {@code last_interrupt}
-     * ({@code headers[18]}). The seed beacon is not an endpoint. A missing time
-     * in the window is {@code not read}.
-     */
-    private static String mtpSpan(Reads reads, HeaderM[] headers, Long lastHeight) {
-        if (!"match".equals(headers[1].cmp) || !"match".equals(headers[18].cmp)) {
-            return Json.quote("not read");
-        }
-        long h0;
-        long h1;
-        try {
-            h0 = Long.parseLong(headers[1].height);
-            h1 = Long.parseLong(headers[18].height);
-        } catch (NumberFormatException e) {
-            return Json.quote("not read");
-        }
-        Long a = mtp(reads, h0);
-        Long b = mtp(reads, h1);
-        if (a == null || b == null) {
-            return Json.quote("not read");
-        }
-        return Long.toString(b - a);
-    }
-
-    /**
-     * §14.4 median-time-past. Erratum E26: the portable index carries no previous-hash
-     * member, and this measurement does not link the window's headers to each other.
-     * An over-range stored height is not defined and is not fetched (no GET).
-     */
-    private static Long mtp(Reads reads, long h) {
-        int n = (int) Math.min(11L, h + 1L);
-        long[] times = new long[n];
-        for (int k = 0; k < n; k++) {
-            long hh = h - n + 1L + k;
-            Doc doc = reads.at(hh);
-            if (doc == null || doc.header == null || doc.header.height != hh || doc.header.time == null) {
-                return null;
-            }
-            times[k] = doc.header.time;
-        }
-        Arrays.sort(times);
-        return times[n / 2];
     }
 
     private static boolean heightsIncrease(Stage[] stages, Long lastHeight) {

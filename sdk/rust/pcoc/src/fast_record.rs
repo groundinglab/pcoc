@@ -2,14 +2,13 @@
 //!
 //! SPEC §15.3: the fast phase never recomputes a leg and omits `six_leg`.
 //! This module does not fill a terrain, does not draw, and does not call
-//! [`crate::step::leg_result`]. The median-time rule is the same one §14
-//! uses (erratum E26: do not link previous-hash).
+//! [`crate::step::leg_result`].
 //!
-//! The admit pair starts at the first interrupt `I_0` (`stages[1].beacon`)
-//! and ends at `last_interrupt`. Stage 0 is not in `hike_legs`. The seed
-//! beacon is not an endpoint.
+//! `hike_span` is raw Bitcoin header `nTime`: `header.time` at
+//! `last_interrupt` minus `header.time` at the first interrupt `I_0`
+//! (`stages[1].beacon`). Median-time-past is not this span. Stage 0 is not
+//! in `hike_legs`. The seed beacon is not an endpoint.
 
-use crate::constants::{HEIGHT_MAX, MTP_WINDOW};
 use crate::object::HikeObject;
 
 /// Checkpoint count over stages 1–17. Stage 0 is before the first interrupt
@@ -26,29 +25,15 @@ pub fn hike_legs(obj: &HikeObject) -> Option<i128> {
     Some(n as i128)
 }
 
-/// Median header time at `height`. `read_time` returns the header's `time`
-/// when that height was read. A missing time is `not read`.
-pub fn mtp_at(height: u64, mut read_time: impl FnMut(u64) -> Option<i128>) -> Option<i128> {
-    if height > HEIGHT_MAX {
-        return None;
-    }
-    let n = std::cmp::min(MTP_WINDOW, height.saturating_add(1));
-    let start = height + 1 - n;
-    let mut times = Vec::with_capacity(n as usize);
-    for h in start..=height {
-        times.push(read_time(h)?);
-    }
-    times.sort();
-    times.get((n as usize) / 2).copied()
-}
-
-/// `MTP(last) − MTP(first)`. `None` when either median was not read.
+/// `nTime(last) − nTime(first)`. `read_time` returns `header.time` at that
+/// height. `None` when either endpoint time was not read. No other height
+/// is read.
 pub fn hike_span(
     first_height: u64,
     last_height: u64,
     mut read_time: impl FnMut(u64) -> Option<i128>,
 ) -> Option<i128> {
-    let first = mtp_at(first_height, &mut read_time)?;
-    let last = mtp_at(last_height, &mut read_time)?;
+    let first = read_time(first_height)?;
+    let last = read_time(last_height)?;
     Some(last - first)
 }

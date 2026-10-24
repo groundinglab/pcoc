@@ -88,7 +88,7 @@ A height at or above `born_height` is production. A height below it is testing. 
 
 The verify output shows `policy_id`, the `born_height` that applied, and `lowest_height` (the lowest offending height), next to the reason `before_born_height`. Health shows `born_height` next to `policy_id`. An object whose stored and claimed heights are all at or above `born_height` is judged as it was before this rule.
 
-Median-time-past reads `MTP_WINDOW` headers ending at the beacon. `MTP_WINDOW` is 11 in the verifier (`n = min(MTP_WINDOW, h + 1)`). The beacon is one of those headers, so the lookback is `MTP_LOOKBACK` = `MTP_WINDOW - 1` = 10. The index and Bari serve the headers from `born_height - MTP_LOOKBACK` through `born_height - 1` so that window can be read. Those headers are for the timestamp only. They are not production heights: tip selection ignores them, and `GET /index/since` omits them. A height below `born_height - MTP_LOOKBACK` is not served. An object anchored below `born_height` is still `before_born_height`.
+`hike_span` is header `nTime` of `last_interrupt` minus header `nTime` of the first interrupt `I_0`. Median-time-past is not that span. The index and Bari still serve headers from `born_height - MTP_LOOKBACK` through `born_height - 1` (`MTP_LOOKBACK` is 10). Those headers are not production heights and are not an input to `hike_span`: tip selection ignores them, and `GET /index/since` omits them. A height below `born_height - MTP_LOOKBACK` is not served. An object anchored below `born_height` is still `before_born_height`.
 
 A caller who receives `before_born_height` should stop. The object is a testing artefact. Submit an object anchored at or above the born height. Do not retry this object.
 

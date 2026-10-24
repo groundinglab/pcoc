@@ -48,12 +48,14 @@ pub const SIX_LEG_COUNT: usize = 6;
 /// SPEC §9. A height above this bound is not a usable JSON integer.
 pub const HEIGHT_MAX: u64 = (1_u64 << 53) - 1;
 
-/// SPEC median-time-past. For a beacon at height `h`, `n = min(MTP_WINDOW, h + 1)`.
-/// The window is the headers from `h - n + 1` through `h`, including the beacon.
+/// Width of the index header floor below `born_height`. Not `hike_span`.
+/// `hike_span` is raw header `nTime` at `last_interrupt` minus raw header
+/// `nTime` at `I_0`. It does not read this window.
 pub const MTP_WINDOW: u64 = 11;
 
-/// Headers strictly before the beacon in a full median-time-past window.
-/// The window includes the beacon, so this is `MTP_WINDOW - 1`.
+/// Headers the index still serves below `born_height`. Not an input to
+/// `hike_span`. `MTP_WINDOW` includes a beacon the hike clock does not use,
+/// so this floor is `MTP_WINDOW - 1`.
 pub const MTP_LOOKBACK: u64 = MTP_WINDOW - 1;
 
 /// SPEC §6. `WORDS_PER_SLOT = SLOT_BYTES / 8` at the section 6 sizes.

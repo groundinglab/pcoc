@@ -135,8 +135,8 @@ pub struct IndexService {
     /// `header.timestamp_unix_ms`.
     clocks: Arc<HashMap<u32, u64>>,
     /// Production floor. Tip selection and `/index/since` ignore a lower
-    /// height. `GET /index/{height}` also serves the median-time lookback
-    /// of [`pcoc_bari::MTP_LOOKBACK`] headers below this value.
+    /// height. `GET /index/{height}` also serves [`pcoc_bari::MTP_LOOKBACK`]
+    /// headers below this value. Those headers are not `hike_span`.
     /// `0` serves every retained file. The binary sets [`pcoc_bari::BORN_HEIGHT`].
     born_height: u32,
 }

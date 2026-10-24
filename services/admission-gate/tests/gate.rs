@@ -707,10 +707,9 @@ async fn a_readable_hike_is_done_not_held() {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../sdk/rust/objects/O3-PROD.cbor"),
     )
     .expect("O3");
-    // Christian relocated the admit start off the seed beacon to I_0
-    // (stages[1].beacon). The old pair was checkpoints over stages 0–17 and
-    // MTP(seed)→MTP(last_interrupt). O3's index times are 5 s per height, so
-    // the span is 5 * (end − start). Stage 0 is not in hike_legs.
+    // The admit pair starts at I_0 (stages[1].beacon). O3's index times are
+    // 5 s of header nTime per height, so hike_span is 5 * (last − I_0).
+    // Stage 0 is not in hike_legs. Median-time-past is not this span.
     let parsed = pcoc::decode_object(&object).expect("O3");
     let seed = parsed.stages[0].beacon_height;
     let i0 = parsed.stages[1].beacon_height;
@@ -839,22 +838,19 @@ async fn an_object_exactly_at_born_height_is_accepted() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// The anchor is exactly this test's born height, so the median-time window
-/// starts below that height. The fake index uses the same header floor as
-/// the production index: it serves `born_height - MTP_LOOKBACK` and up, and
-/// it 404s anything lower. The job reaches `done`.
+/// The object's lowest stored height is this test's born height. The fake
+/// index 404s every height below that. `hike_span` reads only the endpoint
+/// header `nTime` values, both at or above born, so the job reaches `done`.
 #[tokio::test]
-async fn an_object_at_born_height_is_done_when_lookback_is_below_born() {
+async fn an_object_at_born_height_is_done_without_headers_below_born() {
     let object = o3_bytes();
+    let parsed = pcoc::decode_object(&object).expect("O3");
+    let i0 = parsed.stages[1].beacon_height;
+    let last = parsed.last_interrupt_height;
     let (min, max) = height_span(&object);
     assert!(min < max, "O3 spans more than one height");
-    let lookback = pcoc::constants::MTP_LOOKBACK;
-    assert!(min > lookback, "the window reaches below the anchor");
     let born = min;
-    let window = born + 1 - born.saturating_add(1).min(pcoc::constants::MTP_WINDOW);
-    assert!(window < born, "lookback lies below born_height");
-    assert_eq!(window, born - lookback);
-    let index = index_for_hike_from(&object, window);
+    let index = index_for_hike_from(&object, born);
     let dir = scratch("born-lookback");
     let router = opened(dir.clone(), &index.base, |cfg| {
         cfg.policy.born_height = born;
@@ -876,8 +872,14 @@ async fn an_object_at_born_height_is_done_when_lookback_is_below_born() {
     assert_eq!(job["born_height"], born, "{job}");
     assert!(job.get("lowest_height").is_none(), "{job}");
     assert_eq!(job["record"]["shape"], "match", "{job}");
-    assert!(
-        job["record"]["analysis"]["hike_span"].as_i64().is_some(),
+    assert_eq!(
+        job["record"]["analysis"]["hike_span"],
+        5 * (last as i64 - i0 as i64),
+        "{job}"
+    );
+    assert_eq!(
+        job["record"]["analysis"]["whole_hike_span"],
+        job["record"]["analysis"]["hike_span"],
         "{job}"
     );
     let _ = std::fs::remove_dir_all(&dir);
@@ -929,15 +931,14 @@ fn height_span(object: &[u8]) -> (u64, u64) {
     (min, max)
 }
 
-/// Headers whose natural hash is the object's beacon, 5 s apart, so
-/// `MTP(end) − MTP(start)` is `5 * (end − start)`.
+/// Headers whose natural hash is the object's beacon, 5 s of `nTime` apart,
+/// so `nTime(end) − nTime(start)` is `5 * (end − start)`.
 fn index_for_hike(object: &[u8]) -> Index {
     index_for_hike_from(object, 0)
 }
 
 /// Same documents as [`index_for_hike`], served only at or above `serve_from`.
-/// A lower height is the default 404. That is the production header floor:
-/// `born_height - MTP_LOOKBACK`.
+/// A lower height is the default 404.
 fn index_for_hike_from(object: &[u8], serve_from: u64) -> Index {
     let obj = pcoc::decode_object(object).expect("object");
     let mut beacons = HashMap::<u64, [u8; 32]>::new();
@@ -950,9 +951,7 @@ fn index_for_hike_from(object: &[u8], serve_from: u64) -> Index {
     let mut lo = u64::MAX;
     let mut hi = 0u64;
     for &height in beacons.keys() {
-        let n = height.saturating_add(1).min(pcoc::constants::MTP_WINDOW);
-        let start = height + 1 - n;
-        lo = lo.min(start);
+        lo = lo.min(height);
         hi = hi.max(height);
     }
     let mut exact = HashMap::new();

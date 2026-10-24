@@ -56,7 +56,7 @@ pub fn assess(
     let mut times = std::collections::HashMap::<u64, i128>::new();
     compare_headers(&obj, index, &mut times).map_err(|stop| with_tip(stop, tip))?;
     let anchored = compare_plants(&obj, policy, index).map_err(|stop| with_tip(stop, tip))?;
-    let (legs, span) = hike_pair(&obj, index, &mut times).map_err(|stop| with_tip(stop, tip))?;
+    let (legs, span) = hike_pair(&obj, &mut times).map_err(|stop| with_tip(stop, tip))?;
     if pcoc::leg_rate_floor(
         legs,
         span,
@@ -224,14 +224,14 @@ fn stored_interrupt(obj: &HikeObject, height: u64, natural: &[u8; 32]) -> bool {
 
 fn hike_pair(
     obj: &HikeObject,
-    index: &IndexClient,
     times: &mut std::collections::HashMap<u64, i128>,
 ) -> Result<(i128, i128), ReadStop> {
     let Some(legs) = pcoc::hike_legs(obj) else {
         return Err(held(None));
     };
-    // Admit clock: I_0 = stages[1].beacon through last_interrupt.
-    // The seed beacon is not an endpoint.
+    // Admit clock: nTime(last_interrupt) − nTime(I_0). The two endpoint
+    // times come from the header reads already stored. No neighboring header
+    // is read. The seed beacon is not an endpoint.
     let Some(first) = obj.stages.get(1).map(|stage| stage.beacon_height) else {
         return Err(held(None));
     };
@@ -239,39 +239,10 @@ fn hike_pair(
         return Err(held(None));
     }
     let last = obj.last_interrupt_height;
-    if !fill_times(index, first, times) || !fill_times(index, last, times) {
-        return Err(held(None));
-    }
     let Some(span) = pcoc::hike_span(first, last, |height| times.get(&height).copied()) else {
         return Err(held(None));
     };
     Ok((legs, span))
-}
-
-fn fill_times(
-    index: &IndexClient,
-    height: u64,
-    times: &mut std::collections::HashMap<u64, i128>,
-) -> bool {
-    let n = std::cmp::min(pcoc::constants::MTP_WINDOW, height.saturating_add(1));
-    let start = height + 1 - n;
-    for h in start..=height {
-        if times.contains_key(&h) {
-            continue;
-        }
-        let path = format!("/index/{h}");
-        let Ok(body) = index.get_cached(&path) else {
-            return false;
-        };
-        let Some(header) = header_of(body.as_bytes()) else {
-            return false;
-        };
-        let Some(time) = header.time else {
-            return false;
-        };
-        times.insert(h, i128::from(time));
-    }
-    true
 }
 
 fn load_checked(
