@@ -5,6 +5,11 @@
 //! `expected_network`. The first three have no unset meaning and are required.
 //! An absent `expected_network` means no index-network constraint. `status`
 //! and the other `[policy_rules]` keys are not read.
+//!
+//! `submission_deadline_blocks` is retired. SPEC 2.3 has no Rule B10 and no
+//! tip-versus-last-beacon deadline. The key is not required. If a file still
+//! has it (gl-admit-v9, gl-admit-v10), the value is not read and is not
+//! enforced. A key named `K` is not this name and is still an unknown lever.
 
 use crate::policy::{self, AdmissionPolicy, IndexPolicy, RateFloor};
 use std::collections::BTreeSet;
@@ -12,6 +17,8 @@ use std::collections::BTreeSet;
 const KNOWN: &[&str] = &[
     "min_anchored_paths",
     "leg_rate_floor",
+    // Retired. Kept so a file that still names it is not an unknown lever.
+    // The value is ignored. See the module comment.
     "submission_deadline_blocks",
     "held_retry_seconds",
     "reverify_max_attempts",
@@ -34,7 +41,6 @@ const KNOWN: &[&str] = &[
 const REQUIRED: &[&str] = &[
     "min_anchored_paths",
     "leg_rate_floor",
-    "submission_deadline_blocks",
     "held_retry_seconds",
     "reverify_max_attempts",
     "max_held_blocks",
@@ -87,7 +93,7 @@ pub fn load_for_pin(
     }
     let min_anchored_paths = int_range(levers, "min_anchored_paths", 2, 16)?;
     let (p, q) = floor(levers.get("leg_rate_floor"))?;
-    let submission_deadline_blocks = int_range(levers, "submission_deadline_blocks", 0, 6)?;
+    // `submission_deadline_blocks` is in KNOWN and is not read.
     let held_retry_seconds = int_at_least(levers, "held_retry_seconds", 1)?;
     let reverify_max_attempts = int_at_least(levers, "reverify_max_attempts", 1)?;
     let max_held_blocks = int_at_least(levers, "max_held_blocks", 1)?;
@@ -146,7 +152,6 @@ pub fn load_for_pin(
         pending_per_source: policy::DEFAULT_PENDING_PER_SOURCE,
         pending_global,
         verify_cap_per_door_session: verify_session,
-        submission_deadline_blocks,
         held_retry_seconds,
         fast_accept_bound_ms,
         async_catch_budget_ms,
@@ -362,7 +367,6 @@ spec = \"{spec}\"
 [levers]
 min_anchored_paths = 6
 leg_rate_floor = {{ p = 1, q = 5 }}
-submission_deadline_blocks = 3
 held_retry_seconds = 600
 thorough_rounds = 3
 challenge_lifetime_seconds = 120
@@ -398,7 +402,11 @@ born_height = 972685
             assert_eq!(loaded.policy_id, "gl-admit-v10", "{pin}");
             assert_eq!(loaded.min_anchored_paths, 6, "{pin}");
             assert_eq!(loaded.leg_rate_floor, RateFloor { p: 1, q: 5 }, "{pin}");
-            assert_eq!(loaded.submission_deadline_blocks, 3, "{pin}");
+            let table = serde_json::to_value(&loaded).expect("policy json");
+            assert!(
+                table.get("submission_deadline_blocks").is_none(),
+                "{pin}: retired lever was stored"
+            );
             assert_eq!(loaded.held_retry_seconds, 600, "{pin}");
             assert_eq!(loaded.thorough_six_leg_runs, 3, "{pin}");
             assert_eq!(loaded.challenge_lifetime_seconds, 120, "{pin}");
@@ -440,7 +448,7 @@ born_height = 972685
     #[test]
     fn each_required_lever_is_named_when_absent() {
         let raw = complete("2.2");
-        assert_eq!(REQUIRED.len(), 13);
+        assert_eq!(REQUIRED.len(), 12);
         for key in REQUIRED {
             let stripped = without(&raw, key);
             assert_ne!(stripped, raw, "{key} was not removed");
@@ -452,6 +460,41 @@ born_height = 972685
         let err = load_for_pin(&both, 2, "spec-2.3.0").expect_err("two levers");
         assert!(err.contains("min_anchored_paths"), "{err}");
         assert!(err.contains("held_retry_seconds"), "{err}");
+    }
+
+    /// SPEC 2.3 retired the lever. Omitting it loads. A present value is not
+    /// read, whatever its type or range. The alias `K` is still unknown.
+    #[test]
+    fn retired_submission_deadline_is_ignored() {
+        let raw = complete("2.3");
+        assert!(
+            !raw.contains("submission_deadline_blocks"),
+            "the fixture still requires the retired lever"
+        );
+        let omitted = load_for_pin(&raw, 2, "spec-2.3.0").expect("omit");
+        assert!(serde_json::to_value(&omitted)
+            .expect("json")
+            .get("submission_deadline_blocks")
+            .is_none());
+        for value in ["0", "3", "6", "7", "\"K\"", "{ p = 1 }"] {
+            let with = raw.replace(
+                "[policy_rules]",
+                &format!("submission_deadline_blocks = {value}\n[policy_rules]"),
+            );
+            let loaded =
+                load_for_pin(&with, 2, "spec-2.3.0").unwrap_or_else(|err| panic!("{value}: {err}"));
+            assert!(
+                serde_json::to_value(&loaded)
+                    .expect("json")
+                    .get("submission_deadline_blocks")
+                    .is_none(),
+                "{value}"
+            );
+        }
+        let alias = raw.replace("[policy_rules]", "K = 3\n[policy_rules]");
+        let err = load_for_pin(&alias, 2, "spec-2.3.0").expect_err("K");
+        assert!(err.contains("unknown lever"), "{err}");
+        assert!(err.contains('K'), "{err}");
     }
 
     #[test]

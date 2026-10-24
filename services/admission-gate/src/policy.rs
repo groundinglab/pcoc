@@ -273,8 +273,6 @@ pub struct AdmissionPolicy {
     /// That constructor is not a policy-file load path.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub verify_cap_per_door_session: Option<u64>,
-    /// SPEC §15.4 `K`. `tip − last_beacon > K` is Rule B10.
-    pub submission_deadline_blocks: u64,
     /// Seconds between held retries. Read from the policy file.
     pub held_retry_seconds: u64,
     /// `fast_accept_bound` as integer milliseconds.
@@ -326,7 +324,6 @@ impl Default for AdmissionPolicy {
             pending_per_source: DEFAULT_PENDING_PER_SOURCE,
             pending_global: 4,
             verify_cap_per_door_session: Some(3),
-            submission_deadline_blocks: 3,
             held_retry_seconds: 600,
             fast_accept_bound_ms: 2_000,
             async_catch_budget_ms: 22_050,

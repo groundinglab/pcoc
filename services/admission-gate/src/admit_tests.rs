@@ -75,7 +75,6 @@ struct Pol {
     min_anchored: u64,
     p: u64,
     q: u64,
-    k: u64,
     held_retry: u64,
     reverify: u64,
     max_blocks: u64,
@@ -97,7 +96,6 @@ impl Default for Pol {
             min_anchored: 6,
             p: 1,
             q: 5,
-            k: 3,
             held_retry: 600,
             reverify: 3,
             max_blocks: 6,
@@ -131,7 +129,6 @@ spec = "2.2"
 [levers]
 min_anchored_paths = {min}
 leg_rate_floor = {{ p = {p}, q = {q} }}
-submission_deadline_blocks = {k}
 held_retry_seconds = {retry}
 reverify_max_attempts = {reverify}
 max_held_blocks = {blocks}
@@ -151,7 +148,6 @@ born_height = {born}
             min = self.min_anchored,
             p = self.p,
             q = self.q,
-            k = self.k,
             retry = self.held_retry,
             reverify = self.reverify,
             blocks = self.max_blocks,
@@ -518,7 +514,9 @@ fn serve(obj: &HikeObject, face: Face) -> Index {
     let mut routes: HashMap<String, Vec<Shot>> = HashMap::new();
     let fail_all = matches!(face, Face::Down);
     let fail_first = matches!(face, Face::DownThenHonest);
-    if !matches!(face, Face::Down | Face::TipBelow | Face::TipGap(_)) {
+    // TipGap still serves beacon and plant documents. Only the tip height
+    // moves. A far tip is not a reason to skip the other fast checks.
+    if !matches!(face, Face::Down | Face::TipBelow) {
         for height in needed_heights(obj) {
             let path = format!("/index/{height}");
             let flip_hash = match face {
@@ -1344,39 +1342,57 @@ fn each_loaded_lever_changes_what_the_gate_does() {
         .iter()
         .any(|reason| reason.contains("too_few")));
 
-    let last = obj.last_interrupt_height;
-    let k = 3u64;
-    let (door, _index, phase, _) = settle_face(
-        &bytes,
-        Face::TipGap(k),
-        Pol {
-            k,
-            ..Pol::default()
-        }
-        .load(),
-    );
+    // SPEC 2.3 dropped the tip-versus-last-beacon deadline. Forty blocks
+    // past last_interrupt is not `submission_deadline`. The on-disk v10
+    // file still sets `submission_deadline_blocks = 3`; that value is
+    // ignored. A policy that omits the key is judged the same way. A
+    // failing anchor check still refuses, and not for the retired reason.
+    let far = 40u64;
+    let (door, _index, phase, _) = settle_face(&bytes, Face::TipGap(far), v10());
     assert_eq!(
         phase,
-        FastPhase::Held,
-        "gap K should pass B10 {:?}",
+        FastPhase::Provisional,
+        "v10 still names K and must not refuse a far tip {:?}",
         chain(&door)
     );
-    let (door, _index, phase, _) = settle_face(
-        &bytes,
-        Face::TipGap(k + 1),
-        Pol {
-            k,
-            ..Pol::default()
-        }
-        .load(),
+    assert!(door
+        .test_reasons()
+        .iter()
+        .all(|reason| reason != "submission_deadline"));
+    let omitted = Pol {
+        p: 1,
+        q,
+        ..Pol::default()
+    }
+    .load();
+    let (door, _index, phase, _) = settle_face(&bytes, Face::TipGap(far), omitted);
+    assert_eq!(
+        phase,
+        FastPhase::Provisional,
+        "omitted key, far tip {:?}",
+        chain(&door)
     );
+    assert!(door
+        .test_reasons()
+        .iter()
+        .all(|reason| reason != "submission_deadline"));
+    let still_tight = Pol {
+        min_anchored: anchored + 1,
+        p: 1,
+        q,
+        ..Pol::default()
+    }
+    .load();
+    let (door, _index, phase, _) = settle_face(&bytes, Face::TipGap(far), still_tight);
     assert_eq!(phase, FastPhase::Done, "{:?}", chain(&door));
     assert!(door
         .test_reasons()
         .iter()
-        .any(|reason| reason == "submission_deadline"));
-    assert!(!door.log_dir().join("pending").exists());
-    let _ = last;
+        .any(|reason| reason.contains("too_few")));
+    assert!(door
+        .test_reasons()
+        .iter()
+        .all(|reason| reason != "submission_deadline"));
 
     let slow = Pol {
         held_retry: 30,
@@ -1805,13 +1821,6 @@ fn policy_encoding_faults_refuse_the_whole_file() {
             ),
             "wrong type",
         ),
-        (
-            good.replace(
-                "submission_deadline_blocks   = 3",
-                "submission_deadline_blocks = 7",
-            ),
-            "out of range",
-        ),
         (good.replace("p = 1", "p = 0"), "out of range"),
         (
             good.replace(
@@ -1833,6 +1842,20 @@ fn policy_encoding_faults_refuse_the_whole_file() {
         let err = crate::levers::load(&raw, 2).expect_err(&raw);
         assert!(err.contains(needle), "{err}");
     }
+    // The retired key is not a range check. v10's `= 3` and an out-of-range
+    // `= 7` both load, and so does the same file with the line removed.
+    let ignored = good.replace(
+        "submission_deadline_blocks   = 3",
+        "submission_deadline_blocks = 7",
+    );
+    assert!(crate::levers::load(&ignored, 2).is_ok(), "{ignored}");
+    let omitted = good
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("submission_deadline_blocks"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_ne!(omitted, good);
+    assert!(crate::levers::load(&omitted, 2).is_ok(), "{omitted}");
     let dir = scratch("cfg");
     let path = dir.join("gate.toml");
     std::fs::write(&path, "served_origins = [\"https://groundinglab.io\"]\n").unwrap();
