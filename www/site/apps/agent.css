@@ -1,0 +1,73 @@
+/* AI handoff on Apps. A text card, not a download chip (.fmt). */
+
+.agent-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  box-sizing: border-box;
+  max-width: var(--measure);
+  margin: 0 0 1.35rem;
+  padding: 0.9rem 1.1rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.agent-card:hover,
+.agent-card:focus-visible {
+  border-color: var(--accent);
+}
+
+.agent-card .agent-kicker {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+
+.agent-card strong {
+  font-size: 1.12rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.agent-card strong::after {
+  content: " \2192";
+}
+
+.agent-card > span:last-child {
+  color: var(--text-soft);
+  line-height: 1.5;
+  max-width: 36rem;
+}
+
+/* The prompt sits in the reading measure. Copy stays above the block so the
+   text is not squeezed beside the button. Lines are wrapped in the source. */
+.cmd.agent-prompt {
+  flex-direction: column;
+  align-items: stretch;
+  max-width: var(--measure);
+}
+
+.cmd.agent-prompt .copy-btn {
+  order: -1;
+  align-self: flex-start;
+  max-height: none;
+  margin-bottom: 0.45rem;
+}
+
+.cmd.agent-prompt pre {
+  width: 100%;
+}
+
+.cmd.agent-prompt pre code {
+  white-space: pre-wrap;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: manual;
+  -webkit-hyphens: manual;
+}

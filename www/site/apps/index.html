@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="canonical" href="https://groundinglab.io/apps/" />
+<meta property="og:url" content="https://groundinglab.io/apps/" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="groundinglab" />
+<meta property="og:title" content="Apps · groundinglab" />
+<meta property="og:description" content="Apps that make a PCOC on your own device, and a page you can hand to a coding agent to integrate one. Linux and Android install steps included." />
+<meta property="og:image" content="https://groundinglab.io/media/share/groundinglab-share.png" />
+<meta name="description" content="Apps that make a PCOC on your own device, and a page you can hand to a coding agent to integrate one. Linux and Android install steps included." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:site" content="@groundinglab_io" />
+<meta name="twitter:title" content="Apps · groundinglab" />
+<meta name="twitter:description" content="Apps that make a PCOC on your own device, and a page you can hand to a coding agent to integrate one. Linux and Android install steps included." />
+<meta name="twitter:image" content="https://groundinglab.io/media/share/groundinglab-share.png" />
+<title>Apps · groundinglab</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="stylesheet" href="/verify/verify.css">
+<link rel="stylesheet" href="/nav.css">
+<link rel="stylesheet" href="/pages.css">
+<link rel="stylesheet" href="/apps/agent.css">
+<script src="/theme.js"></script>
+</head>
+<body>
+<header class="site-header">
+  <div class="site-header-bar">
+    <a class="home-mark" href="/"><svg class="gl-icon" viewBox="0 0 400 400" role="img" aria-label="groundinglab"><circle cx="200" cy="198" r="187" fill="none" stroke="currentColor" stroke-width="13"/><g fill="currentColor"><rect x="185" y="60" width="30" height="110" rx="15"/><rect x="71" y="152" width="262" height="34" rx="17"/><rect x="91" y="211" width="222" height="35" rx="17.5"/><rect x="143" y="270" width="121" height="35" rx="17.5"/></g></svg></a>
+    <a class="nav-signin" href="/signin/">Sign in</a>
+  </div>
+  <nav class="site-nav" aria-label="Site">
+    <div class="site-nav-inner">
+      <a href="/">What is it?</a>
+      <a href="/how-it-works/">How it works</a>
+      <a href="/apps/" aria-current="page">Apps</a>
+      <a href="/integrate/">For services</a>
+      <a href="/docs/">Learn</a>
+      <a href="/technical/spec/">Spec</a>
+    </div>
+  </nav>
+</header>
+<main class="works">
+
+  <h1>Apps</h1>
+  <p class="lead">Make the identifier that lets you into a service without a phone number or a big-platform sign-in. A PCOC, a self-issued identifier, carries a cost in memory and time, so bots can't make them for free. These apps make one on your own device. Pick your platform.</p>
+  <p class="release-line">Coming soon: an Amethyst integration for Nostr, and a Telegram app.</p>
+  <div class="platforms" role="tablist" aria-label="Platform"><button type="button" role="tab" id="tab-linux" aria-controls="p-linux" aria-selected="true">Linux</button><button type="button" role="tab" id="tab-android" aria-controls="p-android" aria-selected="false" tabindex="-1">Android</button><button type="button" role="tab" id="tab-windows" aria-controls="p-windows" aria-selected="false" tabindex="-1">Windows</button></div>
+  <a class="agent-card" href="/apps/ai/">
+    <span class="agent-kicker">Not a download</span>
+    <strong>AI</strong>
+    <span>Point a coding agent at the specification. For your own app or service.</span>
+  </a>
+  <section class="app-panel" id="p-linux" role="tabpanel" aria-labelledby="tab-linux">
+    <div class="formats">
+      <a class="fmt main" href="https://pub-54bc1adbb1da45aba1b293480fe7105e.r2.dev/demonstrations/pcoc-desktop-v0.1.7.flatpak"><strong>Flatpak</strong><small>Any distribution · 1.6 MB</small></a>
+      <span class="fmt soon"><strong>AppImage</strong><small>Coming soon</small></span>
+      <span class="fmt soon"><strong>.deb</strong><small>Coming soon</small></span>
+    </div>
+    <p class="release-line">PCOC Hike 0.1.7 · built 24 Oct 2026 · <a href="https://github.com/groundinglab/pcoc/tree/desktop-v0.1.7/apps/desktop">Source at this version</a></p>
+    <h2 id="desktop">Install it</h2>
+    <p>Paste each step into a terminal, in order.</p>
+    <div class="setup "><dl class="setup-meta"><dt>OS</dt><dd>Any Linux with Flatpak. The commands are for Debian 13 or Ubuntu 24.04; Ubuntu 24.04 should behave the same, but it was not tested.</dd><dt>You need</dt><dd>Flatpak and the Flathub remote, and about 1.1 GB free for the GNOME runtime</dd><dt>Time</dt><dd>About 5 minutes, mostly the runtime download</dd></dl><p class="tested-line">Tested on Debian 13, 21 Oct 2026.</p><div class="steps"><div class="step"><h3 class="step-h">1. Install Flatpak</h3><p>Fedora and Linux Mint come with Flatpak: skip this step.</p><div class="cmd"><pre tabindex="0"><code>sudo apt update
+sudo apt install -y flatpak</code></pre><button class="copy-btn" type="button" aria-label="Copy step 1: Install Flatpak">Copy</button></div></div><div class="step"><h3 class="step-h">2. Add Flathub</h3><p>The app gets its GNOME runtime from Flathub.</p><div class="cmd"><pre tabindex="0"><code>flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo</code></pre><button class="copy-btn" type="button" aria-label="Copy step 2: Add Flathub">Copy</button></div></div><div class="step"><h3 class="step-h">3. Download the app</h3><div class="cmd"><pre tabindex="0"><code>curl -fLO https://pub-54bc1adbb1da45aba1b293480fe7105e.r2.dev/demonstrations/pcoc-desktop-v0.1.7.flatpak</code></pre><button class="copy-btn" type="button" aria-label="Copy step 3: Download the app">Copy</button></div></div><div class="step"><h3 class="step-h">4. Check the download</h3><p>The number must match exactly. If it does not, delete the download and try again.</p><div class="cmd"><pre tabindex="0"><code>sha256sum pcoc-desktop-v0.1.7.flatpak</code></pre><button class="copy-btn" type="button" aria-label="Copy step 4: Check the download">Copy</button></div><p class="expect-label">Expected output</p><pre class="expect" tabindex="0"><code>ae1bd64f7ca1a6c5ee066d0256420de66b9a17c977f9f2e880a2bb13595ba5e4  pcoc-desktop-v0.1.7.flatpak</code></pre></div><div class="step"><h3 class="step-h">5. Install it</h3><p>This also downloads the GNOME 50 runtime if you do not have it yet, about 1.1 GB.</p><div class="cmd"><pre tabindex="0"><code>flatpak install --user -y ./pcoc-desktop-v0.1.7.flatpak</code></pre><button class="copy-btn" type="button" aria-label="Copy step 5: Install it">Copy</button></div></div><div class="step"><h3 class="step-h">6. Check the result</h3><div class="cmd"><pre tabindex="0"><code>flatpak info --user app.pcoc.Hike</code></pre><button class="copy-btn" type="button" aria-label="Copy step 6: Check the result">Copy</button></div><p class="expect-label">Expected output (from the second line)</p><pre class="expect" tabindex="0"><code>          ID: app.pcoc.Hike
+         Ref: app/app.pcoc.Hike/x86_64/master
+        Arch: x86_64
+      Branch: master
+     Version: 0.1.7
+…</code></pre></div><div class="step"><h3 class="step-h">7. Run it</h3><p>It also appears in your applications menu (on some desktops, after you log out and back in). Then follow the <a href="/guides/desktop/">desktop guide</a>.</p><div class="cmd"><pre tabindex="0"><code>flatpak run --user app.pcoc.Hike</code></pre><button class="copy-btn" type="button" aria-label="Copy step 7: Run it">Copy</button></div></div></div></div>
+    <a class="poster" href="/guides/desktop/"><img src="https://pub-54bc1adbb1da45aba1b293480fe7105e.r2.dev/demonstrations/pcoc-desktop-guide-v3-poster.jpg" width="320" height="180" loading="lazy" alt="Video: How to make a PCOC on desktop."><span>Watch the video in the desktop guide</span></a>
+    <details class="more"><summary>Release details</summary>
+    <dl class="facts">
+      <dt>Version</dt><dd>0.1.7, tag <a href="https://github.com/groundinglab/pcoc/tree/desktop-v0.1.7"><code>desktop-v0.1.7</code></a></dd>
+      <dt>Size</dt><dd>1.6 MB (1684464 bytes)</dd>
+      <dt>Commit</dt><dd><code class="hash">d4cc86f306a6ab30ba21c8603d5e397216d7daf8</code></dd>
+      <dt>sha256</dt><dd><code class="hash">ae1bd64f7ca1a6c5ee066d0256420de66b9a17c977f9f2e880a2bb13595ba5e4</code></dd>
+      <dt>Rebuild</dt><dd>From the tag, with <span class="gh" data-gh="pcoc/blob/desktop-v0.1.7/apps/desktop/flatpak/build-bundle.sh"><code>apps/desktop/flatpak/build-bundle.sh</code></span>. The rebuild is not bit-for-bit identical across machines; the sha256 checks the published download.</dd>
+    </dl></details>
+    <details class="more"><summary>Or build it from source</summary><div class="setup src"><dl class="setup-meta"><dt>OS</dt><dd>Debian 13 or Ubuntu 24.04, in a terminal. Ubuntu 24.04 should behave the same; it was not tested. It needs GTK 4.14+ and libadwaita 1.5+.</dd><dt>You need</dt><dd>Rust 1.99.0 (rustup installs it from the repository pin), the GTK 4 and libadwaita development packages, git and curl</dd><dt>Time</dt><dd>About 10 minutes</dd></dl><p class="tested-line">Tested on Debian 13, 21 Oct 2026.</p><div class="steps"><div class="step"><h3 class="step-h">1. Install the system packages</h3><div class="cmd"><pre tabindex="0"><code>sudo apt update
+sudo apt install -y build-essential pkg-config libgtk-4-dev libadwaita-1-dev git curl</code></pre><button class="copy-btn" type="button" aria-label="Copy step 1: Install the system packages">Copy</button></div></div><div class="step"><h3 class="step-h">2. Install rustup</h3><p>The app folder pins Rust 1.99.0, and rustup installs it on the next <code>cargo</code> command.</p><div class="cmd"><pre tabindex="0"><code>curl --proto &#x27;=https&#x27; --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
+. &quot;$HOME/.cargo/env&quot;</code></pre><button class="copy-btn" type="button" aria-label="Copy step 2: Install rustup">Copy</button></div></div><div class="step"><h3 class="step-h">3. Get the code</h3><div class="cmd"><pre tabindex="0"><code>git clone https://github.com/groundinglab/pcoc.git
+cd pcoc/apps/desktop</code></pre><button class="copy-btn" type="button" aria-label="Copy step 3: Get the code">Copy</button></div></div><div class="step"><h3 class="step-h">4. Build</h3><div class="cmd"><pre tabindex="0"><code>cargo build --release --locked</code></pre><button class="copy-btn" type="button" aria-label="Copy step 4: Build">Copy</button></div></div><div class="step"><h3 class="step-h">5. Check the result</h3><div class="cmd"><pre tabindex="0"><code>cargo test --locked -p pcoc-hike-core</code></pre><button class="copy-btn" type="button" aria-label="Copy step 5: Check the result">Copy</button></div><p class="expect-label">Expected output (each test group ends like this)</p><pre class="expect" tabindex="0"><code>test result: ok. …</code></pre></div><div class="step"><h3 class="step-h">6. Run it</h3><div class="cmd"><pre tabindex="0"><code>cargo run --release --locked -p pcoc-hike</code></pre><button class="copy-btn" type="button" aria-label="Copy step 6: Run it">Copy</button></div></div></div></div></details></section><section class="app-panel" id="p-android" role="tabpanel" aria-labelledby="tab-android" hidden>
+    <div class="formats">
+      <a class="fmt main" href="https://pub-54bc1adbb1da45aba1b293480fe7105e.r2.dev/demonstrations/primal-pcoc-aosp-debug.apk"><strong>Primal (groundinglab fork, demo build)</strong><small>Android APK · debug build · 365 MB</small></a>
+      <span class="fmt soon"><strong>Amethyst integration</strong><small>Coming soon</small></span>
+      <span class="fmt soon"><strong>Telegram app</strong><small>Coming soon</small></span>
+    </div>
+    <p class="release-line">Android app 3.5.50 · built 25 Oct 2026 · <a href="https://github.com/groundinglab/primal-pcoc/commit/5a1d4f5f3c06cd92cfc1ae758418a47122853d3a">Commit 5a1d4f5f3</a></p>
+    <div class="app-details">
+      <p>The phone build is a groundinglab fork of Primal, the open-source Nostr client: a demo build, not an official Primal release.</p>
+      <p>It is a debug build, so it is large. Side-load only, not the Play Store. This build uses SDK 2.3.1.</p>
+      <p>Reset flush link and previous signings. Test build ahead of <a href="https://github.com/groundinglab/primal-pcoc/pull/54">primal-pcoc #54</a>, which is not merged.</p>
+    </div>
+    <h2 id="phone">Install it</h2>
+    <div class="setup "><dl class="setup-meta"><dt>Phone</dt><dd>Android, with installs from your browser or files app allowed</dd><dt>Computer</dt><dd>Optional, to check the download: Debian 13 or Ubuntu 24.04</dd></dl><p class="tested-line">Download checksum verified 25 Oct 2026.</p><div class="steps"><div class="step"><h3 class="step-h">1. On the phone: download and install</h3><p>Open this page on the phone and tap the Primal button above. When the download finishes, open it, and allow your browser to install apps if Android asks. It is side-load only, not on the Play Store.</p></div><div class="step"><h3 class="step-h">2. Or, on a computer: download it</h3><p>365 MB.</p><div class="cmd"><pre tabindex="0"><code>curl -fLO https://pub-54bc1adbb1da45aba1b293480fe7105e.r2.dev/demonstrations/primal-pcoc-aosp-debug.apk</code></pre><button class="copy-btn" type="button" aria-label="Copy step 2: Or, on a computer: download it">Copy</button></div></div><div class="step"><h3 class="step-h">3. Check the download</h3><div class="cmd"><pre tabindex="0"><code>sha256sum primal-pcoc-aosp-debug.apk</code></pre><button class="copy-btn" type="button" aria-label="Copy step 3: Check the download">Copy</button></div><p class="expect-label">Expected output</p><pre class="expect" tabindex="0"><code>6fd62c90ca78b3905d401b63fbe48dc3dcaf81ef97e3131b03dc7a664abbe69c  primal-pcoc-aosp-debug.apk</code></pre></div><div class="step"><h3 class="step-h">4. Install it over USB</h3><p>Turn on USB debugging on the phone beforehand: Settings, About phone, tap Build number seven times, then Developer options. This step needs a phone attached, so it was not tested here.</p><div class="cmd"><pre tabindex="0"><code>sudo apt install -y adb
+adb install primal-pcoc-aosp-debug.apk</code></pre><button class="copy-btn" type="button" aria-label="Copy step 4: Install it over USB">Copy</button></div><p class="expect-label">Expected output (last line)</p><pre class="expect" tabindex="0"><code>Success</code></pre></div></div></div>
+    <p>Then follow the <a href="/guides/phone/">phone guide</a>.</p>
+    <a class="poster" href="/guides/phone/"><img src="https://pub-54bc1adbb1da45aba1b293480fe7105e.r2.dev/demonstrations/pcoc-phone-guide-20261018-poster.jpg" width="320" height="180" loading="lazy" alt="Video: How to use PCOC with Android."><span>Watch the video in the phone guide</span></a>
+    <details class="more"><summary>Release details</summary>
+    <dl class="facts">
+      <dt>Version</dt><dd>3.5.50 (versionCode 2747), commit <a href="https://github.com/groundinglab/primal-pcoc/commit/5a1d4f5f3c06cd92cfc1ae758418a47122853d3a"><code>5a1d4f5f3</code></a></dd>
+      <dt>Size</dt><dd>365 MB (382598590 bytes)</dd>
+      <dt>Built</dt><dd><time datetime="2026-10-24T15:37:06Z">25 Oct 2026</time></dd>
+      <dt>Commit</dt><dd><code class="hash">5a1d4f5f3c06cd92cfc1ae758418a47122853d3a</code></dd>
+      <dt>sha256</dt><dd><code class="hash">6fd62c90ca78b3905d401b63fbe48dc3dcaf81ef97e3131b03dc7a664abbe69c</code></dd>
+      <dt>Signing</dt><dd>Debug key</dd>
+      <dt>Changes</dt><dd>Reset flush link and previous signings. Test sideload ahead of <a href="https://github.com/groundinglab/primal-pcoc/pull/54">primal-pcoc #54</a> (not merged).</dd>
+      <dt>Rebuild</dt><dd>From commit <a href="https://github.com/groundinglab/primal-pcoc/commit/5a1d4f5f3c06cd92cfc1ae758418a47122853d3a"><code>5a1d4f5f3</code></a>, following the <a href="https://github.com/groundinglab/primal-pcoc/blob/5a1d4f5f3c06cd92cfc1ae758418a47122853d3a/README.md">primal-pcoc README</a> (<code>./gradlew :app:assembleAospDebug</code>). The rebuild is not bit-for-bit identical; the sha256 checks the published download.</dd>
+    </dl></details></section><section class="app-panel" id="p-windows" role="tabpanel" aria-labelledby="tab-windows" hidden><div class="formats"><span class="fmt soon"><strong>Windows</strong><small>Coming soon</small></span></div></section>
+  <section id="integrating"><h2>Build it into your own app</h2>
+  <p>Both apps are demonstrations of the PCOC SDK. To make PCOCs in your own app, start with the <a href="/make/#build">SDK setup</a>; to accept them at sign-in, see the <a href="/admission-gate/">admission gate</a>. To hand that work to a coding agent, start from <a href="/apps/ai/">the specification</a>.</p></section>
+</main>
+<script src="/footer.js"></script>
+<script src="/tabs.js"></script>
+<script src="/copy.js"></script>
+</body>
+</html>
