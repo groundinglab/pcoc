@@ -92,6 +92,9 @@ pub struct State {
     pub produce: ProduceView,
     pub produce_run: Option<LiveRun>,
     pub produce_output: Option<PathBuf>,
+    /// Gossip override dialed by the hike that is running. `Some("")` is DNS seeds.
+    /// Settings can change `config.gossip_peer` without touching this.
+    pub hike_peer: Option<String>,
     /// A finished hike opened from the left column. Absent while setup or live is showing.
     pub result_path: Option<PathBuf>,
     pub verify: VerifyState,

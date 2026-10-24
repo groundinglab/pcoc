@@ -29,7 +29,7 @@ use super::wire::{
     decode_headers, decode_inv, encode_getheaders, encode_headers, encode_inv, encode_message,
     encode_pong, encode_version, is_block_inv, take_message, MAINNET_MAGIC, MAX_HEADERS, MSG_BLOCK,
 };
-use crate::TipTick;
+use crate::{PeerCensus, TipTick};
 
 const READ_WAIT: Duration = Duration::from_millis(400);
 const DIAL_WAIT: Duration = Duration::from_secs(8);
@@ -484,6 +484,10 @@ impl Peer {
     fn voting(&self) -> bool {
         self.saw_version && self.saw_verack && self.asked && self.caught_up
     }
+
+    fn handshake_done(&self) -> bool {
+        self.saw_version && self.saw_verack
+    }
 }
 
 pub struct Session {
@@ -503,6 +507,8 @@ pub struct Session {
     /// Set by a producer Stop. Bari leaves this empty. Checked between reads,
     /// never inside a header check, so a leg is not paused by the wait itself.
     cancel: Option<Arc<AtomicBool>>,
+    /// Desktop peer panel. Absent for Bari and for tests that do not ask.
+    census: Option<Arc<PeerCensus>>,
 }
 
 impl Session {
@@ -564,7 +570,32 @@ impl Session {
             below_since: None,
             last_ping: 0,
             cancel,
+            census: None,
         }
+    }
+
+    pub(crate) fn share_census(&mut self, census: Arc<PeerCensus>) {
+        self.census = Some(census);
+        self.note_census();
+    }
+
+    /// Handshake-complete peers, plus every socket still in the pool.
+    fn note_census(&self) {
+        let Some(census) = &self.census else {
+            return;
+        };
+        let mut handshake = 0u32;
+        let mut addrs = Vec::new();
+        for peer in &self.peers {
+            if !peer.handshake_done() {
+                continue;
+            }
+            handshake += 1;
+            if let Some(addr) = peer.pipe.addr() {
+                addrs.push(addr.to_string());
+            }
+        }
+        census.write(handshake, self.peers.len() as u32, addrs);
     }
 
     pub(crate) fn is_open(&self) -> bool {
@@ -633,6 +664,7 @@ impl Session {
             }
             self.sweep_silence()?;
             let mut progress = self.pump_all()?;
+            self.note_census();
             self.maybe_ping()?;
             if let Some(hash) = self.agreed_extension() {
                 self.commit(hash)?;
@@ -1223,6 +1255,41 @@ mod tests {
         assert_eq!(tip.hash, header_hash(&header));
         assert_eq!(tip.height, 81);
         assert_eq!(tip.previous, Some(anchor_hash));
+    }
+
+    #[test]
+    fn census_counts_finished_handshakes_and_a_real_zero() {
+        let (chain, _anchor, anchor_hash) = fixed_chain();
+        let header = child(anchor_hash, 1_700_000_100);
+        let census = crate::PeerCensus::new();
+        assert!(census.snapshot().is_none());
+        let peers = vec![
+            ScriptedPeer::new(anchor_hash, vec![header], false),
+            ScriptedPeer::new(anchor_hash, vec![header], false),
+        ];
+        let mut session = Session::from_scripted(chain, peers, Duration::from_secs(2)).unwrap();
+        session.share_census(Arc::clone(&census));
+        let dialing = census.snapshot().expect("counted before the handshake");
+        assert_eq!(dialing.handshake, 0);
+        assert_eq!(dialing.sockets, 2);
+        assert!(!dialing.feed_stopped);
+        let tip = session.opening_tip().unwrap();
+        assert_eq!(tip.hash, header_hash(&header));
+        let live = census.snapshot().expect("counted after the handshake");
+        assert_eq!(live.handshake, 2);
+        assert_eq!(live.sockets, 2);
+
+        let (chain, _anchor, _anchor_hash) = fixed_chain();
+        let empty = crate::PeerCensus::new();
+        let mut session =
+            Session::from_scripted(chain, Vec::new(), Duration::from_millis(1)).unwrap();
+        session.share_census(Arc::clone(&empty));
+        let none = empty.snapshot().expect("empty pool is a real zero");
+        assert_eq!(none.handshake, 0);
+        assert_eq!(none.sockets, 0);
+        assert_eq!(session.opening_tip().unwrap_err(), "too few peers");
+        let still = empty.snapshot().expect("still known");
+        assert_eq!((still.handshake, still.sockets), (0, 0));
     }
 
     #[test]

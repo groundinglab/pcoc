@@ -18,8 +18,8 @@ mod recorded;
 mod session;
 mod wire;
 
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chain::{mine_header, synth_bits, Chain};
@@ -58,6 +58,101 @@ pub struct HeaderError {
     pub message: String,
 }
 
+/// One published look at the live peer pool.
+///
+/// `handshake` counts peers that finished `version` and `verack`. `sockets`
+/// counts every peer the session is still holding, including those still in
+/// the handshake. `addrs` names the handshake-complete peers when the pipe
+/// has an address.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PeerSnapshot {
+    pub handshake: u32,
+    pub sockets: u32,
+    pub addrs: Vec<String>,
+    pub feed_stopped: bool,
+}
+
+#[derive(Debug)]
+struct CensusSlot {
+    known: bool,
+    handshake: u32,
+    sockets: u32,
+    addrs: Vec<String>,
+}
+
+/// Shared handshake census. The gossip thread writes it. Readers never take
+/// a lock the header walk holds.
+///
+/// [`PeerCensus::snapshot`] is `None` until the session has counted once.
+/// A later zero is a real empty pool, not "the count was never wired".
+#[derive(Debug)]
+pub struct PeerCensus {
+    slot: Mutex<CensusSlot>,
+    feed_stopped: AtomicBool,
+}
+
+impl PeerCensus {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            slot: Mutex::new(CensusSlot {
+                known: false,
+                handshake: 0,
+                sockets: 0,
+                addrs: Vec::new(),
+            }),
+            feed_stopped: AtomicBool::new(false),
+        })
+    }
+
+    pub fn snapshot(&self) -> Option<PeerSnapshot> {
+        let slot = self
+            .slot
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        slot.known.then(|| PeerSnapshot {
+            handshake: slot.handshake,
+            sockets: slot.sockets,
+            addrs: slot.addrs.clone(),
+            feed_stopped: self.feed_stopped.load(Ordering::SeqCst),
+        })
+    }
+
+    /// Replace the published count. Ignored after [`PeerCensus::mark_stopped`].
+    pub fn write(&self, handshake: u32, sockets: u32, addrs: Vec<String>) {
+        if self.feed_stopped.load(Ordering::SeqCst) {
+            return;
+        }
+        let mut slot = self
+            .slot
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        if slot.known
+            && slot.handshake == handshake
+            && slot.sockets == sockets
+            && slot.addrs == addrs
+        {
+            return;
+        }
+        slot.known = true;
+        slot.handshake = handshake;
+        slot.sockets = sockets;
+        slot.addrs = addrs;
+    }
+
+    /// The gossip thread is gone and its sockets with it. Later writes are dropped.
+    pub fn mark_stopped(&self) {
+        let mut slot = self
+            .slot
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        slot.known = true;
+        slot.handshake = 0;
+        slot.sockets = 0;
+        slot.addrs.clear();
+        self.feed_stopped.store(true, Ordering::SeqCst);
+    }
+}
+
 enum LiveState {
     Pending {
         peer: String,
@@ -70,6 +165,7 @@ enum LiveState {
 /// A background thread owns it and publishes the latest tip.
 pub struct LiveClock {
     state: LiveState,
+    census: Option<Arc<PeerCensus>>,
 }
 
 /// Store the peer and dial on the first wait. Bari uses this. Nothing cancels it.
@@ -85,10 +181,19 @@ pub fn open_cancellable(peer: &str, cancel: Option<Arc<AtomicBool>>) -> LiveCloc
             peer: peer.to_owned(),
             cancel,
         },
+        census: None,
     }
 }
 
 impl LiveClock {
+    /// Publish handshake counts from the session this clock owns.
+    pub fn watch_peers(&mut self, census: Arc<PeerCensus>) {
+        if let LiveState::Running(session) = &mut self.state {
+            session.share_census(Arc::clone(&census));
+        }
+        self.census = Some(census);
+    }
+
     pub fn wait(&mut self, after: Option<[u8; 32]>) -> Result<Vec<TipTick>, HeaderError> {
         self.ensure_running()?;
         let session = match &mut self.state {
@@ -112,10 +217,13 @@ impl LiveClock {
             LiveState::Pending { peer, cancel } => (peer.clone(), cancel.clone()),
             LiveState::Running(_) => return Ok(()),
         };
-        let session = match cancel {
+        let mut session = match cancel {
             Some(flag) => connect_mainnet_cancellable(&peer, flag).map_err(fail)?,
             None => connect_mainnet(&peer).map_err(fail)?,
         };
+        if let Some(census) = self.census.clone() {
+            session.share_census(census);
+        }
         self.state = LiveState::Running(session);
         Ok(())
     }

@@ -50,6 +50,7 @@ fn blank_state(config: Config) -> State {
         produce: Default::default(),
         produce_run: None,
         produce_output: None,
+        hike_peer: None,
         result_path: None,
         verify: VerifyState::Empty,
         sign_in: SignInState::Empty,
@@ -101,6 +102,53 @@ mod sample {
         std::env::var(name).ok().filter(|v| !v.is_empty())
     }
 
+    /// Paint one Gossip panel state on the sample hike. Not a live dial.
+    fn preview_gossip(state: &mut State, mode: &str) {
+        use pcoc_hike_core::produce::model::{Phase, GOSSIP_NEED_TWO};
+        let named = "192.168.20.153:8333";
+        match mode {
+            "connecting" => {
+                state.produce.phase = Phase::Starting;
+                state.produce.peers = None;
+                state.produce.sockets = None;
+                state.produce.peer_addrs.clear();
+                state.produce.tip_height = None;
+                state.produce.tip_natural = None;
+                state.produce.tip_seen_ms = None;
+                state.produce.seed_height = None;
+                state.produce.feed_stopped = false;
+                state.produce.gossip_alert = None;
+                state.produce.legs_total = 0;
+                state.hike_peer = Some(named.to_owned());
+            }
+            "stalled" => {
+                state.produce.peers = Some(0);
+                state.produce.sockets = Some(0);
+                state.produce.peer_addrs.clear();
+                state.produce.feed_stopped = true;
+                state.produce.gossip_alert = None;
+                state.hike_peer = Some(named.to_owned());
+            }
+            "one" => {
+                state.produce.peers = Some(1);
+                state.produce.sockets = Some(1);
+                state.produce.peer_addrs = vec![named.to_owned()];
+                state.produce.feed_stopped = false;
+                state.produce.gossip_alert = Some(GOSSIP_NEED_TWO.to_owned());
+                state.hike_peer = Some(named.to_owned());
+            }
+            "live" => {
+                state.produce.peers = Some(2);
+                state.produce.sockets = Some(2);
+                state.produce.peer_addrs = vec![named.to_owned(), "173.212.199.219:8333".into()];
+                state.produce.feed_stopped = false;
+                state.produce.gossip_alert = None;
+                state.hike_peer = Some(named.to_owned());
+            }
+            _ => {}
+        }
+    }
+
     pub fn state() -> Option<State> {
         let moment_f = match env("PCOC_SAMPLE")?.as_str() {
             "r" => false,
@@ -137,6 +185,11 @@ mod sample {
             produce.apply(e);
         }
         state.produce = produce;
+        if let Some(mode) = env("PCOC_GOSSIP") {
+            // Screenshot states for the live Gossip panel. The sample feature
+            // is the only caller. A normal build has no PCOC_GOSSIP.
+            preview_gossip(&mut state, &mode);
+        }
 
         let other = [0x11u8; 32];
         let mut library = Vec::new();

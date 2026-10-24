@@ -4,18 +4,24 @@
 
 use super::events::{AskOutcome, ProduceEvent};
 use pcoc::profile::Profile;
-use pcoc_produce::bari::{
-    BariHub, HttpBari, LiveEvent, Progress, SilentBari, DEFAULT_BARI_URL, RESEND_AFTER,
-};
+use pcoc_produce::bari::{BariHub, HttpBari, LiveEvent, Progress, DEFAULT_BARI_URL, RESEND_AFTER};
 use pcoc_produce::live::{produce_live, LiveRunOpts, LiveStop};
-use pcoc_produce::source::{
-    FailClosedSource, GossipSource, HeldTip, ManualSource, TipSource, FAIL_CLOSED,
-};
+use pcoc_produce::source::{GossipSource, HeldTip, PeerCensus, PeerSnapshot, TipSource};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+/// How long a finished produce thread may sit in a running phase before the
+/// window treats the exit as unexpected. The terminal event usually wins.
+pub const UNEXPECTED_EXIT: Duration = Duration::from_secs(1);
+
+/// Panic, or a produce thread that ended with no terminal event.
+pub const PRODUCE_THREAD_EXITED: &str = "produce thread exited";
+
+/// How often the peer panel is told about handshake changes.
+const PEER_POLL: Duration = Duration::from_millis(200);
 
 pub type Emit = Arc<dyn Fn(ProduceEvent) + Send + Sync>;
 
@@ -45,6 +51,11 @@ impl LiveConfig {
 pub struct LiveRun {
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
+    /// Detached on drop. It exits when `stop` is set or the feed is marked stopped.
+    peers: Option<JoinHandle<()>>,
+    /// Latest handshake census. The 1s ticker reads this so a `Started` event
+    /// cannot leave the panel stuck after the watch already published.
+    census: Option<Arc<PeerCensus>>,
 }
 
 impl LiveRun {
@@ -62,13 +73,27 @@ impl LiveRun {
             .as_ref()
             .is_none_or(|thread| thread.is_finished())
     }
+
+    pub fn census(&self) -> Option<Arc<PeerCensus>> {
+        self.census.clone()
+    }
+}
+
+impl Drop for LiveRun {
+    fn drop(&mut self) {
+        // Detach. Joining the produce thread here would wait out the current leg.
+        drop(self.thread.take());
+        drop(self.peers.take());
+    }
 }
 
 pub fn start(config: LiveConfig, emit: Emit) -> LiveRun {
     let stop = Arc::new(AtomicBool::new(false));
     let peer = config.gossip_peer.clone().unwrap_or_default();
     let source = GossipSource::spawn(&peer, Arc::clone(&stop));
-    let progress = map_progress(&emit);
+    let census = source.census();
+    let progress = map_progress(&emit, Some(Arc::clone(&census)));
+    let peers = spawn_peer_watch(Arc::clone(&census), Arc::clone(&emit), Arc::clone(&stop));
     let bari = match HttpBari::open(
         &config.bari_url,
         RESEND_AFTER,
@@ -78,7 +103,13 @@ pub fn start(config: LiveConfig, emit: Emit) -> LiveRun {
         Ok(bari) => Arc::new(bari) as Arc<dyn BariHub>,
         Err(message) => {
             emit(ProduceEvent::Failed { message });
-            return LiveRun { stop, thread: None };
+            stop.store(true, Ordering::SeqCst);
+            return LiveRun {
+                stop,
+                thread: None,
+                peers: Some(peers),
+                census: Some(census),
+            };
         }
     };
     spawn(
@@ -89,6 +120,8 @@ pub fn start(config: LiveConfig, emit: Emit) -> LiveRun {
         stop,
         emit,
         progress,
+        Some(peers),
+        Some(census),
     )
 }
 
@@ -101,8 +134,10 @@ pub fn start_with(
     emit: Emit,
 ) -> LiveRun {
     let stop = Arc::new(AtomicBool::new(false));
-    let progress = map_progress(&emit);
-    spawn(config, profile, source, bari, stop, emit, progress)
+    let progress = map_progress(&emit, None);
+    spawn(
+        config, profile, source, bari, stop, emit, progress, None, None,
+    )
 }
 
 fn spawn(
@@ -113,6 +148,8 @@ fn spawn(
     stop: Arc<AtomicBool>,
     emit: Emit,
     progress: Progress,
+    peers: Option<JoinHandle<()>>,
+    census: Option<Arc<PeerCensus>>,
 ) -> LiveRun {
     let thread_stop = Arc::clone(&stop);
     let thread = std::thread::Builder::new()
@@ -122,7 +159,68 @@ fn spawn(
     LiveRun {
         stop,
         thread: Some(thread),
+        peers,
+        census,
     }
+}
+
+/// `true` when a finished produce thread has stayed in a running phase long
+/// enough that the terminal event is not merely in flight.
+pub fn produce_exit_is_unexpected(
+    running: bool,
+    finished: bool,
+    seen_for: Option<Duration>,
+) -> bool {
+    running && finished && seen_for.is_some_and(|waited| waited >= UNEXPECTED_EXIT)
+}
+
+fn spawn_peer_watch(census: Arc<PeerCensus>, emit: Emit, stop: Arc<AtomicBool>) -> JoinHandle<()> {
+    std::thread::Builder::new()
+        .name("pcoc-peers".into())
+        .spawn(move || {
+            let mut prev = None;
+            while !stop.load(Ordering::SeqCst) {
+                let snap = census.snapshot();
+                let stopped = snap.as_ref().is_some_and(|item| item.feed_stopped);
+                for event in census_events(&mut prev, snap) {
+                    emit(event);
+                }
+                if stopped {
+                    break;
+                }
+                std::thread::sleep(PEER_POLL);
+            }
+        })
+        .expect("spawn peer watch")
+}
+
+/// Events for a census change. `prev` is updated. The first unknown snapshot emits nothing.
+pub fn census_events(
+    prev: &mut Option<PeerSnapshot>,
+    snap: Option<PeerSnapshot>,
+) -> Vec<ProduceEvent> {
+    let Some(snap) = snap else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    let changed = prev.as_ref().is_none_or(|prior| {
+        prior.handshake != snap.handshake
+            || prior.sockets != snap.sockets
+            || prior.addrs != snap.addrs
+    });
+    if changed {
+        out.push(ProduceEvent::Gossip {
+            peers: snap.handshake,
+            sockets: snap.sockets,
+            addrs: snap.addrs.clone(),
+        });
+    }
+    let stopped = snap.feed_stopped && prev.as_ref().is_none_or(|prior| !prior.feed_stopped);
+    *prev = Some(snap);
+    if stopped {
+        out.push(ProduceEvent::TipFeedStopped);
+    }
+    out
 }
 
 fn run(
@@ -133,6 +231,27 @@ fn run(
     stop: &AtomicBool,
     emit: Emit,
     progress: Progress,
+) {
+    let emit_panic = Arc::clone(&emit);
+    let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        run_body(config, profile, source, bari, stop, &emit, &progress);
+    }))
+    .is_err();
+    if panicked {
+        emit_panic(ProduceEvent::Failed {
+            message: PRODUCE_THREAD_EXITED.to_owned(),
+        });
+    }
+}
+
+fn run_body(
+    config: LiveConfig,
+    profile: Profile,
+    source: Arc<dyn TipSource>,
+    bari: Arc<dyn BariHub>,
+    stop: &AtomicBool,
+    emit: &Emit,
+    progress: &Progress,
 ) {
     emit(ProduceEvent::Started {
         output: config.output.clone(),
@@ -145,7 +264,7 @@ fn run(
         out: &config.output,
         cancel: stop,
     };
-    match produce_live(&opts, source.as_ref(), bari.as_ref(), &progress) {
+    match produce_live(&opts, source.as_ref(), bari.as_ref(), progress) {
         Ok(product) => match write_atomically(&config.output, &product.bytes) {
             Ok(()) => {
                 let lines = product.stderr.lines().map(str::to_owned).collect();
@@ -166,7 +285,14 @@ fn run(
     }
 }
 
-fn map_progress(emit: &Emit) -> Progress {
+/// A positive handshake count to attach to a tip. Zero stays unknown here:
+/// the peer watch publishes zero together with the socket count.
+fn handshake_if_known(census: Option<&PeerCensus>) -> Option<u32> {
+    let snap = census?.snapshot()?;
+    (snap.handshake > 0).then_some(snap.handshake)
+}
+
+fn map_progress(emit: &Emit, census: Option<Arc<PeerCensus>>) -> Progress {
     let emit = Arc::clone(emit);
     let legs = Arc::new(AtomicU64::new(0));
     let seeded = Arc::new(AtomicBool::new(false));
@@ -207,7 +333,7 @@ fn map_progress(emit: &Emit) -> Progress {
                 emit(ProduceEvent::Tip {
                     height,
                     natural_hash: hash,
-                    peers: None,
+                    peers: handshake_if_known(census.as_deref()),
                     header_seen_unix_ms: at_ms,
                 });
             }
@@ -274,6 +400,8 @@ pub fn mock_tip(height: u64) -> HeldTip {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pcoc_produce::bari::SilentBari;
+    use pcoc_produce::source::{FailClosedSource, ManualSource, FAIL_CLOSED};
     use std::time::Duration;
 
     fn small() -> Profile {
@@ -371,6 +499,153 @@ mod tests {
         );
         assert!(!output.exists());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn census_events_emit_real_counts_and_a_stopped_feed() {
+        let mut prev = None;
+        assert!(census_events(&mut prev, None).is_empty());
+        assert!(prev.is_none());
+
+        let connecting = census_events(
+            &mut prev,
+            Some(PeerSnapshot {
+                handshake: 0,
+                sockets: 2,
+                addrs: Vec::new(),
+                feed_stopped: false,
+            }),
+        );
+        assert_eq!(
+            connecting,
+            vec![ProduceEvent::Gossip {
+                peers: 0,
+                sockets: 2,
+                addrs: Vec::new(),
+            }]
+        );
+
+        let live = census_events(
+            &mut prev,
+            Some(PeerSnapshot {
+                handshake: 2,
+                sockets: 2,
+                addrs: vec!["192.168.20.153:8333".into(), "173.212.199.219:8333".into()],
+                feed_stopped: false,
+            }),
+        );
+        match &live[..] {
+            [ProduceEvent::Gossip {
+                peers,
+                sockets,
+                addrs,
+            }] => {
+                assert_eq!(*peers, 2);
+                assert_eq!(*sockets, 2);
+                assert_eq!(addrs.len(), 2);
+            }
+            other => panic!("expected one gossip event, got {other:?}"),
+        }
+
+        let stopped = census_events(
+            &mut prev,
+            Some(PeerSnapshot {
+                handshake: 0,
+                sockets: 0,
+                addrs: Vec::new(),
+                feed_stopped: true,
+            }),
+        );
+        assert!(stopped.iter().any(|event| matches!(
+            event,
+            ProduceEvent::Gossip {
+                peers: 0,
+                sockets: 0,
+                ..
+            }
+        )));
+        assert!(stopped
+            .iter()
+            .any(|event| matches!(event, ProduceEvent::TipFeedStopped)));
+    }
+
+    #[test]
+    fn peer_watch_emits_a_mock_handshake_count() {
+        let census = PeerCensus::new();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let emit: Emit = Arc::new(move |event| {
+            let _ = tx.send(event);
+        });
+        let stop = Arc::new(AtomicBool::new(false));
+        let handle = spawn_peer_watch(census.clone(), emit, Arc::clone(&stop));
+        census.write(
+            2,
+            2,
+            vec!["192.168.20.153:8333".into(), "173.212.199.219:8333".into()],
+        );
+        let event = rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("gossip event");
+        match event {
+            ProduceEvent::Gossip {
+                peers,
+                sockets,
+                addrs,
+            } => {
+                assert_eq!(peers, 2);
+                assert_eq!(sockets, 2);
+                assert_eq!(
+                    addrs,
+                    vec![
+                        "192.168.20.153:8333".to_owned(),
+                        "173.212.199.219:8333".to_owned()
+                    ]
+                );
+            }
+            other => panic!("expected Gossip, got {other:?}"),
+        }
+        census.mark_stopped();
+        let mut saw_stop = false;
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        while std::time::Instant::now() < deadline {
+            match rx.recv_timeout(Duration::from_millis(50)) {
+                Ok(ProduceEvent::TipFeedStopped) => {
+                    saw_stop = true;
+                    break;
+                }
+                Ok(_) => {}
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+        }
+        assert!(saw_stop, "a dead gossip feed must emit TipFeedStopped");
+        stop.store(true, Ordering::SeqCst);
+        handle.join().expect("peer watch");
+    }
+
+    #[test]
+    fn unexpected_exit_waits_for_an_in_flight_terminal_event() {
+        assert!(!produce_exit_is_unexpected(true, true, None));
+        assert!(!produce_exit_is_unexpected(
+            true,
+            true,
+            Some(Duration::from_millis(200))
+        ));
+        assert!(produce_exit_is_unexpected(
+            true,
+            true,
+            Some(UNEXPECTED_EXIT)
+        ));
+        assert!(!produce_exit_is_unexpected(
+            false,
+            true,
+            Some(UNEXPECTED_EXIT)
+        ));
+        assert!(!produce_exit_is_unexpected(
+            true,
+            false,
+            Some(UNEXPECTED_EXIT)
+        ));
     }
 
     #[test]

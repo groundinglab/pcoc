@@ -943,34 +943,85 @@ fn words(n: usize) -> &'static str {
 fn gossip_panel(app: &Rc<App>) -> gtk::Widget {
     let s = app.state.borrow();
     let on = s.learn();
-    let (peers, header, seen) = s.produce.gossip_lines();
+    let panel = s.produce.gossip_panel(s.hike_peer.as_deref());
     drop(s);
     let c = card("Gossip", &["§9"], &[], on);
-    let peers_line = line(&format!("Peers {peers}"), &["strong"]);
-    let header_line = line(&format!("Header {header}"), &["mono", "small"]);
-    header_line.set_wrap(true);
-    let seen_line = line(&format!("Seen {seen}"), &["muted", "small"]);
-    c.body.append(&peers_line);
-    c.body.append(&header_line);
-    c.body.append(&seen_line);
+    c.body.append(&line(
+        "Multi-peer Bitcoin tip feed. A new block counts once two peers agree.",
+        &["lead"],
+    ));
+    let status = line(&panel.status, &["strong", panel.status_tone]);
+    let peers = line(&panel.peers, &["strong"]);
+    let from = line(&panel.from, &["muted", "small"]);
+    from.set_wrap(true);
+    let addrs = line(&panel.addrs, &["mono", "small"]);
+    addrs.set_wrap(true);
+    let header = line(&panel.header, &["mono", "small"]);
+    header.set_wrap(true);
+    let seen = line(&panel.seen, &["muted", "small"]);
+    let note = line(&panel.note, &["small", "amber"]);
+    note.set_wrap(true);
+    c.body.append(&status);
+    c.body.append(&gossip_row("Peers", &peers));
+    let addrs_row = gossip_row("Addr", &addrs);
+    addrs_row.set_visible(!panel.addrs.is_empty());
+    c.body.append(&addrs_row);
+    c.body.append(&gossip_row("From", &from));
+    c.body.append(&gossip_row("Tip", &header));
+    c.body.append(&gossip_row("Seen", &seen));
+    note.set_visible(!panel.note.is_empty());
+    c.body.append(&note);
     app.tick(Page::Produce, {
-        let peers_line = peers_line.clone();
-        let header_line = header_line.clone();
-        let seen_line = seen_line.clone();
+        let status = status.clone();
+        let peers = peers.clone();
+        let from = from.clone();
+        let addrs = addrs.clone();
+        let addrs_row = addrs_row.clone();
+        let header = header.clone();
+        let seen = seen.clone();
+        let note = note.clone();
         move |s: &State| {
-            let (peers, header, seen) = s.produce.gossip_lines();
-            peers_line.set_text(&format!("Peers {peers}"));
-            header_line.set_text(&format!("Header {header}"));
-            seen_line.set_text(&format!("Seen {seen}"));
+            let panel = s.produce.gossip_panel(s.hike_peer.as_deref());
+            paint_tone(&status, panel.status_tone);
+            status.set_text(&panel.status);
+            peers.set_text(&panel.peers);
+            from.set_text(&panel.from);
+            addrs.set_text(&panel.addrs);
+            addrs_row.set_visible(!panel.addrs.is_empty());
+            header.set_text(&panel.header);
+            seen.set_text(&panel.seen);
+            note.set_text(&panel.note);
+            note.set_visible(!panel.note.is_empty());
         }
     });
     learn(
         &c.body,
         &c.root,
-        "Peers come from the named override, or from the DNS seeds when that field is empty. This panel does not read the index.",
+        "Bitcoin gossip keeps more than one peer so a new header is seen when two of them agree. A named override is dialed first; the rest come from the DNS seeds. The count is peers that finished the version handshake. Connecting is not zero. This panel does not read the index.",
         on,
     );
     c.root.upcast()
+}
+
+fn gossip_row(label: &str, value: &gtk::Label) -> gtk::Box {
+    let row = hbox(12);
+    let name = line(label, &["muted", "small"]);
+    name.set_width_chars(6);
+    name.set_xalign(0.0);
+    row.append(&name);
+    value.set_hexpand(true);
+    value.set_xalign(0.0);
+    row.append(value);
+    row
+}
+
+fn paint_tone(label: &gtk::Label, tone: &str) {
+    for class in ["teal", "amber", "magenta", "muted"] {
+        label.remove_css_class(class);
+    }
+    if !tone.is_empty() && tone != "strong" {
+        label.add_css_class(tone);
+    }
 }
 
 fn log_drawer(app: &Rc<App>) -> gtk::Widget {
