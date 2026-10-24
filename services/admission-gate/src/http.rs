@@ -6,6 +6,8 @@
 //! GET  /v1/health            -> 200 version, commit, spec kind, config summary
 //! POST /v1/sign-in           -> locked §15.1 wire
 //! GET  /v1/sign-in/result/{nonce} -> { "outcome" }
+//! POST /v1/flush/challenge   -> mint a signed-flush challenge (config flush_claims)
+//! POST /v1/flush             -> BIP-340 flush of that key's login cache
 //! GET  /latest.json          -> unsigned tip, after a durable line, plus policy
 //! GET  /log/{YYYY-MM-DD}.jsonl -> decision lines for that UTC date
 //! GET  /log/{YYYY-MM-DD}/{seq} -> one decision object
@@ -17,7 +19,7 @@
 //! routes. This process does not mint a session.
 
 use crate::config::Config;
-use crate::door::{Door, LockedThorough, ThoroughJob};
+use crate::door::{Door, FlushResult, LockedThorough, ThoroughJob};
 use crate::jobs::{EnqueueError, JobStore};
 use crate::policy::{self, AdmissionPolicy};
 use crate::ratelimit::RateLimiter;
@@ -114,6 +116,11 @@ impl Service {
                 "/v1/sign-in/result/{nonce}",
                 get(get_sign_in_result).options(preflight),
             )
+            .route(
+                "/v1/flush/challenge",
+                post(post_flush_challenge).options(preflight),
+            )
+            .route("/v1/flush", post(post_flush).options(preflight))
             .route("/latest.json", get(get_latest).options(preflight))
             .route("/log/{day}/{seq}", get(get_line).options(preflight))
             .route("/log/{name}", get(get_day).options(preflight))
@@ -480,7 +487,8 @@ fn spawn_locked(door: Door, jobs: JobStore, job: LockedThorough) {
     tokio::spawn(async move {
         // The slot taken in sign_in_locked is released when this guard drops:
         // on every return, on a hold, and on a panic unwind.
-        let _slot = crate::door::PendingSlot::new(door.clone(), job.pending_key());
+        let _slot =
+            crate::door::PendingSlot::new(door.clone(), job.pending_key(), job.pending_epoch);
         // Banned since the slot was taken (another task's ban): ignored, no
         // fast phase, no line, no return. The website stays pending.
         if door.is_banned(&job.public_key) {
@@ -508,6 +516,118 @@ fn spawn_locked(door: Door, jobs: JobStore, job: LockedThorough) {
             ) => {}
         }
     });
+}
+
+fn flush_off(svc: &Service, headers: &HeaderMap) -> Response {
+    error_response(
+        svc,
+        headers,
+        StatusCode::NOT_FOUND,
+        "not_found",
+        "no such route",
+    )
+}
+
+async fn post_flush_challenge(
+    State(svc): State<Service>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    body: Result<Bytes, BytesRejection>,
+) -> Response {
+    if !svc.cfg.flush_claims {
+        return flush_off(&svc, &headers);
+    }
+    if let Err(refusal) = rate_limit(&svc, &headers, peer) {
+        return refusal.into_response(&svc, &headers);
+    }
+    let content_type = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok());
+    if !content_type.is_some_and(is_json_mime) {
+        return error_response(
+            &svc,
+            &headers,
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "unsupported_media_type",
+            "POST /v1/flush/challenge takes application/json",
+        );
+    }
+    let bytes = match body {
+        Ok(bytes) => bytes,
+        Err(rejection) => {
+            return error_response(
+                &svc,
+                &headers,
+                StatusCode::BAD_REQUEST,
+                "malformed",
+                rejection.body_text(),
+            );
+        }
+    };
+    let origin = match wire::parse_flush_mint(&bytes) {
+        Some(wire::FlushMint::Origin(origin)) => origin,
+        Some(wire::FlushMint::SoleOrigin) => match svc.door.sole_served_origin() {
+            Some(origin) => origin.to_owned(),
+            None => {
+                return bare_code(&svc, &headers, "malformed");
+            }
+        },
+        None => return bare_code(&svc, &headers, "malformed"),
+    };
+    let minted = match svc.door.mint_flush(&origin) {
+        Ok(minted) => minted,
+        Err(()) => return bare_code(&svc, &headers, "malformed"),
+    };
+    ok_response(
+        &svc,
+        &headers,
+        json!({
+            "domain": wire::FLUSH_DOMAIN_STR,
+            "action": wire::FLUSH_ACTION,
+            "origin": minted.origin,
+            "nonce": hex::encode(minted.nonce),
+            "exp": minted.exp,
+            "link": minted.link,
+        }),
+    )
+}
+
+async fn post_flush(
+    State(svc): State<Service>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    body: Result<Bytes, BytesRejection>,
+) -> Response {
+    if !svc.cfg.flush_claims {
+        return flush_off(&svc, &headers);
+    }
+    if let Err(refusal) = rate_limit(&svc, &headers, peer) {
+        return refusal.into_response(&svc, &headers);
+    }
+    let content_type = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok());
+    if !content_type.is_some_and(is_json_mime) {
+        return error_response(
+            &svc,
+            &headers,
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "unsupported_media_type",
+            "POST /v1/flush takes application/json",
+        );
+    }
+    let bytes = match body {
+        Ok(bytes) => bytes,
+        Err(_) => return bare_code(&svc, &headers, "malformed"),
+    };
+    let Some(parsed) = wire::parse_flush_submit(&bytes) else {
+        return bare_code(&svc, &headers, "malformed");
+    };
+    match svc.door.submit_flush(&parsed) {
+        FlushResult::Flushed => ok_response(&svc, &headers, json!({ "flushed": true })),
+        FlushResult::BadSignature => bare_code(&svc, &headers, "bad_signature"),
+        FlushResult::Malformed => bare_code(&svc, &headers, "malformed"),
+    }
 }
 
 async fn get_sign_in_result(

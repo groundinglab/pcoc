@@ -74,6 +74,9 @@ pub struct Config {
     /// Opt in to running this 2.2 build where a live v2.0 service would be
     /// replaced. Defaults off. Nothing in the repo sets it.
     pub allow_2_2_live: bool,
+    /// `POST /v1/flush/challenge` and `POST /v1/flush`. Default on (the
+    /// groundinglab lab). `false` answers those paths with 404.
+    pub flush_claims: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -104,6 +107,9 @@ struct FileConfig {
     /// v2.0 admission service.
     #[serde(default)]
     allow_2_2_live: bool,
+    /// Absent means on. `false` hides the flush routes.
+    #[serde(default)]
+    flush_claims: Option<bool>,
 }
 
 impl Default for FileConfig {
@@ -129,6 +135,7 @@ impl Default for FileConfig {
             policy: None,
             plane: String::new(),
             allow_2_2_live: false,
+            flush_claims: None,
         }
     }
 }
@@ -223,6 +230,7 @@ impl Config {
                 file.plane
             },
             allow_2_2_live: file.allow_2_2_live,
+            flush_claims: file.flush_claims.unwrap_or(true),
         })
     }
 
@@ -264,6 +272,7 @@ impl Config {
             config_path: None,
             plane: "test".to_owned(),
             allow_2_2_live: false,
+            flush_claims: true,
         }
     }
 }
@@ -391,6 +400,7 @@ mod tests {
             config_path: None,
             plane: "live".to_owned(),
             allow_2_2_live: false,
+            flush_claims: true,
         }
     }
 
@@ -499,6 +509,7 @@ mod tests {
         );
         assert_eq!(cfg.plane, "live");
         assert!(!cfg.allow_2_2_live);
+        assert!(cfg.flush_claims);
     }
 
     /// Defect 26 (gate review r2, finding 26). `served_origins` is required,
@@ -520,6 +531,11 @@ mod tests {
         let cfg = load_with_policy("served_origins = [\"https://site.example\"]\n").unwrap();
         assert_eq!(cfg.served_origins, vec!["https://site.example".to_owned()]);
         assert!(cfg.allowed_origins.is_empty(), "served is not CORS");
+        assert!(cfg.flush_claims, "an omitted flush_claims is on");
+        let off =
+            load_with_policy("served_origins = [\"https://site.example\"]\nflush_claims = false\n")
+                .unwrap();
+        assert!(!off.flush_claims);
     }
 
     #[test]

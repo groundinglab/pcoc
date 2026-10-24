@@ -68,6 +68,12 @@ extra_origins = []
 # The path is required. There is no inline table and no build-tree fallback.
 # An unknown lever name, a wrong type, or an out-of-range value refuses
 # the whole file.
+# Signed flush of one identity's cached login state (POST /v1/flush/challenge
+# and POST /v1/flush). Open wire: a BIP-340 signature from that key, no shared
+# secret. true is the groundinglab lab default. false answers those paths 404.
+# This does not rewrite the decision log.
+flush_claims = true
+
 # allow_2_2_live is not set. This file must not replace the live v2.0 service.
 #
 # v1 → v4: gate 0.4.1 read policy_id, a float min_leg_rate, and min_waypoints,
