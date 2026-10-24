@@ -1200,22 +1200,16 @@ fn analysis_of(
     let complete = obj.stages.len() == 18;
     // Erratum 2 (E02). A malformed value has no stage, so these counts are
     // `not defined`. A decoded empty checkpoint list still counts as zero (SPEC L961).
-    let whole = if malformed {
+    // `hike_legs` and `whole_hike_legs` count the same checkpoints: stages 1–17.
+    // Stage 0 is before the first interrupt and is in neither count.
+    let counted = if malformed || !complete {
         J::s("not defined")
-    } else if complete {
+    } else {
         let n: usize = obj.stages[1..].iter().map(|s| s.checkpoints.len()).sum();
         J::Num(n as i128)
-    } else {
-        J::s("not defined")
     };
-    let hike_legs = if malformed {
-        J::s("not defined")
-    } else if complete {
-        let n: usize = obj.stages.iter().map(|s| s.checkpoints.len()).sum();
-        J::Num(n as i128)
-    } else {
-        J::s("not defined")
-    };
+    let whole = counted.clone();
+    let hike_legs = counted;
     let span = |ia: usize, ib: usize| -> J {
         match (headers.get(ia).and_then(|h| h.time), headers.get(ib).and_then(|h| h.time)) {
             (Some(a), Some(b)) => J::Num(b - a),
@@ -1256,14 +1250,16 @@ fn analysis_of(
 }
 
 fn mtp_span(obj: &HikeObject, headers: &[HeaderRow], index: &mut dyn HeightIndex) -> J {
-    let Some(h0) = obj.stages.first().map(|s| s.beacon_height) else {
+    // I_0 = stages[1].beacon. The seed beacon (stages[0], headers[0]) is not
+    // an endpoint: it can sit before produce starts.
+    let Some(h0) = obj.stages.get(1).map(|s| s.beacon_height) else {
         return J::s("not read");
     };
     if !obj.has_last_height {
         return J::s("not read");
     }
     let h1 = obj.last_interrupt_height;
-    let m0 = mtp_at(h0, headers, 0, index);
+    let m0 = mtp_at(h0, headers, 1, index);
     let m1 = mtp_at(h1, headers, 18, index);
     match (m0, m1) {
         (Some(a), Some(b)) => J::Num(b - a),
@@ -1417,4 +1413,165 @@ fn recompute_leg(
         start += n;
     }
     "mismatch"
+}
+
+#[cfg(test)]
+mod admit_pair_tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn stage(height: u64, checkpoints: usize) -> Stage {
+        Stage {
+            beacon: [0x11; 32],
+            beacon_height: height,
+            height_over: false,
+            leg_count: checkpoints as u64,
+            waypoint: [0x22; 32],
+            path: Some(Vec::new()),
+            checkpoints: vec![vec![0x33; 32]; checkpoints],
+            leg_results: Vec::new(),
+            usable: true,
+        }
+    }
+
+    fn row(time: Option<i128>) -> HeaderRow {
+        HeaderRow {
+            stored_hash: J::s("00"),
+            stored_height: J::Num(0),
+            index_comparison: if time.is_some() {
+                "match".into()
+            } else {
+                "not read".into()
+            },
+            t: match time {
+                Some(t) => J::Num(t),
+                None => J::s("not read"),
+            },
+            time,
+        }
+    }
+
+    /// Linear `nTime`, with the last block spiked ahead. MTP's median ignores
+    /// that spike. A seed-start span would include the wait before `I_0`.
+    fn ntime(h: u64, last: u64) -> i128 {
+        let base = 1000 * i128::from(h);
+        if h == last {
+            base + 500_000
+        } else {
+            base
+        }
+    }
+
+    fn index_doc(h: u64, last: u64) -> Vec<u8> {
+        format!(
+            "{{\"network\":\"synthetic\",\"header\":{{\"hash\":\"{}\",\"height\":{h},\"time\":{}}}}}",
+            "ab".repeat(32),
+            ntime(h, last),
+        )
+        .into_bytes()
+    }
+
+    #[test]
+    fn admit_pair_starts_at_the_first_interrupt_not_the_seed() {
+        // Christian relocated the admit start off the seed beacon to I_0
+        // (stages[1].beacon). Stage 0 checkpoints and the pre-start wait are
+        // not in (hike_legs, hike_span). whole_hike_span stays raw header.time.
+        let seed = 1000u64;
+        let i0 = 1100u64;
+        let last = 1117u64;
+        let mut stages = Vec::with_capacity(18);
+        for g in 0..18u64 {
+            let (height, n) = if g == 0 {
+                (seed, 90)
+            } else if g == 17 {
+                (last - 1, 140)
+            } else {
+                (i0 + g - 1, 50)
+            };
+            stages.push(stage(height, n));
+        }
+        let obj = HikeObject {
+            kind: String::new(),
+            fill: String::new(),
+            slot_bytes: 0,
+            n_slots: 0,
+            sample_bytes: 0,
+            steps_per_leg: 0,
+            public_key: [0; 32],
+            seed_beacon: [0x44; 32],
+            stages,
+            last_interrupt: [0x55; 32],
+            last_interrupt_height: last,
+            last_height_over: false,
+            has_last: true,
+            has_last_height: true,
+            field_set: true,
+            stage0_path: false,
+            trailing: false,
+            top_ok: true,
+        };
+        assert_eq!(crate::hike_legs(&obj), Some(940));
+
+        let mut headers = Vec::with_capacity(19);
+        headers.push(row(Some(ntime(seed, last))));
+        for g in 1..18 {
+            headers.push(row(Some(ntime(obj.stages[g].beacon_height, last))));
+        }
+        headers.push(row(Some(ntime(last, last))));
+        assert_eq!(headers.len(), 19);
+
+        let mut docs = HashMap::new();
+        for h in (seed - 10)..=last {
+            docs.insert(h, index_doc(h, last));
+        }
+        let mut index = MapIndex { docs };
+        let book = Book {
+            a: J::s("not defined"),
+            b: J::s("not defined"),
+            n: J::s("not defined"),
+            s: J::s("not defined"),
+            delta_h: J::s("not defined"),
+            fixed_start: J::Obj(vec![
+                ("N", J::s("not defined")),
+                ("S", J::s("not defined")),
+                ("delta_h", J::s("not defined")),
+            ]),
+            p_b: J::s("not defined"),
+            height_p_b: J::s("not defined"),
+            index_comparison_p_b: J::s("not defined"),
+            t_p_b: J::s("not defined"),
+            height_i_a: J::s("not defined"),
+            t_i_a: J::s("not defined"),
+            outside: J::s("not defined"),
+        };
+        let analysis = analysis_of(&obj, &headers, &book, &mut index, false);
+        let v: serde_json::Value = serde_json::from_str(&analysis.render()).unwrap();
+        assert_eq!(v["hike_legs"], 940);
+        assert_eq!(v["whole_hike_legs"], 940);
+        assert_ne!(
+            v["hike_legs"], 1030,
+            "stage 0's 90 checkpoints are not admission legs"
+        );
+        // MTP(I_0) = time(1095) = 1_095_000. MTP(last) = time(1112) = 1_112_000.
+        // The last block's +500_000 nTime spike is not the median.
+        // A seed start would be time(1112) − time(995) = 117_000.
+        assert_eq!(v["hike_span"], 17_000);
+        assert_eq!(
+            v["whole_hike_span"], 517_000,
+            "whole-hike stays raw T and keeps the nTime spike"
+        );
+        assert_eq!(
+            v["legs_outside"], "not defined",
+            "bookends are not the admit pair"
+        );
+
+        let admit = crate::hike_span(i0, last, |h| Some(ntime(h, last))).unwrap();
+        let seeded = crate::hike_span(seed, last, |h| Some(ntime(h, last))).unwrap();
+        assert_eq!(admit, 17_000);
+        assert_eq!(seeded, 117_000);
+        assert_ne!(
+            v["hike_span"].as_i64(),
+            Some(i64::try_from(seeded).unwrap())
+        );
+    }
 }

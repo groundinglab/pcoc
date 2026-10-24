@@ -989,18 +989,17 @@ int pcoc_verify(const pcoc_verify_input *in, char *buf, size_t cap) {
   }
 
   /* Analysis. Counts do not read leg_count. Spans use T from Rule A4.2.
-   * hike_span is median-time-past (Rule A4.10), not raw nTime. */
+   * hike_legs counts stages 1–17. hike_span is MTP(I_17) − MTP(I_0)
+   * (headers[1] through headers[18]), not MTP(seed) − MTP(last). */
   uint64_t hike_legs = 0;
   uint64_t whole = 0;
   int counts_ok = !malformed && obj.n_stages == PCOC_STAGES;
   ja(&j, ",\"analysis\":{\"whole_hike_legs\":");
   if (counts_ok) {
-    for (int g = 0; g < 18; g++) {
-      hike_legs += obj.stages[g].n_checkpoints;
-      if (g >= 1) {
-        whole += obj.stages[g].n_checkpoints;
-      }
+    for (int g = 1; g < 18; g++) {
+      whole += obj.stages[g].n_checkpoints;
     }
+    hike_legs = whole;
     ja_fmt_u(&j, whole);
   } else {
     ja(&j, "\"not defined\"");
@@ -1052,9 +1051,9 @@ int pcoc_verify(const pcoc_verify_input *in, char *buf, size_t cap) {
     ja(&j, "\"not defined\"");
   }
   ja(&j, ",\"hike_span\":");
-  if (counts_ok && hsv[0].have_ht && hsv[18].have_ht && hsv[0].have_T && hsv[18].have_T) {
+  if (counts_ok && hsv[1].have_ht && hsv[18].have_ht && hsv[1].have_T && hsv[18].have_T) {
     uint64_t m0 = 0, m1 = 0;
-    if (mtp_at(in->index_get, in->index_ctx, hsv[0].ht, hsv[0].have_T, hsv[0].Tval, &m0) == 0 &&
+    if (mtp_at(in->index_get, in->index_ctx, hsv[1].ht, hsv[1].have_T, hsv[1].Tval, &m0) == 0 &&
         mtp_at(in->index_get, in->index_ctx, hsv[18].ht, hsv[18].have_T, hsv[18].Tval, &m1) == 0) {
       ja_fmt_i(&j, (int64_t)m1 - (int64_t)m0);
     } else {
