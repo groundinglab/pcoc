@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Policy `gl-admit-v12` is the in-repo successor of `gl-admit-v11` (#127). The file copies v11 and omits `verify_cap_per_door_session`. An absent key is unset: no session cap, and the loader does not fill 3. `verify_cap_per_object` stays unset. The reason code remains for a policy that sets the lever. Ordinary sign-in under v12 does not refuse `verify_cap_per_door_session`. v12 is not live on the host. Host cutover waits on an ops go. This note does not deploy.
+- `POST /v1/sign-in` still returns after the fast checks and does not wait for thorough. Thorough stays a background task. A fake leg revokes the grant and bans the key. A thorough accept writes the friendly entry. Site UX should treat delivery-ok, and a provisional grant that has not settled, as signed in immediately. This process does not call the site. No new wire field.
 - SPEC 2.3 retired the tip-versus-last-beacon deadline (old Rule B10). The gate does not refuse `submission_deadline` when the index tip is past `last_interrupt_height`. `submission_deadline_blocks` is not a required lever. A file that still has the key (`gl-admit-v9`, `gl-admit-v10`) loads, and the value is ignored. A file that omits the key loads. This note does not issue a new policy id and does not deploy.
 - Sticky refuse is off. A resubmit of a refused `(public_key, object_sha256, policy_id)` runs the fast phase again and may append a new refuse line. `[policy_rules] sticky_refuse = true` turns the stored-outcome short circuit back on. An absent key means off, including `gl-admit-v10`. The key is not a §15.4 lever and is not part of the policy bind hash. `gl-admit-v11` sets `false`. This note does not deploy.
 

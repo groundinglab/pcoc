@@ -374,6 +374,19 @@ mod tests {
         std::fs::read_to_string(path).expect("gl-admit-v11.toml")
     }
 
+    fn v12_text() -> String {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../policy/groundinglab-admission/gl-admit-v12.toml");
+        std::fs::read_to_string(path).expect("gl-admit-v12.toml")
+    }
+
+    fn sets_lever(raw: &str, key: &str) -> bool {
+        raw.lines().any(|line| {
+            let line = line.trim();
+            !line.starts_with('#') && line.starts_with(key)
+        })
+    }
+
     fn complete(spec: &str) -> String {
         format!(
             "\
@@ -495,6 +508,69 @@ born_height = 972685
             .join("\n");
         let omitted = load_for_pin(&absent, 2, "spec-2.3.0").expect("absent");
         assert!(!omitted.sticky_refuse);
+    }
+
+    /// gl-admit-v12 copies v11 and omits the door-session cap. Absent stays
+    /// unset. The loader does not fill 3. v11 still sets 3; its bytes stay pinned.
+    #[test]
+    fn v12_omits_the_door_session_cap_and_keeps_the_other_v11_levers() {
+        let raw = v12_text();
+        assert!(
+            !sets_lever(&raw, "verify_cap_per_door_session"),
+            "gl-admit-v12.toml must omit verify_cap_per_door_session"
+        );
+        assert!(
+            !sets_lever(&raw, "verify_cap_per_object"),
+            "verify_cap_per_object stays unset"
+        );
+        assert_eq!(
+            raw.lines()
+                .find(|line| line.trim_start().starts_with("policy_id"))
+                .map(str::trim),
+            Some("policy_id = \"gl-admit-v12\"")
+        );
+        let v11 = load_for_pin(&v11_text(), 2, "spec-2.3.0").expect("v11");
+        assert_eq!(v11.policy_id, "gl-admit-v11");
+        assert_eq!(v11.verify_cap_per_door_session, Some(3));
+        let loaded = load_for_pin(&raw, 2, "spec-2.3.0").expect("v12");
+        assert_eq!(loaded.policy_id, "gl-admit-v12");
+        assert_eq!(loaded.verify_cap_per_door_session, None);
+        assert_eq!(loaded.verify_cap_per_object, None);
+        assert_eq!(loaded.fake_leg_ignore_seconds, None);
+        assert!(serde_json::to_value(&loaded)
+            .expect("policy json")
+            .get("verify_cap_per_door_session")
+            .is_none());
+        assert_eq!(loaded.leg_rate_floor, v11.leg_rate_floor);
+        assert_eq!(loaded.leg_rate_floor, RateFloor { p: 1, q: 10 });
+        assert_eq!(loaded.min_anchored_paths, v11.min_anchored_paths);
+        assert_eq!(loaded.thorough_six_leg_runs, v11.thorough_six_leg_runs);
+        assert_eq!(loaded.provisional, v11.provisional);
+        assert_eq!(loaded.draw_commitment, v11.draw_commitment);
+        assert_eq!(loaded.reverify_max_attempts, v11.reverify_max_attempts);
+        assert_eq!(loaded.max_held_blocks, v11.max_held_blocks);
+        assert_eq!(loaded.held_retry_seconds, v11.held_retry_seconds);
+        assert_eq!(loaded.fast_accept_bound_ms, v11.fast_accept_bound_ms);
+        assert_eq!(loaded.async_catch_budget_ms, v11.async_catch_budget_ms);
+        assert_eq!(
+            loaded.challenge_lifetime_seconds,
+            v11.challenge_lifetime_seconds
+        );
+        assert_eq!(
+            loaded.challenge_clock_skew_seconds,
+            v11.challenge_clock_skew_seconds
+        );
+        assert_eq!(
+            loaded.result_retention_seconds,
+            v11.result_retention_seconds
+        );
+        assert_eq!(loaded.born_height, v11.born_height);
+        assert_eq!(loaded.born_height, 972685);
+        assert_eq!(loaded.index, v11.index);
+        assert!(!loaded.sticky_refuse);
+        assert_eq!(loaded.sticky_refuse, v11.sticky_refuse);
+        assert_eq!(loaded.verify_cap_per_object, v11.verify_cap_per_object);
+        assert_eq!(loaded.fake_leg_ignore_seconds, v11.fake_leg_ignore_seconds);
     }
 
     fn with_sticky(raw: &str, value: &str) -> String {

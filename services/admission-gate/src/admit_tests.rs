@@ -1650,6 +1650,57 @@ fn shipped_policy_reads_verify_cap_per_door_session() {
     assert_eq!(loaded.verify_cap_per_door_session, None);
 }
 
+/// gl-admit-v12 omits the door-session cap. Sign-ins past the old count of 3
+/// do not refuse with `verify_cap_per_door_session`. The reason code stays
+/// available when a policy sets the lever (see the cap of 1 above).
+#[test]
+fn v12_sign_in_does_not_hit_the_door_session_cap() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../policy/groundinglab-admission/gl-admit-v12.toml");
+    let raw = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        !raw.lines().any(|line| {
+            let line = line.trim();
+            !line.starts_with('#') && line.starts_with("verify_cap_per_door_session")
+        }),
+        "gl-admit-v12.toml must omit verify_cap_per_door_session"
+    );
+    let mut policy = crate::levers::load(&raw, 2).expect("gl-admit-v12");
+    assert_eq!(policy.policy_id, "gl-admit-v12");
+    assert_eq!(policy.verify_cap_per_door_session, None);
+    assert_eq!(policy.verify_cap_per_object, None);
+    policy.born_height = 0;
+    let door = open_door(policy, "http://127.0.0.1:9");
+    door.set_now_unix_s(Some(5_000));
+    door.test_set_store_start(0);
+    let (secp, keypair, public) = signer();
+    for i in 0..4u8 {
+        let mut nonce = [70u8; 32];
+        nonce[0] = i;
+        let body = signed_unknown(&secp, &keypair, &public, nonce, 5_100, 20 + i);
+        let signed = door.sign_in_locked(body);
+        assert_eq!(
+            client_code(&signed.body),
+            "delivery",
+            "sign-in {i}: {:?}",
+            signed.body
+        );
+        assert!(
+            signed.thorough.is_some(),
+            "sign-in {i} was refused before thorough"
+        );
+        release_slot(&door, &signed);
+    }
+    assert!(
+        !door
+            .test_reasons()
+            .iter()
+            .any(|reason| reason == "verify_cap_per_door_session"),
+        "v12 refused a sign-in on the door-session cap: {:?}",
+        door.test_reasons()
+    );
+}
+
 /// AC-G12. Rule I4 on a mock clock: restart, flush, two workers.
 #[test]
 fn rule_i4_restart_flush_and_two_workers() {
