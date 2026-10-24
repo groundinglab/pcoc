@@ -45,8 +45,6 @@ pub const CODE_CHALLENGE_EXPIRED: &str = "challenge_expired";
 /// An index document a decision rests on is not from the policy's
 /// `[index] expected_network` (or carries no `network`). gl-admit-v7 on.
 pub const CODE_INDEX_NETWORK_NOT_EXPECTED: &str = "index_network_not_expected";
-/// SPEC §15.4 Rule B10. `tip − last_beacon > K`. Final refuse. No thorough.
-pub const CODE_SUBMISSION_DEADLINE: &str = "submission_deadline";
 /// SPEC §15.3. The held budget ran out.
 pub const CODE_HELD_BOUND: &str = "held_bound";
 /// SPEC §15.4. This door session has verified too many objects.
@@ -78,7 +76,6 @@ pub const INVENTORY: &[(&str, &str)] = &[
     (CODE_VERIFIER_ERROR, CLASS_OPERATIONAL),
     (CODE_CHALLENGE_EXPIRED, CLASS_OPERATIONAL),
     (CODE_INDEX_NETWORK_NOT_EXPECTED, CLASS_INVALID),
-    (CODE_SUBMISSION_DEADLINE, CLASS_INVALID),
     (CODE_HELD_BOUND, CLASS_OPERATIONAL),
     (CODE_VERIFY_CAP_SESSION, CLASS_OPERATIONAL),
     (CODE_VERIFY_CAP_OBJECT, CLASS_OPERATIONAL),
@@ -119,7 +116,6 @@ pub fn code_of_note(note: &str) -> &'static str {
         "verifier_error" => CODE_VERIFIER_ERROR,
         CODE_CHALLENGE_EXPIRED => CODE_CHALLENGE_EXPIRED,
         CODE_INDEX_NETWORK_NOT_EXPECTED => CODE_INDEX_NETWORK_NOT_EXPECTED,
-        CODE_SUBMISSION_DEADLINE => CODE_SUBMISSION_DEADLINE,
         note if note == policy::REFUSE_HELD_BOUND || note == CODE_HELD_BOUND => CODE_HELD_BOUND,
         CODE_VERIFY_CAP_SESSION => CODE_VERIFY_CAP_SESSION,
         CODE_VERIFY_CAP_OBJECT => CODE_VERIFY_CAP_OBJECT,
@@ -271,9 +267,6 @@ fn sentence(code: &str, measures: &Measures) -> String {
                 .to_owned()
         }
         CODE_SHAPE_MISMATCH => "Invalid: the object does not match the section 6 shape.".to_owned(),
-        CODE_SUBMISSION_DEADLINE => {
-            "Invalid: the submission is past the deadline of K blocks.".to_owned()
-        }
         CODE_HELD_BOUND => "No decision on the PCOC: the hold ran out of attempts.".to_owned(),
         CODE_VERIFY_CAP_SESSION => {
             "No decision on the PCOC: this door session has reached its verify cap.".to_owned()
@@ -325,6 +318,9 @@ mod tests {
     #[test]
     fn every_inventory_code_is_snake_case_and_not_rejected() {
         assert!(INVENTORY.len() >= 10);
+        assert!(INVENTORY
+            .iter()
+            .all(|(code, _)| *code != "submission_deadline"));
         for (code, class) in INVENTORY {
             assert!(
                 code.chars()

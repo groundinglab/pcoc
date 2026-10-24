@@ -99,7 +99,6 @@ spec = "2.2"
 [levers]
 min_anchored_paths = 6
 leg_rate_floor = { p = 1, q = 5 }
-submission_deadline_blocks = 3
 held_retry_seconds = 600
 thorough_rounds = 3
 challenge_lifetime_seconds = 120
@@ -131,14 +130,23 @@ fn a_bad_lever_file_is_refused() {
     let err = levers::refuse_reason(&p_zero).unwrap_err();
     assert!(err.contains("out of range"), "{err}");
 
-    let deadline = base_levers().replace(
-        "submission_deadline_blocks = 3",
-        "submission_deadline_blocks = 7",
-    );
-    let err = levers::refuse_reason(&deadline).unwrap_err();
-    assert!(err.contains("out of range"), "{err}");
-
     let absent = base_levers().replace("reverify_max_attempts = 3\n", "");
     let err = levers::refuse_reason(&absent).unwrap_err();
     assert!(err.contains("absent"), "{err}");
+}
+
+/// The retired tip-deadline key is not required. A present value, including
+/// one outside the old 0…6 range, does not refuse the file. The alias `K`
+/// is not that key.
+#[test]
+fn retired_submission_deadline_key_is_ignored() {
+    assert!(levers::refuse_reason(&base_levers()).is_ok());
+    let present = base_levers().replace(
+        "[policy_rules]",
+        "submission_deadline_blocks = 7\n[policy_rules]",
+    );
+    assert!(levers::refuse_reason(&present).is_ok(), "{present}");
+    let named_k = base_levers().replace("[policy_rules]", "K = 3\n[policy_rules]");
+    let err = levers::refuse_reason(&named_k).unwrap_err();
+    assert!(err.contains("unknown lever"), "{err}");
 }
