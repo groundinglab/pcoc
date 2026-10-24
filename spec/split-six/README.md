@@ -2,6 +2,8 @@
 
 **Status.** Branch `spec/split-six-documents-2026-10-24`. Text relocation 2026-10-24 (boundaries only; no new object rules). Not merged. See [INTENT.md](./INTENT.md), [GLOSSARY.md](./GLOSSARY.md), [FRAMING-REVIEW.md](./FRAMING-REVIEW.md), [GB-REVIEW-BRIEF.md](./GB-REVIEW-BRIEF.md).
 
+**Start here if you are building something:** [GUIDE.md](./GUIDE.md) — which documents to use for a producer, a verifier, an admission gate, or policy tuning.
+
 ## Definitional pair
 
 **Construction + Conformance** = specification + matching test specification. That pair is fundamental: object cost, encodings, and the two-way Bitcoin commitment bind, plus the yes/no rules and vectors that prove an object (and a tool) matches Construction.
@@ -35,9 +37,14 @@ Construction  ↔  Conformance     ← definitional pair
 
 ## Reader paths
 
-- **Builder (producer implementer):** Construction + Conformance; Producer Process; Waypoint Publication if planting via our channel.
+Full developer instructions: **[GUIDE.md](./GUIDE.md)**.
+
+- **Builder (producer implementer):** Construction + Conformance; Producer Process; Waypoint Publication if planting via our channel. (Path-body layout for produce-time path checks: Measurement §14.3 — see Producer FRAMING stub.)
 - **Measurer / verifier implementer:** Construction + Conformance; Measurement Record; Waypoint Publication only to interpret that channel’s evidence.
 - **Gate / admission implementer:** Construction (shape), Measurement Record (inputs), Admission Process (generic consume/decide), then **your** policy instance outside this pack.
+- **Policy tuner:** policy instance only — do not edit Admission Process to change thresholds.
 - **Conformance claimant:** Conformance + every document claimed (always Construction).
+
+SDKs and services elsewhere should follow the same paths. This restructure alone does not require implementation changes; K remains HOLD.
 
 Bodies remain section lifts from monolith 2.3; this pass relocates homes and adds FRAMING/HOLD markers only. The original 2.3 specification remains source of truth until these documents are confirmed complete and merged.

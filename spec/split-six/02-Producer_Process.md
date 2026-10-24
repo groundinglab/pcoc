@@ -120,6 +120,8 @@ The serve window is the anchor window above. A plant posted at height H can be i
 
 On the live profile, Bari's plant is a Bitcoin transaction. The anchor is the block that includes that transaction. Bari serves the waypoint path for the anchor window. The producer posts the waypoint to Bari and asks Bari for the path. This specification does not define a path that anchors by talking to Bitcoin and skipping Bari.
 
+**FRAMING.** Unspecified here ≠ forbidden. Direct-to-Bitcoin plant/confirm/fetch remains an out-of-scope mechanism; Construction’s bind still holds. See Waypoint Publication FRAMING and [GLOSSARY.md](./GLOSSARY.md).
+
 The leaf is the waypoint’s 64 lowercase hexadecimal digits, byte 0 first. An ask sends `GET {bari-url}/path/{leaf}` and does not follow a redirect. An ask is due when the producer’s header source learns a header at a height in the anchor window, before the close. Produce sends it then, as an asynchronous event, with no wait. Produce must make the ask at every due header among `W_1` … `W_16`. Watching only the newest tip is not enough. `W_17` is not asked.
 
 - Status 200: a checked path is a 200 response whose bytes are a path for that waypoint. The bytes are a path for that waypoint when they decode as a canonical path body as defined in section 14.3 and its `validate_for` succeeds for that waypoint, including the Merkle checks in section 14.3. Produce checks that before it stores the bytes. A 200 that does not check is a miss. Produce does not require a `Content-Type`. The path’s block must be one height in the anchor window for the stage that posted at H. It does not have to be the same header as `I_{g−1}`.
@@ -282,11 +284,11 @@ Key order, omitting a key this section says is omitted:
 5. Fetch: `event`, `waypoint`, `worked`, then `status` only when the producer has one, then `block` and `block_height` only when the body names that block, then `miss` only when the body is exactly one of the five phrases and no other bytes.
 6. Alert: `event`, `alert`, `stage`, then `height` only when there is one.
 
-The log does not choose a Bari URL. `{bari-url}` is the URL section 13 uses. A producer may name any Bari operator’s https origin. An SDK default, if an SDK has one, is not a requirement. This section does not define a path that skips Bari.
+The log does not choose a Bari URL. `{bari-url}` is the URL section 13 uses. A producer may name any Bari operator’s https origin. An SDK default, if an SDK has one, is not a requirement. This section does not define a path that skips Bari. **FRAMING:** same as §13.1 — out-of-scope direct-to-Bitcoin is allowed as a different mechanism; see Waypoint Publication FRAMING.
 
 <a id="sec-13-6"></a>
 
 ### 13.6 Bari waypoint service
 
-**FRAMING (2026-10-24 relocation).** Bari operator rules (BR1–BR4: paid waypoint, dedupe, pool and tree, path serve) live in [03-Waypoint_Publication_Process.md](./03-Waypoint_Publication_Process.md). Producer Process keeps the live hike sequence and ask timing (section 13.1); use Waypoint Publication when planting via our scoped batching channel. Construction owns the two-way Bitcoin bind.
+**FRAMING (2026-10-24 relocation).** Bari operator rules (BR1–BR4: paid waypoint, dedupe, pool and tree, path serve) live in [03-Waypoint_Publication_Process.md](./03-Waypoint_Publication_Process.md). Producer Process keeps the live hike sequence and ask timing (section 13.1); use Waypoint Publication when planting via our scoped batching channel. Construction owns the two-way Bitcoin bind. **Canonical path-body layout** and `validate_for` (cited as “section 14.3” in §13.1) live in [06-Measurement_Record_Process.md](./06-Measurement_Record_Process.md) §14.3 — do not copy that layout back into Producer.
 

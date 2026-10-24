@@ -3,7 +3,7 @@
 **FRAMING (2026-10-24).** Construction + Conformance = definitional pair (specification + matching test specification). Design-time for producer and verifier authors; same rules used at runtime to confirm **valid** before measure. Admission policy values are not a conformance target. F16 flagged HOLD below pending K retirement.
 
 
-**Responsibility.** Process for claiming an implementation matches a particular test pack. Used by a producer or verifier implementer who wants that claim.
+**Responsibility.** Test-specification half of the Construction + Conformance definitional pair: yes/no rules, permanent negatives, and the one pack. Also the process for claiming an implementation matches that pack. Used by a producer or verifier implementer who wants that claim.
 
 **Source.** Inherited without change of wording from the following sections of Satoshi Hike 2.3 (`spec/satoshi-hike-v2.3/SPEC.md`):
 
