@@ -1,5 +1,5 @@
 //! Satoshi Hike 2.3 construction and verifier.
-//! Behaviour is `spec/satoshi-hike-v2.3/SPEC.md`. Errata 1 and 2 are folded into that file.
+//! Behaviour is the Satoshi Hike 2.3 pack under `spec/` (`README.md`, `GUIDE.md`, `01`–`06`). Errata 1 and 2 are folded into that pack.
 //! Each public function below names the section it implements (Rule I2).
 #![deny(unsafe_code)]
 

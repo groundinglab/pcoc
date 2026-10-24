@@ -1,6 +1,6 @@
 # C SDK 2.2 — generator results
 
-The generator writes the CASES v2 keys. Where this file and `spec/satoshi-hike-v2.2/SPEC.md` differ, the SPEC wins. No deviation from CASES.md key templates was required.
+The generator writes the CASES v2 keys. Where this file and the public six-doc pack under `spec/` differ, the specification wins (`README.md`, `GUIDE.md`, and `01`–`06`). No deviation from CASES.md key templates was required.
 
 ## SPEC questions
 

@@ -667,14 +667,14 @@ def _pending_erratum2_section(tables: list[str], names: list[str]) -> str:
         "`PENDING_ERRATUM_2` in `sdk/conformance/harness.py` is the only mask. "
         "Set that tuple to `()` and the empty and truncated records are compared byte for byte.",
         "",
-        "SPEC.md line 1320 limits `path_state` to `present` or `skip`, and `plant` is `n/a` only when `path_state` is `skip`. "
-        "SPEC.md line 1346 (Rule A4.1) says a value left without a usable object value is `not defined`. "
+        "`spec/06-Measurement_Record_Process.md` limits `path_state` to `present` or `skip`, and `plant` is `n/a` only when `path_state` is `skip`. "
+        "`spec/06-Measurement_Record_Process.md` (Rule A4.1) says a value left without a usable object value is `not defined`. "
         "Malformed CBOR leaves no object, so those sentences do not pick one record.",
         "",
         "Three analysis counts differ for the same reason, and no other field differs. "
-        "SPEC.md line 961 leaves `whole_hike_legs` `not defined` when a stage is missing. "
-        "SPEC.md lines 1338 and 1591 define `checkpoint_count` and `hike_legs` as checkpoint counts, including zero. "
-        "A missing stage has no usable count, so line 1346 records `not defined` rather than 0. "
+        "`spec/06-Measurement_Record_Process.md` leaves `whole_hike_legs` `not defined` when a stage is missing. "
+        "`spec/06-Measurement_Record_Process.md` defines `checkpoint_count` and `hike_legs` as checkpoint counts, including zero. "
+        "A missing stage has no usable count, so Rule A4.1 records `not defined` rather than 0. "
         "Rust and Go record 0 for every `checkpoint_count`. "
         "Go records 0 for `whole_hike_legs` and `hike_legs`. "
         "The others record `not defined`.",

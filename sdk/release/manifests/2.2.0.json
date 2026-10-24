@@ -10,8 +10,8 @@
     "version": "2.2",
     "erratum": 2,
     "tag": "spec-2.2.0",
-    "url": "https://github.com/groundinglab/pcoc/blob/spec-2.2.0/spec/satoshi-hike-v2.2/SPEC.md",
-    "erratum_url": "https://github.com/groundinglab/pcoc/blob/spec-2.2.0/spec/satoshi-hike-v2.2/ERRATUM-2.md",
+    "url": "https://github.com/groundinglab/pcoc/blob/main/spec/README.md",
+    "erratum_url": "https://github.com/groundinglab/pcoc/blob/main/spec/README.md",
     "pack_url": "https://github.com/groundinglab/pcoc/tree/spec-2.2.0/spec/conformance/pack",
     "pack_manifest_sha256": "91ded57e5c05b7cb4cd74d313a51d83d2373fa86dc625df41faed9586e9032af",
     "pack_status": "complete"
