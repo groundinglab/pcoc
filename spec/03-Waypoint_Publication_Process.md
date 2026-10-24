@@ -2,7 +2,7 @@
 
 **Responsibility.** Our scoped open Bitcoin-anchor channel: Hashcash → pool → batch/tree → confirm → path fetch window (Bari-shaped). Used by a producer that publishes paths via this channel. Constrained by Construction’s two-way Bitcoin bind.
 
-**Source.** Inherited without change of wording from the following sections of Satoshi Hike 2.3 (tag `spec-2.3.0`; formerly the monolith at `spec/satoshi-hike-v2.3/SPEC.md`, not present on this branch’s public face):
+**Source.** Satoshi Hike 2.3 (tag `spec-2.3.0`). Section numbers are the specification section numbers:
 
 - §13.6 Bari waypoint service
 - Rule BR1 Acceptance and Hashcash

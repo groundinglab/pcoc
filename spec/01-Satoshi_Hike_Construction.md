@@ -2,7 +2,7 @@
 
 **Responsibility.** Defines the object, the terrain, the leg, the stage and waypoint binding, the encodings, and the two-way Bitcoin commitment bind. Used with Conformance as the definitional pair. Producer and Measurement are process documents constrained by this definition.
 
-**Source.** Inherited without change of wording from the following sections of Satoshi Hike 2.3 (tag `spec-2.3.0`; formerly the monolith at `spec/satoshi-hike-v2.3/SPEC.md`, not present on this branch’s public face):
+**Source.** Satoshi Hike 2.3 (tag `spec-2.3.0`). Section numbers are the specification section numbers:
 
 - §1 Status
 - §2 Scope
@@ -24,7 +24,7 @@
 
 The status prose in this section is **informative**. The rule index is the ID-to-heading map. The subsection “Part A rule classes” is the **normative** classification.
 
-This document is Satoshi Hike 2.3 Construction (Part A object definition). Part A is the construction: `SAMPLE_BYTES` 1024, `STEPS_PER_LEG` 2000000, `KIND` `v2.2-pcoc-object`, anchor-window offsets 2, 3, and 4, the NL4 terrain word, the §11.1 fold, and the asynchronous producer event model (Rule A6 lives in Producer Process). **FRAMING.** Unknown-kind measurement (Rule A5) and the full §14 measure procedure live in Measurement Record. Section 13.6 Bari waypoint service lives in Waypoint Publication. Part B admission levers, judgment, Rule B7/B9/B10, and section 15.5 floor measuring method live in Admission Process (value-free process) and/or outside policy instances (`gl-admit-*`); this Construction file does not set lever values. Section 16.2 implementation requirements live in Conformance.
+This document is Satoshi Hike 2.3 Construction (Part A object definition). Part A is the construction: `SAMPLE_BYTES` 1024, `STEPS_PER_LEG` 2000000, `KIND` `v2.2-pcoc-object`, anchor-window offsets 2, 3, and 4, the NL4 terrain word, the §11.1 fold, and the asynchronous producer event model (Rule A6 lives in Producer Process). **FRAMING.** Unknown-kind measurement (Rule A5) and the full §14 measure procedure live in Measurement Record. Section 13.6 Bari waypoint service lives in Waypoint Publication. Part B admission levers, judgment, Rule B7/B9, and section 15.5 floor measuring method live in Admission Process (value-free process) and/or outside policy instances (`gl-admit-*`); this Construction file does not set lever values. Section 16.2 implementation requirements live in Conformance.
 
 ### Rule index
 
@@ -70,7 +70,6 @@ This document is Satoshi Hike 2.3 Construction (Part A object definition). Part 
 | B7 | Rule B7. Resubmits | 15 |
 | B8 | Rule B8. Leg count | 15 |
 | B9 | Rule B9. Invariant refuses | 15.2 |
-| B10 | Rule B10. Submission deadline | 15 |
 | BR1 | Rule BR1. Paid waypoint | 13.6 |
 | BR2 | Rule BR2. Dedupe | 13.6 |
 | BR3 | Rule BR3. Pool and tree | 13.6 |
@@ -210,7 +209,7 @@ This subsection is the normative classification of Part A. It does not add a sec
 | <a id="rule-a4-3-1"></a>A4.3.1 | INVARIANT | Verify recomputes each checkpoint digest and the seed and records `match` or `mismatch`. A missing leg result is `mismatch`. This check does not run a leg. | §14.3 Rule A4.3 |
 | <a id="rule-a4-3-2"></a>A4.3.2 | INVARIANT | Verify recomputes `W_1` … `W_17` from stored bytes under section 12.2. No waypoint is recomputed from `last_interrupt`. | §14.3 |
 | <a id="rule-a4-5-1"></a>A4.5.1 | INVARIANT | Empty path bytes on `W_1` … `W_16` are `skip` and plant `n/a`. Any other bytes are `present`. Empty `W_17` is `not fetched by design`. | §14.3 Rule A4.5 |
-| <a id="rule-a4-5-2"></a>A4.5.2 | INVARIANT | Anchored and fetched is the `anchors` token `anchored`: in the section 13.1 window, an interrupt header stored on the object, and plant `match`. `anchored_total` is that count. This row records it and does not judge it. Rule B4, settled and normative, compares it with 6. **FRAMING (nit):** inherited “6”; Rule B4’s normative comparison is `anchored_total ≥ min_anchored_paths` (lever, policy). Leave this sentence; policy owns the value. | §14.3, §14.5 |
+| <a id="rule-a4-5-2"></a>A4.5.2 | INVARIANT | Anchored and fetched is the `anchors` token `anchored`: in the section 13.1 window, an interrupt header stored on the object, and plant `match`. `anchored_total` is that count. This row records it and does not judge it. Rule B4, settled and normative, compares it with 6. | §14.3, §14.5 |
 | <a id="rule-a4-5-3"></a>A4.5.3 | INVARIANT | `d_g` subtracts index-confirmed heights only, and only when plant is `match` and the index comparison of `I_{g−1}` is `match`. Otherwise `d_g` is `not defined`. | §4, §14.3 |
 | <a id="rule-p14-4"></a>P14.4 | INVARIANT | A present path’s plant is compared with the portable index. A read that does not return a document is `not read`. A document that was read with no plant, or with no matching plant, is `mismatch`. Verify does not GET Bari. | §14.3 |
 | <a id="rule-p14-5"></a>P14.5 | INVARIANT | A returned plant document’s `network` is the string `main` or the string `synthetic`. Any other string, or a missing `network`, is `plant` `mismatch`. There is no verifier input that selects one of those two strings. Accepting `synthetic` does not make the measurement a mainnet fact. Two plants may share a block. `tree_size` is not compared. | §14.3 |
@@ -332,7 +331,7 @@ Byte ranges are half-open. `b[i:j]` is bytes `i` through `j-1` of `b`, starting 
 | Friendly list | See section 15. |
 | Paths minimum | Rule B4. `anchored_total ≥ min_anchored_paths` among `W_1` … `W_16`, wherever those waypoints sit. Not a measurement. |
 | Outcome token | Lowercase, with spaces: `match`, `mismatch`, `present`, `skip`, `not defined`, `not read`, `not fetched by design`, `n/a`, `anchored`, `not anchored`, and `unknown kind`. Not `not_defined`. Not title case. There is no measurement token `not obtained`; that wording is not used (see below). `unknown_kind` is not in this set. It is a section 15 reason. `n/a` means a plant comparison does not apply because `path_state` is `skip`. `n/a` is not `not defined`. `not read` is an index document that is missing or unreadable, a header whose comparison is not `match` so `T` is not taken, a `T` that is missing or unusable on a `match`, an unreadable header, or anything short or missing from a network read. Short path bytes for a six-leg run, and a short-byte six-leg draw, are `not read`. A document that was read and has no plant for that block is `plant` `mismatch`. A path body that does not yield `claimed_block` is `not defined`. Fewer than six legs is `not defined`. Those `not defined` values are settled by the object's own bytes. |
-| Comparison result | The result of a Part B integer comparison (Rules B2, B4, and B10). It is `meets` when the comparison holds. When it does not hold, the rule states the outcome: `refuse`, or `not read` and `held` where that rule says so. `meets` is not an outcome token of this table, not an admission outcome, and not a section 15.2 state. It means only that this comparison does not refuse; every other section 15 check still runs. Part A does not use these words. |
+| Comparison result | The result of a Part B integer comparison (Rules B2 and B4). It is `meets` when the comparison holds. When it does not hold, the rule states the outcome: `refuse`, or `not read` and `held` where that rule says so. `meets` is not an outcome token of this table, not an admission outcome, and not a section 15.2 state. It means only that this comparison does not refuse; every other section 15 check still runs. Part A does not use these words. |
 | Fee header | The 80-byte Bitcoin block header the producer’s header source holds as its best tip when a Hashcash solve starts. `header_hash` is `SHA-256(SHA-256(header))` in natural byte order. It is not a stored header and it is not `H` (section 13.1). |
 | `bari_origin` | The ASCII origin of `{bari-url}` as section 13.1 serializes it. Bari uses its own public origin, serialized the same way (section 13.6). |
 | Asynchronous event | Work the producer starts and does not wait for on the walk path: a post, a solve, an ask, a header-source or peer read, a Bari exchange, or a log write (Rule A6). |

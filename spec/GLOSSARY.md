@@ -1,6 +1,6 @@
-# Glossary and roles — Satoshi Hike / PCOC split-six
+# Glossary and roles — Satoshi Hike 2.3
 
-**Status.** Framing vocabulary for the six-document pack. Locked 2026-10-24 with Christian. Boundary relocation the same day moved §14 into Measurement and marked K HOLD — see [INTENT.md](./INTENT.md). See also [README.md](./README.md) and [`docs/internal/spec-split-six/FRAMING-REVIEW.md`](../docs/internal/spec-split-six/FRAMING-REVIEW.md).
+**Status.** Framing vocabulary for the six-document pack under `spec/` (tag `spec-2.3.0`). See [INTENT.md](./INTENT.md) and [README.md](./README.md).
 
 **Language rule.** Prefer **valid** → **measured** → **admitted**. Do not say “verified” when you mean only one of those three.
 
@@ -10,7 +10,7 @@
 
 | Term | Meaning | Who decides |
 |---|---|---|
-| **Valid** | The object matches Construction; Conformance rules and vectors agree. Yes/no. | Conformance (design-time for tools; runtime check before measure) |
+| **Valid** | The object matches Construction; Conformance rules and vectors agree. Yes/no. | Conformance (design-time for tools; the same rules a verifier applies while measuring) |
 | **Measured** | Quantities reported for a valid object: beacons folded, legs, anchored paths, times, etc. Facts only. No thresholds. | Measurement (verifier at runtime) |
 | **Admitted** | A **policy instance** applied to a measurement record accepts (or refuses/holds) the submission. | Admission Process + policy instance |
 
@@ -32,7 +32,7 @@ Construction does **not** set admission thresholds, does **not** own the §14 me
 The **test specification** paired with Construction (specification + matching tests). Yes/no rules, permanent negatives, and the one conformance pack/vectors.
 
 - **Design time:** producer authors prove outputs are valid; verifier authors prove they accept valids, reject invalids, and report the required measurements.
-- **Runtime:** a verifier applies the same validity rules before reporting quantities.
+- **Runtime:** a verifier applies the same validity rules while measuring. Recording a mismatch is measurement. It is not a reject gate that skips the rest of the record, and it is not admission.
 - An **admission service is not a conformance target.** Policy numbers are not vectors.
 
 Construction + Conformance travel as the **definitional pair**.
@@ -43,7 +43,7 @@ A **producer** is software that builds a hike object. **Producer Process** is th
 
 ### Verifier
 
-Software that **measures** a finished object: confirm it is **valid** (Conformance), then emit a **measurement record** of quantities. It does not admit. It does not say accept/refuse.
+Software that **measures** a finished object and emits a **measurement record** of quantities, including mismatch tokens. Confirming validity and measuring are one pass. It does not admit. It does not say accept/refuse. It does not reject-before-measure.
 
 ### Waypoint Publication (Process)
 
@@ -53,7 +53,7 @@ Our **scoped** open channel for the anchor side of the Bitcoin bind: Hashcash pa
 - This document scopes **batching** as the path we specify.
 - **Direct-to-Bitcoin** plant/confirm/fetch with different timing is allowed as a different mechanism; it is out of scope for this process document.
 
-Bari **fetchability** (path served or not in the anchor window) is the real include window for anchored paths. A tip-vs-last-beacon **submit deadline (K)** is not that window.
+Bari **fetchability** (path served or not in the anchor window, offsets 2, 3, and 4) is the include window for anchored paths. This specification defines no tip-versus-last-beacon submit deadline.
 
 ### Measurement / Measurement Record
 
@@ -64,7 +64,7 @@ Bari **fetchability** (path served or not in the anchor window) is the real incl
 | | Admission Process (in pack) | Policy instance (outside pack) |
 |---|---|---|
 | Role | Generic consumer: take measurement record + policy → decide/log | Named values for one relying party |
-| Contents | How to read fields, apply a policy file, outcomes vocabulary | e.g. `gl-admit-v*` — floors, `min_anchored_paths`, born height, whether any tip deadline exists |
+| Contents | How to read fields, apply a policy file, outcomes vocabulary | e.g. `gl-admit-v*` — floors, `min_anchored_paths`, born height |
 | Values | None (value-free) | All thresholds |
 
 groundinglab Gate **service** docs and runbooks are neither the Process nor the instance; they are ops.
@@ -79,7 +79,7 @@ Always owned by **Construction**. Observing headers into the object and anchorin
 
 ### Builder (producer implementer)
 
-Read **Construction + Conformance**. Implement **Producer Process**. If planting via our channel, also **Waypoint Publication**. Prove with the conformance pack that emitted objects are **valid**.
+Read **Construction + Conformance**. Implement **Producer Process**. If planting via our channel, also **Waypoint Publication**. For the path-body / `validate_for` check only, read Measurement **§14.3**. Prove with the conformance pack that emitted objects are **valid**.
 
 ### Measurer / verifier implementer
 
@@ -100,7 +100,7 @@ Read **Conformance** plus every document you claim to implement (always Construc
 | Phase | Producer | Verifier / measurer | Gate |
 |---|---|---|---|
 | Design time | Build against Construction + Conformance until outputs pass the pack | Build against Construction + Conformance until behaviour matches vectors | Build against Admission Process; configure a policy instance |
-| Runtime | Emit a PCOC (trusted valid via design-time conformance) | Validate (Conformance rules) then **measure** → record | Apply policy instance → **admit** or not |
+| Runtime | Emit a PCOC (trusted valid via design-time conformance) | **Measure** in one pass (Conformance rules + quantities, including mismatch) → record. No admit/refuse | Apply policy instance → **admit** or not |
 
 ---
 
@@ -108,4 +108,4 @@ Read **Conformance** plus every document you claim to implement (always Construc
 
 - **Verified** — say **valid**, **measured**, or **admitted** as appropriate.
 - **Optional anchors** — anchors are part of the Construction bind; only the *batching channel* is a scoped mechanism.
-- **SPEC deadline (K)** — do not treat tip-vs-last-beacon as an object or measurement rule; see framing review.
+- **Tip-versus-last-beacon submit deadline** — not part of this specification. Anchored-path inclusion is the Bari fetch window (offsets 2, 3, and 4).

@@ -2,12 +2,12 @@
 
 **Responsibility.** How to measure a finished PCOC against Construction and emit the fact-only measurement (verify) record, plus the verify CLI conventions. Constrained by Construction + Conformance. No thresholds, no admit/refuse.
 
-**Source.** Inherited without change of wording from the following sections of Satoshi Hike 2.3 (tag `spec-2.3.0`; formerly the monolith at `spec/satoshi-hike-v2.3/SPEC.md`, not present on this branch’s public face):
+**Source.** Satoshi Hike 2.3 (tag `spec-2.3.0`). Section numbers are the specification section numbers:
 
 - §14 Verify (full procedure: Rules A4/A5, §§14.1–14.7, verify-record shape)
 - §18 Verify CLI
 
-**FRAMING (2026-10-24 relocation).** §14 body moved here from Construction (cut-paste). Plant-measurement text that had also been duplicated under Waypoint Publication was removed from that file; this document is the home for measure. Language: after Conformance validity, this document **measures** quantities. Admission Process consumes the record. Do not say “verified” for admit.
+**FRAMING.** This document is the measure procedure. Cites of “section 15” name gate-owned judgment (fast record, admit/refuse). A verifier does not apply section 15 and does not reject-before-measure. Runtime is **valid → measured → admitted**: record tokens, including `mismatch`, and do not admit or refuse. “Confirm still valid, then measure” is one pass, not a separate reject gate before measuring. Admission Process consumes the record. Do not say “verified” for admit.
 
 ---
 
