@@ -26,6 +26,11 @@
     <display_length compare="ge">720</display_length>
   </requires>
   <releases>
+    <release version="0.1.7" date="2026-10-24">
+      <description>
+        <p>Live hike panel shows truthful gossip peer counts and tip-feed status.</p>
+      </description>
+    </release>
     <release version="0.1.6" date="2026-10-23">
       <description>
         <p>Start hike runs a live producer. Stop cancels the hike and writes no object.</p>
