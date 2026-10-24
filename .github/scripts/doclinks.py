@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Light link check: every relative Markdown link in root *.md, docs/, spec/, sdk/,
-services/, and apps/ points at a file or directory that exists. External links are not
+services/, apps/, and policy/ points at a file or directory that exists. External links are not
 fetched. Run from the repo root."""
 import glob, os, re, sys
 files = sorted(set(glob.glob("*.md")
@@ -8,7 +8,8 @@ files = sorted(set(glob.glob("*.md")
                    + glob.glob("spec/**/*.md", recursive=True)
                    + glob.glob("sdk/**/*.md", recursive=True)
                    + glob.glob("services/**/*.md", recursive=True)
-                   + glob.glob("apps/**/*.md", recursive=True)))
+                   + glob.glob("apps/**/*.md", recursive=True)
+                   + glob.glob("policy/**/*.md", recursive=True)))
 bad = 0
 for f in files:
     text = re.sub(r"```.*?```", "", open(f, encoding="utf-8").read(), flags=re.S)
