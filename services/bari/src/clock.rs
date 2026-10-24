@@ -2242,9 +2242,9 @@ impl BariClock {
 
     /// Lowest height whose stored header this process returns.
     ///
-    /// Production heights start at [`Self::born_height`]. The median-time
-    /// lookback is the [`crate::MTP_LOOKBACK`] headers before that, and
-    /// those headers are returned too. A path is not.
+    /// Production heights start at [`Self::born_height`]. The
+    /// [`crate::MTP_LOOKBACK`] headers before that are returned too. They
+    /// are not `hike_span`. A path is not returned below born height.
     fn header_floor(&self) -> u32 {
         self.born_height.saturating_sub(crate::MTP_LOOKBACK)
     }

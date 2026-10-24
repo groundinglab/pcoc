@@ -2,10 +2,10 @@ package pcoc
 
 import "testing"
 
-// TestAdmitPairStartsAtFirstInterrupt locks Rule A4.10 after Christian
-// relocated the admit start off the seed beacon to I_0 (stages[1].beacon).
-// Stage 0 checkpoints and the pre-start wait are not in (hike_legs, hike_span).
-// whole_hike_span stays raw header.time.
+// TestAdmitPairStartsAtFirstInterrupt locks Rule A4.10. The admit pair
+// starts at I_0 (stages[1].beacon). Stage 0 checkpoints are not in
+// hike_legs. hike_span is raw header nTime, the same integer as
+// whole_hike_span, including a last-block spike.
 func TestAdmitPairStartsAtFirstInterrupt(t *testing.T) {
 	const seed = uint64(1000)
 	const i0 = uint64(1100)
@@ -51,19 +51,7 @@ func TestAdmitPairStartsAtFirstInterrupt(t *testing.T) {
 	headers[0] = hdr{indexCmp: "match", hasT: true, tInt: ntime(seed)}
 	headers[1] = hdr{indexCmp: "match", hasT: true, tInt: ntime(i0)}
 	headers[18] = hdr{indexCmp: "match", hasT: true, tInt: ntime(last)}
-	rb := &recordBody{
-		headers: headers,
-		mtpGet: func(h uint64) *IndexDoc {
-			return &IndexDoc{
-				HeaderOK: true,
-				Header: HeaderDoc{
-					Height:  h,
-					Time:    uint64(ntime(h)),
-					HasTime: true,
-				},
-			}
-		},
-	}
+	rb := &recordBody{headers: headers}
 	analysis(rb, obj)
 
 	if rb.hikeLegs != 940 {
@@ -75,20 +63,18 @@ func TestAdmitPairStartsAtFirstInterrupt(t *testing.T) {
 	if rb.hikeLegs == 1030 {
 		t.Fatal("stage 0's 90 checkpoints were counted")
 	}
-	// MTP(I_0) = time(1095). MTP(last) = time(1112). The last block's
-	// nTime spike is not the median. A seed start would be 117000.
-	if rb.hikeSpan != "17000" {
-		t.Fatalf("hike_span %s, want 17000", rb.hikeSpan)
+	// nTime(I_0) = 1_100_000. nTime(last) = 1_617_000. The spike is in the span.
+	// A seed start is 617000 and is not the admit span.
+	if rb.hikeSpan != "517000" {
+		t.Fatalf("hike_span %s, want 517000", rb.hikeSpan)
 	}
 	if rb.wholeSpan != "517000" {
-		t.Fatalf("whole_hike_span %s, want 517000 raw T", rb.wholeSpan)
+		t.Fatalf("whole_hike_span %s, want 517000", rb.wholeSpan)
 	}
-	seeded := mtpAt(rb, seed, headers[0])
-	ended := mtpAt(rb, last, headers[18])
-	if ended-seeded != 117000 {
-		t.Fatalf("seed→last MTP %d, want 117000", ended-seeded)
+	if rb.hikeSpan != rb.wholeSpan {
+		t.Fatal("hike_span and whole_hike_span disagreed")
 	}
-	if rb.hikeSpan == "117000" {
+	if rb.hikeSpan == "617000" {
 		t.Fatal("admit span still starts at the seed")
 	}
 }

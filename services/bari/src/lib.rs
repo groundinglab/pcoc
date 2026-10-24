@@ -33,12 +33,11 @@ pub type Hash32 = [u8; 32];
 /// Files already stored stay where they are.
 pub const BORN_HEIGHT: u32 = 972685;
 
-/// Headers before a beacon in a full median-time-past window.
+/// Headers this process still returns below [`BORN_HEIGHT`].
 ///
 /// Equal to [`pcoc::constants::MTP_LOOKBACK`], which is
-/// [`pcoc::constants::MTP_WINDOW`] minus one. The beacon itself is inside
-/// the window, so the headers below [`BORN_HEIGHT`] that this process still
-/// returns are this many.
+/// [`pcoc::constants::MTP_WINDOW`] minus one. These headers are not
+/// production heights and are not an input to `hike_span`.
 pub const MTP_LOOKBACK: u32 = pcoc::constants::MTP_LOOKBACK as u32;
 
 /// Decode exactly 32 natural-order bytes from lowercase hexadecimal.

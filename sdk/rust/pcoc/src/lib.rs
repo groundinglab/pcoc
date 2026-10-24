@@ -135,7 +135,7 @@ pub use draw::thorough_draw;
 pub use compare::leg_rate_floor;
 
 /// SPEC §14 fast-phase hike pair. No terrain fill and no leg.
-pub use fast_record::{hike_legs, hike_span, mtp_at};
+pub use fast_record::{hike_legs, hike_span};
 
 /// SPEC §16.1 Anchor comparison. Integer window only.
 pub use compare::anchor_window;

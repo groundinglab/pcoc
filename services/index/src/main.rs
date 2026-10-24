@@ -75,7 +75,7 @@ fn startup_line(
     lookback: u32,
 ) -> String {
     format!(
-        "pcoc-index v{version} bind={bind} data_dir={} sequencer_clocks={clocks} born_height={born} (read-only height-*.json cache; median-time headers born_height-{lookback} through born_height-1 are served by height and are not production heights; files below that stay on disk and are not served)",
+        "pcoc-index v{version} bind={bind} data_dir={} sequencer_clocks={clocks} born_height={born} (read-only height-*.json cache; headers born_height-{lookback} through born_height-1 are served by height, are not production heights, and are not hike_span; files below that stay on disk and are not served)",
         data_dir.display(),
         version = pcoc_index::VERSION,
     )
@@ -156,24 +156,24 @@ fn run_rebuild(
     Ok(())
 }
 
-/// Do not fetch heights below the median-time header floor.
+/// Do not fetch heights below the header floor.
 ///
-/// The floor is `born_height - MTP_LOOKBACK`. Headers in that window are
-/// written so a timestamp read can see them. They are not production heights.
-/// Files already in the output directory are left in place.
+/// The floor is `born_height - MTP_LOOKBACK`. Headers in that band are not
+/// production heights and are not `hike_span`. Files already in the output
+/// directory are left in place.
 fn apply_born_floor(from_height: u32, to_height: u32) -> Option<(u32, u32)> {
     let born = pcoc_bari::BORN_HEIGHT;
     let floor = born.saturating_sub(pcoc_bari::MTP_LOOKBACK);
     if to_height < floor {
         eprintln!(
-            "pcoc-index rebuild: to-height {to_height} is below the median-time header floor {floor} (born_height {born} minus {}); nothing written; files already stored are left in place",
+            "pcoc-index rebuild: to-height {to_height} is below the header floor {floor} (born_height {born} minus {}); nothing written; files already stored are left in place",
             pcoc_bari::MTP_LOOKBACK
         );
         return None;
     }
     if from_height < floor {
         eprintln!(
-            "pcoc-index rebuild: from-height {from_height} is below the median-time header floor {floor} (born_height {born} minus {}); starting at {floor}; files below that height are left in place",
+            "pcoc-index rebuild: from-height {from_height} is below the header floor {floor} (born_height {born} minus {}); starting at {floor}; files below that height are left in place",
             pcoc_bari::MTP_LOOKBACK
         );
         return Some((floor, to_height));

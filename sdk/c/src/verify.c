@@ -206,49 +206,6 @@ static int urandom_read(void *ctx, uint8_t out[8]) {
   return got == 8 ? 0 : -1;
 }
 
-static int mtp_at(pcoc_index_get get, void *ctx, uint64_t h, int beacon_have_T, uint64_t beacon_T,
-                  uint64_t *out) {
-  /* Rule A4.10. Other window headers are not linked (erratum E26). */
-  if (!get || !beacon_have_T) {
-    return -1;
-  }
-  uint64_t n = 11;
-  if (h + 1 < n) {
-    n = h + 1;
-  }
-  if (n == 0) {
-    return -1;
-  }
-  uint64_t times[11];
-  uint64_t start = h + 1 - n;
-  for (uint64_t i = 0; i < n; i++) {
-    uint64_t hh = start + i;
-    if (hh == h) {
-      times[i] = beacon_T;
-      continue;
-    }
-    pcoc_index_doc doc;
-    memset(&doc, 0, sizeof(doc));
-    int got = get(ctx, hh, &doc);
-    if (!got || !doc.present || !doc.has_header || !doc.header_height_ok || doc.header_height != hh ||
-        !doc.header_time_ok || doc.header_time > 0xffffffffull) {
-      return -1;
-    }
-    times[i] = doc.header_time;
-  }
-  for (uint64_t a = 1; a < n; a++) {
-    uint64_t v = times[a];
-    uint64_t b = a;
-    while (b > 0 && times[b - 1] > v) {
-      times[b] = times[b - 1];
-      b--;
-    }
-    times[b] = v;
-  }
-  *out = times[n / 2];
-  return 0;
-}
-
 static void reverse32b(const uint8_t in[32], uint8_t out[32]) {
   for (int i = 0; i < 32; i++) {
     out[i] = in[31 - i];
@@ -989,8 +946,8 @@ int pcoc_verify(const pcoc_verify_input *in, char *buf, size_t cap) {
   }
 
   /* Analysis. Counts do not read leg_count. Spans use T from Rule A4.2.
-   * hike_legs counts stages 1–17. hike_span is MTP(I_17) − MTP(I_0)
-   * (headers[1] through headers[18]), not MTP(seed) − MTP(last). */
+   * hike_legs counts stages 1–17. hike_span is nTime(I_17) − nTime(I_0),
+   * the same integer as whole_hike_span. The seed beacon is not an endpoint. */
   uint64_t hike_legs = 0;
   uint64_t whole = 0;
   int counts_ok = !malformed && obj.n_stages == PCOC_STAGES;
@@ -1051,14 +1008,8 @@ int pcoc_verify(const pcoc_verify_input *in, char *buf, size_t cap) {
     ja(&j, "\"not defined\"");
   }
   ja(&j, ",\"hike_span\":");
-  if (counts_ok && hsv[1].have_ht && hsv[18].have_ht && hsv[1].have_T && hsv[18].have_T) {
-    uint64_t m0 = 0, m1 = 0;
-    if (mtp_at(in->index_get, in->index_ctx, hsv[1].ht, hsv[1].have_T, hsv[1].Tval, &m0) == 0 &&
-        mtp_at(in->index_get, in->index_ctx, hsv[18].ht, hsv[18].have_T, hsv[18].Tval, &m1) == 0) {
-      ja_fmt_i(&j, (int64_t)m1 - (int64_t)m0);
-    } else {
-      ja(&j, "\"not read\"");
-    }
+  if (counts_ok && hsv[18].have_T && hsv[1].have_T) {
+    ja_fmt_i(&j, (int64_t)hsv[18].Tval - (int64_t)hsv[1].Tval);
   } else {
     ja(&j, "\"not read\"");
   }

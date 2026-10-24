@@ -468,22 +468,6 @@ fn needed_heights(obj: &HikeObject) -> BTreeSet<u64> {
     if obj.has_last_height {
         heights.insert(obj.last_interrupt_height);
     }
-    let mut windows = Vec::new();
-    // MTP windows for the admit endpoints: I_0 and last_interrupt.
-    // Christian relocated the admit start off the seed beacon.
-    if let Some(first) = obj.stages.get(1) {
-        windows.push(first.beacon_height);
-    }
-    if obj.has_last_height {
-        windows.push(obj.last_interrupt_height);
-    }
-    for height in windows {
-        let n = std::cmp::min(pcoc::constants::MTP_WINDOW, height.saturating_add(1));
-        let start = height + 1 - n;
-        for item in start..=height {
-            heights.insert(item);
-        }
-    }
     for stage in obj.stages.iter().skip(1).take(16) {
         let Some(bytes) = stage.path.as_ref() else {
             continue;
