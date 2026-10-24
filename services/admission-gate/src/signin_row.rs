@@ -84,6 +84,15 @@ impl SignInRows {
         self.skew_s
     }
 
+    /// Drop result rows held by this public key. Other keys stay. The
+    /// nonce-store start does not move: this is not a process restart.
+    pub fn drop_holder(&self, public_key: &[u8; 32]) {
+        self.rows
+            .lock()
+            .expect("sign-in rows")
+            .retain(|_, row| row.public_key != Some(*public_key));
+    }
+
     /// Drop every row and move the start forward. A flush with no new process.
     pub fn flush(&self, now: u64) {
         self.rows.lock().expect("sign-in rows").clear();

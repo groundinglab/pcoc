@@ -7,6 +7,8 @@ This checkout is pinned to `spec-2.3.0`. Health `spec` is Satoshi Hike 2.3. The 
 ```text
 POST /v1/sign-in                    admission. Locked six-field body (SPEC §15.1).
 GET  /v1/sign-in/result/{nonce}     locked wire. One website outcome. 64 lowercase hex.
+POST /v1/flush/challenge            mint a flush challenge. 404 when flush_claims is false.
+POST /v1/flush                      BIP-340 flush of that key's login cache. 404 when flush_claims is false.
 GET  /latest.json                   unsigned tip, after a durable line
 GET  /log/{YYYY-MM-DD}.jsonl        lines whose time_unix_s falls on that UTC date
 GET  /log/{YYYY-MM-DD}/{seq}        one decision-log line
@@ -18,7 +20,51 @@ GET  /v1/policy                     the policy in force (policy_id and its param
 
 Every route also answers `OPTIONS` (CORS preflight). Any other path is HTTP 404 `not_found`. Source: `src/http.rs` router.
 
-`POST /v1/admit`, `POST /v1/challenge`, `POST /v1/sign-in/challenge`, and any friendly-list path are not routes. The response is HTTP 404 `not_found`. There is no profile file, no friendly list, and no held state.
+`POST /v1/admit`, `POST /v1/challenge`, `POST /v1/sign-in/challenge`, and any friendly-list path are not routes. The response is HTTP 404 `not_found`. There is no profile file, no friendly list, and no held state. `POST /v1/flush/challenge` and `POST /v1/flush` are routes only while config `flush_claims` is on (the default, and the groundinglab lab file). `flush_claims = false` answers both with HTTP 404 `not_found`.
+
+## Flush one identity
+
+A tester who holds the private key for public key `P` can clear `P`'s cached login state without restarting the process. The routes are open wire. There is no shared secret. The authorization is a BIP-340 signature by `P` over a domain that is not the sign-in domain. The private key stays on the phone. The decision log is not rewritten and `last_seq` does not move.
+
+`POST /v1/flush/challenge` takes `application/json`. The body is `{"origin":"<served origin>"}`, or `{}` when this gate serves one origin. `origin` must be one of `served_origins`. The response is HTTP 200:
+
+```json
+{
+  "domain": "pcoc-gate-flush-v1",
+  "action": "flush-claims",
+  "origin": "https://groundinglab.io",
+  "nonce": "<64 lowercase hex>",
+  "exp": 0,
+  "link": "https://groundinglab.io/flush/?v=1&nonce=<64 lowercase hex>&exp=<decimal>"
+}
+```
+
+`action` is a label. It is not part of the signed bytes. `v=1` on the link names domain `pcoc-gate-flush-v1`. It does not name `pcoc-gate-signin-v1`. The link does not carry the public key. The same lifetime and skew as sign-in apply (`challenge_lifetime_seconds`, `challenge_clock_skew_seconds`). `exp` is `now + challenge_lifetime_seconds`.
+
+`challenge_bytes` is the ASCII domain `pcoc-gate-flush-v1`, one `0x00`, one length byte, the origin UTF-8, the 32 nonce bytes, `exp` as `uint64` big-endian, and the 32-byte x-only public key being flushed. The BIP-340 message is `SHA-256(challenge_bytes)` once. The signer appends their own public key. A signature over `pcoc-gate-signin-v1` does not verify here.
+
+`POST /v1/flush` takes `application/json`. The five keys appear once:
+
+```json
+{
+  "origin": "https://groundinglab.io",
+  "nonce": "<64 lowercase hex>",
+  "exp": 0,
+  "public_key": "<64 lowercase hex>",
+  "signature": "<128 lowercase hex, 64 bytes>"
+}
+```
+
+`exp` is a JSON integer. `origin`, `nonce`, and `exp` must be the minted challenge. The signature must verify under `public_key` for the flush `challenge_bytes` of that challenge. On success the response is HTTP 200 `{"flushed":true}` and the nonce is consumed. The door then drops only that key's:
+
+- ban map entry, and the same key in `banned_keys.json`
+- friendly file `{log_dir}/friendly/<public_key hex>`
+- sign-in result rows whose holder is that key
+- pending-slot count and held jobs for that key
+- that key's share of the door-session verify count, and the per-object counts it added
+- the live claim window: a thorough accept, a return inside 300 seconds, a provisional grant, and a sticky refuse, when the line's `seq` is below the watermark taken at flush
+
+A later decision for the key is live again, so the next `POST /v1/sign-in` is a new async cycle and can be issued a new provisional. Lines already in `chain.jsonl` stay, including their `seq`. `/latest.json` is not rewritten by the flush. `flushed_keys.json` records the watermark so a restart keeps the flush. It is not a decision-log line. A bad signature is HTTP 400 `{"error":{"code":"bad_signature"}}` and does not consume the nonce, so another key's cache is untouched. An unknown, reused, expired, or mismatched challenge is HTTP 400 `{"error":{"code":"malformed"}}`. Those two bodies have no `message` field.
 
 ## POST /v1/sign-in
 

@@ -38,6 +38,8 @@ Edit `/etc/pcoc-admission/gate.toml`. The gate binds `127.0.0.1:8787`. **`served
 
 `log_dir` is the public log. The process creates it. A relative `log_dir` is under `WorkingDirectory`. A chain that is not Satoshi Hike 2.2 is refused at startup and is not served. Leave an earlier log where it is.
 
+`flush_claims` gates `POST /v1/flush/challenge` and `POST /v1/flush`. Absent, or `true`, turns them on. That is the groundinglab lab default, and `deploy/gate.toml` sets `true`. `false` answers both paths HTTP 404. A flush is authorized by a BIP-340 signature from the identity being cleared. It does not rewrite `chain.jsonl` and it does not move `last_seq`. See [WIRE.md](../WIRE.md).
+
 ## Unit
 
 [pcoc-admission.service](pcoc-admission.service) sets `User`, `StateDirectory`, `WorkingDirectory`, `GATE_CONFIG`, an optional `EnvironmentFile` ([env.example](env.example)), and `ExecStart`. `StateDirectory=pcoc-admission` creates `/var/lib/pcoc-admission` on a system unit. Create that directory before enable if you drop `StateDirectory`.
@@ -66,6 +68,6 @@ Build the new binary, replace the file in `ExecStart`, then `sudo systemctl rest
 
 ## Routes
 
-`POST /v1/sign-in`, `POST /v1/verify`, `GET /v1/verify/{job_id}`, `GET /v1/health`, `GET /v1/policy`, `GET /latest.json`, `GET /log/{YYYY-MM-DD}.jsonl`, `GET /log/{YYYY-MM-DD}/{seq}`. Anything else, including `POST /v1/admit`, is HTTP 404. Bodies are in [WIRE.md](../WIRE.md).
+`POST /v1/sign-in`, `POST /v1/verify`, `GET /v1/verify/{job_id}`, `GET /v1/health`, `GET /v1/policy`, `GET /latest.json`, `GET /log/{YYYY-MM-DD}.jsonl`, `GET /log/{YYYY-MM-DD}/{seq}`. When `flush_claims` is on, also `POST /v1/flush/challenge` and `POST /v1/flush`. Anything else, including `POST /v1/admit`, is HTTP 404. Bodies are in [WIRE.md](../WIRE.md).
 
 The groundinglab policy file this config names is `policy/groundinglab-admission/gl-admit-v10.toml`. The in-repo successor is `gl-admit-v12.toml`. It omits `verify_cap_per_door_session`, so that lever is unset (the gate does not fill 3). It is not live on the host. Host cutover waits on an ops go. `gl-admit-v9.toml` is `superseded`. It does not set `born_height`, so this gate refuses that file. A file that omits `policy_id`, `draw_commitment`, or `born_height` does not start; the error names the key. The id is bound to a hash of the full table. Changing any value requires a new id. The process writes that binding to `{log_dir}/policy-bind.json` and exits before it listens when the same id is paired with a different table. `[policy_rules] sticky_refuse` is not part of that hash. Absent or `false` leaves the stored-refuse short circuit off. `true` turns it back on for the same id.

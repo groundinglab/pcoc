@@ -11,6 +11,7 @@
 
 use crate::canon::{self, hex32};
 use crate::fast::{self, FastDecision};
+use crate::flush::Challenges;
 use crate::log::{self, DecisionLog, DecisionWrite, LogError};
 use crate::policy::{self, AdmissionPolicy, Judgment};
 use crate::reasons;
@@ -34,6 +35,8 @@ pub struct Door {
     served_origins: Arc<Vec<String>>,
     /// Cache of index response bodies for this door. Not a terrain.
     mirror: Arc<verifier::Mirror>,
+    /// One-time flush challenges. Not the decision log.
+    flush: Arc<Challenges>,
 }
 
 #[derive(Clone)]
@@ -66,7 +69,21 @@ struct Inner {
     /// Consuming sign-ins that started a verify in this process.
     verify_session: u64,
     verify_object: std::collections::HashMap<[u8; 32], u64>,
+    /// How many of `verify_session` belong to each key, so a flush can
+    /// release that key's share and leave every other key's count.
+    verify_by_key: std::collections::HashMap<[u8; 32], u64>,
+    /// Object hashes counted in `verify_object` for each key, in count order.
+    verify_objects_by_key: std::collections::HashMap<[u8; 32], Vec<[u8; 32]>>,
     held: Vec<HeldEntry>,
+    /// Exclusive seq watermark. A log line for this key with `seq < mark`
+    /// is history. It is not a live claim, grant, return, or sticky refuse.
+    flushed_before: std::collections::HashMap<[u8; 32], u64>,
+    /// Bumped on each flush of that key. An in-flight job keeps the value
+    /// from when its slot was taken and does not append after a flush.
+    flush_ticket: std::collections::HashMap<[u8; 32], u64>,
+    /// Bumped when a flush releases that key's pending slots. A slot drop
+    /// decrements only when its epoch still matches.
+    pending_epoch: std::collections::HashMap<String, u64>,
 }
 
 /// One locked-wire POST, after the transport edge.
@@ -88,6 +105,10 @@ pub struct LockedThorough {
     /// A prior thorough accept with `policy_id` covers this pair.
     /// Measurement is skipped. `None` means measure.
     pub prior_accept: Option<AccessRef>,
+    /// Pending-slot epoch captured when the slot was taken.
+    pub pending_epoch: u64,
+    /// Flush generation captured when the slot was taken.
+    pub flush_ticket: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -169,6 +190,7 @@ impl Door {
         log.set_policy_hint(policy::public_document(&policy))
             .map_err(show_log)?;
         let banned = load_bans(log.dir());
+        let flushed_before = load_flushed(log.dir());
         let opened = unix_now();
         let banned_at = banned.keys().map(|key| (*key, opened)).collect();
         Ok(Self {
@@ -182,7 +204,12 @@ impl Door {
                 ban_ignored: 0,
                 verify_session: 0,
                 verify_object: std::collections::HashMap::new(),
+                verify_by_key: std::collections::HashMap::new(),
+                verify_objects_by_key: std::collections::HashMap::new(),
                 held: Vec::new(),
+                flushed_before,
+                flush_ticket: std::collections::HashMap::new(),
+                pending_epoch: std::collections::HashMap::new(),
             })),
             rows,
             policy,
@@ -190,6 +217,7 @@ impl Door {
             index_timeout,
             served_origins: Arc::new(served_origins),
             mirror: Arc::new(verifier::Mirror::new()),
+            flush: Arc::new(Challenges::new()),
         })
     }
 
@@ -296,6 +324,9 @@ impl Door {
     }
 
     fn settle_with(&self, job: &LockedThorough, out: crate::thorough::ThoroughOut, granted: bool) {
+        if self.stale_flush(job) {
+            return;
+        }
         self.drop_held(&job.nonce);
         if granted && !self.provisional_is(out.seq, job) {
             eprintln!(
@@ -477,6 +508,13 @@ impl Door {
                 return;
             }
         };
+        if !self.seq_live_for_key(&job.public_key, job.fast_seq) {
+            eprintln!(
+                "admission-service resume fast_seq={}: flushed before this grant; held",
+                job.fast_seq
+            );
+            return;
+        }
         if out.matched && self.is_banned(&job.public_key) {
             eprintln!(
                 "admission-service resume fast_seq={}: the key is banned; held",
@@ -562,12 +600,17 @@ impl Door {
         {
             return PendingAdmit::OverCap;
         }
+        let epoch = inner.pending_epoch.get(source).copied().unwrap_or(0);
+        let flush_ticket = inner.flush_ticket.get(public_key).copied().unwrap_or(0);
         inner.pending_global = inner.pending_global.saturating_add(1);
         *inner
             .pending_by_source
             .entry(source.to_owned())
             .or_insert(0) += 1;
-        PendingAdmit::Begun
+        PendingAdmit::Begun {
+            epoch,
+            flush_ticket,
+        }
     }
 
     /// Number of pending slots held, globally and for `source`.
@@ -603,8 +646,8 @@ impl Door {
         inner.banned.insert(*public_key, seq);
         inner.banned_at.insert(*public_key, at);
         let dir = inner.log.dir().to_path_buf();
-        drop(inner);
-        if let Err(err) = store_ban(&dir, public_key, seq) {
+        let bans = inner.banned.clone();
+        if let Err(err) = save_bans(&dir, &bans) {
             eprintln!("admission-service ban was not stored: {err}");
         }
     }
@@ -643,7 +686,11 @@ impl Door {
     }
 
     /// Count a verify that is about to start. `None` means it may start.
-    fn over_verify_cap(&self, object_sha: &[u8; 32]) -> Option<&'static str> {
+    fn over_verify_cap(
+        &self,
+        public_key: &[u8; 32],
+        object_sha: &[u8; 32],
+    ) -> Option<&'static str> {
         let mut inner = self.lock();
         if let Some(cap) = self.policy.verify_cap_per_door_session {
             if inner.verify_session >= cap {
@@ -657,6 +704,12 @@ impl Door {
         }
         inner.verify_session = inner.verify_session.saturating_add(1);
         *inner.verify_object.entry(*object_sha).or_insert(0) += 1;
+        *inner.verify_by_key.entry(*public_key).or_insert(0) += 1;
+        inner
+            .verify_objects_by_key
+            .entry(*public_key)
+            .or_default()
+            .push(*object_sha);
         None
     }
 
@@ -751,6 +804,9 @@ impl Door {
             else {
                 continue;
             };
+            if !line_live(&line.value, inner.flushed_before.get(&public_key).copied()) {
+                continue;
+            }
             let Some(submission) = line
                 .value
                 .get("submission_sha256")
@@ -867,7 +923,7 @@ impl Door {
         // so one submitter cannot hold every sign-in for a site. The ban
         // check and the slot are taken under one lock (try_begin_pending).
         let pending_key = pending_key(&public_key);
-        match self.try_begin_pending(&public_key, &pending_key) {
+        let (slot_epoch, flush_ticket) = match self.try_begin_pending(&public_key, &pending_key) {
             PendingAdmit::Banned => {
                 return match self.rows.consume(
                     &body,
@@ -884,12 +940,15 @@ impl Door {
                 // unknown nonce is `pending`, which is the locked token.
                 return locked_client(ClientClass::DeliveryOk, None);
             }
-            PendingAdmit::Begun => {}
-        }
+            PendingAdmit::Begun {
+                epoch,
+                flush_ticket,
+            } => (epoch, flush_ticket),
+        };
 
         // 9. Consume when this step starts. A verify cap refuses here, before
         // thorough, and does not increment the counter.
-        if let Some(code) = self.over_verify_cap(&body.object_sha) {
+        if let Some(code) = self.over_verify_cap(&public_key, &body.object_sha) {
             self.end_pending(&pending_key);
             let signed =
                 self.rows
@@ -910,6 +969,8 @@ impl Door {
                     public_key,
                     object_sha: body.object_sha,
                     prior_accept: None,
+                    pending_epoch: slot_epoch,
+                    flush_ticket,
                 };
                 self.write_fast_refuse(
                     &job,
@@ -941,7 +1002,8 @@ impl Door {
                 self.rows.note_holder(&body.nonce, public_key);
                 let prior_accept = {
                     let inner = self.lock();
-                    prior_accept(&inner.log, &public_key, &body.object_sha).map(|line| {
+                    let mark = inner.flushed_before.get(&public_key).copied();
+                    prior_accept(&inner.log, &public_key, &body.object_sha, mark).map(|line| {
                         let (day, seq) = line_ref(&line.value);
                         AccessRef {
                             day,
@@ -966,6 +1028,8 @@ impl Door {
                         public_key,
                         object_sha: body.object_sha,
                         prior_accept,
+                        pending_epoch: slot_epoch,
+                        flush_ticket,
                     }),
                 }
             }
@@ -1004,10 +1068,16 @@ impl Door {
     /// The website token stays `accepted`, `pending`, or `rejected`. The log
     /// stores one `reason_code` and a class. It does not store `rejected`.
     pub fn settle_locked(&self, job: LockedThorough, report: Result<Report, String>) {
+        if self.stale_flush(&job) {
+            return;
+        }
         let now = self.now_unix_s();
         if let Some(prior) = &job.prior_accept {
             let mut inner = self.lock();
-            if let Some(echo) = recent_return(&inner.log, &job.public_key, &job.object_sha, now) {
+            let mark = inner.flushed_before.get(&job.public_key).copied();
+            if let Some(echo) =
+                recent_return(&inner.log, &job.public_key, &job.object_sha, now, mark)
+            {
                 let (day, seq) = line_ref(&echo.value);
                 drop(inner);
                 self.rows.note_bookends(&job.nonce, None, None);
@@ -1142,6 +1212,9 @@ impl Door {
     /// The thorough phase keys its draw and its line on that seq. A
     /// provisional that was not written returns `Held` and no seq.
     pub fn settle_fast_seq(&self, job: &LockedThorough) -> (FastPhase, Option<u64>) {
+        if self.stale_flush(job) {
+            return (FastPhase::Held, None);
+        }
         // Off unless `[policy_rules] sticky_refuse` is true. A resubmit of a
         // refused pair is measured again and may append a new refuse line.
         // `sticky_phase` stays so that flag turns the short circuit back on.
@@ -1261,10 +1334,14 @@ impl Door {
 
     fn sticky(&self, public_key: &[u8; 32], object_sha: &[u8; 32]) -> Option<String> {
         let inner = self.lock();
+        let mark = inner.flushed_before.get(public_key).copied();
         let key = hex32(public_key);
         let object = hex32(object_sha);
         let mut found = None;
         for line in inner.log.lines() {
+            if !line_live(&line.value, mark) {
+                continue;
+            }
             let same = line.value.get("public_key").and_then(|item| item.as_str())
                 == Some(key.as_str())
                 && line
@@ -1501,8 +1578,12 @@ impl Door {
 
     fn provisional_seq(&self, job: &LockedThorough) -> Option<u64> {
         let inner = self.lock();
+        let mark = inner.flushed_before.get(&job.public_key).copied();
         let submission = hex32(&job.submission);
         inner.log.lines().iter().find_map(|line| {
+            if !line_live(&line.value, mark) {
+                return None;
+            }
             let decision = line.value.get("decision").and_then(|item| item.as_str());
             let same = line
                 .value
@@ -1596,7 +1677,8 @@ impl Door {
         object_sha: &[u8; 32],
     ) -> Option<AccessRef> {
         let inner = self.lock();
-        prior_accept(&inner.log, public_key, object_sha).map(|line| {
+        let mark = inner.flushed_before.get(public_key).copied();
+        prior_accept(&inner.log, public_key, object_sha, mark).map(|line| {
             let (day, seq) = line_ref(&line.value);
             AccessRef {
                 day,
@@ -1609,6 +1691,152 @@ impl Door {
                     .to_owned(),
             }
         })
+    }
+
+    /// Mint a flush challenge for a served origin. `exp` is `now` plus the
+    /// policy challenge lifetime. The nonce is single-use and is not a
+    /// sign-in nonce.
+    pub fn mint_flush(&self, origin: &str) -> Result<MintedFlush, ()> {
+        if !self
+            .served_origins
+            .iter()
+            .any(|served| served.as_bytes() == origin.as_bytes())
+        {
+            return Err(());
+        }
+        let now = self.now_unix_s();
+        let exp = now.saturating_add(self.policy.challenge_lifetime_seconds);
+        let nonce = self.flush.mint(origin.to_owned(), exp).map_err(|err| {
+            eprintln!("admission-service flush challenge was not minted: {err}");
+        })?;
+        let link = format!("{origin}/flush/?v=1&nonce={}&exp={exp}", hex32(&nonce));
+        Ok(MintedFlush {
+            origin: origin.to_owned(),
+            nonce,
+            exp,
+            link,
+        })
+    }
+
+    /// The sole served origin, when this gate serves exactly one site.
+    pub fn sole_served_origin(&self) -> Option<&str> {
+        if self.served_origins.len() == 1 {
+            Some(self.served_origins[0].as_str())
+        } else {
+            None
+        }
+    }
+
+    /// Verify a flush signature and clear that key's login cache.
+    ///
+    /// A bad signature does not consume the nonce. A consumed, unknown, or
+    /// out-of-window nonce is [`FlushResult::Malformed`]. The decision log
+    /// is not appended.
+    pub fn submit_flush(&self, body: &wire::FlushSubmit) -> FlushResult {
+        let Some(row) = self.flush.get(&body.nonce) else {
+            return FlushResult::Malformed;
+        };
+        if row.consumed || row.origin != body.origin || row.exp != body.exp {
+            return FlushResult::Malformed;
+        }
+        let now = self.now_unix_s();
+        if !wire::window_accepts(
+            now,
+            row.exp,
+            self.policy.challenge_lifetime_seconds,
+            self.policy.challenge_clock_skew_seconds,
+            self.rows.store_start(),
+        ) {
+            return FlushResult::Malformed;
+        }
+        let message =
+            wire::flush_bip340_message(&row.origin, &body.nonce, row.exp, &body.public_key);
+        if !wire::verify_signature(&body.public_key, &message, &body.signature) {
+            return FlushResult::BadSignature;
+        }
+        if !self.flush.consume_fresh(&body.nonce) {
+            return FlushResult::Malformed;
+        }
+        self.flush_claims(&body.public_key);
+        FlushResult::Flushed
+    }
+
+    /// Clear this key's claim, provisional grant, accepted claim window,
+    /// ban, door-session counts, pending slots, held jobs, and result rows.
+    ///
+    /// Log lines stay. `last_seq` does not move. Lines with `seq` below the
+    /// watermark are no longer a live claim for this key. A later decision
+    /// for the key is live again.
+    pub fn flush_claims(&self, public_key: &[u8; 32]) {
+        let mut inner = self.lock();
+        let mark = inner
+            .log
+            .lines()
+            .last()
+            .and_then(|line| line.value.get("seq").and_then(|item| item.as_u64()))
+            .map(|seq| seq.saturating_add(1))
+            .unwrap_or(0);
+        let previous = inner.flushed_before.get(public_key).copied().unwrap_or(0);
+        if mark > previous {
+            inner.flushed_before.insert(*public_key, mark);
+        }
+        *inner.flush_ticket.entry(*public_key).or_insert(0) += 1;
+        inner.banned.remove(public_key);
+        inner.banned_at.remove(public_key);
+        let source = pending_key(public_key);
+        let pending = inner.pending_by_source.remove(&source).unwrap_or(0);
+        inner.pending_global = inner.pending_global.saturating_sub(pending);
+        *inner.pending_epoch.entry(source).or_insert(0) += 1;
+        if let Some(count) = inner.verify_by_key.remove(public_key) {
+            inner.verify_session = inner.verify_session.saturating_sub(count);
+        }
+        if let Some(objects) = inner.verify_objects_by_key.remove(public_key) {
+            for object in objects {
+                if let Some(count) = inner.verify_object.get_mut(&object) {
+                    *count = count.saturating_sub(1);
+                    if *count == 0 {
+                        inner.verify_object.remove(&object);
+                    }
+                }
+            }
+        }
+        inner
+            .held
+            .retain(|entry| entry.job.public_key != *public_key);
+        let dir = inner.log.dir().to_path_buf();
+        let bans = inner.banned.clone();
+        let flushed = inner.flushed_before.clone();
+        drop(inner);
+        self.rows.drop_holder(public_key);
+        if let Err(err) = save_bans(&dir, &bans) {
+            eprintln!("admission-service ban file was not updated: {err}");
+        }
+        if let Err(err) = save_flushed(&dir, &flushed) {
+            eprintln!("admission-service flush watermark was not stored: {err}");
+        }
+        let friendly = dir.join("friendly").join(hex32(public_key));
+        if friendly.is_file() {
+            if let Err(err) = std::fs::remove_file(&friendly) {
+                eprintln!("admission-service friendly file was not removed: {err}");
+            }
+        }
+    }
+
+    /// An in-flight job whose flush generation is older than the key's.
+    fn stale_flush(&self, job: &LockedThorough) -> bool {
+        let inner = self.lock();
+        inner
+            .flush_ticket
+            .get(&job.public_key)
+            .copied()
+            .unwrap_or(0)
+            != job.flush_ticket
+    }
+
+    /// `seq` is still a live claim for this key. A flush hides earlier lines.
+    fn seq_live_for_key(&self, public_key: &[u8; 32], seq: u64) -> bool {
+        let inner = self.lock();
+        line_seq_live(Some(seq), inner.flushed_before.get(public_key).copied())
     }
 
     /// One decision object. `None` when `seq` is missing or its time is another day.
@@ -1642,7 +1870,7 @@ impl Door {
     }
 
     /// A provisional line with no index read. The seq is the thorough ticket.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-util"))]
     pub fn test_grant_provisional(&self, job: &LockedThorough) -> u64 {
         self.write_provisional(job, "{}", serde_json::json!(["main"]))
             .expect("provisional")
@@ -1657,7 +1885,7 @@ impl Door {
             .map(|entry| entry.attempts)
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-util"))]
     pub fn test_decisions(&self) -> Vec<String> {
         self.lock()
             .log
@@ -1672,7 +1900,7 @@ impl Door {
             .collect()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-util"))]
     pub fn test_reasons(&self) -> Vec<String> {
         self.lock()
             .log
@@ -1707,8 +1935,9 @@ pub enum PendingAdmit {
     /// A pending cap is full. No slot was taken.
     OverCap,
     /// A slot was taken. The caller releases it with `end_pending`
-    /// (or a [`PendingSlot`]).
-    Begun,
+    /// (or a [`PendingSlot`]). `epoch` and `flush_ticket` are the values
+    /// at the take. A later flush does not match them.
+    Begun { epoch: u64, flush_ticket: u64 },
 }
 
 /// A taken pending slot, released exactly once when dropped. The thorough
@@ -1717,18 +1946,29 @@ pub enum PendingAdmit {
 pub struct PendingSlot {
     door: Door,
     source: String,
+    epoch: u64,
 }
 
 impl PendingSlot {
-    pub fn new(door: Door, source: String) -> Self {
-        Self { door, source }
+    pub fn new(door: Door, source: String, epoch: u64) -> Self {
+        Self {
+            door,
+            source,
+            epoch,
+        }
     }
 }
 
 impl Drop for PendingSlot {
     fn drop(&mut self) {
         // A poisoned lock must not turn a panic unwind into an abort.
+        // A flush releases the count and bumps the epoch. This drop then
+        // leaves the counters alone.
         if let Ok(mut inner) = self.door.inner.lock() {
+            let current = inner.pending_epoch.get(&self.source).copied().unwrap_or(0);
+            if current != self.epoch {
+                return;
+            }
             inner.pending_global = inner.pending_global.saturating_sub(1);
             if let Some(count) = inner.pending_by_source.get_mut(&self.source) {
                 *count = count.saturating_sub(1);
@@ -1777,15 +2017,18 @@ fn unknown_measures() -> Measures {
 }
 
 /// A thorough accept of this pair that carries a non-empty `policy_id`.
+/// `flushed_before` hides lines a flush has retired for this key.
 fn prior_accept<'a>(
     log: &'a DecisionLog,
     public_key: &[u8; 32],
     object_sha: &[u8; 32],
+    flushed_before: Option<u64>,
 ) -> Option<&'a log::StoredLine> {
     let key = hex32(public_key);
     let object = hex32(object_sha);
     log.lines().iter().find(|line| {
-        line.value.get("phase").and_then(|item| item.as_str()) == Some("thorough")
+        line_live(&line.value, flushed_before)
+            && line.value.get("phase").and_then(|item| item.as_str()) == Some("thorough")
             && line.value.get("decision").and_then(|item| item.as_str()) == Some("accept")
             && line.value.get("public_key").and_then(|item| item.as_str()) == Some(key.as_str())
             && line
@@ -1807,10 +2050,14 @@ fn recent_return<'a>(
     public_key: &[u8; 32],
     object_sha: &[u8; 32],
     now: u64,
+    flushed_before: Option<u64>,
 ) -> Option<&'a log::StoredLine> {
     let key = hex32(public_key);
     let object = hex32(object_sha);
     log.lines().iter().rev().find(|line| {
+        if !line_live(&line.value, flushed_before) {
+            return false;
+        }
         if line.value.get("decision").and_then(|item| item.as_str()) != Some("return") {
             return false;
         }
@@ -1941,6 +2188,36 @@ fn held_bound_detail(
     }
 }
 
+fn line_live(value: &Value, flushed_before: Option<u64>) -> bool {
+    line_seq_live(
+        value.get("seq").and_then(|item| item.as_u64()),
+        flushed_before,
+    )
+}
+
+fn line_seq_live(seq: Option<u64>, flushed_before: Option<u64>) -> bool {
+    match flushed_before {
+        None => true,
+        Some(mark) => seq.is_some_and(|seq| seq >= mark),
+    }
+}
+
+/// A minted flush challenge. `domain` is `pcoc-gate-flush-v1`. The link's
+/// `v=1` names that domain, not the sign-in domain.
+pub struct MintedFlush {
+    pub origin: String,
+    pub nonce: [u8; 32],
+    pub exp: u64,
+    pub link: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FlushResult {
+    Flushed,
+    BadSignature,
+    Malformed,
+}
+
 fn load_bans(dir: &Path) -> std::collections::HashMap<[u8; 32], u64> {
     let mut out = std::collections::HashMap::new();
     let path = dir.join("banned_keys.json");
@@ -1961,18 +2238,50 @@ fn load_bans(dir: &Path) -> std::collections::HashMap<[u8; 32], u64> {
     out
 }
 
-fn store_ban(dir: &Path, public_key: &[u8; 32], seq: u64) -> Result<(), String> {
-    let path = dir.join("banned_keys.json");
-    let mut map = if path.exists() {
-        let raw = std::fs::read_to_string(&path).map_err(|err| err.to_string())?;
-        serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&raw).unwrap_or_default()
-    } else {
-        serde_json::Map::new()
+fn save_bans(dir: &Path, bans: &std::collections::HashMap<[u8; 32], u64>) -> Result<(), String> {
+    let mut map = serde_json::Map::new();
+    for (key, seq) in bans {
+        map.insert(hex32(key), serde_json::json!(seq));
+    }
+    write_private_json(dir, "banned_keys.json", &serde_json::Value::Object(map))
+}
+
+fn load_flushed(dir: &Path) -> std::collections::HashMap<[u8; 32], u64> {
+    let mut out = std::collections::HashMap::new();
+    let path = dir.join("flushed_keys.json");
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        return out;
     };
-    map.insert(hex32(public_key), serde_json::json!(seq));
-    let bytes = serde_json::to_vec(&map).map_err(|err| err.to_string())?;
-    // Atomic and private: a 0600 tmp file, fsync, rename, fsync the directory.
-    let tmp = dir.join("banned_keys.json.tmp");
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return out;
+    };
+    let Some(map) = value.as_object() else {
+        return out;
+    };
+    for (key, mark) in map {
+        if let (Some(bytes), Some(mark)) = (log::parse_hex32(key), mark.as_u64()) {
+            out.insert(bytes, mark);
+        }
+    }
+    out
+}
+
+fn save_flushed(
+    dir: &Path,
+    flushed: &std::collections::HashMap<[u8; 32], u64>,
+) -> Result<(), String> {
+    let mut map = serde_json::Map::new();
+    for (key, mark) in flushed {
+        map.insert(hex32(key), serde_json::json!(mark));
+    }
+    write_private_json(dir, "flushed_keys.json", &serde_json::Value::Object(map))
+}
+
+/// Atomic and private: a 0600 tmp file, fsync, rename, fsync the directory.
+fn write_private_json(dir: &Path, name: &str, value: &serde_json::Value) -> Result<(), String> {
+    let bytes = serde_json::to_vec(value).map_err(|err| err.to_string())?;
+    let tmp = dir.join(format!("{name}.tmp"));
+    let path = dir.join(name);
     {
         use std::io::Write as _;
         let mut file = crate::thorough::private_file(&tmp)?;

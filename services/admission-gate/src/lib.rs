@@ -16,6 +16,7 @@ pub mod cbor_limit;
 pub mod config;
 pub mod door;
 pub mod fast;
+pub mod flush;
 pub mod http;
 pub mod ids;
 pub mod jobs;

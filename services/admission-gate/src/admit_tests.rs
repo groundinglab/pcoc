@@ -191,6 +191,8 @@ fn job_for(object: &[u8], nonce: [u8; 32]) -> LockedThorough {
         object_sha,
         object: object.to_vec(),
         prior_accept: None,
+        pending_epoch: 0,
+        flush_ticket: 0,
     }
 }
 
@@ -945,7 +947,7 @@ fn a_banned_key_takes_no_slot_and_a_panicking_job_releases_its_slot() {
     door.begin_pending("src");
     let door2 = door.clone();
     let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _slot = crate::door::PendingSlot::new(door2, "src".to_owned());
+        let _slot = crate::door::PendingSlot::new(door2, "src".to_owned(), 0);
         panic!("job");
     }));
     assert!(panicked.is_err());

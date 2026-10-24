@@ -23,6 +23,14 @@ pub fn origin_served<S: AsRef<str>>(served: &[S], origin: &str) -> bool {
 }
 pub const DOMAIN: &[u8] = b"pcoc-gate-signin-v1";
 
+/// Flush challenge domain. Distinct from [`DOMAIN`] so a sign-in signature
+/// is not a flush, and a flush signature is not a sign-in.
+pub const FLUSH_DOMAIN_STR: &str = "pcoc-gate-flush-v1";
+pub const FLUSH_DOMAIN: &[u8] = FLUSH_DOMAIN_STR.as_bytes();
+
+/// Label on the mint response. It is not part of `challenge_bytes`.
+pub const FLUSH_ACTION: &str = "flush-claims";
+
 pub const OUTCOME_PENDING: &str = "pending";
 pub const OUTCOME_ACCEPTED: &str = "accepted";
 pub const OUTCOME_MALFORMED: &str = "malformed";
@@ -104,23 +112,58 @@ pub fn window_accepts(
 }
 
 pub fn challenge_bytes(origin: &str, nonce: &[u8; 32], exp: u64, object: &[u8; 32]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(93 + origin.len());
-    out.extend_from_slice(DOMAIN);
+    tagged_challenge(DOMAIN, origin, nonce, exp, object)
+}
+
+pub fn bip340_message(origin: &str, nonce: &[u8; 32], exp: u64, object: &[u8; 32]) -> [u8; 32] {
+    digest32(&challenge_bytes(origin, nonce, exp, object))
+}
+
+/// Flush `challenge_bytes`. Same layout as sign-in, with [`FLUSH_DOMAIN`]
+/// and the signer's 32-byte x-only public key in the slot sign-in uses for
+/// `object_sha256`. The mint response does not carry the key. The signer
+/// appends it. The link does not carry it.
+pub fn flush_challenge_bytes(
+    origin: &str,
+    nonce: &[u8; 32],
+    exp: u64,
+    public_key: &[u8; 32],
+) -> Vec<u8> {
+    tagged_challenge(FLUSH_DOMAIN, origin, nonce, exp, public_key)
+}
+
+pub fn flush_bip340_message(
+    origin: &str,
+    nonce: &[u8; 32],
+    exp: u64,
+    public_key: &[u8; 32],
+) -> [u8; 32] {
+    digest32(&flush_challenge_bytes(origin, nonce, exp, public_key))
+}
+
+fn digest32(bytes: &[u8]) -> [u8; 32] {
+    let digest = Sha256::digest(bytes);
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&digest);
+    out
+}
+
+fn tagged_challenge(
+    domain: &[u8],
+    origin: &str,
+    nonce: &[u8; 32],
+    exp: u64,
+    tail: &[u8; 32],
+) -> Vec<u8> {
+    let mut out = Vec::with_capacity(domain.len() + 2 + origin.len() + 32 + 8 + 32);
+    out.extend_from_slice(domain);
     out.push(0x00);
     let n = u8::try_from(origin.len()).unwrap_or(u8::MAX);
     out.push(n);
     out.extend_from_slice(&origin.as_bytes()[..usize::from(n).min(origin.len())]);
     out.extend_from_slice(nonce);
     out.extend_from_slice(&exp.to_be_bytes());
-    out.extend_from_slice(object);
-    out
-}
-
-pub fn bip340_message(origin: &str, nonce: &[u8; 32], exp: u64, object: &[u8; 32]) -> [u8; 32] {
-    let bytes = challenge_bytes(origin, nonce, exp, object);
-    let digest = Sha256::digest(&bytes);
-    let mut out = [0u8; 32];
-    out.copy_from_slice(&digest);
+    out.extend_from_slice(tail);
     out
 }
 
@@ -299,6 +342,67 @@ pub fn nonce_from_path(text: &str) -> Option<[u8; 32]> {
     decode_fixed(text).ok()
 }
 
+/// Body of `POST /v1/flush`. Five keys, each once. No object.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FlushSubmit {
+    pub origin: String,
+    pub nonce: [u8; 32],
+    pub exp: u64,
+    pub public_key: [u8; 32],
+    pub signature: [u8; 64],
+}
+
+const FLUSH_KEYS: [&str; 5] = ["origin", "nonce", "exp", "public_key", "signature"];
+
+/// `None` is malformed: not one JSON object, or the five-field grammar missed.
+pub fn parse_flush_submit(body: &[u8]) -> Option<FlushSubmit> {
+    let parsed: Value = serde_json::from_slice(body).ok()?;
+    let map = parsed.as_object()?;
+    if map.len() != FLUSH_KEYS.len() || FLUSH_KEYS.iter().any(|key| !map.contains_key(*key)) {
+        return None;
+    }
+    let origin = map.get("origin").and_then(Value::as_str)?.to_owned();
+    let nonce = decode_fixed(map.get("nonce").and_then(Value::as_str).unwrap_or("")).ok()?;
+    let exp = json_u64(map.get("exp")).ok()?;
+    let public_key =
+        decode_fixed(map.get("public_key").and_then(Value::as_str).unwrap_or("")).ok()?;
+    let signature =
+        decode_fixed(map.get("signature").and_then(Value::as_str).unwrap_or("")).ok()?;
+    Some(FlushSubmit {
+        origin,
+        nonce,
+        exp,
+        public_key,
+        signature,
+    })
+}
+
+/// Mint body. `{"origin":"..."}` names the site. `{}` asks the door to use
+/// its sole served origin. Any other shape is malformed.
+pub enum FlushMint {
+    Origin(String),
+    SoleOrigin,
+}
+
+pub fn parse_flush_mint(body: &[u8]) -> Option<FlushMint> {
+    if body.iter().all(|byte| byte.is_ascii_whitespace()) {
+        return Some(FlushMint::SoleOrigin);
+    }
+    let parsed: Value = serde_json::from_slice(body).ok()?;
+    let map = parsed.as_object()?;
+    if map.is_empty() {
+        return Some(FlushMint::SoleOrigin);
+    }
+    if map.len() != 1 || !map.contains_key("origin") {
+        return None;
+    }
+    let origin = map.get("origin").and_then(Value::as_str)?.to_owned();
+    if origin.is_empty() {
+        return None;
+    }
+    Some(FlushMint::Origin(origin))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -316,5 +420,20 @@ mod tests {
         // Issued at store_start + skew passes. One second earlier does not.
         assert!(window_accepts(1_125, 1_125, 120, 5, 1_000));
         assert!(!window_accepts(1_124, 1_124, 120, 5, 1_000));
+    }
+
+    #[test]
+    fn flush_domain_is_not_the_sign_in_domain() {
+        assert_ne!(FLUSH_DOMAIN, DOMAIN);
+        assert_eq!(FLUSH_DOMAIN, b"pcoc-gate-flush-v1");
+        let nonce = [0x11; 32];
+        let key = [0x22; 32];
+        let origin = "https://groundinglab.io";
+        let flush = flush_challenge_bytes(origin, &nonce, 1_893_456_000, &key);
+        let sign_in = challenge_bytes(origin, &nonce, 1_893_456_000, &key);
+        assert_ne!(flush, sign_in);
+        assert_eq!(flush.len(), 115);
+        assert!(flush.starts_with(FLUSH_DOMAIN));
+        assert_eq!(flush[FLUSH_DOMAIN.len()], 0x00);
     }
 }

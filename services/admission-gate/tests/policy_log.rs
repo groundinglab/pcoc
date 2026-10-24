@@ -383,6 +383,8 @@ fn thorough(
         public_key: key,
         object_sha,
         prior_accept: door.prior_accept_ref(&key, &object_sha),
+        pending_epoch: 0,
+        flush_ticket: 0,
     }
 }
 
