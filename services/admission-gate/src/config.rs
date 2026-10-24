@@ -535,7 +535,6 @@ mod tests {
             [levers]
             min_anchored_paths = 8
             leg_rate_floor = { p = 7, q = 20 }
-            submission_deadline_blocks = 4
             held_retry_seconds = 30
             thorough_rounds = 2
             challenge_lifetime_seconds = 60
@@ -562,7 +561,10 @@ mod tests {
         assert_eq!(cfg.policy.min_anchored_paths, 8);
         assert_eq!(cfg.policy.thorough_six_leg_runs, 2);
         assert!(!cfg.policy.provisional_on());
-        assert_eq!(cfg.policy.submission_deadline_blocks, 4);
+        assert!(serde_json::to_value(&cfg.policy)
+            .expect("policy json")
+            .get("submission_deadline_blocks")
+            .is_none());
         assert_eq!(cfg.policy.held_retry_seconds, 30);
         assert_eq!(cfg.policy.challenge_lifetime_seconds, 60);
         assert!(cfg.policy.thorough_early_stop);

@@ -1,4 +1,4 @@
-//! SPEC §15.3 header and plant reads, and Rule B10, for the fast phase.
+//! SPEC §15.3 header and plant reads for the fast phase.
 //!
 //! The mirror is a cache of `{index-url}` bodies. A mismatch against a cached
 //! body is `held` until a fresh read that bypasses the cache confirms it.
@@ -33,7 +33,8 @@ enum DocFail {
     Mismatch,
 }
 
-/// Header, plant, B10, B2, and B4. `Ok` means every measurement was read and met.
+/// Header, plant, B2, and B4. `Ok` means every measurement was read and met.
+/// Tip age past `last_interrupt_height` is not a refusal.
 pub fn assess(
     object: &[u8],
     policy: &AdmissionPolicy,
@@ -51,7 +52,7 @@ pub fn assess(
         line: "The object is not the canonical encoding.".to_owned(),
         record: "{}".to_owned(),
     })?;
-    let tip = rule_b10(&obj, policy, index)?;
+    let tip = deciding_tip(&obj, index)?;
     let mut times = std::collections::HashMap::<u64, i128>::new();
     compare_headers(&obj, index, &mut times).map_err(|stop| with_tip(stop, tip))?;
     let anchored = compare_plants(&obj, policy, index).map_err(|stop| with_tip(stop, tip))?;
@@ -87,11 +88,11 @@ pub fn assess(
     })
 }
 
-fn rule_b10(
-    obj: &HikeObject,
-    policy: &AdmissionPolicy,
-    index: &IndexClient,
-) -> Result<Option<u64>, ReadStop> {
+/// Tip for the held-bound clock: the first successful read at or above
+/// `last_interrupt_height`. A tip that is not read, or still below that
+/// height, is `held`. SPEC 2.3 has no tip-versus-last-beacon deadline, so
+/// a tip many blocks past that height is not a refusal.
+fn deciding_tip(obj: &HikeObject, index: &IndexClient) -> Result<Option<u64>, ReadStop> {
     if !obj.has_last_height {
         return Err(held(None));
     }
@@ -104,14 +105,6 @@ fn rule_b10(
     };
     if height < last {
         return Err(held(None));
-    }
-    let gap = height - last;
-    if gap > policy.submission_deadline_blocks {
-        return Err(ReadStop::Refuse {
-            reasons: vec![crate::reasons::CODE_SUBMISSION_DEADLINE.to_owned()],
-            line: crate::reasons::public_sentence(crate::reasons::CODE_SUBMISSION_DEADLINE),
-            record: "{}".to_owned(),
-        });
     }
     Ok(Some(height))
 }
