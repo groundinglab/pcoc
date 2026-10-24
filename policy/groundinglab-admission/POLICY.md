@@ -1,54 +1,66 @@
-# groundinglab admission policy gl-admit-v10
+# groundinglab admission policy gl-admit-v11
 
-- **Status.** A policy file's `status` is one of `draft`, `active`, or `superseded`. `gl-admit-v10` is `active`. Live from 2026-10-23. `gl-admit-v9` is `superseded`: it was live until 2026-10-23, and `gl-admit-v10` supersedes it.
-- **Repo path (agreed layout).** `policy/groundinglab-admission/POLICY.md`, next to `gl-admit-v10.toml`. `gl-admit-v9.toml` stays in this directory with `status` `superseded`.
-- **Targets.** Satoshi Hike 2.2, tag `spec-2.2.0` (`spec/satoshi-hike-v2.2/SPEC.md`).
-- **Policy version.** The `policy_version` is the id `gl-admit-v10` plus the SHA-256 of `gl-admit-v10.toml`. Ops pins that SHA-256 in the deployment manifest at deploy time.
+- **Status.** A policy file's `status` is one of `draft`, `active`, or `superseded`. `gl-admit-v11` is `active` in this repository. The live gate stays on `gl-admit-v10` until an explicit go (#115). This change does not deploy. `gl-admit-v10.toml` keeps `status` `active` until that swap, because that file is the live id and its bytes stay pinned. After the swap it becomes `superseded`. `gl-admit-v9` is `superseded`: it was live until 2026-10-23.
+- **Repo path (agreed layout).** `policy/groundinglab-admission/POLICY.md`, next to [`gl-admit-v11.toml`](gl-admit-v11.toml). [`gl-admit-v10.toml`](gl-admit-v10.toml) and [`gl-admit-v9.toml`](gl-admit-v9.toml) stay in this directory.
+- **Targets.** Satoshi Hike 2.3, tag `spec-2.3.0`. The public face is the six-doc pack under [`spec/`](../../spec/README.md) ([GUIDE](../../spec/GUIDE.md)). Admission levers are [Admission Process §15.4](../../spec/04-Admission_Process.md#sec-15-4). This document does not target `spec/satoshi-hike-v2.2/SPEC.md` or `spec/satoshi-hike-v2.3/SPEC.md`.
+- **Policy version.** The `policy_version` is the id `gl-admit-v11` plus the SHA-256 of `gl-admit-v11.toml`. Ops pins that SHA-256 in the deployment manifest at deploy time. There is no deploy in this change.
 
-A policy sets the SPEC's §15.4 levers to values inside their ranges. It never changes a SPEC rule. Section 3 holds the behaviour that SPEC 2.2 leaves to policy. Changing any value or rule here needs a new id; ids are never reused. `gl-admit-v9.toml` is the previous id. Its `status` is `superseded`. Earlier ids are kept only in ops `policy-bind.json`.
+## Changes from gl-admit-v10 (Christian, 24 Oct 2026)
+
+| Field | v10 | v11 |
+|---|---|---|
+| `leg_rate_floor` | `{ p = 1, q = 5 }` (0.2 legs/s) | `{ p = 1, q = 10 }` (0.1 legs/s) for testing; retune after more produces (#115) |
+| `spec` | `"2.2"` | `"2.3"` |
+| `submission_deadline_blocks` | set on v10 | omitted. [Admission Process](../../spec/04-Admission_Process.md) defines no tip-versus-last-beacon submit deadline (#119). It is not a §15.4 lever. |
+
+`min_anchored_paths` stays 6. `born_height` stays 972685. Every other §15.4 lever is carried from v10.
+
+A policy sets the Admission Process §15.4 levers to values inside their ranges. It never changes a SPEC rule. Section 3 holds the behaviour that process leaves to policy. Changing any value or rule here needs a new id; ids are never reused. `gl-admit-v9.toml` is the id before v10. Its `status` is `superseded`. Earlier ids are kept only in ops `policy-bind.json`.
 
 ## 1. Levers this policy sets
 
-| Lever (SPEC §15.4) | Value | Source | Argument |
+| Lever ([Admission Process §15.4](../../spec/04-Admission_Process.md#sec-15-4)) | Value | Source | Argument |
 |---|---|---|---|
-| `min_anchored_paths` | 6 | SPEC default | Enough anchored waypoints to time the hike without punishing a weak connection. They can be anywhere among `W_1` … `W_16`. |
-| `leg_rate_floor` | `1/5` | SPEC default (`p ≥ 1`, `q ≥ 1`) | One leg per 5 s over the MTP span. It must be re-measured under 2.2 with async producers (SPEC §15.5). It will rise once the 15–45 s wait no longer sits inside the span. |
-| `held_retry_seconds` | 600 | SPEC default | Retry a held submission every 10 minutes. |
-| `thorough_rounds` | 3 | SPEC default | 18 legs in 3 rounds of 6, which detects a 25 % fake fraction 99.44 % of the time. |
-| `challenge_lifetime_seconds` | 120 | SPEC default | The website mints with the same value. |
-| `challenge_clock_skew_seconds` | 5 | SPEC default | |
-| `result_retention_seconds` | 600 | SPEC default | |
-| `reverify_max_attempts` | 3 | policy (no SPEC default) | Earlier `default`-profile figure. |
-| `max_held_blocks` | 6 | policy (no SPEC default) | Earlier `default`-profile figure. |
-| `provisional` | `on` | policy | Cheap checks first, then a short read-only grant that is never `accept`. |
-| `fast_accept_bound` | 2 s | policy | Earlier `default`-profile figure. |
-| `async_catch_budget` | 22.05 s | policy | Times the parallel checkpoint-digest pass. It does not include recomputing legs. |
-| `verify_cap_per_object` | unset | SPEC default | The earlier candidate was 1. Set it if compute abuse appears. |
-| `verify_cap_per_door_session` | 3 | policy | SPEC default is unset. This file sets 3. The gate reads the key. |
-| `fake_leg_ignore_seconds` | unset (no expiry) | SPEC default | A fake leg ignores that key at this gate permanently. |
+| `min_anchored_paths` | 6 | carried from v10 | Enough anchored waypoints to time the hike without punishing a weak connection. They can be anywhere among `W_1` … `W_16`. |
+| `leg_rate_floor` | `1/10` | measured hike ≈0.14; floor 0.1 for testing (#115) | Integer compare `q · hike_legs ≥ p · hike_span`. Retune after more produces. |
+| `held_retry_seconds` | 600 | carried from v10 | Retry a held submission every 10 minutes. |
+| `thorough_rounds` | 3 | carried from v10 | 18 legs in 3 rounds of 6, which detects a 25 % fake fraction 99.44 % of the time. |
+| `challenge_lifetime_seconds` | 120 | carried from v10 | The website mints with the same value. |
+| `challenge_clock_skew_seconds` | 5 | carried from v10 | |
+| `result_retention_seconds` | 600 | carried from v10 | |
+| `reverify_max_attempts` | 3 | carried from v10 | Earlier `default`-profile figure. |
+| `max_held_blocks` | 6 | carried from v10 | Earlier `default`-profile figure. |
+| `provisional` | `on` | carried from v10 | Cheap checks first, then a short read-only grant that is never `accept`. |
+| `fast_accept_bound` | 2 s | carried from v10 | Earlier `default`-profile figure. |
+| `async_catch_budget` | 22.05 s | carried from v10 | Times the parallel checkpoint-digest pass. It does not include recomputing legs. |
+| `verify_cap_per_object` | unset | carried from v10 | The earlier candidate was 1. Set it if compute abuse appears. |
+| `verify_cap_per_door_session` | 3 | carried from v10 | The range lists unset. This file sets 3. The gate reads the key. |
+| `fake_leg_ignore_seconds` | unset (no expiry) | carried from v10 | A fake leg ignores that key at this gate with no expiry. |
 
-`submission_deadline_blocks` is not a lever this policy sets for the gate. SPEC 2.3 dropped the tip-versus-last-beacon deadline (old Rule B10). `gl-admit-v9.toml` and `gl-admit-v10.toml` still contain the key, so those files stay the bytes of the ids they already are. The gate ignores the key when it is present and does not require it when it is absent. It does not refuse with `submission_deadline`. Taking the key out of a later policy id is a separate change. This note does not issue that id.
+`submission_deadline_blocks` is not a lever v11 sets. SPEC 2.3 dropped the tip-versus-last-beacon deadline (old Rule B10), and this file omits the key. `gl-admit-v9.toml` and `gl-admit-v10.toml` still contain it, so those files stay the bytes of the ids they already are. The gate ignores the key when it is present and does not require it when it is absent. It does not refuse with `submission_deadline`.
 
 ## 2. Fixed by the SPEC, not set here
 
-`provisional_action_cap`, `revoke_scope`, the 6-leg round, the Rule B9 invariant refuses, and the fake-leg ignore itself are fixed by SPEC 2.2. So are: admission reads only a `production`-profile record, and a live-plane gate compares against the mainnet index only (SPEC Rule B9); the consumed-nonce row outlives the challenge window whatever `result_retention_seconds` is (SPEC §15.1 **Single-use**); and the policy-file encoding (SPEC 2.3 §15.4 **Policy file encoding**), which `gl-admit-v10.toml` follows: exact lever names, `leg_rate_floor` as `{ p, q }`, and decimal seconds. Under SPEC 2.3 D2 the SPEC has no lever defaults. A policy must set every lever the SPEC still lists. An absent key means unset only for `verify_cap_per_object`, `verify_cap_per_door_session` and `fake_leg_ignore_seconds`, whose ranges list unset. `submission_deadline_blocks` is not in that list and is not required: the gate ignores it. Any other absent key refuses the whole file, and so do an absent `policy_id`, `draw_commitment` or `born_height`. With no policy file, or a refused one, the gate admits nothing.
+`provisional_action_cap`, `revoke_scope`, the 6-leg round, the Rule B9 invariant refuses, and the fake-leg ignore itself are fixed by [Admission Process](../../spec/04-Admission_Process.md). So are: admission reads only a `production`-profile record, and a live-plane gate compares against the mainnet index only (Rule B9); the consumed-nonce row outlives the challenge window whatever `result_retention_seconds` is (§15.1 **Single-use**); and the policy-file encoding (§15.4 **Policy file encoding**), which `gl-admit-v11.toml` follows: exact lever names, `leg_rate_floor` as `{ p, q }`, and decimal seconds. Admission Process gives no lever a default. A policy must set every lever the SPEC still lists. An absent key means unset only for `verify_cap_per_object`, `verify_cap_per_door_session` and `fake_leg_ignore_seconds`, whose ranges list unset. `submission_deadline_blocks` is not in that list and is not required: the gate ignores it. Any other absent lever refuses the whole file, and so do an absent `policy_id`, `draw_commitment` or `born_height`. A key in `[levers]` that is not a §15.4 name refuses the whole file, except that retired key, which the gate ignores so `gl-admit-v9` and `gl-admit-v10` still load. With no policy file, or a refused one, the gate admits nothing.
 
-## 3. Behaviour SPEC 2.2 leaves to policy
+Anchored-path inclusion is Bari's anchor window (offsets 2, 3, and 4). This policy sets no tip-versus-last-beacon submit deadline.
+
+## 3. Behaviour the admission process leaves to policy
 
 These moved out of the draft SPEC at 11:32 (Rules B1 and B5, and the friendly-list custody sentences). They apply only under this policy id.
 
 ### P1. Integrity (was SPEC Rule B1)
 
-- An `accepted` submission rests on mainnet headers and mainnet waypoints (`expected_network = "main"`). A `match` on a `synthetic` document is not a mainnet fact. SPEC §14 already records `plant` `mismatch` for a `network` that is neither `main` nor `synthetic`.
-- `index_comparison` `not read`, `T` `not read` and `plant` `not read` are not, by themselves, a refusal. The response is to re-verify: `held`, then retry, inside the SPEC held bound (`reverify_max_attempts`, `max_held_blocks`, reason `held_bound`).
+- An `accepted` submission rests on mainnet headers and mainnet waypoints (`expected_network = "main"`). A `match` on a `synthetic` document is not a mainnet fact. [Measurement Record](../../spec/06-Measurement_Record_Process.md) section 14 already records `plant` `mismatch` for a `network` that is neither `main` nor `synthetic`.
+- `index_comparison` `not read`, `T` `not read` and `plant` `not read` are not, by themselves, a refusal. The response is to re-verify: `held`, then retry, inside the held bound (`reverify_max_attempts`, `max_held_blocks`, reason `held_bound`).
 - A six-leg draw that is `not defined` because fewer than six legs exist is settled by the object's own bytes, so it is refused at once. A short-byte six-leg draw is `not read` and is `held`.
-- A `skip` is not, by itself, a refusal. SPEC Rule B4 (`min_anchored_paths`) is the paths comparison.
-- `profile` `conformance-small` is never offered to the production gate. This is now also SPEC Rule B9 (production profile only), so it no longer rests on this policy.
-- The invariant refuses (shape, seed value, waypoint rehash, confirmed header or plant mismatch, checkpoint digest, six-leg) stay SPEC Rule B9. They are not policy.
+- A `skip` is not, by itself, a refusal. [Admission Process Rule B4](../../spec/04-Admission_Process.md#rule-b4) (`min_anchored_paths`) is the paths comparison.
+- `profile` `conformance-small` is never offered to the production gate. This is also [Admission Process Rule B9](../../spec/04-Admission_Process.md#rule-b9) (production profile only), so it no longer rests on this policy.
+- The invariant refuses (shape, seed value, waypoint rehash, confirmed header or plant mismatch, checkpoint digest, six-leg) stay Admission Process Rule B9. They are not policy.
 
 ### P2. Plant gap (was SPEC Rule B5)
 
-- `d_g` is recorded and never compared under this policy. A plant `mismatch` confirmed by a fresh `{index-url}` read is a SPEC B9 refusal, not a plant-gap outcome.
+- `d_g` is recorded and never compared under this policy. A plant `mismatch` confirmed by a fresh `{index-url}` read is a Rule B9 refusal, not a plant-gap outcome.
 - The earlier candidate `plant_gap_floor` of 1 block is not used. Making it a comparison would need a SPEC lever and a defined outcome first.
 
 ### P3. Friendly-entry custody (was the SPEC "custody candidate" sentences)
@@ -69,7 +81,7 @@ The gate logs `H(draw ‖ salt)` at the draw and reveals it with the result, so 
 
 ### P5. Born height
 
-`born_height` is **972685**. It lives in `[policy_rules]` of `gl-admit-v10.toml`. It is not a SPEC §15.4 lever, and it is not a change to Satoshi Hike 2.2. The number can change by issuing a new policy id. It does not need a spec release.
+`born_height` is **972685**. It lives in `[policy_rules]` of `gl-admit-v11.toml`. It is not an Admission Process §15.4 lever, and it is not a change to the Satoshi Hike 2.3 pack. The number can change by issuing a new policy id. It does not need a spec release.
 
 A height at or above `born_height` is production. A height below it is testing. If any stored height in the object (`beacon_height`, `last_interrupt_height`) or any claimed path block height is below `born_height`, the gate rejects the object with `before_born_height`. That decision is final. The job is terminal. It is not `held`, and waiting on the index will not change it.
 
@@ -81,6 +93,7 @@ A caller who receives `before_born_height` should stop. The object is a testing 
 
 ## 4. Open
 
-- Re-measure `leg_rate_floor` under 2.2 (SPEC §15.5 method) and issue the result as a new id.
+- Re-measure `leg_rate_floor` after further produces and issue the result as a new id (#115). The testing value is `{ p = 1, q = 10 }`.
 - Confirm the carried-over figures for `reverify_max_attempts`, `max_held_blocks`, `fast_accept_bound` and `async_catch_budget`.
-- Gate code must read every §15.4 lever and the §3 rules from this file. Today it reads `thorough_six_leg_runs`, and that key is renamed `thorough_rounds`.
+- Swap the live gate only after an explicit go. This repository change does not deploy, and it does not edit ops.
+- The gate strip landed in #120. The loader accepts this file with the key omitted, and it ignores the key on v9 and v10. The live process keeps `gl-admit-v10` until an explicit go.
