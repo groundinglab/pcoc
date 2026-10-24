@@ -1,5 +1,9 @@
 # Changes
 
+## Unreleased
+
+- SPEC 2.3 retired the tip-versus-last-beacon deadline (old Rule B10). The gate does not refuse `submission_deadline` when the index tip is past `last_interrupt_height`. `submission_deadline_blocks` is not a required lever. A file that still has the key (`gl-admit-v9`, `gl-admit-v10`) loads, and the value is ignored. A file that omits the key loads. This note does not issue a new policy id and does not deploy.
+
 ## 0.5.8
 
 Crate `pcoc-admission` is 0.5.8. Tag `gate-v0.5.7` was not moved. This build links Rust SDK 2.3.1 on pin `spec-2.3.0`.

@@ -13,7 +13,6 @@ A policy sets the SPEC's §15.4 levers to values inside their ranges. It never c
 |---|---|---|---|
 | `min_anchored_paths` | 6 | SPEC default | Enough anchored waypoints to time the hike without punishing a weak connection. They can be anywhere among `W_1` … `W_16`. |
 | `leg_rate_floor` | `1/5` | SPEC default (`p ≥ 1`, `q ≥ 1`) | One leg per 5 s over the MTP span. It must be re-measured under 2.2 with async producers (SPEC §15.5). It will rise once the 15–45 s wait no longer sits inside the span. |
-| `submission_deadline_blocks` (K) | 3 | SPEC default (range 0–6) | Submit within 3 blocks of the last beacon. |
 | `held_retry_seconds` | 600 | SPEC default | Retry a held submission every 10 minutes. |
 | `thorough_rounds` | 3 | SPEC default | 18 legs in 3 rounds of 6, which detects a 25 % fake fraction 99.44 % of the time. |
 | `challenge_lifetime_seconds` | 120 | SPEC default | The website mints with the same value. |
@@ -28,9 +27,11 @@ A policy sets the SPEC's §15.4 levers to values inside their ranges. It never c
 | `verify_cap_per_door_session` | 3 | policy | SPEC default is unset. This file sets 3. The gate reads the key. |
 | `fake_leg_ignore_seconds` | unset (no expiry) | SPEC default | A fake leg ignores that key at this gate permanently. |
 
+`submission_deadline_blocks` is not a lever this policy sets for the gate. SPEC 2.3 dropped the tip-versus-last-beacon deadline (old Rule B10). `gl-admit-v9.toml` and `gl-admit-v10.toml` still contain the key, so those files stay the bytes of the ids they already are. The gate ignores the key when it is present and does not require it when it is absent. It does not refuse with `submission_deadline`. Taking the key out of a later policy id is a separate change. This note does not issue that id.
+
 ## 2. Fixed by the SPEC, not set here
 
-`provisional_action_cap`, `revoke_scope`, the 6-leg round, the Rule B9 invariant refuses, and the fake-leg ignore itself are fixed by SPEC 2.2. So are: admission reads only a `production`-profile record, and a live-plane gate compares against the mainnet index only (SPEC Rule B9); the consumed-nonce row outlives the challenge window whatever `result_retention_seconds` is (SPEC §15.1 **Single-use**); and the policy-file encoding (SPEC 2.3 §15.4 **Policy file encoding**), which `gl-admit-v10.toml` follows: exact lever names, `leg_rate_floor` as `{ p, q }`, and decimal seconds. Under SPEC 2.3 D2 the SPEC has no lever defaults. A policy must set every lever. An absent key means unset only for `verify_cap_per_object`, `verify_cap_per_door_session` and `fake_leg_ignore_seconds`, whose ranges list unset. Any other absent key refuses the whole file, and so do an absent `policy_id`, `draw_commitment` or `born_height`. With no policy file, or a refused one, the gate admits nothing.
+`provisional_action_cap`, `revoke_scope`, the 6-leg round, the Rule B9 invariant refuses, and the fake-leg ignore itself are fixed by SPEC 2.2. So are: admission reads only a `production`-profile record, and a live-plane gate compares against the mainnet index only (SPEC Rule B9); the consumed-nonce row outlives the challenge window whatever `result_retention_seconds` is (SPEC §15.1 **Single-use**); and the policy-file encoding (SPEC 2.3 §15.4 **Policy file encoding**), which `gl-admit-v10.toml` follows: exact lever names, `leg_rate_floor` as `{ p, q }`, and decimal seconds. Under SPEC 2.3 D2 the SPEC has no lever defaults. A policy must set every lever the SPEC still lists. An absent key means unset only for `verify_cap_per_object`, `verify_cap_per_door_session` and `fake_leg_ignore_seconds`, whose ranges list unset. `submission_deadline_blocks` is not in that list and is not required: the gate ignores it. Any other absent key refuses the whole file, and so do an absent `policy_id`, `draw_commitment` or `born_height`. With no policy file, or a refused one, the gate admits nothing.
 
 ## 3. Behaviour SPEC 2.2 leaves to policy
 
