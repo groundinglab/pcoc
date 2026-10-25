@@ -22,7 +22,7 @@ Create, check, and admit are separate. A policy can change while the object stay
 
 1. **Create (the hike).** Your machine fills a terrain of 256 MiB, fixed by your public key and a Bitcoin block, then walks it in legs of two million steps. Satoshi Hike 2.3 records eighteen stages. Bitcoin blocks pace those stages. They are a public clock. Bari timestamps each tip's pooled waypoints in one Bitcoin transaction. Bitcoin's proof-of-work does not secure a PCOC and does not pay for it. A full hike is about three hours, and it varies with the blocks.
 
-2. **Check (verify).** A verifier recomputes from the object and writes a measurement record. The words are measurements: `match`, `mismatch`, `present`, `skip`, `not read`, `not defined`, `n/a`, and, on a path, `anchored` or `not anchored`. The record does not say pass or fail. The public index stands in for Bitcoin. Anyone can skip the index and read Bitcoin. Which programs in this tree actually fetch an index is under [Measure an object](#4-measure-an-object).
+2. **Check (verify).** A verifier recomputes from the object and writes a measurement record. The words are measurements: `match`, `mismatch`, `present`, `skip`, `not read`, `not defined`, `n/a`, `anchored` or `not anchored` on a path, and `not fetched by design` on the W17 path. The record does not say pass or fail. The public index stands in for Bitcoin. Anyone can skip the index and read Bitcoin. Which programs in this tree actually fetch an index is under [Measure an object](#4-measure-an-object).
 
 3. **Admit (policy).** Accept, refuse, and revoke belong to each relying party. groundinglab's Admission Gate is one configured instance. Its current example is policy id `gl-admit-v12`, written in [policy/groundinglab-admission/POLICY.md](policy/groundinglab-admission/POLICY.md). The specification sets no lever value.
 
@@ -164,9 +164,9 @@ The commands in this section are the Rust binary `sdk/rust/target/release/pcoc`.
 (cd sdk/rust && cargo build --locked --release -p pcoc-cli)
 ```
 
-This binary does not take `--index-url`, and it does not open a network connection. It measures with an empty index, so header and plant reads are `not read`. `--profile production` is the default. `--profile live` and `--profile test` are accepted, and they still use the section 6 sizes and that empty index. The specification says `--profile live` selects the live index. This binary does not do that.
+This binary does not take `--index-url`, and it does not open a network connection. It measures with an empty index, so header and plant reads are `not read`. `--profile production` is the default. `--profile live` and `--profile test` are accepted. The record's `profile` field is still `production`, the sizes are still section 6, and the index is still empty. The specification says `--profile live` selects the live index. This binary does not do that.
 
-A fast check of a current-kind object uses the pack fixture `sdk/rust/objects/O1-S1.cbor` (kind `v2.2-pcoc-object`) on the small profile. `--draw-label` is the pack's rig input, so the six-leg rows repeat. Omit it and that draw reads the operating-system random source.
+A fast check of a current-kind object uses the pack fixture `sdk/rust/objects/O1-S1.cbor` (kind `v2.2-pcoc-object`) on the small profile. `--draw-label` is the pack's rig input, so the six-leg rows repeat. Stderr adds one line, `draw: injected label (rig input)`. Omit the flag and that draw reads the operating-system random source.
 
 ```sh
 sdk/rust/target/release/pcoc verify \
@@ -212,7 +212,7 @@ The Rust CLI can also produce. The scripted rig is offline:
 sdk/rust/target/release/pcoc produce --rig --case s1 --public-key HEX --out object.cbor
 ```
 
-`--case` is `s1`, `s2`, or `prod`. `HEX` is 64 hex digits, with an optional `0x` prefix.
+`--case` is `s1`, `s2`, or `prod`. `HEX` is 64 hex digits, with an optional `0x` prefix. Progress is JSON on stderr. The object is the `--out` file.
 
 A live produce dials Bitcoin and posts waypoints:
 
