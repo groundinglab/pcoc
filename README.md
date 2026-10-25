@@ -1,93 +1,116 @@
-# PCOC
+# Production-constrained observable commitment (PCOC)
 
-**Early prototype.** Specification: Satoshi Hike 2.3 (`spec-2.3.0`, cut by the maintainers on the merge commit). Website: https://groundinglab.io
+**Early public release.** Specification pin [`spec-2.3.0`](sdk/SPEC_PIN) (Satoshi Hike 2.3). The SDKs are 2.3.1. Released component tags are in [DEPLOYABLES](DEPLOYABLES.md). Website: https://groundinglab.io
 
-A PCOC (production-constrained observable commitment) is a self-issued identifier backed by a resource commitment, not a payment. You make it on your own device by holding memory through a hike, the timed making process, paced by Bitcoin blocks. The result is the PCOC object (the specification's hike object): the bytes you keep and present, holding your public key and the record of the hike. Anyone can check the PCOC object cheaply, without trusting you or us. The design aims to give bulk making no discount: copying the PCOC object is cheap, but a new public key means a new hike.
+## What it is
 
-An identifier is not an identity: a PCOC says nothing about who made it.
+Open systems give identifiers away. A new key costs nothing, so a crowd of them costs the same as one. Filters and scores then try to tell the crowd apart.
+
+A production-constrained observable commitment (PCOC) is an identifier you issue yourself, on your own device, with no registrar to ask. What limits it is the work of making it: memory you hold across a hike, paced by Bitcoin blocks. The bytes you keep are the PCOC object (the specification's hike object). Anyone can measure that object. Copying it is cheap. A new public key is a new hike. The design aims to give bulk making no discount.
+
+An identifier is not an identity. A PCOC says nothing about who made it.
 
 ## Why detection loses
 
-Open systems usually defend against bots and fake accounts by detection: rules, filters, scores. A rule is solved once and the solution is reused by every account the attacker runs. The attacker pays once; the defence pays per user, forever. And volume is not aggression, so tightening the rule punishes heavy honest users along with the crowd.
+A detection rule is solved once. Every account an attacker runs reuses that solution. The attacker pays once. The defence pays per user, from then on. Volume is not aggression, so a tighter rule also catches people who simply show up a lot.
 
-Most of that trouble starts at issuance. Identifiers are either free and unlimited, which floods, or handed out by an office, which installs a gatekeeper. PCOC takes a third path: you issue your own, and the cost is in the making.
+Most of that starts at issuance. Identifiers are either free, which floods, or handed out by an office, which installs a gatekeeper. A PCOC is a third path: you issue your own, and the cost sits in the making. The longer version is [Where does the trouble start?](docs/briefs/where-does-the-trouble-start.md).
 
-## What "self-issued" means
+## Three steps
 
-A PCOC is self-issued: you create it on your own device from your own key, with no issuer, registrar, or account to ask. What limits it is the resource commitment you make in producing it (memory held across a Bitcoin-paced hike), not a payment or anyone's permission. See [Where does the trouble start?](docs/briefs/where-does-the-trouble-start.md).
+Create, check, and admit are separate. A policy can change while the object stays the same.
 
-## Three separate steps
+1. **Create (the hike).** Your machine fills a terrain of 256 MiB, fixed by your public key and a Bitcoin block, then walks it in legs of two million steps. Satoshi Hike 2.3 records eighteen stages. Bitcoin blocks pace those stages. They are a public clock. Bari timestamps each tip's pooled waypoints in one Bitcoin transaction. Bitcoin's proof-of-work does not secure a PCOC and does not pay for it. A full hike is about three hours, and it varies with the blocks.
 
-1. **Create (the hike).** Your computer fills a block of memory fixed by your public key and a Bitcoin block, then works through it in legs of two million steps, each ending in a leg result. Bitcoin blocks pace the stages: Satoshi Hike 2.3 records eighteen. The cost is your own device's work. Bitcoin only timestamps it: Bari records each tip's pooled waypoints in one Bitcoin transaction. Bitcoin's proof-of-work does not secure a PCOC or pay for it.
-2. **Check (verify).** A verifier recomputes from the PCOC object and the public index and records measurements: `match`, `mismatch`, `present`, `skip`, `not defined`, `not read`, `not fetched by design`, `n/a`, `anchored`, `not anchored`, and `earlier version`. It never says pass or fail. The index stands in for Bitcoin; anyone can bypass it by checking Bitcoin directly.
-3. **Admit (policy).** Accept, refuse, and revoke are each relying party's own decisions. groundinglab's Admission Gate is one configured instance. Its policy is [policy/groundinglab-admission/POLICY.md](policy/groundinglab-admission/POLICY.md); the specification sets no lever value. Policy can change without changing the PCOC object.
+2. **Check (verify).** A verifier recomputes from the object and writes a measurement record. The words are measurements: `match`, `mismatch`, `present`, `skip`, `not read`, `not defined`, `n/a`, `anchored` or `not anchored` on a path, and `not fetched by design` on the W17 path. The record does not say pass or fail. The public index stands in for Bitcoin. Anyone can skip the index and read Bitcoin. Which programs in this tree actually fetch an index is under [Measure an object](#4-measure-an-object).
 
-The Bitcoin tip (the newest block's hash and height) is the shared public tick that paces the staged work. That is the whole of its role: not a fee, not a confirmation count, and not an archive of the chain. The hike is the quantity of work.
+3. **Admit (policy).** Accept, refuse, and revoke belong to each relying party. groundinglab's Admission Gate is one configured instance. Its current example is policy id `gl-admit-v12`, written in [policy/groundinglab-admission/POLICY.md](policy/groundinglab-admission/POLICY.md). The specification sets no lever value.
+
+The Bitcoin tip (the newest block's hash and height) is the shared tick that paces the staged work. That is its role: a clock, not a fee, not a confirmation count, and not an archive of the chain. The hike is the quantity of work.
+
+## Versions that move separately
+
+Three names are versioned on their own. Moving one does not move the others.
+
+| Name | What it pins | In this tree |
+|---|---|---|
+| SPEC | Satoshi Hike, the normative pack | tag `spec-2.3.0`, named by [`sdk/SPEC_PIN`](sdk/SPEC_PIN) |
+| KIND | The wire label inside the object | `v2.2-pcoc-object` |
+| Policy | One relying party's lever values | `gl-admit-v12`, groundinglab's current example |
+
+Satoshi Hike 2.3 / `spec-2.3.0` is the specification pin. The object kind on that pin is `v2.2-pcoc-object`. There is no `v2.3-pcoc-object` kind. The digits in `pcoc-walk-v1`, `bari-hc-v2`, `pcoc-gate-signin-v1`, and the `/v1` routes are wire domains, not specification versions. The gate's own note is [services/admission-gate/WIRE.md](services/admission-gate/WIRE.md).
+
+Health follows the SDK pin. A build on `spec-2.3.0` reports `spec` Satoshi Hike 2.3. Decision-log lines and `/latest.json` still carry `spec` `Satoshi Hike 2.2`, so a log stamped with that name still opens on this pin.
+
+The conformance pack id is `pack-2.2.0`. That id is historical. The bytes are valid for the 2.3 pin, and the id was left unchanged so the manifest hash beside `spec-2.3.0` stays put. SDK 2.3.1 ([`sdk/VERSION`](sdk/VERSION)) implements that pin. An SDK version is not a specification version.
 
 ## What this does not claim
 
-- Bitcoin's proof-of-work does not secure or pay for a PCOC. Bitcoin is a public clock and timestamp, via Bari.
-- It does not make fakes impossible. It raises the cost of each one above the near-free price of a new key. How that cost behaves at scale is still being measured ([STATUS](STATUS.md)).
+- Bitcoin's proof-of-work does not secure a PCOC or pay for one. Bitcoin is the public clock. Bari is the timestamp channel.
+- It does not make fakes impossible. Each new public key still has to be made. The design aims to give bulk making no discount. How that holds at scale is unmeasured ([STATUS](STATUS.md)).
 - It is not a token, coin, currency, or payment.
 - There is no issuer, account, or identity provider, and it says nothing about personhood.
-- Verify does not judge; it measures. Admission belongs to each relying party.
-- You do not need to trust groundinglab's index. Only hash-bound values are evidence.
-- No privacy claim beyond the specification: the public key and its Bitcoin-timed record are public.
-- Not affiliated with Bitcoin, its developers, or its creator. "Satoshi Hike" is named for the Bitcoin block clock it keeps pace with.
+- Verify measures. Admission is each relying party's own decision.
+- groundinglab's index is a convenience. Only hash-bound values are evidence.
+- The public key and its Bitcoin-timed record are public. The specification states the privacy claim, and there is nothing beyond it.
+- Not affiliated with Bitcoin, its developers, or its creator. "Satoshi Hike" is named for the block clock it keeps pace with.
 - Economic security, catch rates, and deployed cost are open research.
 
-## How the repository fits together
+## How the repository is laid out
 
-The specification and the conformance vectors are the core deliverable. The point is interoperability. Everything else is built from them and pins a version of the layer below. Anyone can build a producer, a verifier, a service, or an app from the specification and the vectors alone, with no groundinglab code, service, or account.
+The specification and the conformance pack are what you build from. Anyone can write a producer, a verifier, a service, or an app from those two alone, with no groundinglab code, service, or account. Everything else pins a version of the layer under it. Where an SDK and the specification disagree, the specification wins.
 
-| Layer | Folder | Role |
+| Layer | Path | Role |
 |---|---|---|
-| Specification | [spec/](spec/) | The complete, normative definition of how a PCOC is made and checked |
-| Conformance | [spec/conformance/pack/](spec/conformance/pack/) | The one pack (`pack-2.2.0`, status complete), pinned in `sdk/SPEC_PIN` beside `spec-2.3.0` |
-| SDKs | [sdk/](sdk/) | Rust, C, Go, and Java SDKs at 2.3.1, tested against the shared vectors and cross-checked against each other. The specification wins if they disagree |
-| Services | [services/](services/) | Bari (the plant), the index (its own reader), and the Admission Gate, built on the Rust SDK |
-| Apps | [apps/](apps/) | Desktop demonstrator, and an Android demonstrator described in [apps/android](apps/android/) |
-| Docs | [docs/](docs/README.md) | Plain-language briefs and rationale. Explanatory, not normative |
-| Your own deployment | [docs/run-under-your-own-name.md](docs/run-under-your-own-name.md) | Every place a builder changes to run the pieces under their own name |
+| Specification | [spec/](spec/) | Satoshi Hike 2.3: six documents plus [GUIDE](spec/GUIDE.md). Normative |
+| Conformance | [spec/conformance/pack/](spec/conformance/pack/) | The one pack, id `pack-2.2.0`, status complete. The id stays 2.2 on the `spec-2.3.0` pin. Hash in `sdk/SPEC_PIN` |
+| SDKs | [sdk/](sdk/) | Rust, C, Go, and Java at 2.3.1, tested on the shared vectors |
+| Policy | [policy/groundinglab-admission/](policy/groundinglab-admission/) | groundinglab's example levers. Current id `gl-admit-v12`. Not the specification |
+| Services | [services/](services/) | Bari (the plant), the index, the Admission Gate, the claims service, and a Cloudflare Worker. Each builds alone |
+| Apps | [apps/](apps/) | Linux desktop demonstrator. Android notes are in [apps/android](apps/android/); the app is built from [groundinglab/primal-pcoc](https://github.com/groundinglab/primal-pcoc) |
+| Docs | [docs/](docs/README.md) | Briefs and rationale. Explanatory, not normative |
+| Your own deployment | [docs/run-under-your-own-name.md](docs/run-under-your-own-name.md) | Where a builder changes hosts to run the pieces under their own name |
+
+At the top level: [STATUS](STATUS.md) (specified, measured, open), [DEPLOYABLES](DEPLOYABLES.md) (released components and their tags), [PRINCIPLES](PRINCIPLES.md), [CONTRIBUTING](CONTRIBUTING.md), [SECURITY](SECURITY.md), and the licences. CI is in `.github/`. Instructions for a coding agent are in [ai/README.md](ai/README.md).
 
 ## Get started
 
-This section takes you from no code to a checked PCOC on your own machine: get the code, install the tools, run the tests, and verify a real PCOC. Every command below was run on Debian 13 (x86-64). Other systems have not been tried with these steps.
+From a clone to a measurement on your own machine. The paths below match this tree. The sequence was written for Debian 13 (x86-64). The desktop app's library notes also name Ubuntu 24.04 and Fedora 40. Other systems are untested with these exact steps.
 
-For the ideas behind each step, see [How it works](https://groundinglab.io/how-it-works/) and [Technical](https://groundinglab.io/technical/) on groundinglab.io.
+For the ideas behind the steps, see [How it works](https://groundinglab.io/how-it-works/) and [Technical](https://groundinglab.io/technical/).
 
 ### 1. Get the code
 
-The code is public at https://github.com/groundinglab/pcoc. Make a full clone:
+The code is public at https://github.com/groundinglab/pcoc. Clone the full history:
 
 ```sh
 git clone https://github.com/groundinglab/pcoc.git
 cd pcoc
 ```
 
-Don't use `--depth 1`. `sdk/SPEC_PIN` names `spec-2.3.0`. The maintainers cut that tag on the merge commit. The pin check looks that tag up in the clone, and a shallow clone has no tags. If you already have a shallow clone, run `git fetch --tags`.
+Use a full clone. `sdk/SPEC_PIN` names `spec-2.3.0`, and the pin check looks that tag up. A shallow clone (`--depth 1`) has no tags. If you already have one, run `git fetch --tags`.
 
 ### 2. Install the tools
 
 | Tool | Version | Needed for |
 |---|---|---|
-| Python | 3 | the test harness and its checks |
-| Rust, installed with [rustup](https://rustup.rs) | 1.99.0 | the Rust SDK, the services and the desktop app |
-| Go | 1.22 or newer | the Go SDK |
+| Python | 3 | the specification checks |
+| Rust, from [rustup](https://rustup.rs) | 1.99.0 | the Rust SDK, the services, and the desktop app |
+| Go | 1.24 or newer | the Go SDK (`sdk/go/go.mod`) |
 | JDK | 21 or newer | the Java SDK |
 | GTK and libadwaita | GTK 4.14+, libadwaita 1.5+ | the desktop app only ([apps/desktop](apps/desktop/)) |
 
-`sdk/rust/`, `services/admission-gate/` and `apps/desktop/` each pin Rust 1.99.0 in a `rust-toolchain.toml`, and rustup installs it on the first `cargo` command there. The other services (`services/bari/`, `services/index/` and `services/admission-claims/`) have no pin yet, so give rustup a default as well:
+`sdk/rust/`, `services/admission-gate/`, and `apps/desktop/` each pin Rust 1.99.0 in a `rust-toolchain.toml`. rustup installs that version on the first `cargo` command in those folders. `services/bari/`, `services/index/`, and `services/admission-claims/` have no pin, so set a default as well:
 
 ```sh
 rustup default 1.99.0
 ```
 
-Without a default, those folders stop with "rustup could not choose a version of cargo to run".
+Without a default, those three folders stop with "rustup could not choose a version of cargo to run".
 
 ### 3. Run the tests
 
-An SDK (software development kit) is the library you add to your own app or service to make or check a PCOC. The conformance pack is [spec/conformance/pack/](spec/conformance/pack/). The Rust SDK is the workspace at `sdk/rust/`:
+An SDK is the library you add to your own program to make or measure a PCOC. The Rust workspace is `sdk/rust/`:
 
 ```sh
 cd sdk/rust
@@ -96,7 +119,7 @@ cargo test --workspace --locked
 bash check/negatives.sh
 ```
 
-Go, Java and C are in this tree:
+Go, Java, and C:
 
 ```sh
 (cd sdk/go && go test ./...)
@@ -104,83 +127,134 @@ Go, Java and C are in this tree:
 (cd sdk/c && make check)
 ```
 
-To run only the specification's own checks (section 6 constants, sign-in wire vectors, links and the vector manifest hash):
+The specification's own checks (section 6 constants, the sign-in wire vectors, links, and the vector manifest hash):
 
 ```sh
 python3 spec/conformance/tools/ring1_checks.py
 ```
 
-Each service builds and tests on its own:
+Run that from the repository root.
+
+Each Rust service builds and tests on its own. From `services/admission-gate`, `services/bari`, `services/index`, or `services/admission-claims`:
 
 ```sh
-cd services/admission-gate   # or bari, index, admission-claims
 cargo test --locked --release
 ```
 
-The desktop app's core logic tests without GTK:
+The claims Worker, from `services/cf-claims-worker`:
+
+```sh
+node --test test/
+```
+
+The desktop app's core tests do not need GTK:
 
 ```sh
 cd apps/desktop
 cargo test --locked -p pcoc-hike-core
 ```
 
-### 4. Verify a real PCOC
+### 4. Measure an object
 
-To verify is to measure a PCOC against Bitcoin's public block record, read through an index (a read-only copy of the block data a verifier needs, one entry per block height). The verifier writes a measurement record: JSON, with values such as `match` and `anchored`. It never says pass or fail; deciding who gets in is a service's policy.
+`pcoc verify` writes one measurement record to stdout and nothing else. Exit 0 means a record was written, including a record full of `not read` or an unknown-kind record. It does not mean the object was admitted.
 
-Download the PCOC object that groundinglab made, build the Rust `pcoc` program, and run it:
+The commands in this section are the Rust binary `sdk/rust/target/release/pcoc`. The C, Go, and Java programs are separate, and each prints its own usage.
 
 ```sh
-curl -fsSLO https://groundinglab.io/verify/groundinglab.pcoc.cbor
 (cd sdk/rust && cargo build --locked --release -p pcoc-cli)
-sdk/rust/target/release/pcoc verify --profile production --input groundinglab.pcoc.cbor > record.json
 ```
 
-This build's `pcoc verify` does not read a live index. A live header source is Phase C. The [verify page](https://groundinglab.io/verify/) is a separate deploy.
+This binary does not take `--index-url`, and it does not open a network connection. It measures with an empty index, so header and plant reads are `not read`. `--profile production` is the default. `--profile live` and `--profile test` are accepted. The record's `profile` field is still `production`, the sizes are still section 6, and the index is still empty. The specification says `--profile live` selects the live index. This binary does not do that.
+
+A fast check of a current-kind object uses the pack fixture `sdk/rust/objects/O1-S1.cbor` (kind `v2.2-pcoc-object`) on the small profile. `--draw-label` is the pack's rig input, so the six-leg rows repeat. Stderr adds one line, `draw: injected label (rig input)`. Omit the flag and that draw reads the operating-system random source.
+
+```sh
+sdk/rust/target/release/pcoc verify \
+  --profile conformance-small \
+  --sample-bytes 32 --slot-bytes 64 --terrain-bytes 65536 --steps-per-leg 100 \
+  --draw-label pcoc-pack-2.2/draw \
+  --input sdk/rust/objects/O1-S1.cbor
+```
+
+`pcoc quickstart`, run from the repository root, checks the pin, measures that same object, and prints six lines:
+
+```sh
+sdk/rust/target/release/pcoc quickstart
+```
+
+`pcoc --version` prints the SDK version, the spec tag, and the manifest hash.
+
+The file at https://groundinglab.io/verify/groundinglab.pcoc.cbor is still served. Its kind text is `satoshi-hike-v2.0-object`. This binary records an unknown kind (Rule A5) and does not walk the hike:
+
+```json
+{"kind":"unknown kind","kind_text":"satoshi-hike-v2.0-object"}
+```
+
+That record is not a measurement of a current-kind object. The page at https://groundinglab.io/verify/ is a separate deploy.
+
+A live read of `GET {index-url}/index/{height}` is in two programs here. The desktop app's Verify uses it, and the default URL is `https://index.groundinglab.io`. The Admission Gate uses the `index_url` in its config. Build and run steps for the app are in [apps/desktop/README.md](apps/desktop/README.md).
+
+Java's `pcoc verify` can read a directory of `{height}.json` files already on disk (`--index DIR`). That flag is not a URL, and those names are not the index service's `height-XXXXXXXXXX.json` files. The conformance drivers under `sdk/conformance/` take `--index-url` for a local test server (the Rust driver accepts only `http://127.0.0.1:PORT`). They are the harness, not the `pcoc` command.
+
+`sdk/rust/objects/O3-PROD.cbor` is a current-kind object at the section 6 sizes: a 256 MiB terrain and two million steps a leg. Measuring it is the production walk:
+
+```sh
+sdk/rust/target/release/pcoc verify --profile production --input sdk/rust/objects/O3-PROD.cbor
+```
 
 ### 5. Make a PCOC
 
-Making a PCOC takes 18 Bitcoin blocks, typically around three hours, but it varies. The desktop app makes one on your own machine with your own key, with Bitcoin's live blocks as the clock. Build and run steps are in [apps/desktop/README.md](apps/desktop/README.md), and the plain-language guide is [Make a PCOC](https://groundinglab.io/make/). The Android app is built from [groundinglab/primal-pcoc](https://github.com/groundinglab/primal-pcoc).
+A live hike is the eighteen stages above, about three hours. The desktop app runs one on your machine, with your key and Bitcoin's live blocks. See [apps/desktop/README.md](apps/desktop/README.md) and [Make a PCOC](https://groundinglab.io/make/). The Android app is built from [groundinglab/primal-pcoc](https://github.com/groundinglab/primal-pcoc).
 
-To produce one offline on the scripted rig:
+The Rust CLI can also produce. The scripted rig is offline:
 
 ```sh
 sdk/rust/target/release/pcoc produce --rig --case s1 --public-key HEX --out object.cbor
 ```
 
-`pcoc produce --live --public-key HEX --out PATH` walks Bitcoin headers and posts waypoints. `--gossip-peer HOST:PORT` and `--bari URL` are optional. Resume is not supported.
+`--case` is `s1`, `s2`, or `prod`. `HEX` is 64 hex digits, with an optional `0x` prefix. Progress is JSON on stderr. The object is the `--out` file.
 
-## Repository map
+A live produce dials Bitcoin and posts waypoints:
 
-| Folder | What is in it | Test it with |
-|---|---|---|
-| [spec/](spec/) | Satoshi Hike 2.3 as six documents + [GUIDE](spec/GUIDE.md); vectors in [spec/conformance/pack/](spec/conformance/pack/) | See [spec/GUIDE.md](spec/GUIDE.md) |
-| [sdk/](sdk/) | The 2.3.1 SDKs. Rust, C, Go, and Java are in this tree | `cargo test --workspace --locked` in `sdk/rust`; `bash sdk/rust/check/negatives.sh` |
-| [services/](services/) | Bari (the anchoring service), the index, the Admission Gate, the claims service, and a Cloudflare Worker. Each builds alone | `cargo test --locked --release` in each Rust service; `node --test test/` in `cf-claims-worker` |
-| [apps/](apps/) | The desktop app (Linux), and notes and checks for the Android app | `cargo test --locked -p pcoc-hike-core` in `apps/desktop` |
-| [docs/](docs/README.md) | Plain-language briefs, rationale, architecture and integration notes. Explanatory, not normative | |
-| [.github/](.github/) | CI (self-hosted runners), its scripts, and issue templates | |
+```sh
+sdk/rust/target/release/pcoc produce --live --public-key HEX --out object.cbor
+```
 
-At the top level: [STATUS](STATUS.md) (what is specified, measured and open), [DEPLOYABLES](DEPLOYABLES.md) (what is released and how it is tagged), [PRINCIPLES](PRINCIPLES.md), [CONTRIBUTING](CONTRIBUTING.md), [SECURITY](SECURITY.md) and the licences.
+`--gossip-peer HOST:PORT` and `--bari URL` are optional. With no peer, the client uses the Bitcoin Core DNS seeds. With no `--bari`, it posts to `https://bari.groundinglab.io`. Resume is not supported. A hike that stops before it closes writes no object.
 
 ## Run it yourself
 
-Hosted services are opt-in. `https://index.groundinglab.io` and `https://bari.groundinglab.io` are a convenience, not a dependency. A verifier takes `--index-url`. Omit it on the live profile and the SDK verify program uses the hosted index. Pass your own and it does not.
+Hosted names are opt-in. `https://index.groundinglab.io` and `https://bari.groundinglab.io` are a convenience. The Rust `pcoc verify` command does not call either of them.
 
-The index is its own component ([services/index](services/index/)). Three ways to have one, each opt-in:
+Live produce uses the hosted Bari when you omit `--bari`, as in the command above. Pass your own URL and it posts there.
 
-1. Use the hosted index.
-2. Rebuild the files from a public block API. No node: `pcoc-index rebuild --source esplora --from-height N --to-height M --out DIR`, then serve that directory.
-3. Rebuild from a pruned Bitcoin Core (`--source rpc`), or run Bari and let it write the files. A node is what planting needs. Serving and rebuilding an index do not.
+The index is its own program ([services/index](services/index/)). It serves one JSON file per block height. Three ways to have one, each opt-in:
+
+1. Use the hosted index. The desktop app does this with its default URL. A gate uses the `index_url` its config names.
+2. Rebuild the files from a public block API. No Bitcoin node:
+
+```sh
+cd services/index
+cargo build --locked --release
+./target/release/pcoc-index rebuild --source esplora --from-height N --to-height M --out DIR
+```
+
+Esplora is the default source. The base URL defaults to `https://mempool.space/api`. Pacing, the header floor, and `--source rpc` are in [services/index/README.md](services/index/README.md).
+
+3. Rebuild from a pruned Bitcoin Core (`--source rpc`), or run Bari and let it write the same files. A node is what planting needs. Serving an index, and rebuilding one, do not.
+
+A snapshot or Nostr cache of those files is not built.
+
+Serve a directory you rebuilt with `pcoc-index` (default bind `127.0.0.1:38081`, data directory `PCOC_INDEX_DATA_DIR`). Point a desktop app or a gate at that origin. The `pcoc verify` command will not fetch it.
 
 ## Where next
 
-- **Check one:** https://groundinglab.io/verify
+- **Public checker:** https://groundinglab.io/verify
 - **Make one:** [desktop app](apps/desktop/)
-- **Build one:** [spec](spec/) → [conformance](spec/conformance/pack/) → [SDKs](sdk/)
+- **Build one:** [spec](spec/GUIDE.md) → [conformance pack](spec/conformance/pack/) → [SDKs](sdk/)
 - **Read why:** [briefs](docs/briefs/README.md) and [rationale](docs/README.md)
-- **What is measured:** [STATUS](STATUS.md)
-- **Contribute / report a vulnerability:** [CONTRIBUTING](CONTRIBUTING.md) · [SECURITY](SECURITY.md)
+- **What is measured, and what is open:** [STATUS](STATUS.md)
+- **Contribute, or report a vulnerability:** [CONTRIBUTING](CONTRIBUTING.md) · [SECURITY](SECURITY.md)
 
 ## Built on
 
