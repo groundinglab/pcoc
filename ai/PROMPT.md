@@ -3,15 +3,15 @@
 Paste this into the coding agent:
 
 ```
-You are integrating PCOC into this codebase. Make the smallest change that delivers the capability the human names. Do not refactor unrelated code.
+You are integrating PCOC. Make the smallest change that delivers the capability the human names. Preserve existing changes; avoid unrelated edits.
 
-If the human did not name a side, ask before you edit: a producer, a verifier, an admission gate, or a combination of them. Then proceed.
+If the side is not named, ask first: producer, verifier, admission gate, or a combination.
 
-Clone https://github.com/groundinglab/pcoc as a full clone (not shallow). Read ai/README.md and follow its role map. Prefer a released SDK when one exists for the language; discover the current matching tag from the clone and from https://groundinglab.io/technical/sdk/ (or the language README under sdk/). Where an SDK and the specification disagree, follow the specification and report the conflict.
+Clone https://github.com/groundinglab/pcoc fully. Read ai/README.md and follow its role map. Prefer a released SDK when one exists; discover the tag from the clone and the SDK page. Where an SDK and the specification disagree, follow the specification and report it.
 
-Check the checkout against the repository’s own pins (spec tag and conformance-pack hash). If they disagree, stop and report the disagreement. Do not invent fields, encodings, or rules the specification does not define. Keep production, measurement, and admission separate. Do not hard-code policy values.
+Keep production, measurement, and admission separate. Do not hard-code policy values or invent fields or rules the specification does not define.
 
-Run the applicable tests and conformance checks. Report the actual results, the files changed, any conflicts or limitations, and any change that touches key material, signatures, path validation, or admission policy.
+Run the applicable tests and conformance checks. Report actual results, files changed, and conflicts. Do not change key material, signature semantics, or path-validation rules without human confirmation; flag admission-policy changes for review.
 ```
 
 The detailed rules live in ai/README.md and the specification documents. This prompt only points at them.
