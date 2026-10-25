@@ -1,6 +1,6 @@
 # PCOC Hike for Linux
 
-PCOC Hike for Linux is desktop 0.1.6 on Rust SDK 2.3.1. It makes a PCOC, checks one, and signs in, on your own machine, using the Rust SDK in this repository (`sdk/rust`, by path in `Cargo.toml`; About shows the resolved SDK version). A demonstrator, not part of the specification.
+PCOC Hike for Linux is desktop 0.1.7 on Rust SDK 2.3.1. It makes a PCOC, checks one, and signs in, on your own machine, using the Rust SDK in this repository (`sdk/rust`, by path in `Cargo.toml`; About shows the resolved SDK version). A demonstrator, not part of the specification.
 
 A full hike is eighteen stages paced by Bitcoin blocks. That is hours, not a button press. The key stays on the machine. Verify reads the portable index (the live default is the public index). Anyone can bypass that index by checking Bitcoin. The app does not say pass or fail. Sign-in sends the object to a relying party. Accept, refuse, and revoke are that party's policy.
 
@@ -8,7 +8,7 @@ A full hike is eighteen stages paced by Bitcoin blocks. That is hours, not a but
 
 **Send to my phone.** On a finished hike, Send to my phone sends the `.cbor` to the object's own npub as one NIP-04 direct message (kind 4), encrypted with the nsec pasted in this session. It goes to relay.damus.io, relay.primal.net and nos.lol; one relay accepting is enough, and nos.lol refuses most objects for size. The phone app signed in with that npub offers it for approval. Making a PCOC never sends it by itself, and the send never touches the admission gate. The code is `core/src/dm.rs`.
 
-**SDK 2.3.1.** The app version is 0.1.6. The Rust SDK is 2.3.1 (`sdk/VERSION`), the in-tree `sdk/rust` crate `pcoc`. The object kind this app checks is `v2.2-pcoc-object`. Any other kind is an unknown kind (Rule A5). A malformed object is still a section 14 record. A decode failure is not.
+**SDK 2.3.1.** The app version is 0.1.7. The Rust SDK is 2.3.1 (`sdk/VERSION`), the in-tree `sdk/rust` crate `pcoc`. The object kind this app checks is `v2.2-pcoc-object`. Any other kind is an unknown kind (Rule A5). A malformed object is still a section 14 record. A decode failure is not.
 
 Needs GTK 4.14+ and libadwaita 1.5+ (Ubuntu 24.04, Debian 13, Fedora 40 or newer). Rust 1.99.0 comes from `rust-toolchain.toml` in this folder.
 

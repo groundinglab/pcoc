@@ -205,7 +205,7 @@ Sign-in posts JSON. The transport limit is large enough for the base64 of an obj
 
 ## Health
 
-`GET /v1/health` returns `version` (crate), `commit` (git SHA baked in at build), `sdk` (the Rust SDK version from Cargo.lock, for example `2.3.1 (path)`, or `2.3.1 (path, dirty)` when the SDK files had uncommitted changes at build time), `spec`, `spec_kind`, and `config` (the file: bind, index, log directory, limits, rate, leg-rate floor). `spec` and `spec_kind` follow the SDK pin: `Satoshi Hike 2.2` and `2.2` on a spec-2.2.x pin, `Satoshi Hike 2.3` and `2.3` on a spec-2.3.x pin (this checkout is `spec-2.3.0`). The JSON keys are unchanged. Decision lines still carry `spec` `Satoshi Hike 2.2`. `config.policy_id` and `config.born_height` are the policy in force (`gl-admit-v10`). `born_height` is policy, not spec. No secrets.
+`GET /v1/health` returns `version` (crate), `commit` (git SHA baked in at build), `sdk` (the Rust SDK version from Cargo.lock, for example `2.3.1 (path)`, or `2.3.1 (path, dirty)` when the SDK files had uncommitted changes at build time), `spec`, `spec_kind`, and `config` (the file: bind, index, log directory, limits, rate, leg-rate floor). `spec` and `spec_kind` follow the SDK pin: `Satoshi Hike 2.2` and `2.2` on a spec-2.2.x pin, `Satoshi Hike 2.3` and `2.3` on a spec-2.3.x pin (this checkout is `spec-2.3.0`). The JSON keys are unchanged. Decision lines still carry `spec` `Satoshi Hike 2.2` (the log chain name; health on a 2.3 pin says `Satoshi Hike 2.3`). `config.policy_id` and `config.born_height` are the policy in force. On 25 Oct 2026 the public gate reported `gl-admit-v12` and born height 972685. `deploy/gate.toml` in this tree still names `gl-admit-v10`. `born_height` is policy, not spec. No secrets.
 
 ## Verify job
 

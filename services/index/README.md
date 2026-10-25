@@ -127,7 +127,7 @@ A `height` or `limit` that is not a `u32` is **400**. No matching mainnet record
 
 ## Born height
 
-`born_height` is 972685. It is the groundinglab admission policy value in `policy/groundinglab-admission/gl-admit-v10.toml`. It is not a SPEC rule. The serve process uses the same number (`pcoc_bari::BORN_HEIGHT`).
+`born_height` is 972685. It is the groundinglab admission policy value in `policy/groundinglab-admission/gl-admit-v12.toml` (the same number is in v11 and v10). It is not a SPEC rule. The serve process uses the same number (`pcoc_bari::BORN_HEIGHT`).
 
 Before this floor, the process served every `height-XXXXXXXXXX.json` in the cache directory. There is no lower bound in the file format. `GET /index` is the highest filename. `GET /index/{height}` is that file, or 404 when the file is absent. `GET /index/since` with no `height` starts at the lowest stored mainnet filename. The lowest height a deployment serves is therefore the lowest filename in that directory.
 

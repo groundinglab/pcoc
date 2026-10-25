@@ -2,7 +2,7 @@
 
 A demonstrator, not part of the specification. The app is a fork of Primal's Android client. You can make a PCOC on the phone, check one on the phone, and sign in with one. It implements SPEC 2.3 (tag `spec-2.3.0`).
 
-The current demonstrator is [groundinglab/primal-pcoc](https://github.com/groundinglab/primal-pcoc) tag [`android-v3.5.49`](https://github.com/groundinglab/primal-pcoc/tree/android-v3.5.49) (commit `7443f44`). Its JNI bridge builds on the Rust SDK tag [`sdk-rust-v2.3.1`](https://github.com/groundinglab/pcoc/releases/tag/sdk-rust-v2.3.1) (crates `pcoc` and `pcoc-produce`, set in `pcoc-bridge/bridge/Cargo.toml`). The published debug APK and its SHA-256 are on the [Apps page](https://groundinglab.io/apps/).
+The published debug APK on the [Apps page](https://groundinglab.io/apps/) is version 3.5.50 (versionCode 2747), primal-pcoc commit [`5a1d4f5`](https://github.com/groundinglab/primal-pcoc/commit/5a1d4f5f3c06cd92cfc1ae758418a47122853d3a), SHA-256 `6fd62c90ca78b3905d401b63fbe48dc3dcaf81ef97e3131b03dc7a664abbe69c`. That commit is [primal-pcoc #54](https://github.com/groundinglab/primal-pcoc/pull/54), which is open. There is no `android-v3.5.50` tag. The last release tag is [`android-v3.5.49`](https://github.com/groundinglab/primal-pcoc/tree/android-v3.5.49) (commit `7443f44`). The JNI bridge builds on the Rust SDK tag [`sdk-rust-v2.3.1`](https://github.com/groundinglab/pcoc/releases/tag/sdk-rust-v2.3.1) (crates `pcoc` and `pcoc-produce`, set in `pcoc-bridge/bridge/Cargo.toml`).
 
 Sign-in is a different door. The phone signs the enrolled object and POSTs the section 15.1 body to `https://admission.groundinglab.io/v1/sign-in`. The Admission Gate decides. The phone shows that decision. A measurement on the verify screen is not a policy decision, and a policy decision is not a verifier result.
 
@@ -26,7 +26,7 @@ This repository does not vendor the Android app. The fork's copy is outside this
 
 ## Build and verify
 
-The build guide, with toolchain pins, is the fork's [README at `android-v3.5.49`](https://github.com/groundinglab/primal-pcoc/blob/android-v3.5.49/README.md). In short, on a machine with the Android SDK, JDK 21, and the NDK:
+The build guide, with toolchain pins, is the fork's [README at `android-v3.5.49`](https://github.com/groundinglab/primal-pcoc/blob/android-v3.5.49/README.md). The published 3.5.50 APK was built from commit `5a1d4f5`, not from that tag. In short, on a machine with the Android SDK, JDK 21, and the NDK, the tagged build is:
 
 ```sh
 git clone https://github.com/groundinglab/primal-pcoc.git
