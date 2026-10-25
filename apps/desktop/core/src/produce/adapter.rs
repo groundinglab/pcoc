@@ -3,17 +3,21 @@
 //! `produce_on_rig` walks `cases_rig`. The live header source is not in this
 //! build, so this path does not dial Bitcoin.
 
+#[cfg(test)]
 use super::events::ProduceEvent;
+#[cfg(test)]
 use pcoc_produce::{
     cases_profile, cases_rig, encode_produced, path_skip_stderr, produce_on_rig, Case,
     ProduceOutcome, Progress,
 };
+#[cfg(test)]
 use std::sync::atomic::AtomicBool;
 
 pub const STOPPED: &str = "stopped by the user";
 
 /// Run one CASES rig. `Err` is [`STOPPED`] when `cancel` is set. No object
-/// bytes are returned in that case.
+/// bytes are returned in that case. The CASES tests are the only caller.
+#[cfg(test)]
 pub(crate) fn produce_case(
     public_key: &[u8; 32],
     case: Case,

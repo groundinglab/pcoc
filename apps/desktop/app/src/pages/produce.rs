@@ -440,44 +440,26 @@ fn hero(app: &Rc<App>) -> gtk::Widget {
         let c = hero_card("Legs recorded", "§11", &[], on);
         let legs_line = line(&thousands(p.legs_total), &["hero"]);
         c.body.append(&legs_line);
-        match p.rate() {
-            Some((rate, span)) => {
-                let rate_line = line(&format!("{rate} legs/s"), &["strong"]);
-                c.body.append(&rate_line);
-                learn(
-                    &c.body,
-                    &c.root,
-                    &format!(
-                        "{} ÷ {} s. Terrain fill is not in the rate. A leg is {} steps; this screen counts legs. The rate is not a quota.",
-                        thousands(p.legs_total),
-                        thousands(span),
-                        thousands(STEPS_PER_LEG)
-                    ),
-                    on,
-                );
-                app.tick(Page::Produce, move |s: &State| {
-                    legs_line.set_text(&thousands(s.produce.legs_total));
-                    if let Some((rate, _)) = s.produce.rate() {
-                        rate_line.set_text(&format!("{rate} legs/s"));
-                    }
-                });
+        let rate_line = line(&rate_so_far_label(p), &["strong"]);
+        rate_line.set_visible(p.rate().is_some());
+        c.body.append(&rate_line);
+        learn(&c.body, &c.root, &rate_learn(p), on);
+        app.tick(Page::Produce, move |s: &State| {
+            let p = &s.produce;
+            legs_line.set_text(&thousands(p.legs_total));
+            // Frozen at the latest waypoint. A leg between waypoints
+            // leaves this text where it is.
+            match p.rate() {
+                Some((rate, _)) => {
+                    rate_line.set_text(&format!("rate so far {rate} legs/s"));
+                    rate_line.set_visible(true);
+                }
+                None => {
+                    rate_line.set_text("");
+                    rate_line.set_visible(false);
+                }
             }
-            None => {
-                c.body.append(&line("rate after two legs", &["muted"]));
-                learn(
-                    &c.body,
-                    &c.root,
-                    &format!(
-                        "A leg is {} steps; this screen counts legs.",
-                        thousands(STEPS_PER_LEG)
-                    ),
-                    on,
-                );
-                app.tick(Page::Produce, move |s: &State| {
-                    legs_line.set_text(&thousands(s.produce.legs_total));
-                });
-            }
-        }
+        });
         cards.push(c.root.upcast());
 
         let c = hero_card("Time left", "estimate", &[], on);
@@ -534,6 +516,30 @@ fn hero(app: &Rc<App>) -> gtk::Widget {
         cards.push(c.root.upcast());
     }
     widgets::columns(&cards, 10).upcast()
+}
+
+/// "rate so far 0.308 legs/s", or empty when there is no span yet.
+fn rate_so_far_label(p: &ProduceView) -> String {
+    match p.rate() {
+        Some((rate, _)) => format!("rate so far {rate} legs/s"),
+        None => String::new(),
+    }
+}
+
+/// Learn-mode sentence under the legs counter. Names the frozen figure.
+fn rate_learn(p: &ProduceView) -> String {
+    match p.rate_so_far {
+        Some((ref rate, span, legs)) => format!(
+            "Rate so far is {rate} legs/s: {} ÷ {} s, total legs up to the latest waypoint divided by the time from the first leg to that leg. It updates when a waypoint fires and stays the same between waypoints. Terrain fill is not in the rate. A leg is {} steps; this screen counts legs. The rate is not a quota.",
+            thousands(legs),
+            thousands(span),
+            thousands(STEPS_PER_LEG)
+        ),
+        None => format!(
+            "The rate so far appears beside the legs counter when a waypoint fires with at least two legs. It is total legs up to that waypoint divided by the time from the first leg to the latest of those legs. A leg is {} steps; this screen counts legs.",
+            thousands(STEPS_PER_LEG)
+        ),
+    }
 }
 
 fn hero_primary(p: &ProduceView) -> String {

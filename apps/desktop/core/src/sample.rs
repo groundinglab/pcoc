@@ -370,7 +370,8 @@ mod tests {
             )
         );
         assert_eq!(thousands(v.legs_total), "1,228");
-        assert_eq!(v.rate(), Some(("0.308".into(), 3_982)));
+        // Frozen at W_6: 1,192 legs through stage 5, not the 36 legs since.
+        assert_eq!(v.rate(), Some(("0.308".into(), 3_865)));
         assert_eq!(v.tip_height, Some(971_210));
         assert_eq!(v.tip_age_s(now), Some(123));
         assert_eq!(duration_hms(123), "2 m 03 s");
@@ -420,7 +421,9 @@ mod tests {
         assert_eq!(v.phase, Phase::Written);
         assert_eq!(v.stages_recorded(), 18);
         assert_eq!(v.legs_total, 3_559);
-        assert_eq!(v.rate(), None);
+        // Frozen at W_17: 3,379 legs through stage 16. Stage 17's legs
+        // are stored after that waypoint and do not move the figure.
+        assert_eq!(v.rate(), Some(("0.308".into(), 10_962)));
         assert!(v.estimate(NOW_F_S * 1000).is_none());
         assert_eq!(duration_hms(v.wall_s().unwrap()), "3 h 13 m 29 s");
         assert_eq!(

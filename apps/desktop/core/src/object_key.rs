@@ -169,6 +169,8 @@ fn finish_item(open: &mut Vec<u64>, depth: &mut usize) -> bool {
 }
 
 /// `depth` containers, the innermost a map holding `public_key`.
+/// The depth test is the only caller.
+#[cfg(test)]
 fn nest_key(depth: usize, key: &[u8; 32]) -> Vec<u8> {
     let mut bytes = cbor::encode_map(&[("public_key".into(), cbor::encode_bytes(key))]);
     for _ in 1..depth {
