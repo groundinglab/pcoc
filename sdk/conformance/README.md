@@ -1,6 +1,6 @@
 # Cross-verify gate
 
-`cross-verify.sh` is the Phase A gate for the four Satoshi Hike 2.3 SDKs (Rust, C, Go, and Java). It builds each verify CLI from this tree and checks that they agree on the CASES v2 objects, the candidate files, the pinned digests, the thirteen permanent negatives, and the malformed inputs.
+`cross-verify.sh` is the cross-SDK conformance gate for the four Satoshi Hike 2.3 SDKs (Rust, C, Go, and Java). It builds each verify CLI from this tree and checks that they agree on the CASES v2 objects, the candidate files, the pinned digests, the thirteen permanent negatives, and the malformed inputs.
 
 The normative specification pack is [spec/](../../spec/) — see [GUIDE.md](../../spec/GUIDE.md) and [05-Conformance_Process.md](../../spec/05-Conformance_Process.md). Permanent negatives are stated in Conformance Process and pinned in [spec/conformance/pack/](../../spec/conformance/pack/). `cross-verify.sh` reads the same rows from [erratum-negatives.tsv](erratum-negatives.tsv). That table is harness input, not a second specification.
 
