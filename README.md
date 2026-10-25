@@ -184,7 +184,7 @@ sdk/rust/target/release/pcoc quickstart
 
 `pcoc --version` prints the SDK version, the spec tag, and the manifest hash.
 
-The file at https://groundinglab.io/verify/groundinglab.pcoc.cbor is still served. Its kind text is `satoshi-hike-v2.0-object`. This binary records an unknown kind (Rule A5) and does not walk the hike:
+The file at https://groundinglab.io/verify/groundinglab.pcoc.cbor is still served. Its kind text is `satoshi-hike-v2.0-object`. This binary records an unknown kind (Rule A5) and does not measure the hike:
 
 ```json
 {"kind":"unknown kind","kind_text":"satoshi-hike-v2.0-object"}
@@ -196,7 +196,7 @@ A live read of `GET {index-url}/index/{height}` is in two programs here. The des
 
 Java's `pcoc verify` can read a directory of `{height}.json` files already on disk (`--index DIR`). That flag is not a URL, and those names are not the index service's `height-XXXXXXXXXX.json` files. The conformance drivers under `sdk/conformance/` take `--index-url` for a local test server (the Rust driver accepts only `http://127.0.0.1:PORT`). They are the harness, not the `pcoc` command.
 
-`sdk/rust/objects/O3-PROD.cbor` is a current-kind object at the section 6 sizes: a 256 MiB terrain and two million steps a leg. Measuring it is the production walk:
+`sdk/rust/objects/O3-PROD.cbor` is a current-kind object at the section 6 sizes: a 256 MiB terrain and two million steps a leg. Measuring it is the production-sized measure:
 
 ```sh
 sdk/rust/target/release/pcoc verify --profile production --input sdk/rust/objects/O3-PROD.cbor

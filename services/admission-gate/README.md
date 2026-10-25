@@ -2,7 +2,7 @@
 
 > This checkout is pinned to `spec-2.3.0` (Satoshi Hike 2.3). Live gate 0.5.8 uses that pin. The process refuses a live plane unless `allow_2_2_live = true`. That opt-in defaults to off and is not set anywhere in this repo.
 
-The admission gate is a standalone service built on the Rust SDK (`sdk/rust`, version in `sdk/VERSION`). It implements the specification's admission service model (Part B, §15) and applies a configured **policy** to the verifier's measurements. It adds no Part A rule. Accept, refuse, and revoke are the operating relying party's decisions. They are not pass or fail.
+The admission gate is a standalone service built on the Rust SDK (`sdk/rust`, version in `sdk/VERSION`). It implements the specification's Admission Process (§15) and applies a configured **policy** to the verifier's measurements. It adds no Construction rule. Accept, refuse, and revoke are the operating relying party's decisions. They are not pass or fail.
 
 Three layers stay separate:
 
@@ -40,13 +40,13 @@ GET  /log/{YYYY-MM-DD}.jsonl
 GET  /log/{YYYY-MM-DD}/{seq}
 GET  /v1/policy            -> the full policy table, plus source
 POST /v1/verify            -> 202 { "job_id" }
-GET  /v1/verify/{job_id}   -> status, and the section 14 record
+GET  /v1/verify/{job_id}   -> status, and the §14 record
 GET  /v1/health            -> version, commit, sdk, spec, spec_kind, config
 ```
 
 `POST /v1/admit` and the other legacy names are HTTP 404.
 
-`POST /v1/verify` runs section 14 (`pcoc::verify`) against `index_url`. Any other kind is Rule A5 (`unknown_kind`) and does not read the index. A shape match whose `hike_span` is `not read` finishes `held`. One whose pair meets the floor finishes `done`. The sign-in fast phase is `pcoc::precheck` plus the header and plant reads in `reads`. The thorough phase calls `pcoc::thorough_draw`.
+`POST /v1/verify` runs §14 (`pcoc::verify`) against `index_url`. Any other kind is Rule A5 (`unknown_kind`) and does not read the index. A shape match whose `hike_span` is `not read` finishes `held`. One whose pair meets the floor finishes `done`. The sign-in fast phase is `pcoc::precheck` plus the header and plant reads in `reads`. The thorough phase calls `pcoc::thorough_draw`.
 
 Policy values come from the policy file, not from the specification. The gate does not fill a built-in number for a missing lever. A lever whose SPEC default is unset (`verify_cap_per_object`, `verify_cap_per_door_session`, `fake_leg_ignore_seconds`) stays unset when the key is absent. Every other §15.4 lever must be present; a missing key refuses the file and the error names it. The file must also set `policy_id`, `draw_commitment`, and `born_height`. A missing key refuses the file and the error names it. There is no fallback id, commitment sentence, or born height of 0. `expected_network` may be absent, which means no index-network constraint. The groundinglab policy named by `deploy/gate.toml` is [gl-admit-v10.toml](../../policy/groundinglab-admission/gl-admit-v10.toml). `gl-admit-v9.toml` is `superseded` and does not set `born_height`, so the gate refuses that file. The file was not edited. A change of any value needs a new id. The public gate on 25 Oct 2026 reported [gl-admit-v12.toml](../../policy/groundinglab-admission/gl-admit-v12.toml) (`GET /v1/health`, commit `7274792`). `deploy/gate.toml` still names the v10 file. It omits `verify_cap_per_door_session`. An absent key stays unset: the gate does not fill 3, so there is no session cap. `verify_cap_per_object` stays unset. `gl-admit-v11.toml` keeps `status` `active` and its bytes stay pinned until that swap. See [POLICY.md](../../policy/groundinglab-admission/POLICY.md). `born_height` is policy, not a SPEC lever. The current value is 972685. A stored or claimed height below it finishes the verify job as terminal `before_born_height`, with `born_height` and `lowest_height` on the output. That job is not `held`. The index still serves `MTP_LOOKBACK` headers below `born_height` (10). Those headers are not production heights and are not `hike_span`. `hike_span` is header `nTime` of `last_interrupt` minus header `nTime` of `I_0`. Health and verify output report `born_height` next to `policy_id`. Sticky refuse is off. A later submission of a pair this policy already refused or revoked is measured again and may append a new refuse line. `[policy_rules] sticky_refuse = true` turns the stored-outcome short circuit back on. An absent key means off, so `gl-admit-v10.toml` is off without an edit. The key is not a §15.4 lever and is not in the policy bind hash. `gl-admit-v11.toml` and `gl-admit-v12.toml` set `false`. See [POLICY.md](../../policy/groundinglab-admission/POLICY.md). The verifier writes `measures`. The gate writes `policy_id` and `policy_checks`. A refusal carries one `reason_code` and a class. `bitcoin_tip_height` is null when unknown. Public health does not show `log_dir` or `config_path`. Health echoes the policy id.
 
