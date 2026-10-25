@@ -8,7 +8,7 @@ From this directory the full suite is:
 
     make check
 
-That is the command CI runs. It builds the library, the `pcoc` tool, and the candidate generator, then runs every Phase A check.
+That is the command CI runs. It builds the library, the `pcoc` tool, and the candidate generator, then runs every conformance check.
 
 `check/negatives.sh` checks that negative constructions stay out of the release library and the `pcoc` binary. `make check` runs it. After a build it can also be run on its own:
 
