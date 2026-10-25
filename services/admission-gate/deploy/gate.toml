@@ -84,4 +84,4 @@ flush_claims = true
 # The first start writes {log_dir}/policy-bind.json, a hash of the full
 # table. A later start with the same id and a different table exits before
 # it listens. A value change needs a new id.
-policy = "../../../policy/groundinglab-admission/gl-admit-v10.toml"
+policy = "../../../policy/groundinglab-admission/gl-admit-v12.toml"

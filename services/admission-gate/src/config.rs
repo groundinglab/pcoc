@@ -61,7 +61,7 @@ pub struct Config {
     /// Decision log directory. The process creates it. A v1.35 chain here is
     /// not loaded.
     pub log_dir: PathBuf,
-    /// The full policy table. The shipped file is `gl-admit-v10`.
+    /// The full policy table. The shipped example file is `gl-admit-v12`.
     pub policy: AdmissionPolicy,
     /// Checkpoint binding threads. The process does not read `PCOC_BIND_THREADS`.
     pub bind_threads: usize,
@@ -492,7 +492,20 @@ mod tests {
         assert_eq!(cfg.log_dir, PathBuf::from(DEFAULT_LOG_DIR));
         assert_eq!(cfg.max_object_bytes, DEFAULT_MAX_OBJECT_BYTES);
         assert_eq!(cfg.rate_per_min, DEFAULT_RATE_PER_MIN);
-        assert_eq!(cfg.policy, defaults().policy);
+        // Example points at gl-admit-v12 (live public gate). Unit-test
+        // AdmissionPolicy::default still mirrors gl-admit-v10 for fixtures.
+        assert_eq!(cfg.policy.policy_id, "gl-admit-v12");
+        assert_eq!(
+            (cfg.policy.leg_rate_floor.p, cfg.policy.leg_rate_floor.q),
+            (1, 10)
+        );
+        assert_eq!(cfg.policy.min_anchored_paths, 6);
+        assert_eq!(cfg.policy.thorough_six_leg_runs, 3);
+        assert_eq!(cfg.policy.held_retry_seconds, 600);
+        assert_eq!(cfg.policy.born_height, 972685);
+        assert!(cfg.policy.verify_cap_per_door_session.is_none());
+        assert!(cfg.policy.fake_leg_ignore_seconds.is_none());
+        assert!(!cfg.policy.sticky_refuse);
         assert_eq!(cfg.bind_threads, 6);
         assert_eq!(
             cfg.allowed_origins,
