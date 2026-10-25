@@ -2,15 +2,19 @@
 
 `main` takes pull requests. CI is self-hosted. Fork pull requests do not run the workflows. A maintainer re-runs CI from a branch on this repository.
 
-One subject per branch. Future work stays one subject. The publication branch already in flight is the exception.
+One subject per branch.
 
 ## Spec changes
 
-A Part A change updates the vectors in the same pull request, recomputes `sdk/SPEC_PIN`, and runs the full suites. A path move of the vectors is a spec change for this reason.
+A semantic change to Construction must update the corresponding Conformance rules and vectors in the same pull request. When the vector pack or its manifest changes, update the pin accordingly. Run the full SDK suites and conformance checks. Editorial changes that do not alter normative behaviour need not change vectors. A path move of the vectors is a spec change for this reason.
 
 ## Wording
 
-Measurement tokens (`match`, `mismatch`, `present`, `skip`, `not read`, `not defined`, `n/a`) stay out of policy sentences. Policy words are `accept`, `refuse`, `revoke`, and `held`. They are not verifier outputs.
+Measurement tokens stay out of policy sentences. The closed set defined in §4 is:
+
+`match`, `mismatch`, `present`, `skip`, `not defined`, `not read`, `not fetched by design`, `n/a`, `anchored`, `not anchored`, `unknown kind`.
+
+Policy words are `accept`, `refuse`, `revoke`, and `held`. They are not verifier outputs.
 
 ## Stable pages
 

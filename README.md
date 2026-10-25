@@ -6,13 +6,13 @@
 
 Open systems give identifiers away. A new key costs nothing, so a crowd of them costs the same as one. Filters and scores then try to tell the crowd apart.
 
-A production-constrained observable commitment (PCOC) is an identifier you issue yourself, on your own device, with no registrar to ask. What limits it is the work of making it: memory you hold across a hike, paced by Bitcoin blocks. The bytes you keep are the PCOC object (the specification's hike object). Anyone can measure that object. Copying it is cheap. A new public key is a new hike. The design aims to give bulk making no discount.
+A production-constrained observable commitment (PCOC) is an identifier you issue yourself, on your own device, with no registrar to ask. What limits it is the work of making it: memory you hold across a hike, paced by Bitcoin blocks. The bytes you keep are the PCOC object (the specification's hike object). Anyone can measure that object. Copying an object is cheap. The design aims to make each additional object require its own hike, without giving bulk production a discount.
 
 An identifier is not an identity. A PCOC says nothing about who made it.
 
 ## Why detection loses
 
-A detection rule is solved once. Every account an attacker runs reuses that solution. The attacker pays once. The defence pays per user, from then on. Volume is not aggression, so a tighter rule also catches people who simply show up a lot.
+A detection rule is solved once. Every account an attacker runs can reuse that solution. The attacker's cost can be amortised across accounts. Services and legitimate users continue to bear the costs of screening. Volume is not aggression, so a tighter rule also catches people who simply show up a lot.
 
 Most of that starts at issuance. Identifiers are either free, which floods, or handed out by an office, which installs a gatekeeper. A PCOC is a third path: you issue your own, and the cost sits in the making. The longer version is [Where does the trouble start?](docs/briefs/where-does-the-trouble-start.md).
 
@@ -22,7 +22,7 @@ Create, check, and admit are separate. A policy can change while the object stay
 
 1. **Create (the hike).** Your machine fills a terrain of 256 MiB, fixed by your public key and a Bitcoin block, then walks it in legs of two million steps. Satoshi Hike 2.3 records eighteen stages. Bitcoin blocks pace those stages. They are a public clock. Bari timestamps each tip's pooled waypoints in one Bitcoin transaction. Bitcoin's proof-of-work does not secure a PCOC and does not pay for it. A full hike is about three hours, and it varies with the blocks.
 
-2. **Check (verify).** A verifier recomputes from the object and writes a measurement record. The words are measurements: `match`, `mismatch`, `present`, `skip`, `not read`, `not defined`, `n/a`, `anchored` or `not anchored` on a path, and `not fetched by design` on the W17 path. The record does not say pass or fail. The public index stands in for Bitcoin. Anyone can skip the index and read Bitcoin. Which programs in this tree actually fetch an index is under [Measure an object](#4-measure-an-object).
+2. **Check (verify).** A verifier recomputes from the object and writes a measurement record. The words are measurements. The closed set defined in §4 is `match`, `mismatch`, `present`, `skip`, `not defined`, `not read`, `not fetched by design`, `n/a`, `anchored`, `not anchored`, and `unknown kind`. The record does not say pass or fail. The public index stands in for Bitcoin. Anyone can skip the index and read Bitcoin. Which programs in this tree actually fetch an index is under [Measure an object](#4-measure-an-object).
 
 3. **Admit (policy).** Accept, refuse, and revoke belong to each relying party. groundinglab's Admission Gate is one configured instance. Its current example is policy id `gl-admit-v12`, written in [policy/groundinglab-admission/POLICY.md](policy/groundinglab-admission/POLICY.md). The specification sets no lever value.
 
@@ -47,7 +47,7 @@ The conformance pack id is `pack-2.2.0`. That id is historical. The bytes are va
 ## What this does not claim
 
 - Bitcoin's proof-of-work does not secure a PCOC or pay for one. Bitcoin is the public clock. Bari is the timestamp channel.
-- It does not make fakes impossible. Each new public key still has to be made. The design aims to give bulk making no discount. How that holds at scale is unmeasured ([STATUS](STATUS.md)).
+- It does not make fakes impossible. The design aims to make each additional object require its own hike. How that holds at scale is unmeasured ([STATUS](STATUS.md)).
 - It is not a token, coin, currency, or payment.
 - There is no issuer, account, or identity provider, and it says nothing about personhood.
 - Verify measures. Admission is each relying party's own decision.
