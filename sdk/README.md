@@ -11,7 +11,7 @@ The Rust workspace in this tree is [sdk/rust](rust/).
 | You are writing | Use |
 |---|---|
 | A Rust verifier, a scripted offline producer, or the `pcoc` command | `sdk/rust`: crates `pcoc` and `pcoc-produce`, binary `pcoc` |
-| C, Go, or Java | That language's own Phase A tree |
+| C, Go, or Java | That language's own SDK tree |
 
 `pcoc` is the construction, the section 7 encodings, the section 14 verify record, the draws, the integer comparisons, and the Hashcash digest. `pcoc-produce` is the offline producer on the scripted rig. The `pcoc` command is `verify`, `selftest`, `candidates`, and `produce --rig`.
 
