@@ -72,6 +72,11 @@ pub struct ProduceView {
     pub legs_total: u64,
     pub first_leg_ms: Option<u64>,
     pub last_leg_ms: Option<u64>,
+    /// Cumulative leg rate frozen when the latest waypoint fired.
+    /// `None` until that waypoint, and unchanged by later legs.
+    /// `(legs/s to three places, span seconds, legs in the numerator)`.
+    /// Display only. Nothing in the gate, verifier, object, or policy reads it.
+    pub rate_so_far: Option<(String, u64, u64)>,
     pub tip_height: Option<u64>,
     pub tip_natural: Option<[u8; 32]>,
     pub tip_seen_ms: Option<u64>,
@@ -107,6 +112,7 @@ impl Default for ProduceView {
             legs_total: 0,
             first_leg_ms: None,
             last_leg_ms: None,
+            rate_so_far: None,
             tip_height: None,
             tip_natural: None,
             tip_seen_ms: None,
@@ -238,6 +244,7 @@ impl ProduceView {
                     output: Some(output),
                     public_key_hex: Some(public_key_hex),
                     started_ms: Some(at_ms),
+                    rate_so_far: None,
                     ..Self::default()
                 };
                 self.stages[0].open = true;
@@ -343,6 +350,13 @@ impl ProduceView {
                 if let Some(status) = status {
                     self.last_post_status = Some(status);
                 }
+                // The produce screen freezes its cumulative rate here.
+                // Legs recorded between waypoints do not move the figure.
+                self.rate_so_far = cumulative_leg_rate(
+                    self.legs_total,
+                    self.first_leg_ms,
+                    self.last_leg_ms,
+                );
             }
             ProduceEvent::PathAsk {
                 g,
@@ -433,14 +447,23 @@ impl ProduceView {
         self.stages[STAGES - 1].interrupt_height
     }
 
-    /// `0.308` legs/s: stored legs over the time since the first stored leg.
-    /// Terrain fill is before the first leg and is not in it. Recording only.
+    /// Cumulative leg rate frozen at the latest waypoint, in legs/s.
+    ///
+    /// Total legs up to that waypoint, divided by (time of the latest of
+    /// those legs − time of the first leg). Terrain fill is before the
+    /// first leg and is not in it. Zero legs, one leg, and a zero span
+    /// are `None` (the screen shows nothing, or an em dash). The figure
+    /// does not change between waypoints. Display only.
     pub fn rate(&self) -> Option<(String, u64)> {
-        if self.phase != Phase::Recording {
+        if !matches!(
+            self.phase,
+            Phase::Recording | Phase::Settling | Phase::Written
+        ) {
             return None;
         }
-        let span_s = (self.last_leg_ms? - self.first_leg_ms?) / 1000;
-        Some((three_places(self.legs_total, span_s)?, span_s))
+        self.rate_so_far
+            .as_ref()
+            .map(|(rate, span_s, _)| (rate.clone(), *span_s))
     }
 
     pub fn tip_age_s(&self, now_ms: u64) -> Option<u64> {
@@ -805,6 +828,19 @@ fn post_error_status(status: u16) -> bool {
     status >= 500 || status == 408
 }
 
+/// Total legs so far ÷ (latest leg time − first leg time), in whole seconds.
+/// `None` for no legs, one leg, or a span that rounds to zero seconds.
+/// The third value is the leg count in the numerator, for the label.
+fn cumulative_leg_rate(
+    legs: u64,
+    first_leg_ms: Option<u64>,
+    last_leg_ms: Option<u64>,
+) -> Option<(String, u64, u64)> {
+    let span_s = last_leg_ms?.saturating_sub(first_leg_ms?) / 1000;
+    let rate = three_places(legs, span_s)?;
+    Some((rate, span_s, legs))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1149,5 +1185,70 @@ mod tests {
                 chip.label()
             );
         }
+    }
+
+    fn leg(stage: usize, j: u64, at_ms: u64) -> ProduceEvent {
+        ProduceEvent::LegRecorded {
+            stage,
+            j,
+            stored_in_stage: j + 1,
+            at_ms,
+        }
+    }
+
+    fn posted(g: u64) -> ProduceEvent {
+        ProduceEvent::WaypointPosted {
+            g,
+            appended: true,
+            status: Some(204),
+        }
+    }
+
+    /// The rate so far is total legs ÷ (latest leg − first leg), frozen
+    /// when a waypoint fires. Legs between waypoints do not move it.
+    /// No legs and one leg show nothing.
+    #[test]
+    fn cumulative_rate_updates_only_when_a_waypoint_fires() {
+        let mut view = ProduceView {
+            phase: Phase::Recording,
+            ..ProduceView::default()
+        };
+        assert_eq!(view.rate(), None);
+        assert_eq!(cumulative_leg_rate(0, None, None), None);
+
+        view.apply(leg(0, 0, 1_000));
+        assert_eq!(view.rate(), None, "one leg has no span");
+        view.apply(posted(1));
+        assert_eq!(view.rate(), None, "a waypoint of one leg still has no span");
+
+        view.apply(leg(0, 1, 5_000));
+        assert_eq!(view.rate(), None, "a leg between waypoints does not show a rate");
+        view.apply(posted(2));
+        // 2 legs ÷ (5_000 − 1_000) ms = 2 / 4 s.
+        assert_eq!(view.rate(), Some(("0.500".into(), 4)));
+
+        view.apply(leg(0, 2, 9_000));
+        view.apply(leg(0, 3, 13_000));
+        assert_eq!(
+            view.rate(),
+            Some(("0.500".into(), 4)),
+            "the figure stays at the previous waypoint"
+        );
+        view.apply(posted(3));
+        // 4 legs ÷ (13_000 − 1_000) ms = 4 / 12 s.
+        assert_eq!(view.rate(), Some(("0.333".into(), 12)));
+
+        view.phase = Phase::Settling;
+        assert_eq!(view.rate(), Some(("0.333".into(), 12)));
+        view.phase = Phase::Written;
+        assert_eq!(view.rate(), Some(("0.333".into(), 12)));
+        view.phase = Phase::Stopped;
+        assert_eq!(view.rate(), None);
+
+        assert_eq!(cumulative_leg_rate(3, Some(1_000), Some(1_400)), None);
+        assert_eq!(
+            cumulative_leg_rate(3, Some(0), Some(2_000)),
+            Some(("1.500".into(), 2, 3))
+        );
     }
 }

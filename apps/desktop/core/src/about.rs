@@ -53,7 +53,9 @@ pub fn pin_note() -> String {
 }
 
 /// A commit pin, or the in-tree SDK at `sdk/rust` (developer wording).
-pub fn pin_line() -> String {
+/// The pin test is the only caller. The About card uses `source_line`.
+#[cfg(test)]
+fn pin_line() -> String {
     match PIN_KIND {
         "tag" => format!("git tag {PIN} of the Rust SDK, not branch main"),
         "path" => format!("in-tree Rust SDK at {PIN}"),
@@ -64,7 +66,8 @@ pub fn pin_line() -> String {
     }
 }
 
-pub fn commit_line() -> String {
+#[cfg(test)]
+fn commit_line() -> String {
     short_rev(PIN_COMMIT).to_owned()
 }
 
@@ -92,6 +95,7 @@ mod tests {
         assert_eq!(PIN, "../../sdk/rust/pcoc");
         assert_eq!(PIN_COMMIT, "local");
         assert_eq!(pin_line(), "in-tree Rust SDK at ../../sdk/rust/pcoc");
+        assert_eq!(commit_line(), "local");
         // KIND stays v2.2-pcoc-object in SPEC 2.3. This is the object kind, not the SDK version.
         assert_eq!(OBJECT_KIND, "v2.2-pcoc-object");
         assert_eq!(SPEC, "SDK 2.3");
