@@ -16,7 +16,7 @@ This directory holds the detailed instructions a coding agent should follow when
 
 - **Producer:** Construction, Conformance, Producer Process. Waypoint Publication only when using that channel. Measurement Record section 14.3 only for the path-body check.
 - **Verifier:** Construction, Conformance, Measurement Record. Waypoint Publication only when interpreting evidence from that channel.
-- **Admission gate:** the verifier documents plus Admission Process, `policy/README.md`, and the policy file the human names.
+- **Admission gate:** the verifier documents plus Admission Process, `policy/README.md`, and the policy file the human names. For a **Continue with PCOC** button, also read [`admission-button.md`](admission-button.md).
 
 The specification and its matching conformance pack define interoperability. Check the tag and pinned pack using the repository's own records. Do not assume SDK and specification versions match. If the tagged specification and the published copy at https://groundinglab.io/technical/spec/ disagree, stop and report the disagreement.
 
