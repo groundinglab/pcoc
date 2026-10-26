@@ -1,5 +1,9 @@
 # Changes
 
+## 0.1.7
+
+Crate `pcoc-index` is 0.1.7. Tag `index-v0.1.6` was not moved. The binary links `pcoc-bari` 0.6.12 and Rust SDK 2.3.1. Behavior is unchanged. The number is the same ops cut as gate 0.6.0 and bari 0.6.12.
+
 ## 0.1.6
 
 Crate `pcoc-index` is 0.1.6. Tag `index-v0.1.5` was not moved. The binary links `pcoc-bari` 0.6.11 and Rust SDK 2.3.1.

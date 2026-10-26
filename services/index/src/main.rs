@@ -357,7 +357,7 @@ mod tests {
             10,
         );
         let version = pcoc_index::VERSION;
-        assert_eq!(version, "0.1.6");
+        assert_eq!(version, "0.1.7");
         assert!(line.starts_with(&format!("pcoc-index v{version} ")));
         assert!(!line.starts_with("pcoc-index v0.1 "));
         assert!(line.contains("born_height=972685"));

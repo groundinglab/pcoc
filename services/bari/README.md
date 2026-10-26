@@ -1,6 +1,6 @@
 # bari
 
-One binary, `bari`. Crate `pcoc-bari`, library `pcoc_bari`, version 0.6.11, tag `bari-v0.6.11`. The SDK pin is `spec-2.3.0`.
+One binary, `bari`. Crate `pcoc-bari`, library `pcoc_bari`, version 0.6.12, tag `bari-v0.6.12`. The SDK pin is `spec-2.3.0`.
 
 It accepts 32-byte waypoints and later serves a Merkle path. It writes the index cache. It does not serve `GET /index`. The index HTTP reader is [services/index](../index/).
 

@@ -369,7 +369,7 @@ async fn health_reports_version_commit_spec_and_config() {
     assert_eq!(body["ok"], true);
     assert_eq!(body["service"], "admission-service");
     assert_eq!(body["version"], env!("CARGO_PKG_VERSION"));
-    assert_eq!(body["version"], "0.5.8");
+    assert_eq!(body["version"], "0.6.0");
     assert!(body["commit"].as_str().unwrap().len() >= 7);
     // The gate builds the in-tree Rust SDK; health names its version.
     // A clean tree stamps "(path)"; uncommitted SDK changes stamp "(path, dirty)".

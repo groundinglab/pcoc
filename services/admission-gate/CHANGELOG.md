@@ -1,6 +1,8 @@
 # Changes
 
-## Unreleased
+## 0.6.0
+
+Crate `pcoc-admission` is 0.6.0. Tag `gate-v0.5.8` was not moved. This build links Rust SDK 2.3.1 on pin `spec-2.3.0`. The flush endpoint and the admit behavior below were already live, unlabeled, as 0.5.8. `hike_span` is header `nTime`. Sticky refuse is off. The tip deadline is retired. `gl-admit-v12` leaves the door-session cap unset.
 
 - A banned resubmit (a readable object whose key is already on the fake-leg ignore record) consumes the nonce with website outcome `rejected`, not `pending`. The client body stays `{"delivery":"ok"}`. No decision line is written, and no pending slot is taken. The result is `{"outcome":"rejected"}` with no `submitted` field, so a site cannot read it as a provisional grant (#131).
 - `POST /v1/flush/challenge` and `POST /v1/flush` clear one identity's cached login state after a BIP-340 signature by that key over domain `pcoc-gate-flush-v1`. The decision log is not rewritten and `last_seq` does not move. A bad signature flushes nothing. Config `flush_claims` defaults on (groundinglab lab). `false` answers both paths 404. This note does not deploy.
