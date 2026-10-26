@@ -40,7 +40,7 @@ Three names are versioned on their own. Moving one does not move the others.
 
 Satoshi Hike 2.3 / `spec-2.3.0` is the specification pin. The object kind on that pin is `v2.2-pcoc-object`. There is no `v2.3-pcoc-object` kind. The digits in `pcoc-walk-v1`, `bari-hc-v2`, `pcoc-gate-signin-v1`, and the `/v1` routes are wire domains, not specification versions. The gate's own note is [services/admission-gate/WIRE.md](services/admission-gate/WIRE.md).
 
-Health follows the SDK pin. A build on `spec-2.3.0` reports `spec` Satoshi Hike 2.3. Decision-log lines and `/latest.json` still carry `spec` `Satoshi Hike 2.2`, so a log stamped with that name still opens on this pin.
+Health follows the SDK pin. A build on `spec-2.3.0` reports `spec` Satoshi Hike 2.3. A new decision-log line and `/latest.json` carry that same string. A log line stamped `Satoshi Hike 2.2` still opens on this pin, and that line is not rewritten.
 
 The conformance pack id is `pack-2.2.0`. That id is historical. The bytes are valid for the 2.3 pin, and the id was left unchanged so the manifest hash beside `spec-2.3.0` stays put. SDK 2.3.1 ([`sdk/VERSION`](sdk/VERSION)) implements that pin. An SDK version is not a specification version.
 

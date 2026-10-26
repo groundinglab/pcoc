@@ -2,7 +2,7 @@
 
 > This checkout is pinned to `spec-2.3.0` (Satoshi Hike 2.3). Live gate 0.6.0 uses that pin. The process refuses a live plane unless `allow_2_2_live = true`. That opt-in defaults to off and is not set anywhere in this repo.
 
-One binary, one config file, a log directory the process creates. The object kind is `v2.2-pcoc-object`. Policy `spec` `2.2` loads on a spec-2.2.x pin and on a spec-2.3.x pin. Policy `spec` `2.3` loads on a spec-2.3.x pin and is refused on a spec-2.2.x pin. This page is the whole install. Do not point `log_dir` at an earlier decision log. A decision-log line is still stamped `Satoshi Hike 2.2`.
+One binary, one config file, a log directory the process creates. The object kind is `v2.2-pcoc-object`. Policy `spec` `2.2` loads on a spec-2.2.x pin and on a spec-2.3.x pin. Policy `spec` `2.3` loads on a spec-2.3.x pin and is refused on a spec-2.2.x pin. This page is the whole install. Do not point `log_dir` at a v1.35 decision log. A chain of `Satoshi Hike 2.2` lines still opens. A new line on this pin (`spec-2.3.0`) is stamped `Satoshi Hike 2.3`, and `/latest.json` carries that string.
 
 ## Build
 
@@ -36,7 +36,7 @@ sudo chown pcoc:pcoc /var/lib/pcoc-admission
 
 Edit `/etc/pcoc-admission/gate.toml`. The gate binds `127.0.0.1:8787`. **`served_origins` is required and has no default**: it lists the exact site origins whose signed sign-ins this gate serves (groundinglab's file sets `served_origins = ["https://groundinglab.io"]`). A file without it does not start. It is separate from the CORS lists. The code default for `allowed_origins` is empty (loopback only). **A live groundinglab deploy needs `allowed_origins = ["https://groundinglab.io", "https://www.groundinglab.io"]`** in this file (the shipped `gate.toml` sets it; see also [env.example](env.example)); without it the website's sign-in requests are refused by CORS. To serve it publicly, put a reverse proxy of your choice in front of the loopback bind. Every key is optional. That file lists each key, its default, and what it does. The process reads that file only. The path is `--config` or `GATE_CONFIG`. It does not read `PCOC_BIND_THREADS` or any `GL_VERIFY_*` variable.
 
-`log_dir` is the public log. The process creates it. A relative `log_dir` is under `WorkingDirectory`. A chain that is not Satoshi Hike 2.2 is refused at startup and is not served. Leave an earlier log where it is.
+`log_dir` is the public log. The process creates it. A relative `log_dir` is under `WorkingDirectory`. A chain whose `spec` is not `Satoshi Hike 2.2` or `Satoshi Hike 2.3` is refused at startup and is not served. Leave a v1.35 log where it is. A restart of this pin rewrites `/latest.json` to `Satoshi Hike 2.3` and does not rewrite `chain.jsonl`.
 
 `flush_claims` gates `POST /v1/flush/challenge` and `POST /v1/flush`. Absent, or `true`, turns them on. That is the groundinglab lab default, and `deploy/gate.toml` sets `true`. `false` answers both paths HTTP 404. A flush is authorized by a BIP-340 signature from the identity being cleared. It does not rewrite `chain.jsonl` and it does not move `last_seq`. See [WIRE.md](../WIRE.md).
 

@@ -139,6 +139,7 @@ pub fn public_reason_lines() -> Vec<String> {
         policy::BOOKENDS_LINE.to_owned(),
         policy::BOOKENDS_NOT_READ_LINE.to_owned(),
         crate::verifier::SPEC_NAME.to_owned(),
+        crate::verifier::SPEC_NAME_2_3.to_owned(),
     ];
     for (code, _) in INVENTORY {
         lines.push(sentence(code, &empty));

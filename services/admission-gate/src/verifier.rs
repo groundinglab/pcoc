@@ -12,10 +12,13 @@ use pcoc::profile::Profile;
 use pcoc::verify::{HeightIndex, Precheck, Verified};
 use std::time::Duration;
 
-/// Decision-log spec name. `KIND` stays `v2.2-pcoc-object`, so a chain
-/// stamped with this name still opens on a 2.3 pin. `/v1/health` uses
-/// [`spec_identity`]: this string on a 2.2 pin, `Satoshi Hike 2.3` on a 2.3 pin.
+/// Decision-log stamp a spec-2.2 pin writes. A later pin still loads a line
+/// that carries this string. The line is not rewritten.
 pub const SPEC_NAME: &str = "Satoshi Hike 2.2";
+
+/// Decision-log stamp a spec-2.3 pin writes on a new line and on `/latest.json`.
+/// `KIND` stays `v2.2-pcoc-object`.
+pub const SPEC_NAME_2_3: &str = "Satoshi Hike 2.3";
 
 /// `spec_kind` for a 2.2 pin. Health uses [`spec_identity`].
 pub const SPEC_KIND_LABEL: &str = "2.2";
@@ -39,11 +42,22 @@ pub fn pin_spec_version(tag: &str) -> Option<&'static str> {
 pub fn spec_identity(tag: &str) -> Result<(&'static str, &'static str), String> {
     match pin_spec_version(tag) {
         Some("2.2") => Ok((SPEC_NAME, SPEC_KIND_LABEL)),
-        Some("2.3") => Ok(("Satoshi Hike 2.3", "2.3")),
+        Some("2.3") => Ok((SPEC_NAME_2_3, "2.3")),
         _ => Err(format!(
             "SDK pin {tag:?} is not a known Satoshi Hike pin (spec-2.2.x or spec-2.3.x)"
         )),
     }
+}
+
+/// `spec` this binary writes on a new decision line and on `/latest.json`.
+/// The same name [`spec_identity`] gives `/v1/health` for this build's pin.
+pub fn decision_spec_stamp() -> Result<&'static str, String> {
+    spec_identity(&pcoc::build_info().spec_tag).map(|(name, _)| name)
+}
+
+/// A stored decision line may carry either stamp. The hash chain is not rewritten.
+pub fn accepted_decision_spec(spec: &str) -> bool {
+    spec == SPEC_NAME || spec == SPEC_NAME_2_3
 }
 
 /// Policy `spec` against the SDK pin.
