@@ -45,7 +45,7 @@ pub const COMMIT: &str = env!("ADMISSION_COMMIT");
 /// The Rust SDK (`hike`) version this binary was built against, from Cargo.lock.
 pub const SDK_VERSION: &str = env!("PCOC_SDK_VERSION");
 
-/// `admission-service 0.5.8 commit=<sha> sdk=<hike version> (<source>)`, for `--version`.
+/// `admission-service 0.6.0 commit=<sha> sdk=<hike version> (<source>)`, for `--version`.
 pub fn version_line() -> String {
     format!("{SERVICE} {VERSION} commit={COMMIT} sdk={SDK_VERSION}")
 }

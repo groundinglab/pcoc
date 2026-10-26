@@ -1,5 +1,9 @@
 # Changes
 
+## 0.6.12
+
+Crate `pcoc-bari` is 0.6.12. This build links Rust SDK 2.3.1. Tag `bari-v0.6.11` was not moved. Behavior is unchanged. The number is the same ops cut as gate 0.6.0 and index 0.1.7.
+
 ## 0.6.11
 
 Crate `pcoc-bari` is 0.6.11. This build links Rust SDK 2.3.1. Tag `bari-v0.6.10` was not moved.

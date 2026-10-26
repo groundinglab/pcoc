@@ -603,7 +603,7 @@ mod tests {
         );
         let health_json = body_json(health).await;
         assert_eq!(health_json["version"], VERSION);
-        assert_eq!(health_json["version"], "0.1.6");
+        assert_eq!(health_json["version"], "0.1.7");
         assert_eq!(health_json["commit"], compiled_commit());
         assert!(compiled_commit().len() >= 7, "{}", compiled_commit());
         let mut keys: Vec<&str> = health_json
