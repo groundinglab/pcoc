@@ -794,5 +794,15 @@ born_height = 972685
         let (name, label) = crate::verifier::health_spec();
         assert_eq!(name, "Satoshi Hike 2.3");
         assert_eq!(label, "2.3");
+        assert_eq!(
+            crate::verifier::decision_spec_stamp().unwrap(),
+            crate::verifier::SPEC_NAME_2_3
+        );
+        assert!(crate::verifier::accepted_decision_spec("Satoshi Hike 2.2"));
+        assert!(crate::verifier::accepted_decision_spec("Satoshi Hike 2.3"));
+        assert!(!crate::verifier::accepted_decision_spec("Satoshi Hike 2.4"));
+        assert!(!crate::verifier::accepted_decision_spec(
+            "Satoshi Hike v2.0"
+        ));
     }
 }

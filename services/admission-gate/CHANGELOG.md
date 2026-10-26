@@ -1,5 +1,11 @@
 # Changes
 
+## Unreleased
+
+Crate version stays 0.6.0. No tag is moved. This note does not deploy. Admission policy levers are unchanged (`gl-admit-v12`, `born_height`, and the rest).
+
+- A new decision line and `/latest.json` carry `spec` from the pin this binary was built on (`Satoshi Hike 2.3` on `spec-2.3.0`). A chain that already contains `Satoshi Hike 2.2` lines still opens. Those lines are not rewritten. Object kind stays `v2.2-pcoc-object`.
+
 ## 0.6.0
 
 Crate `pcoc-admission` is 0.6.0. Tag `gate-v0.5.8` was not moved. This build links Rust SDK 2.3.1 on pin `spec-2.3.0`. The flush endpoint and the admit behavior below were already live, unlabeled, as 0.5.8. `hike_span` is header `nTime`. Sticky refuse is off. The tip deadline is retired. `gl-admit-v12` leaves the door-session cap unset.

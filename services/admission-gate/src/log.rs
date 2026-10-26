@@ -1,9 +1,11 @@
-//! Append-only public decision log for Satoshi Hike 2.2.
+//! Append-only public decision log.
 //!
-//! The process creates the directory. A chain whose lines are not this
-//! spec is not loaded and is not rewritten. Archiving a v1.35 log is a
-//! later phase. Day paths are served from `time_unix_s` on the one chain
-//! `{log_dir}/chain.jsonl`.
+//! A new line is stamped with the pin this binary was built on
+//! (`Satoshi Hike 2.3` on `spec-2.3.0`). `/latest.json` carries that same
+//! string. A chain of `Satoshi Hike 2.2` lines still opens. Those lines
+//! are not rewritten. Any other `spec` is not loaded and is not rewritten.
+//! Archiving a v1.35 log is a later phase. Day paths are served from
+//! `time_unix_s` on the one chain `{log_dir}/chain.jsonl`.
 //!
 //! One writer. A line is fsynced, including its newline, before it is
 //! current. `/latest.json` is rewritten after the line is durable, and again
@@ -19,7 +21,7 @@
 //! brace is the line separator and is not part of the hashed bytes.
 
 use crate::canon::{self, event_hash, genesis_hash, hex32, GENESIS_HEX};
-use crate::verifier::SPEC_NAME;
+use crate::verifier::{accepted_decision_spec, decision_spec_stamp};
 use serde_json::{json, Map, Value};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
@@ -156,7 +158,7 @@ impl DecisionLog {
         if parsed.torn {
             if parsed.lines.is_empty() {
                 return Err(LogError::NotThisLineage(format!(
-                    "{} has no complete Satoshi Hike 2.2 line; this gate does not rewrite it",
+                    "{} has no complete Satoshi Hike 2.2 or 2.3 line; this gate does not rewrite it",
                     chain.display()
                 )));
             }
@@ -328,7 +330,7 @@ impl DecisionLog {
             .unwrap_or(0);
         let mut map = Map::new();
         map.insert("feed".to_owned(), json!(FEED));
-        map.insert("spec".to_owned(), json!(SPEC_NAME));
+        map.insert("spec".to_owned(), json!(decision_stamp()?));
         if let Some(policy) = self.policy_hint.as_ref() {
             map.insert("policy".to_owned(), policy.clone());
         }
@@ -370,11 +372,16 @@ fn parse_chain(blob: &[u8]) -> Result<Parsed, LogError> {
     let mut prev_hash = genesis_hash();
     for (index, raw) in objects.raw.iter().enumerate() {
         let value: Value = serde_json::from_slice(raw).map_err(|err| {
-            LogError::NotThisLineage(format!("log line {index} is not a 2.2 line: {err}"))
+            LogError::NotThisLineage(format!("log line {index} is not a decision line: {err}"))
         })?;
-        if value.get("spec").and_then(|item| item.as_str()) != Some(SPEC_NAME) {
+        if !accepted_decision_spec(
+            value
+                .get("spec")
+                .and_then(|item| item.as_str())
+                .unwrap_or(""),
+        ) {
             return Err(LogError::NotThisLineage(format!(
-                "log line {index} is not a Satoshi Hike 2.2 decision; this gate does not serve it"
+                "log line {index} is not a Satoshi Hike 2.2 decision or a Satoshi Hike 2.3 decision; this gate does not serve it"
             )));
         }
         let seq = value
@@ -415,7 +422,25 @@ fn parse_chain(blob: &[u8]) -> Result<Parsed, LogError> {
     })
 }
 
+fn decision_stamp() -> Result<&'static str, LogError> {
+    decision_spec_stamp().map_err(LogError::Unusable)
+}
+
 fn encode_decision(seq: u64, prev: &str, write: &DecisionWrite) -> Result<Vec<u8>, LogError> {
+    encode_decision_stamped(seq, prev, write, decision_stamp()?)
+}
+
+fn encode_decision_stamped(
+    seq: u64,
+    prev: &str,
+    write: &DecisionWrite,
+    spec: &str,
+) -> Result<Vec<u8>, LogError> {
+    if !accepted_decision_spec(spec) {
+        return Err(LogError::Unusable(format!(
+            "decision spec {spec:?} is not a stamp this gate writes"
+        )));
+    }
     let mut map = Map::new();
     map.insert("event".to_owned(), json!("gate.decision"));
     map.insert("seq".to_owned(), json!(seq));
@@ -428,7 +453,7 @@ fn encode_decision(seq: u64, prev: &str, write: &DecisionWrite) -> Result<Vec<u8
             None => Value::Null,
         },
     );
-    map.insert("spec".to_owned(), json!(SPEC_NAME));
+    map.insert("spec".to_owned(), json!(spec));
     map.insert("gate_version".to_owned(), json!(env!("CARGO_PKG_VERSION")));
     map.insert("gate_commit".to_owned(), json!(env!("ADMISSION_COMMIT")));
     map.insert("phase".to_owned(), json!(write.phase));
@@ -866,6 +891,103 @@ mod tests {
             reopened.lines()[0].value["verify_summary"]["N"],
             "not defined"
         );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Pin `spec-2.3.0` stamps new lines and `/latest.json` `Satoshi Hike 2.3`.
+    /// A chain that already holds `Satoshi Hike 2.2` lines still opens, and
+    /// those bytes stay so the hash chain is not rewritten.
+    #[test]
+    fn a_2_3_pin_stamps_2_3_and_a_2_2_chain_still_opens() {
+        assert_eq!(pcoc::build_info().spec_tag, "spec-2.3.0");
+        let (name, kind) = crate::verifier::spec_identity("spec-2.3.0").unwrap();
+        assert_eq!(name, "Satoshi Hike 2.3");
+        assert_eq!(kind, "2.3");
+        assert_eq!(crate::verifier::decision_spec_stamp().unwrap(), name);
+        assert_eq!(crate::verifier::SPEC_KIND, "v2.2-pcoc-object");
+
+        let write = sample("provisional", 5);
+        let stamped_22 =
+            encode_decision_stamped(0, GENESIS_HEX, &write, "Satoshi Hike 2.2").unwrap();
+        let stamped_23 =
+            encode_decision_stamped(0, GENESIS_HEX, &write, "Satoshi Hike 2.3").unwrap();
+        let fresh = encode_decision(0, GENESIS_HEX, &write).unwrap();
+        assert_eq!(fresh, stamped_23);
+        assert_ne!(stamped_22, stamped_23);
+        assert_eq!(stamped_22.len(), stamped_23.len());
+        let diffs = stamped_22
+            .iter()
+            .zip(stamped_23.iter())
+            .filter(|(left, right)| left != right)
+            .count();
+        assert_eq!(diffs, 1, "the stamp is the only byte that moves");
+        let line_22: serde_json::Value = serde_json::from_slice(&stamped_22).unwrap();
+        let line_23: serde_json::Value = serde_json::from_slice(&stamped_23).unwrap();
+        assert_eq!(line_22["spec"], "Satoshi Hike 2.2");
+        assert_eq!(line_23["spec"], "Satoshi Hike 2.3");
+
+        let dir = temp_dir("mixed-spec");
+        fs::create_dir_all(&dir).unwrap();
+        let chain_path = dir.join("chain.jsonl");
+        let mut original = stamped_22.clone();
+        original.push(b'\n');
+        fs::write(&chain_path, &original).unwrap();
+
+        let mut log = DecisionLog::open(&dir).unwrap();
+        assert_eq!(log.lines().len(), 1);
+        assert_eq!(log.lines()[0].raw, stamped_22);
+        assert_eq!(log.lines()[0].value["spec"], "Satoshi Hike 2.2");
+        let latest: serde_json::Value =
+            serde_json::from_slice(&log.latest_bytes().expect("latest")).unwrap();
+        assert_eq!(latest["spec"], "Satoshi Hike 2.3");
+        assert_eq!(latest["feed"], FEED);
+        assert_eq!(latest["last_seq"], 0);
+
+        log.append(&sample("refuse", 6)).unwrap();
+        assert_eq!(log.lines()[0].raw, stamped_22, "the 2.2 line was rewritten");
+        assert_eq!(log.lines()[1].value["spec"], "Satoshi Hike 2.3");
+        assert_eq!(
+            log.lines()[1].value["prev_event_hash"],
+            hex32(&event_hash(&stamped_22))
+        );
+        let latest: serde_json::Value =
+            serde_json::from_slice(&log.latest_bytes().expect("latest")).unwrap();
+        assert_eq!(latest["spec"], "Satoshi Hike 2.3");
+        assert_eq!(latest["last_seq"], 1);
+        let chain = fs::read(&chain_path).unwrap();
+        assert!(
+            chain.starts_with(&original),
+            "the stored 2.2 line was rewritten"
+        );
+        drop(log);
+
+        let reopened = DecisionLog::open(&dir).unwrap();
+        assert_eq!(reopened.lines().len(), 2);
+        assert_eq!(reopened.lines()[0].raw, stamped_22);
+        assert_eq!(reopened.lines()[0].value["spec"], "Satoshi Hike 2.2");
+        assert_eq!(reopened.lines()[1].value["spec"], "Satoshi Hike 2.3");
+        let latest: serde_json::Value =
+            serde_json::from_slice(&reopened.latest_bytes().expect("latest")).unwrap();
+        assert_eq!(latest["spec"], "Satoshi Hike 2.3");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_foreign_spec_stamp_is_not_opened_or_rewritten() {
+        let dir = temp_dir("foreign-spec");
+        fs::create_dir_all(&dir).unwrap();
+        let chain = dir.join("chain.jsonl");
+        let original = b"{\"event\":\"gate.decision\",\"seq\":0,\"spec\":\"Satoshi Hike 2.4\",\"prev_event_hash\":\"b927019a3b2ca1a67b5e7d3a09bd14f5ba2b762abccd3c6ab2da3dbeafd4e671\"}\n";
+        fs::write(&chain, original).unwrap();
+        match DecisionLog::open(&dir) {
+            Err(LogError::NotThisLineage(message)) => {
+                assert!(message.contains("not a Satoshi Hike 2.2"), "{message}");
+            }
+            Err(error) => panic!("expected a foreign stamp to be refused, got {error:?}"),
+            Ok(_) => panic!("a Satoshi Hike 2.4 chain was opened"),
+        }
+        assert_eq!(fs::read(&chain).unwrap(), original);
+        assert!(!dir.join("latest.json").exists());
         let _ = fs::remove_dir_all(&dir);
     }
 }

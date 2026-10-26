@@ -1,6 +1,6 @@
 # Gate wire
 
-This checkout is pinned to `spec-2.3.0`. Health `spec` is Satoshi Hike 2.3. The only kind is `v2.2-pcoc-object`. Decision-log lines and `/latest.json` stay `spec` `Satoshi Hike 2.2`. The `/v1` prefix stays: the website and the phone already call these paths. This process does not mint a session and does not call the website.
+This checkout is pinned to `spec-2.3.0`. Health `spec` is Satoshi Hike 2.3. The only kind is `v2.2-pcoc-object`. A new decision-log line and `/latest.json` carry `spec` `Satoshi Hike 2.3`. A line already stamped `Satoshi Hike 2.2` still opens, and that line is not rewritten. The `/v1` prefix stays: the website and the phone already call these paths. This process does not mint a session and does not call the website.
 
 ## Routes
 
@@ -185,7 +185,7 @@ After a durable append:
 ```json
 {
   "feed": "pcoc-gate-feed-v2",
-  "spec": "Satoshi Hike 2.2",
+  "spec": "Satoshi Hike 2.3",
   "last_seq": 0,
   "last_event_hash": "<64 hex>",
   "today": "YYYY-MM-DD",
@@ -195,7 +195,9 @@ After a durable append:
 
 There is no `policy_current`. `verify_summary` on a locked sign-in thorough line is `{}`. A fast line's `verify_summary` is `{}` because thorough has not run. The gate does not trim the record and does not remove a key.
 
-A decision line carries `event` `gate.decision`, `seq`, `prev_event_hash`, `time_unix_s`, `bitcoin_tip_height`, `spec` `Satoshi Hike 2.2`, `gate_version`, `gate_commit`, `phase`, `decision`, `submission_sha256`, `public_key`, `object_sha256`, `reasons`, and `verify_summary`. A resumed provisional's thorough line also carries `fast_seq`. `reason` is present when the decision is `refuse`.
+`spec` on `/latest.json` is the stamp of the binary that rewrote the hint. On pin `spec-2.3.0` that string is `Satoshi Hike 2.3`. A new decision line carries the same string. The hint is not copied from the last line. Opening a chain whose lines are still `Satoshi Hike 2.2` rewrites the hint to `Satoshi Hike 2.3` and leaves `chain.jsonl` as it was.
+
+A decision line carries `event` `gate.decision`, `seq`, `prev_event_hash`, `time_unix_s`, `bitcoin_tip_height`, `spec`, `gate_version`, `gate_commit`, `phase`, `decision`, `submission_sha256`, `public_key`, `object_sha256`, `reasons`, and `verify_summary`. On pin `spec-2.3.0` a new line's `spec` is `Satoshi Hike 2.3`. A line written on a spec-2.2 pin carries `Satoshi Hike 2.2`. Both stamps load. A later append does not rewrite an earlier line, so the hash chain stays. A resumed provisional's thorough line also carries `fast_seq`. `reason` is present when the decision is `refuse`.
 
 The feed id is `pcoc-gate-feed-v2`. The hash domain on each line is the frozen string `pcoc-gate-log-v1` (a trailing newline in the preimage). That domain is not the feed id and is not renamed when the feed moves.
 
@@ -205,7 +207,7 @@ Sign-in posts JSON. The transport limit is large enough for the base64 of an obj
 
 ## Health
 
-`GET /v1/health` returns `version` (crate), `commit` (git SHA baked in at build), `sdk` (the Rust SDK version from Cargo.lock, for example `2.3.1 (path)`, or `2.3.1 (path, dirty)` when the SDK files had uncommitted changes at build time), `spec`, `spec_kind`, and `config` (the file: bind, index, log directory, limits, rate, leg-rate floor). `spec` and `spec_kind` follow the SDK pin: `Satoshi Hike 2.2` and `2.2` on a spec-2.2.x pin, `Satoshi Hike 2.3` and `2.3` on a spec-2.3.x pin (this checkout is `spec-2.3.0`). The JSON keys are unchanged. Decision lines still carry `spec` `Satoshi Hike 2.2` (the log chain name; health on a 2.3 pin says `Satoshi Hike 2.3`). `config.policy_id` and `config.born_height` are the policy in force. On 27 Oct 2026 the public gate reported `gl-admit-v12`, born height 972685, version 0.6.0, commit `18ec94a`. `deploy/gate.toml` in this tree names `gl-admit-v12.toml`. `born_height` is policy, not spec. No secrets.
+`GET /v1/health` returns `version` (crate), `commit` (git SHA baked in at build), `sdk` (the Rust SDK version from Cargo.lock, for example `2.3.1 (path)`, or `2.3.1 (path, dirty)` when the SDK files had uncommitted changes at build time), `spec`, `spec_kind`, and `config` (the file: bind, index, log directory, limits, rate, leg-rate floor). `spec` and `spec_kind` follow the SDK pin: `Satoshi Hike 2.2` and `2.2` on a spec-2.2.x pin, `Satoshi Hike 2.3` and `2.3` on a spec-2.3.x pin (this checkout is `spec-2.3.0`). The JSON keys are unchanged. A new decision line and `/latest.json` carry that same `spec` string (`Satoshi Hike 2.3` on this pin). A stored line stamped `Satoshi Hike 2.2` stays that string. `config.policy_id` and `config.born_height` are the policy in force. On 27 Oct 2026 the public gate reported `gl-admit-v12`, born height 972685, version 0.6.0, commit `18ec94a`. `deploy/gate.toml` in this tree names `gl-admit-v12.toml`. `born_height` is policy, not spec. No secrets.
 
 ## Verify job
 
