@@ -52,6 +52,10 @@ impl Sink {
             let _ = tx.send(line.into());
         }
     }
+
+    fn sender(&self) -> Option<std::sync::mpsc::Sender<String>> {
+        self.tx.clone()
+    }
 }
 
 impl Drop for Sink {
@@ -160,6 +164,9 @@ pub fn produce_live(
     let checkpoint_path = PathBuf::from(format!("{}.checkpoint", opts.out.display()));
     let log = event_sink(events_path);
     let points = checkpoint_sink(checkpoint_path);
+    if let Some(tx) = log.sender() {
+        bari.attach_event_log(tx);
+    }
     note_header(progress, &log, bari, &seed);
     points.send(checkpoint_body(0, seed.height, 0, false));
 
