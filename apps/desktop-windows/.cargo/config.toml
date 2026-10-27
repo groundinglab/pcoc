@@ -1,4 +1,4 @@
-# Cross build from Pepebook (Linux) to Windows. The mingw linker is the
+# Cross build on the named Linux build host to Windows. The mingw linker is the
 # distro `x86_64-w64-mingw32-gcc`. Native `cargo test` does not use this.
 [target.x86_64-pc-windows-gnu]
 linker = "x86_64-w64-mingw32-gcc"

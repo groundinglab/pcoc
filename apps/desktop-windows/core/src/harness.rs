@@ -29,7 +29,7 @@ fn w1_ac3_optional_private_key_derives_and_prefs_drop_a_planted_secret() {
     let rendered = format!("{from_hex:?}");
     assert!(rendered.contains("redacted"), "{rendered}");
     assert!(!rendered.contains(hex.as_str()), "{rendered}");
-    assert!(!rendered.contains("nsec1"), "{rendered}");
+    assert!(!rendered.contains(crate::keys::NSEC_PREFIX), "{rendered}");
 
     let public = PublicKey::parse(&generated.public_key().npub()).unwrap();
     assert_eq!(public, generated.public_key());

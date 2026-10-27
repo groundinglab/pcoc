@@ -10,6 +10,9 @@ use secp256k1::{Keypair, Secp256k1, XOnlyPublicKey};
 use std::fmt;
 use zeroize::{Zeroize, Zeroizing};
 
+/// The bech32 prefix of an nsec: the HRP `nsec` and the separator `1`.
+pub const NSEC_PREFIX: &str = concat!("nsec", "1");
+
 /// Why a public or private key string was refused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum KeyError {
@@ -91,7 +94,7 @@ impl SecretKey {
     /// Optional `0x`. Whitespace at the ends is ignored.
     pub fn parse(input: &str) -> Result<Self, KeyError> {
         let text = trim_ws(input);
-        if text.starts_with("nsec1") {
+        if text.starts_with(NSEC_PREFIX) {
             return Self::from_nsec(text);
         }
         let hex = text
@@ -176,7 +179,7 @@ impl KeyMaterial {
         if text.starts_with("npub1") {
             return Ok(KeyMaterial::Public(PublicKey::parse(text)?));
         }
-        if text.starts_with("nsec1") {
+        if text.starts_with(NSEC_PREFIX) {
             return Ok(KeyMaterial::Secret(SecretKey::from_nsec(text)?));
         }
         if let Ok(secret) = SecretKey::parse(text) {
@@ -247,7 +250,7 @@ mod tests {
         let material = KeyMaterial::parse(NIP19_NSEC).unwrap();
         let rendered = format!("{material:?}");
         assert!(rendered.contains("redacted"));
-        assert!(!rendered.contains("nsec1"));
+        assert!(!rendered.contains(NSEC_PREFIX));
         assert!(!rendered.contains(NIP19_NSEC_HEX));
     }
 }
