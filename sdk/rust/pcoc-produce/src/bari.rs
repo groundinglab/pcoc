@@ -12,6 +12,7 @@ use pcoc::hexutil::hex_encode;
 use pcoc::path::{decode_path, validate_for};
 use std::io::Read;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -41,6 +42,9 @@ pub trait BariHub: Send + Sync {
     fn enqueue_header(&self, height: u64);
     /// A checked path already in hand for `stage` (`W_stage`). `None` is a skip.
     fn path(&self, stage: usize) -> Option<Vec<u8>>;
+    /// Attach the `{out}.events` writer so Posted/Fetch/Checked/Alert lines land
+    /// in the same file as waypoint/block (SPEC §13.5). Default: no-op.
+    fn attach_event_log(&self, _tx: Sender<String>) {}
 }
 
 /// Ignores every post and ask. Fail-closed runs use this so nothing is sent.
@@ -135,6 +139,8 @@ pub struct HttpBari {
     progress: Progress,
     agent: ureq::Agent,
     state: Arc<State>,
+    /// Shared with post/ask workers. Set via [`BariHub::attach_event_log`].
+    event_log: Arc<Mutex<Option<Sender<String>>>>,
 }
 
 impl HttpBari {
@@ -163,6 +169,7 @@ impl HttpBari {
                 posts: AtomicUsize::new(0),
                 fetches: AtomicUsize::new(0),
             }),
+            event_log: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -211,6 +218,7 @@ impl BariHub for HttpBari {
             retry: self.retry_after,
             tip: Arc::clone(&self.tip),
             progress: Arc::clone(&self.progress),
+            event_log: Arc::clone(&self.event_log),
             agent: self.agent.clone(),
             state: Arc::clone(&self.state),
             request,
@@ -226,13 +234,14 @@ impl BariHub for HttpBari {
             self.state.inflight.fetch_add(1, Ordering::SeqCst);
             let base = self.base.clone();
             let progress = Arc::clone(&self.progress);
+            let event_log = Arc::clone(&self.event_log);
             let agent = self.agent.clone();
             let state = Arc::clone(&self.state);
             let spawned = std::thread::Builder::new()
                 .name("pcoc-bari-path".into())
                 .spawn(move || {
                     let _guard = Inflight(Arc::clone(&state));
-                    ask_worker(base, progress, agent, state, job);
+                    ask_worker(base, progress, event_log, agent, state, job);
                 });
             if spawned.is_err() {
                 self.state.inflight.fetch_sub(1, Ordering::SeqCst);
@@ -244,6 +253,10 @@ impl BariHub for HttpBari {
         self.state.plants.lock().expect("plants")[stage]
             .as_ref()
             .and_then(|plant| plant.path.clone())
+    }
+
+    fn attach_event_log(&self, tx: Sender<String>) {
+        *self.event_log.lock().expect("event_log") = Some(tx);
     }
 }
 
@@ -291,9 +304,27 @@ struct PostCtx {
     retry: Duration,
     tip: Arc<dyn Fn() -> Option<HeldTip> + Send + Sync>,
     progress: Progress,
+    event_log: Arc<Mutex<Option<Sender<String>>>>,
     agent: ureq::Agent,
     state: Arc<State>,
     request: PostRequest,
+}
+
+
+/// Write a §13.5 line when configured, then forward to the UI/CLI progress hook.
+fn report_progress(
+    progress: &Progress,
+    event_log: &Mutex<Option<Sender<String>>>,
+    event: LiveEvent,
+) {
+    if let Some(line) = event_log_line(&event) {
+        if let Ok(guard) = event_log.lock() {
+            if let Some(tx) = guard.as_ref() {
+                let _ = tx.send(line);
+            }
+        }
+    }
+    progress(event);
 }
 
 fn post_worker(ctx: PostCtx) {
@@ -303,18 +334,19 @@ fn post_worker(ctx: PostCtx) {
         retry,
         tip,
         progress,
+        event_log,
         agent,
         state,
         request,
     } = ctx;
     let Some(held) = tip() else {
         settle(&state, request.stage, false);
-        progress(LiveEvent::Alert {
+        report_progress(&progress, &event_log, LiveEvent::Alert {
             name: "fee_header_missing".into(),
             stage: request.stage,
             height: Some(request.beacon_height),
         });
-        progress(LiveEvent::Posted {
+        report_progress(&progress, &event_log, LiveEvent::Posted {
             stage: request.stage,
             waypoint: request.waypoint,
             attempt: 1,
@@ -326,12 +358,12 @@ fn post_worker(ctx: PostCtx) {
     };
     let Some((nonce, header_hex)) = solve(&origin, &held.header, &request.waypoint) else {
         settle(&state, request.stage, false);
-        progress(LiveEvent::Alert {
+        report_progress(&progress, &event_log, LiveEvent::Alert {
             name: "fee_header_missing".into(),
             stage: request.stage,
             height: Some(request.beacon_height),
         });
-        progress(LiveEvent::Posted {
+        report_progress(&progress, &event_log, LiveEvent::Posted {
             stage: request.stage,
             waypoint: request.waypoint,
             attempt: 1,
@@ -346,7 +378,7 @@ fn post_worker(ctx: PostCtx) {
     state.posts.fetch_add(1, Ordering::SeqCst);
     let first_ok = first.status == Some(204);
     let retryable = first.status.is_none_or(|code| matches!(code, 502..=504));
-    progress(LiveEvent::Posted {
+    report_progress(&progress, &event_log, LiveEvent::Posted {
         stage: request.stage,
         waypoint: request.waypoint,
         attempt: 1,
@@ -366,7 +398,7 @@ fn post_worker(ctx: PostCtx) {
     let second = post_once(&agent, &url, &request.waypoint, &nonce, &header_hex);
     state.posts.fetch_add(1, Ordering::SeqCst);
     let second_ok = second.status == Some(204);
-    progress(LiveEvent::Posted {
+    report_progress(&progress, &event_log, LiveEvent::Posted {
         stage: request.stage,
         waypoint: request.waypoint,
         attempt: 2,
@@ -424,6 +456,7 @@ fn solve(origin: &str, header: &[u8; 80], waypoint: &[u8; 32]) -> Option<(String
 fn ask_worker(
     base: String,
     progress: Progress,
+    event_log: Arc<Mutex<Option<Sender<String>>>>,
     agent: ureq::Agent,
     state: Arc<State>,
     job: AskJob,
@@ -443,7 +476,7 @@ fn ask_worker(
     let miss = miss_phrase(&body);
     let checked = status == Some(200) && accept_path(&body, &job.waypoint, job.posted_height);
     if status == Some(200) {
-        progress(LiveEvent::Checked {
+        report_progress(&progress, &event_log, LiveEvent::Checked {
             waypoint: job.waypoint,
             checked,
         });
@@ -459,7 +492,7 @@ fn ask_worker(
             plant.path = Some(body.clone());
         }
     }
-    progress(LiveEvent::Fetch {
+    report_progress(&progress, &event_log, LiveEvent::Fetch {
         stage: job.stage,
         waypoint: job.waypoint,
         status,

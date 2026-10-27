@@ -250,6 +250,50 @@ fn read_request(stream: &mut TcpStream) -> std::io::Result<Hit> {
     })
 }
 
+
+#[test]
+fn posted_lines_reach_attached_event_log() {
+    use std::sync::mpsc;
+    let (url, _hits) = serve(Arc::new(|hit, _| {
+        if hit.method == "POST" {
+            return (204, Vec::new());
+        }
+        (404, b"unknown".to_vec())
+    }));
+    let held = tip_at(972_685);
+    let tip = Arc::new(move || Some(held.clone()));
+    let bari = HttpBari::open(&url, Duration::from_millis(40), tip, noop()).unwrap();
+    let (tx, rx) = mpsc::channel::<String>();
+    bari.attach_event_log(tx);
+    bari.enqueue_post(PostRequest {
+        stage: 1,
+        waypoint: [0xab; 32],
+        beacon_height: 972_686,
+    });
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let mut lines = Vec::new();
+    while Instant::now() < deadline {
+        while let Ok(line) = rx.try_recv() {
+            lines.push(line);
+        }
+        if lines.iter().any(|l| l.contains("hike.produce.posted") && l.contains("\"succeeded\":true")) {
+            break;
+        }
+        if bari.post_settled(1) && !lines.is_empty() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(
+        bari.post_settled(1),
+        "post did not settle; lines={lines:?}"
+    );
+    assert!(
+        lines.iter().any(|l| l.contains("hike.produce.posted")),
+        "no posted line in {lines:?}"
+    );
+}
+
 #[test]
 fn bari_post_is_async_and_retries_once_after_backoff() {
     let (url, hits) = serve(Arc::new(|hit, prior| {
