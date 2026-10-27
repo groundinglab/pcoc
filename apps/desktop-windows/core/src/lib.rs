@@ -1,14 +1,16 @@
-//! Windows producer core. No window crate, no GTK, no direct-message send.
+//! Windows producer core. The egui window is the `app` crate.
 //!
-//! W1 is compile plus harness. The Linux desktop under `apps/desktop` is a
-//! separate tree and is not replaced by this one.
+//! The Linux desktop under `apps/desktop` is a separate tree and is not
+//! replaced by this one. This crate has no GTK dependency.
 #![forbid(unsafe_code)]
 
 pub mod claims;
+pub mod dm;
 pub mod endpoints;
 pub mod hex;
 pub mod history;
 pub mod keys;
+mod object_key;
 pub mod pin;
 pub mod produce;
 pub mod signin;

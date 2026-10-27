@@ -79,7 +79,11 @@ fn w1_ac6_and_ac8_doors_match_linux_and_claims_are_omitted() {
     assert!(!claims_source.contains("https://claims"));
     assert!(!claims_source.contains("/badge"));
     assert!(!claims_source.contains("/name"));
+    // W2 adds the direct-message module. It still has no claims request.
     let tree = include_str!("lib.rs");
-    assert!(!tree.contains("mod dm"));
-    assert!(!tree.contains("nip04"));
+    assert!(tree.contains("pub mod dm"));
+    let dm_source = include_str!("dm.rs");
+    assert!(!dm_source.contains("https://claims"));
+    assert!(!dm_source.contains("/badge"));
+    assert!(!dm_source.contains("/name"));
 }

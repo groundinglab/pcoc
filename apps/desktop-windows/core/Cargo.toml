@@ -1,6 +1,6 @@
 [package]
 name = "pcoc-windows-core"
-description = "PCOC Windows producer core: keys, sign-in door, history, produce. No window crate."
+description = "PCOC Windows producer core: keys, sign-in, history, produce, and NIP-04. The window is the app crate."
 version.workspace = true
 license.workspace = true
 edition.workspace = true
@@ -10,10 +10,15 @@ publish.workspace = true
 [dependencies]
 pcoc.workspace = true
 pcoc-produce.workspace = true
+aes.workspace = true
+base64.workspace = true
 bech32.workspace = true
+cbc.workspace = true
 getrandom.workspace = true
 secp256k1.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+tungstenite.workspace = true
+ureq.workspace = true
 zeroize.workspace = true

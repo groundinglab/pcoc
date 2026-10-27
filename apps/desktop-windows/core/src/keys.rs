@@ -6,7 +6,7 @@
 //! on drop. `Debug` never prints it. Nothing here writes a key file.
 
 use bech32::{FromBase32, ToBase32, Variant};
-use secp256k1::{Keypair, Secp256k1, XOnlyPublicKey};
+use secp256k1::{Keypair, Message, Secp256k1, XOnlyPublicKey};
 use std::fmt;
 use zeroize::{Zeroize, Zeroizing};
 
@@ -112,9 +112,14 @@ impl SecretKey {
         Self::from_scalar(bytes)
     }
 
-    fn from_scalar(bytes: Zeroizing<[u8; 32]>) -> Result<Self, KeyError> {
+    pub(crate) fn from_scalar(bytes: Zeroizing<[u8; 32]>) -> Result<Self, KeyError> {
         secp256k1::SecretKey::from_slice(bytes.as_ref()).map_err(|_| KeyError::NotAPrivateKey)?;
         Ok(Self { bytes })
+    }
+
+    /// The raw scalar, for NIP-04 key agreement. Never logged.
+    pub(crate) fn scalar(&self) -> &[u8; 32] {
+        &self.bytes
     }
 
     /// The bech32 nsec spelling. For the user to copy. Not stored.
@@ -140,6 +145,17 @@ impl SecretKey {
         let (xonly, _) = keypair.x_only_public_key();
         keypair.non_secure_erase();
         PublicKey(xonly.serialize())
+    }
+
+    /// BIP-340 over a 32-byte message. The message is signed as given.
+    /// It is not hashed again.
+    pub fn sign_digest(&self, message: &[u8; 32], aux: &[u8; 32]) -> [u8; 64] {
+        let secp = Secp256k1::signing_only();
+        let mut keypair =
+            Keypair::from_seckey_slice(&secp, self.bytes.as_ref()).expect("valid scalar");
+        let sig = secp.sign_schnorr_with_aux_rand(&Message::from_digest(*message), &keypair, aux);
+        keypair.non_secure_erase();
+        *sig.as_ref()
     }
 }
 

@@ -157,6 +157,22 @@ pub fn is_cbor_file(path: &Path) -> bool {
     path.extension().is_some_and(|ext| ext == "cbor")
 }
 
+/// Finished objects in `root`, sorted by file name. Missing directories are empty.
+pub fn list_objects(root: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let Ok(read) = std::fs::read_dir(root) else {
+        return found;
+    };
+    for entry in read.flatten() {
+        let path = entry.path();
+        if path.is_file() && is_cbor_file(&path) {
+            found.push(path);
+        }
+    }
+    found.sort();
+    found
+}
+
 /// Stage count the producer is built for. Exposed so prefs tests can name it
 /// without a second constant.
 pub fn stages() -> usize {
@@ -201,10 +217,7 @@ mod tests {
 
     #[test]
     fn finished_produce_always_writes_cbor_under_the_root() {
-        let dir = std::env::temp_dir().join(format!(
-            "pcoc-windows-history-{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("pcoc-windows-history-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let bytes = b"cleartext-object-bytes";
         let path = save_object(&dir, "ab".repeat(32).as_str(), bytes).unwrap();
@@ -212,6 +225,8 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap(), bytes);
         assert!(CLEARTEXT_NOTE.contains("cleartext"));
         assert!(!CLEARTEXT_NOTE.to_lowercase().contains("encrypt the"));
+        std::fs::write(dir.join("notes.txt"), b"not an object").unwrap();
+        assert_eq!(list_objects(&dir), vec![path]);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

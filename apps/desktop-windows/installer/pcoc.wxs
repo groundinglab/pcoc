@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="PCOC Windows" Language="1033" Version="0.1.0.0"
+           Manufacturer="groundinglab" UpgradeCode="6f0e2c1a-4b7d-4e8a-9c11-2a5d8e7b6c40">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLDIR" Name="PCOC">
+          <Component Id="AppExe" Guid="b7c1d2e3-4f56-4789-a012-3456789abcde">
+            <File Id="PcocWindowsExe" Source="$(var.SourceExe)" KeyPath="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <Feature Id="Main" Title="PCOC Windows" Level="1">
+      <ComponentRef Id="AppExe" />
+    </Feature>
+  </Product>
+</Wix>
