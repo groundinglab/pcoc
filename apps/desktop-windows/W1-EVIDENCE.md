@@ -25,7 +25,7 @@ Commands were run from `apps/desktop-windows/` on 27 Oct 2026.
 | W1-AC6 Sign-in door | met | Origin `https://groundinglab.io`. POST `https://admission.groundinglab.io/v1/sign-in`. Sign-in module source (above the tests) does not name the result URL. |
 | W1-AC7 History cleartext + always save | met | Default display `%USERPROFILE%\PCOC\hikes\`. `history_root` uses `USERPROFILE` when `HOME` is unset. Finished produce writes `{public-hex}.cbor`. README states cleartext now, encryption later. No encryption API. |
 | W1-AC8 Defaults, no auto badge | met | Endpoint constants match Linux `apps/desktop/core/src/endpoints.rs`. `claims::auto_claims` returns `ClaimsOmitted::AskA1`. Claims module has no claims URL and no `/badge` or `/name` request. |
-| W1-AC9 Local build | met | Built locally on the named Linux build host by Grok Build. No Cursor cloud agent. Evidence names this host. |
+| W1-AC9 Local build | met | Built locally on the named Linux build host (not a cloud coding agent). Evidence names this host. |
 
 ## Out of scope (not done)
 
