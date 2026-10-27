@@ -1,6 +1,6 @@
 # Admission gate service
 
-> This checkout is pinned to `spec-2.3.0` (Satoshi Hike 2.3). Live gate 0.6.0 uses that pin. The process refuses a live plane unless `allow_2_2_live = true`. That opt-in defaults to off and is not set anywhere in this repo.
+> This checkout is pinned to `spec-2.3.0` (Satoshi Hike 2.3). Live gate 0.6.1 uses that pin. The process refuses a live plane unless `allow_2_2_live = true`. That opt-in defaults to off and is not set anywhere in this repo.
 
 The admission gate is a standalone service built on the Rust SDK (`sdk/rust`, version in `sdk/VERSION`). It implements the specification's Admission Process (§15) and applies a configured **policy** to the verifier's measurements. It adds no Construction rule. Accept, refuse, and revoke are the operating relying party's decisions. They are not pass or fail.
 
@@ -25,7 +25,7 @@ Any kind other than `v2.2-pcoc-object` is Rule A5. The fast phase's reason is `u
 | Piece | Name |
 |---|---|
 | Service | admission gate (groundinglab runs one instance) |
-| Spec | Health `spec` / `spec_kind` follow `sdk/SPEC_PIN`: Satoshi Hike 2.2 / `2.2` on a spec-2.2.x pin, Satoshi Hike 2.3 / `2.3` on a spec-2.3.x pin. This checkout's pin is `spec-2.3.0`, so health reports Satoshi Hike 2.3 / `2.3`. Live gate 0.6.0 is that pin. Object kind stays `v2.2-pcoc-object`. Policy `spec` `2.2` loads on either pin; `2.3` loads on a spec-2.3.x pin. |
+| Spec | Health `spec` / `spec_kind` follow `sdk/SPEC_PIN`: Satoshi Hike 2.2 / `2.2` on a spec-2.2.x pin, Satoshi Hike 2.3 / `2.3` on a spec-2.3.x pin. This checkout's pin is `spec-2.3.0`, so health reports Satoshi Hike 2.3 / `2.3`. Live gate 0.6.1 is that pin. Object kind stays `v2.2-pcoc-object`. Policy `spec` `2.2` loads on either pin; `2.3` loads on a spec-2.3.x pin. |
 | Cargo package | `pcoc-admission` |
 | Directory | `services/admission-gate/` |
 | Binary | `admission-service` |

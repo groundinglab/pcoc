@@ -1,6 +1,6 @@
 # Deploy the admission gate
 
-> This checkout is pinned to `spec-2.3.0` (Satoshi Hike 2.3). Live gate 0.6.0 uses that pin. The process refuses a live plane unless `allow_2_2_live = true`. That opt-in defaults to off and is not set anywhere in this repo.
+> This checkout is pinned to `spec-2.3.0` (Satoshi Hike 2.3). Live gate 0.6.1 uses that pin. The process refuses a live plane unless `allow_2_2_live = true`. That opt-in defaults to off and is not set anywhere in this repo.
 
 One binary, one config file, a log directory the process creates. The object kind is `v2.2-pcoc-object`. Policy `spec` `2.2` loads on a spec-2.2.x pin and on a spec-2.3.x pin. Policy `spec` `2.3` loads on a spec-2.3.x pin and is refused on a spec-2.2.x pin. This page is the whole install. Do not point `log_dir` at a v1.35 decision log. A chain of `Satoshi Hike 2.2` lines still opens. A new line on this pin (`spec-2.3.0`) is stamped `Satoshi Hike 2.3`, and `/latest.json` carries that string.
 
@@ -60,7 +60,7 @@ A user unit drops `User=` and `Group=`, sets `WantedBy=default.target`, and uses
 curl -sS http://127.0.0.1:8787/v1/health
 ```
 
-`version` is the crate version, `commit` is the build SHA, and `config` repeats the file with no secrets. `spec` and `spec_kind` follow the SDK pin. This checkout's pin is `spec-2.3.0`, so they are `Satoshi Hike 2.3` and `2.3`. Live gate 0.6.0 is that pin. On a spec-2.2.x pin they are `Satoshi Hike 2.2` and `2.2`. The JSON keys do not change.
+`version` is the crate version, `commit` is the build SHA, and `config` repeats the file with no secrets. `spec` and `spec_kind` follow the SDK pin. This checkout's pin is `spec-2.3.0`, so they are `Satoshi Hike 2.3` and `2.3`. Live gate 0.6.1 is that pin. On a spec-2.2.x pin they are `Satoshi Hike 2.2` and `2.2`. The JSON keys do not change.
 
 ## Upgrade
 
