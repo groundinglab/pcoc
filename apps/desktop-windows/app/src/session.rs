@@ -309,7 +309,7 @@ mod tests {
         let (mut session, dir) = temp_session();
         session.generate();
         let nsec = session.nsec_input.clone();
-        assert!(nsec.starts_with("nsec1"));
+        assert!(nsec.starts_with(pcoc_windows_core::keys::NSEC_PREFIX));
         assert!(session.npub.starts_with("npub1"));
         assert!(!dir.join("pcoc.nsec").exists());
         assert!(!session.public_log().contains(&nsec));

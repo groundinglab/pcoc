@@ -1,6 +1,6 @@
 # W2 evidence — egui one-screen, NIP-04, MSI
 
-Host: pepebook (Linux x86_64). Branch: `desktop/windows-w2`. Tree: `apps/desktop-windows/`. Date: 28 Oct 2026.
+Host: named Linux build host (x86_64). Branch: `desktop/windows-w2`. Tree: `apps/desktop-windows/`. Date: 28 Oct 2026.
 
 Commands were run from `apps/desktop-windows/`.
 
