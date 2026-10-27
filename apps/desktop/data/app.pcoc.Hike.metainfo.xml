@@ -26,6 +26,11 @@
     <display_length compare="ge">720</display_length>
   </requires>
   <releases>
+    <release version="0.1.8" date="2026-10-27">
+      <description>
+        <p>Produce screen shows the cumulative leg rate so far at each waypoint (display only).</p>
+      </description>
+    </release>
     <release version="0.1.7" date="2026-10-24">
       <description>
         <p>Live hike panel shows truthful gossip peer counts and tip-feed status.</p>
