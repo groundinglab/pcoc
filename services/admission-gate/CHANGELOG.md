@@ -1,10 +1,10 @@
 # Changes
 
-## Unreleased
+## 0.6.1
 
-Crate version stays 0.6.0. No tag is moved. This note does not deploy. Admission policy levers are unchanged (`gl-admit-v12`, `born_height`, and the rest).
+Crate `pcoc-admission` is 0.6.1. Tag `gate-v0.6.0` was not moved; it stays at `18ec94a`. This build links Rust SDK 2.3.1 on pin `spec-2.3.0`. #148, the pin-name stamp on decision lines, is in this number. That change was already live, unlabeled, as 0.6.0. Admission policy levers are unchanged (`gl-admit-v12`, `born_height`, and the rest). This note does not deploy.
 
-- A new decision line and `/latest.json` carry `spec` from the pin this binary was built on (`Satoshi Hike 2.3` on `spec-2.3.0`). A chain that already contains `Satoshi Hike 2.2` lines still opens. Those lines are not rewritten. Object kind stays `v2.2-pcoc-object`.
+- A new decision line and `/latest.json` carry `spec` from the pin this binary was built on (`Satoshi Hike 2.3` on `spec-2.3.0`). A chain that already contains `Satoshi Hike 2.2` lines still opens. Those lines are not rewritten. Object kind stays `v2.2-pcoc-object` (#148).
 
 ## 0.6.0
 

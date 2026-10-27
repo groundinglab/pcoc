@@ -30,7 +30,7 @@ Any kind other than `v2.2-pcoc-object` is Rule A5. The fast phase's reason is `u
 | Directory | `services/admission-gate/` |
 | Binary | `admission-service` |
 | Config | one TOML file, `--config` or `GATE_CONFIG` |
-| Crate version | `0.6.0` |
+| Crate version | `0.6.1` |
 
 ```text
 POST /v1/sign-in           -> locked §15.1 body

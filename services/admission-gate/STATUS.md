@@ -2,7 +2,7 @@
 
 > This checkout is pinned to `spec-2.3.0` (Satoshi Hike 2.3). Live gate 0.6.0 uses that pin. The process refuses a live plane unless `allow_2_2_live = true`. That opt-in defaults to off and is not set anywhere in this repo.
 
-Admission gate service, crate `pcoc-admission` 0.6.0. This page is the service's status. Evidence and withdrawn claims are in [EVIDENCE.md](EVIDENCE.md). Policy is in [POLICY.md](../../policy/groundinglab-admission/POLICY.md). The wire is in [WIRE.md](WIRE.md).
+Admission gate service, crate `pcoc-admission` 0.6.1. This page is the service's status. Evidence and withdrawn claims are in [EVIDENCE.md](EVIDENCE.md). Policy is in [POLICY.md](../../policy/groundinglab-admission/POLICY.md). The wire is in [WIRE.md](WIRE.md).
 
 ## Implemented
 
