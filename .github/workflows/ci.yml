@@ -46,6 +46,7 @@ jobs:
       bari: ${{ steps.gate.outputs.bari }}
       index: ${{ steps.gate.outputs.index }}
       desktop: ${{ steps.gate.outputs.desktop }}
+      desktop_windows: ${{ steps.gate.outputs.desktop_windows }}
       docs: ${{ steps.gate.outputs.docs }}
       xverify: ${{ steps.gate.outputs.xverify }}
     steps:
@@ -250,6 +251,30 @@ jobs:
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
         run: cargo test --locked -p pcoc-hike-core
 
+  desktop-windows:
+    needs: changes
+    if: (github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && needs.changes.outputs.desktop_windows == 'true'
+    runs-on: [self-hosted, linux, pcoc-heavy]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: sparse worktree (full clone, cone mode, no partial filter)
+        run: git sparse-checkout set apps/desktop-windows sdk spec
+      - name: local cache dirs (runner-provided; in-tree fallback)
+        run: |
+          if [[ -n "${PCOC_TARGET_ROOT:-}" ]]; then
+            echo "CARGO_TARGET_DIR=$PCOC_TARGET_ROOT/desktop-windows" >> "$GITHUB_ENV"
+          fi
+      - name: cargo test core and window logic
+        working-directory: apps/desktop-windows
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+        run: |
+          cargo test --locked -p pcoc-windows-core
+          cargo test --locked -p pcoc-windows --no-default-features
+
   docs:
     needs: changes
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && needs.changes.outputs.docs == 'true'
@@ -348,7 +373,7 @@ jobs:
 
   ci-ok:
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    needs: [changes, spec, sdk, services, desktop, docs, gitleaks, g1, retired-term, xverify]
+    needs: [changes, spec, sdk, services, desktop, desktop-windows, docs, gitleaks, g1, retired-term, xverify]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

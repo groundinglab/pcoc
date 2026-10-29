@@ -10,6 +10,34 @@ pub fn encode(bytes: &[u8]) -> String {
     out
 }
 
+/// Even-length hex, either case. Odd lengths and bad digits are `None`.
+pub fn decode(text: &str) -> Option<Vec<u8>> {
+    if text.len() % 2 != 0 {
+        return None;
+    }
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(text.len() / 2);
+    let mut i = 0;
+    while i < bytes.len() {
+        let hi = nibble(bytes[i])?;
+        let lo = nibble(bytes[i + 1])?;
+        out.push((hi << 4) | lo);
+        i += 2;
+    }
+    Some(out)
+}
+
+/// 64 lowercase hex digits.
+pub fn decode32_lower(text: &str) -> Option<[u8; 32]> {
+    if !text
+        .bytes()
+        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    {
+        return None;
+    }
+    decode32(text)
+}
+
 /// 64 hex digits, either case.
 pub fn decode32(text: &str) -> Option<[u8; 32]> {
     if text.len() != 64 {

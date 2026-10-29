@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Path gate for ci.yml. Usage: changes.sh <base-sha|""> <head-sha>
-# Prints key=value lines (spec rust go java c gate claims bari index desktop docs xverify).
+# Prints key=value lines (spec rust go java c gate claims bari index desktop desktop_windows docs xverify).
 # Empty, all-zero or unknown base => run everything. spec/ or .github/ or any
 # unclassified path => run everything. spec/* already covers spec/conformance/.
 # A file reintroduced at repo-root conformance/ hits the unclassified arm.
@@ -8,10 +8,10 @@
 # gate and the desktop app. services/bari is a path dependency of the index.
 set -euo pipefail
 base="${1:-}"; head="${2:-HEAD}"
-keys=(spec rust go java c gate claims bari index desktop docs xverify)
+keys=(spec rust go java c gate claims bari index desktop desktop_windows docs xverify)
 declare -A on dir=([spec]=spec [rust]=sdk/rust [go]=sdk/go [java]=sdk/java [c]=sdk/c
   [gate]=services/admission-gate [claims]=services/admission-claims [bari]=services/bari [index]=services/index
-  [desktop]=apps/desktop [docs]=. [xverify]=sdk/conformance)
+  [desktop]=apps/desktop [desktop_windows]=apps/desktop-windows [docs]=. [xverify]=sdk/conformance)
 for k in "${keys[@]}"; do on[$k]=false; done
 all=false
 if [[ -z "$base" || "$base" =~ ^0+$ ]] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
@@ -32,6 +32,7 @@ else
       services/index/*) on[index]=true ;;
       services/*.md|apps/*.md|docs/*|*.md|LICENSE) on[docs]=true ;;
       apps/desktop/*) on[desktop]=true ;;
+      apps/desktop-windows/*) on[desktop_windows]=true ;;
       .gitignore|.gitleaks.toml|.gitleaksignore) ;;  # scans always run
       *) all=true; echo "unclassified: $f -> full run" >&2 ;;
     esac
