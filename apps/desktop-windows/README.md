@@ -2,6 +2,10 @@
 
 One-screen Windows producer. The egui window is `app/` (`pcoc-windows`). It links `pcoc-windows-core`. The Linux GTK app in `apps/desktop` is a separate tree.
 
+## Status
+
+In this repository as a convenience for Windows users. Automated tests on the Linux build host pass. **It has not been smoke-tested on a real Windows VM yet**, so treat it as likely good enough past CI, but verify yourself before relying on it. The MSI is **not** published on groundinglab.io until that smoke happens.
+
 ## Pin
 
 | Item | Value |
