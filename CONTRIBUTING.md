@@ -20,6 +20,10 @@ Policy words are `accept`, `refuse`, `revoke`, and `held`. They are not verifier
 
 Stable pages do not carry lab hostnames, LAN addresses, living issue numbers, or process meta.
 
+## Risk tier
+
+Each ticket and pull request carries a `Risk tier:` line set to `Quick`, `Normal`, or `High`. Quick work merges on green CI, Normal work merges after both reviewers pass, and High work also waits for the owner's go. A tier can be raised at any time and only the owner lowers it. A ticket is checked before work starts and is marked `Lauren checked: OK` or `Lauren checked: changes needed`. The full process is in [`devops/TICKET_TO_MERGE.md`](https://github.com/groundinglab/ops/blob/main/devops/TICKET_TO_MERGE.md) in `groundinglab/ops`.
+
 ## Code comments
 
 This is guidance, not a rule, and no check enforces it. Pull requests, including ones written by coding agents, should not add code comments. A comment is often used to justify a shortcut, and the shortcut then gets copied along with the comment. Put the reason in the pull request description, the commit message, or a test that pins the behaviour, and let names and structure carry the rest. A link to an upstream issue or RFC that explains a workaround is fine, and so is legal or licence text.
