@@ -14,7 +14,7 @@ export function objectFor(pathname) {
     return null;
   }
   if (pathname === "/.well-known/nostr.json") {
-    return { key: ".well-known/nostr.json", type: "application/json", cache: "public, max-age=30" };
+    return { key: ".well-known/nostr.json", type: "application/json", cache: "no-store", nip05: true };
   }
   if (pathname === "/claims/index.json") {
     return { key: "claims/index.json", type: "application/json", cache: "public, max-age=30" };
@@ -42,6 +42,20 @@ function headers(extra) {
   return { ...CORS, ...extra };
 }
 
+// NIP-05: answer only the name asked for, so one lookup does not list every name.
+export function nip05Answer(stored, name) {
+  const names = (stored && typeof stored.names === "object" && stored.names) || {};
+  const out = { names: {} };
+  if (typeof name !== "string" || !Object.prototype.hasOwnProperty.call(names, name)) return out;
+  const hex = names[name];
+  out.names[name] = hex;
+  const relays = stored.relays && typeof stored.relays === "object" ? stored.relays : null;
+  if (relays && Object.prototype.hasOwnProperty.call(relays, hex)) {
+    out.relays = { [hex]: relays[hex] };
+  }
+  return out;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -63,7 +77,17 @@ export default {
     if (!found) {
       return new Response(null, { status: 404, headers: headers({ "cache-control": "no-store" }) });
     }
-    const body = request.method === "HEAD" ? null : found.body;
+    let body = request.method === "HEAD" ? null : found.body;
+    if (object.nip05) {
+      let stored;
+      try {
+        stored = JSON.parse(await found.text());
+      } catch {
+        return new Response(null, { status: 502, headers: headers({ "cache-control": "no-store" }) });
+      }
+      const text = JSON.stringify(nip05Answer(stored, url.searchParams.get("name")));
+      body = request.method === "HEAD" ? null : text;
+    }
     return new Response(body, {
       status: 200,
       headers: headers({
