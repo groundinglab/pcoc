@@ -4,6 +4,8 @@
 
 One subject per branch.
 
+A pull request body names a `Risk tier:` (`Low`, `Medium`, `High`, or `SPEC / L5-shaped`); `High` and `SPEC / L5-shaped` also name `Red Hat verdict:` and `White Hat verdict:` comment links, as [INTENT_AND_RISK_GATE.md](https://github.com/groundinglab/ops/blob/main/devops/INTENT_AND_RISK_GATE.md) requires.
+
 ## Spec changes
 
 A semantic change to Construction must update the corresponding Conformance rules and vectors in the same pull request. When the vector pack or its manifest changes, update the pin accordingly. Run the full SDK suites and conformance checks. Editorial changes that do not alter normative behaviour need not change vectors. A path move of the vectors is a spec change for this reason.

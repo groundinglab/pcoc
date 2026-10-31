@@ -11,6 +11,9 @@ name: ci
 # (schedule) or on demand (workflow_dispatch), never on every merge.
 on:
   pull_request:
+    # `edited` is not in the default set. Verdict links arrive after review,
+    # so the PR-body check must run again when the description changes.
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
   schedule:
@@ -326,6 +329,27 @@ jobs:
           G1_PATTERNS: ${{ secrets.G1_PATTERNS }}
         run: bash .github/scripts/g1.sh
 
+  pr-body:
+    # The pull request body is untrusted. This job holds no secrets and cannot
+    # write. It runs only for a same-repo pull request. Push, schedule, and
+    # workflow_dispatch have no pull request body. Fork pull requests are
+    # skipped, the same rule as g1.
+    if: (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Risk tier and verdict links
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/pr_body_check.py
+
   xverify:
     # Cross-SDK verify. The harness lives at sdk/conformance/cross-verify.sh
     # (written by the conformance job). sdk/conformance absent => changes.sh
@@ -373,7 +397,7 @@ jobs:
 
   ci-ok:
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    needs: [changes, spec, sdk, services, desktop, desktop-windows, docs, gitleaks, g1, retired-term, xverify]
+    needs: [changes, spec, sdk, services, desktop, desktop-windows, docs, gitleaks, g1, pr-body, retired-term, xverify]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -401,6 +425,7 @@ jobs:
         env:
           NEEDS: ${{ toJSON(needs) }}
           FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           python3 - <<'PY'
           import json, os
@@ -416,10 +441,24 @@ jobs:
                   print("g1: skipped on fork PR (accepted)")
               elif r != "success":
                   bad.append(f"{name}={r}")
+          # pr-body is required on a same-repo pull request. Push, schedule,
+          # and workflow_dispatch have no PR body, so a skip there is accepted.
+          pr_body = needs["pr-body"]["result"]
+          event = os.environ.get("EVENT_NAME", "")
+          if event == "pull_request":
+              if pr_body == "skipped" and fork:
+                  print("pr-body: skipped on fork PR (accepted)")
+              elif pr_body != "success":
+                  bad.append(f"pr-body={pr_body}")
+          elif event in ("push", "schedule", "workflow_dispatch"):
+              if pr_body not in ("success", "skipped"):
+                  bad.append(f"pr-body={pr_body}")
+          else:
+              bad.append(f"pr-body={pr_body}")
           for name, job in needs.items():
               r = job["result"]
               print(f"{name}: {r}")
-              if name != "desktop" and r in ("failure", "cancelled"):
+              if name not in ("desktop", "pr-body") and r in ("failure", "cancelled"):
                   bad.append(f"{name}={r}")
           if bad:
               raise SystemExit("ci-ok FAIL: " + ", ".join(bad))
