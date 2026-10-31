@@ -20,6 +20,10 @@ Policy words are `accept`, `refuse`, `revoke`, and `held`. They are not verifier
 
 Stable pages do not carry lab hostnames, LAN addresses, living issue numbers, or process meta.
 
+## Code comments
+
+This is guidance, not a rule, and no check enforces it. Pull requests, including ones written by coding agents, should not add code comments. A comment is often used to justify a shortcut, and the shortcut then gets copied along with the comment. Put the reason in the pull request description, the commit message, or a test that pins the behaviour, and let names and structure carry the rest. A link to an upstream issue or RFC that explains a workaround is fine, and so is legal or licence text.
+
 ## Licence and sign-off
 
 Contributions are Apache-2.0 for code and CC BY 4.0 for prose, as [LICENSE-DOCS.md](LICENSE-DOCS.md) states. Conformance vector bytes are Apache-2.0. Sign-off is a `Signed-off-by` trailer (Developer Certificate of Origin).
