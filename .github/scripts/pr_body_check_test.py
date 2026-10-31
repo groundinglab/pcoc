@@ -163,12 +163,13 @@ class VerdictParserTests(unittest.TestCase):
         self.assertTrue(all(row.status == "ok" for row in rows))
 
     def test_case_insensitive_host_org_repo(self):
-        url = verdict_url(comment="4", org="GroundingLab", repo="PCOC", host="GitHub.com")
+        url = verdict_url(comment="4", org="Acme", repo="Widgets", host="GitHub.com")
         body = high_body(
             "Red Hat verdict: " + url,
             "White Hat verdict: " + url,
         )
-        rows = self.details(body, {PR})
+        rows = check.parse_verdicts(body, "acme", "widgets", "github.com", {PR})
+        self.assertEqual([row.label for row in rows], ["Red Hat", "White Hat"])
         self.assertTrue(all(row.detail == "ok" for row in rows))
 
     def test_wrong_label(self):
