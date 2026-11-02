@@ -178,6 +178,7 @@ jobs:
           DOTNET_NOLOGO: "1"
         run: |
           dotnet run --project check/Pcoc.Check -c Release
+          dotnet build cli/Pcoc.Cli -c Release
           sh check/negatives.sh
 
   services:
