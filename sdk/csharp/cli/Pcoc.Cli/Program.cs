@@ -233,7 +233,8 @@ public static class Program
         Console.Out.WriteLine("O1-S1 six_leg " + sixText + ", checkpoints " + (cps ? "match" : "mismatch") + ", waypoints " + (wps ? "match" : "mismatch"));
         Console.Out.WriteLine("negatives " + neg + " non-match");
         Console.Out.WriteLine("PROD leg 0 legs_le_hex " + prod);
-        if (!sixOk || !cps || !wps || neg != 13 || packProd == null || prod.Length == 0 || prod != packProd)
+        var objectPinned = digest == "800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246";
+        if (!objectPinned || !sixOk || !cps || !wps || neg != 13 || packProd == null || prod.Length == 0 || prod != packProd)
         {
             return 1;
         }

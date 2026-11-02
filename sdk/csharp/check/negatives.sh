@@ -1,7 +1,13 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
-root=$(CDPATH= cd -- ../.. && pwd)
+# PCOC_ROOT, when set, is the repo root that holds spec/conformance/pack.
+# Unset or empty, the root stays two directories above this SDK.
+if [ -n "${PCOC_ROOT:-}" ]; then
+  root=$PCOC_ROOT
+else
+  root=$(CDPATH= cd -- ../.. && pwd)
+fi
 pub=$(mktemp -d)
 cleanup() { rm -rf "$pub"; }
 trap cleanup EXIT

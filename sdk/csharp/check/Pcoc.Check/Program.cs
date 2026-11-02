@@ -35,7 +35,8 @@ public static class Program
             SlotMutation();
             ShaBackend();
             Excluded();
-            QuickstartTamper(root);
+            QuickstartCases(root);
+            NegativesCanary(root);
         }
         finally
         {
@@ -251,57 +252,560 @@ public static class Program
         Console.Out.WriteLine("excluded sign-in-origins.json");
     }
 
-    private static void QuickstartTamper(string root)
+    private static void QuickstartCases(string root)
     {
-        var tmp = Path.Combine(Path.GetTempPath(), "pcoc-qs-" + Environment.ProcessId);
-        Directory.CreateDirectory(Path.Combine(tmp, "sdk"));
-        Directory.CreateDirectory(Path.Combine(tmp, "spec", "conformance", "pack"));
+        var dll = BuildCli(root);
+        if (dll == null)
+        {
+            Fail("quickstart-honest", "build");
+            Fail("quickstart-object-tamper", "build");
+            Fail("quickstart-tamper", "build");
+            return;
+        }
+        QuickstartHonest(root, dll);
+        QuickstartObjectTamper(root, dll);
+        QuickstartTamper(root, dll);
+    }
+
+    private static string? BuildCli(string root)
+    {
+        var proj = Path.Combine(root, "sdk", "csharp", "cli", "Pcoc.Cli", "Pcoc.Cli.csproj");
+        var build = new ProcessStartInfo("dotnet", "build \"" + proj + "\" -c Release --source " + EmptySource() + " --nologo")
+        {
+            WorkingDirectory = root,
+            UseShellExecute = false,
+        };
+        var built = Process.Start(build)!;
+        built.WaitForExit();
+        var dll = Path.Combine(root, "sdk", "csharp", "cli", "Pcoc.Cli", "bin", "Release", "net10.0", "pcoc.dll");
+        if (built.ExitCode != 0 || !File.Exists(dll))
+        {
+            return null;
+        }
+        return dll;
+    }
+
+    private static void QuickstartHonest(string root, string dll)
+    {
+        var tmp = NewTree("honest");
         try
         {
-            File.Copy(Path.Combine(root, "sdk", "SPEC_PIN"), Path.Combine(tmp, "sdk", "SPEC_PIN"), true);
-            File.Copy(Path.Combine(root, "sdk", "csharp", "global.json"), Path.Combine(tmp, "global.json"), true);
-            var manifest = File.ReadAllBytes(Path.Combine(root, "spec", "conformance", "pack", "manifest.json"));
-            manifest[manifest.Length / 2] ^= 0x01;
-            File.WriteAllBytes(Path.Combine(tmp, "spec", "conformance", "pack", "manifest.json"), manifest);
-            var proj = Path.Combine(root, "sdk", "csharp", "cli", "Pcoc.Cli", "Pcoc.Cli.csproj");
-            var build = new ProcessStartInfo("dotnet", "build \"" + proj + "\" -c Release --source " + EmptySource() + " --nologo")
+            CopyPin(root, tmp);
+            CopyPack(root, tmp, false);
+            File.Copy(ObjectPath(root), Path.Combine(tmp, "sdk", "csharp", "objects", "O1-S1.cbor"), true);
+            var run = RunQuickstart(dll, tmp);
+            string[] want =
             {
-                WorkingDirectory = root,
-                UseShellExecute = false,
+                "pcoc 2.3.1 (csharp) spec-2.3.0 pack 91ded57e: pin match",
+                "kernel scalar, sha256 openssl",
+                "O1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246",
+                "O1-S1 six_leg match, checkpoints match, waypoints match",
+                "negatives 13 non-match",
+                "PROD leg 0 legs_le_hex 88a04ac5beacb8a7",
             };
-            var built = Process.Start(build)!;
-            built.WaitForExit();
-            var dll = Path.Combine(root, "sdk", "csharp", "cli", "Pcoc.Cli", "bin", "Release", "net10.0", "pcoc.dll");
-            if (built.ExitCode != 0 || !File.Exists(dll))
+            var got = Lines(run.Stdout);
+            if (run.Code != 0 || got.Length != want.Length)
             {
-                Fail("quickstart-tamper", "build");
+                Fail("quickstart-honest", "exit " + run.Code.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 return;
             }
-            var run = new ProcessStartInfo("dotnet", "exec \"" + dll + "\" quickstart")
+            for (var i = 0; i < want.Length; i++)
+            {
+                if (got[i] != want[i])
+                {
+                    Fail("quickstart-honest", "line " + (i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    return;
+                }
+            }
+            Pass("quickstart-honest");
+        }
+        finally
+        {
+            try { Directory.Delete(tmp, true); } catch (Exception) { }
+        }
+    }
+
+    private static void QuickstartObjectTamper(string root, string dll)
+    {
+        var tmp = NewTree("object");
+        try
+        {
+            CopyPin(root, tmp);
+            CopyPack(root, tmp, false);
+            var original = File.ReadAllBytes(ObjectPath(root));
+            var offset = DrawnLegPayload(original);
+            if (offset == null)
+            {
+                Fail("quickstart-object-tamper", "locate");
+                return;
+            }
+            var copy = (byte[])original.Clone();
+            // Payload byte of an 8-byte leg_results bstr (header 0x48 stays). Decode still reaches six-leg comparison.
+            copy[offset.Value] ^= 0x01;
+            if (!Cbor.TryDecodeOne(copy, out _) || !Decoded(copy))
+            {
+                Fail("quickstart-object-tamper", "decode");
+                return;
+            }
+            File.WriteAllBytes(Path.Combine(tmp, "sdk", "csharp", "objects", "O1-S1.cbor"), copy);
+            var run = RunQuickstart(dll, tmp);
+            var combined = run.Stdout + run.Stderr;
+            if (combined.Contains("pin mismatch", StringComparison.Ordinal))
+            {
+                Fail("quickstart-object-tamper", "pin mismatch");
+                return;
+            }
+            var six = SixLegValue(run.Stdout);
+            if (run.Code == 0 || six == null || six == "match" || !six.Contains("mismatch", StringComparison.Ordinal))
+            {
+                Fail("quickstart-object-tamper", "exit " + run.Code.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                return;
+            }
+            Pass("quickstart-object-tamper (six_leg " + six + ")");
+        }
+        finally
+        {
+            try { Directory.Delete(tmp, true); } catch (Exception) { }
+        }
+    }
+
+    private static void QuickstartTamper(string root, string dll)
+    {
+        var tmp = NewTree("pin");
+        try
+        {
+            CopyPin(root, tmp);
+            CopyPack(root, tmp, true);
+            var run = RunQuickstart(dll, tmp);
+            if (run.Code != 0
+                && run.Stderr.Contains("pin mismatch", StringComparison.Ordinal)
+                && !run.Stdout.Contains("six_leg", StringComparison.Ordinal))
+            {
+                Pass("quickstart-tamper (pin mismatch)");
+            }
+            else
+            {
+                Fail("quickstart-tamper", "exit " + run.Code.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+        }
+        finally
+        {
+            try { Directory.Delete(tmp, true); } catch (Exception) { }
+        }
+    }
+
+    private static void NegativesCanary(string root)
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), "pcoc-canary-" + Environment.ProcessId);
+        try
+        {
+            var sdk = Path.Combine(root, "sdk", "csharp");
+            CopyTree(Path.Combine(sdk, "src", "Pcoc"), Path.Combine(tmp, "src", "Pcoc"));
+            CopyTree(Path.Combine(sdk, "cli", "Pcoc.Cli"), Path.Combine(tmp, "cli", "Pcoc.Cli"));
+            Directory.CreateDirectory(Path.Combine(tmp, "check"));
+            File.Copy(Path.Combine(sdk, "check", "negatives.sh"), Path.Combine(tmp, "check", "negatives.sh"), true);
+            File.Copy(Path.Combine(sdk, "global.json"), Path.Combine(tmp, "global.json"), true);
+            File.Copy(Path.Combine(sdk, "NuGet.Config"), Path.Combine(tmp, "NuGet.Config"), true);
+            var constPath = Path.Combine(tmp, "src", "Pcoc", "Const.cs");
+            var text = File.ReadAllText(constPath);
+            var nl = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+            var marker = "public static class Const" + nl + "{";
+            if (!text.Contains(marker, StringComparison.Ordinal))
+            {
+                Fail("negatives-canary", "anchor");
+                return;
+            }
+            var planted = marker + nl + "    internal const string CanaryX = \"CachedLeg\";";
+            File.WriteAllText(constPath, text.Replace(marker, planted));
+            var script = Path.Combine(tmp, "check", "negatives.sh");
+            var psi = new ProcessStartInfo("sh", "\"" + script + "\"")
             {
                 WorkingDirectory = tmp,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
             };
-            var proc = Process.Start(run)!;
+            psi.Environment["PCOC_ROOT"] = root;
+            var proc = Process.Start(psi)!;
             var errTask = proc.StandardError.ReadToEndAsync();
             var outTask = proc.StandardOutput.ReadToEndAsync();
             proc.WaitForExit();
             var stderr = errTask.GetAwaiter().GetResult();
             outTask.GetAwaiter().GetResult();
-            if (proc.ExitCode != 0 && stderr.Contains("pin mismatch", StringComparison.Ordinal))
+            if (proc.ExitCode == 1 && stderr.Contains("cached_leg", StringComparison.Ordinal))
             {
-                Pass("quickstart-tamper");
+                Pass("negatives-canary (cached_leg)");
             }
             else
             {
-                Fail("quickstart-tamper", "exit " + proc.ExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                Fail("negatives-canary", "exit " + proc.ExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
             }
         }
         finally
         {
             try { Directory.Delete(tmp, true); } catch (Exception) { }
+        }
+    }
+
+    private readonly struct RunOut
+    {
+        public RunOut(int code, string stdout, string stderr)
+        {
+            Code = code;
+            Stdout = stdout;
+            Stderr = stderr;
+        }
+
+        public int Code { get; }
+        public string Stdout { get; }
+        public string Stderr { get; }
+    }
+
+    private static RunOut RunQuickstart(string dll, string cwd)
+    {
+        var run = new ProcessStartInfo("dotnet", "exec \"" + dll + "\" quickstart")
+        {
+            WorkingDirectory = cwd,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        var proc = Process.Start(run)!;
+        var errTask = proc.StandardError.ReadToEndAsync();
+        var outTask = proc.StandardOutput.ReadToEndAsync();
+        proc.WaitForExit();
+        return new RunOut(proc.ExitCode, outTask.GetAwaiter().GetResult(), errTask.GetAwaiter().GetResult());
+    }
+
+    private static string NewTree(string tag)
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), "pcoc-qs-" + tag + "-" + Environment.ProcessId);
+        Directory.CreateDirectory(Path.Combine(tmp, "sdk", "csharp", "objects"));
+        Directory.CreateDirectory(Path.Combine(tmp, "spec", "conformance", "pack"));
+        return tmp;
+    }
+
+    private static void CopyPin(string root, string tmp)
+    {
+        File.Copy(Path.Combine(root, "sdk", "SPEC_PIN"), Path.Combine(tmp, "sdk", "SPEC_PIN"), true);
+        File.Copy(Path.Combine(root, "sdk", "csharp", "global.json"), Path.Combine(tmp, "global.json"), true);
+    }
+
+    private static void CopyPack(string root, string tmp, bool flipManifest)
+    {
+        var manifest = File.ReadAllBytes(Path.Combine(root, "spec", "conformance", "pack", "manifest.json"));
+        if (flipManifest)
+        {
+            manifest[manifest.Length / 2] ^= 0x01;
+        }
+        File.WriteAllBytes(Path.Combine(tmp, "spec", "conformance", "pack", "manifest.json"), manifest);
+        if (!flipManifest)
+        {
+            File.Copy(Path.Combine(root, "spec", "conformance", "pack", "negatives.json"), Path.Combine(tmp, "spec", "conformance", "pack", "negatives.json"), true);
+            File.Copy(Path.Combine(root, "spec", "conformance", "pack", "prod.json"), Path.Combine(tmp, "spec", "conformance", "pack", "prod.json"), true);
+        }
+    }
+
+    private static string ObjectPath(string root)
+    {
+        return Path.Combine(root, "sdk", "csharp", "objects", "O1-S1.cbor");
+    }
+
+    private static string[] Lines(string text)
+    {
+        var norm = text.Replace("\r\n", "\n").Replace('\r', '\n');
+        if (norm.EndsWith('\n'))
+        {
+            norm = norm.Substring(0, norm.Length - 1);
+        }
+        if (norm.Length == 0)
+        {
+            return System.Array.Empty<string>();
+        }
+        return norm.Split('\n');
+    }
+
+    private static string? SixLegValue(string stdout)
+    {
+        const string head = "O1-S1 six_leg ";
+        foreach (var line in Lines(stdout))
+        {
+            if (!line.StartsWith(head, StringComparison.Ordinal))
+            {
+                continue;
+            }
+            var rest = line.Substring(head.Length);
+            var cut = rest.IndexOf(", checkpoints", StringComparison.Ordinal);
+            if (cut < 0)
+            {
+                return null;
+            }
+            return rest.Substring(0, cut);
+        }
+        return null;
+    }
+
+    private static bool Decoded(byte[] buf)
+    {
+        var hike = HikeObject.Read(buf);
+        return !hike.Malformed && !hike.DecodeFailure;
+    }
+
+    private readonly struct LegPayload
+    {
+        public LegPayload(int payload, byte[] bytes)
+        {
+            Payload = payload;
+            Bytes = bytes;
+        }
+
+        public int Payload { get; }
+        public byte[] Bytes { get; }
+    }
+
+    private static int? DrawnLegPayload(byte[] buf)
+    {
+        try
+        {
+            var hike = HikeObject.Read(buf);
+            if (hike.Malformed || hike.DecodeFailure || hike.StagesLength < 18)
+            {
+                return null;
+            }
+            var hits = new List<LegPayload>();
+            var i = 0;
+            Walk(buf, ref i, hits);
+            if (i != buf.Length)
+            {
+                return null;
+            }
+            var flat = new List<byte[]>();
+            var total = 0;
+            for (var g = 0; g < 18; g++)
+            {
+                var st = hike.Stages[g];
+                if (!st.CheckpointsUsable || !st.LegResultsUsable || st.Checkpoints.Length != st.LegResults.Length)
+                {
+                    return null;
+                }
+                total += st.Checkpoints.Length;
+                for (var j = 0; j < st.LegResults.Length; j++)
+                {
+                    flat.Add(st.LegResults[j]);
+                }
+            }
+            if (hits.Count != flat.Count || total < 6)
+            {
+                return null;
+            }
+            for (var k = 0; k < flat.Count; k++)
+            {
+                if (hits[k].Bytes.Length != 8 || !SameBytes(hits[k].Bytes, flat[k]) || buf[hits[k].Payload - 1] != 0x48)
+                {
+                    return null;
+                }
+            }
+            var drawn = Draw.Six(Draw.LabelSource("pcoc-pack-2.2/draw"), total);
+            if (drawn == null || drawn.Length != 6 || drawn[0] < 0 || drawn[0] >= hits.Count)
+            {
+                return null;
+            }
+            return hits[drawn[0]].Payload;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    private static bool SameBytes(byte[] a, byte[] b)
+    {
+        if (a.Length != b.Length)
+        {
+            return false;
+        }
+        for (var i = 0; i < a.Length; i++)
+        {
+            if (a[i] != b[i])
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static void Walk(byte[] buf, ref int i, List<LegPayload> hits)
+    {
+        if (i >= buf.Length)
+        {
+            throw new FormatException();
+        }
+        var b = buf[i++];
+        var major = b >> 5;
+        var add = b & 0x1F;
+        if (add == 31)
+        {
+            throw new FormatException();
+        }
+        var n = CborLen(buf, ref i, add);
+        switch (major)
+        {
+            case 0:
+                return;
+            case 2:
+            case 3:
+                Skip(buf, ref i, n);
+                return;
+            case 4:
+                for (ulong k = 0; k < n; k++)
+                {
+                    Walk(buf, ref i, hits);
+                }
+                return;
+            case 5:
+                for (ulong k = 0; k < n; k++)
+                {
+                    var key = ReadKey(buf, ref i);
+                    if (key == "leg_results")
+                    {
+                        ReadLegArray(buf, ref i, hits);
+                    }
+                    else
+                    {
+                        Walk(buf, ref i, hits);
+                    }
+                }
+                return;
+            default:
+                throw new FormatException();
+        }
+    }
+
+    private static void ReadLegArray(byte[] buf, ref int i, List<LegPayload> hits)
+    {
+        if (i >= buf.Length)
+        {
+            throw new FormatException();
+        }
+        var b = buf[i++];
+        var major = b >> 5;
+        var add = b & 0x1F;
+        if (major != 4 || add == 31)
+        {
+            throw new FormatException();
+        }
+        var n = CborLen(buf, ref i, add);
+        for (ulong k = 0; k < n; k++)
+        {
+            if (i >= buf.Length)
+            {
+                throw new FormatException();
+            }
+            var item = buf[i++];
+            var itemMajor = item >> 5;
+            var itemAdd = item & 0x1F;
+            if (itemMajor != 2 || itemAdd == 31)
+            {
+                throw new FormatException();
+            }
+            var len = CborLen(buf, ref i, itemAdd);
+            if (len > (ulong)(buf.Length - i))
+            {
+                throw new FormatException();
+            }
+            var size = (int)len;
+            var data = new byte[size];
+            System.Buffer.BlockCopy(buf, i, data, 0, size);
+            hits.Add(new LegPayload(i, data));
+            i += size;
+        }
+    }
+
+    private static string ReadKey(byte[] buf, ref int i)
+    {
+        if (i >= buf.Length)
+        {
+            throw new FormatException();
+        }
+        var b = buf[i++];
+        var major = b >> 5;
+        var add = b & 0x1F;
+        if (major != 3 || add == 31)
+        {
+            throw new FormatException();
+        }
+        var n = CborLen(buf, ref i, add);
+        if (n > (ulong)(buf.Length - i))
+        {
+            throw new FormatException();
+        }
+        var len = (int)n;
+        var text = System.Text.Encoding.UTF8.GetString(buf, i, len);
+        i += len;
+        return text;
+    }
+
+    private static void Skip(byte[] buf, ref int i, ulong n)
+    {
+        if (n > (ulong)(buf.Length - i))
+        {
+            throw new FormatException();
+        }
+        i += (int)n;
+    }
+
+    private static ulong CborLen(byte[] buf, ref int i, int add)
+    {
+        if (add < 24)
+        {
+            return (ulong)add;
+        }
+        var width = add switch
+        {
+            24 => 1,
+            25 => 2,
+            26 => 4,
+            27 => 8,
+            _ => throw new FormatException(),
+        };
+        if (i + width > buf.Length)
+        {
+            throw new FormatException();
+        }
+        ulong n = 0;
+        for (var k = 0; k < width; k++)
+        {
+            n = (n << 8) | buf[i++];
+        }
+        return n;
+    }
+
+    private static void CopyTree(string from, string to)
+    {
+        foreach (var file in Directory.GetFiles(from, "*", SearchOption.AllDirectories))
+        {
+            var rel = Path.GetRelativePath(from, file);
+            var parts = rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var skip = false;
+            foreach (var part in parts)
+            {
+                if (part == "bin" || part == "obj")
+                {
+                    skip = true;
+                    break;
+                }
+            }
+            if (skip)
+            {
+                continue;
+            }
+            var dest = Path.Combine(to, rel);
+            var dir = Path.GetDirectoryName(dest);
+            if (dir != null)
+            {
+                Directory.CreateDirectory(dir);
+            }
+            File.Copy(file, dest, true);
         }
     }
 
