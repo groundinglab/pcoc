@@ -94,7 +94,9 @@ command -v go >/dev/null 2>&1 || missing "go ($HOME/.local/bin/go)"
 command -v gcc >/dev/null 2>&1 || missing "gcc"
 command -v make >/dev/null 2>&1 || missing "make"
 command -v python3 >/dev/null 2>&1 || missing "python3"
-if [ -x "$HOME/.dotnet/dotnet" ]; then
+if [ -n "${DOTNET_ROOT:-}" ] && [ -x "${DOTNET_ROOT}/dotnet" ]; then
+  export PATH="$DOTNET_ROOT:$PATH"
+elif [ -x "$HOME/.dotnet/dotnet" ]; then
   export PATH="$HOME/.dotnet:$PATH"
   export DOTNET_ROOT="$HOME/.dotnet"
 fi
@@ -167,7 +169,9 @@ echo "cross-verify: building the five verify CLIs" >&2
 
 cat >"$BUILD/pcoc-csharp" <<EOF
 #!/bin/sh
-export DOTNET_ROOT="\${DOTNET_ROOT:-\$HOME/.dotnet}"
+if [ -z "\${DOTNET_ROOT:-}" ] || [ ! -x "\${DOTNET_ROOT}/dotnet" ]; then
+  export DOTNET_ROOT="\$HOME/.dotnet"
+fi
 export PATH="\$DOTNET_ROOT:\$PATH"
 export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 export DOTNET_CLI_TELEMETRY_OPTOUT=1

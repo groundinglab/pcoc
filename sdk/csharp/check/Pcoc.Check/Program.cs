@@ -35,6 +35,7 @@ public static class Program
             SlotMutation();
             ShaBackend();
             Excluded();
+            QuickstartTamper(root);
         }
         finally
         {
@@ -83,7 +84,7 @@ public static class Program
             Fail("manifest-mutation", "mutated manifest still matched");
             return;
         }
-        Console.Out.WriteLine("fail manifest-mutation (expected)");
+        Pass("manifest-mutation (mutated copy rejected)");
     }
 
     private static void Generate(string root, string work)
@@ -202,6 +203,28 @@ public static class Program
         }
         if (changed) Pass("slot-mutation");
         else Fail("slot-mutation", "step unchanged");
+        if (!Profile.TrySmall(32, 16384, 32768, 1, out var wide, out _))
+        {
+            Fail("slot-mutation-16384", "profile");
+            return;
+        }
+        var wideTerrain = Terrain.Fill(pk, beacon, wide);
+        var wideStep = Step.Apply(wideTerrain, wideTerrain.Lanes[0]);
+        int[] wordIndex = { 0, wide.WordsPerSlot / 2, wide.WordsPerSlot - 1 };
+        var wordsChanged = true;
+        foreach (var w in wordIndex)
+        {
+            var at = wideStep.SlotIndex * wide.SlotBytes + w * 8;
+            wideTerrain.Data[at] ^= 0x01;
+            var next = Step.Apply(wideTerrain, wideTerrain.Lanes[0]);
+            if (next.Folded == wideStep.Folded)
+            {
+                wordsChanged = false;
+            }
+            wideTerrain.Data[at] ^= 0x01;
+        }
+        if (wordsChanged) Pass("slot-mutation-16384");
+        else Fail("slot-mutation-16384", "fold unchanged");
     }
 
     /// §11.1
@@ -226,6 +249,60 @@ public static class Program
     {
         Console.Out.WriteLine("excluded sign-in.json");
         Console.Out.WriteLine("excluded sign-in-origins.json");
+    }
+
+    private static void QuickstartTamper(string root)
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), "pcoc-qs-" + Environment.ProcessId);
+        Directory.CreateDirectory(Path.Combine(tmp, "sdk"));
+        Directory.CreateDirectory(Path.Combine(tmp, "spec", "conformance", "pack"));
+        try
+        {
+            File.Copy(Path.Combine(root, "sdk", "SPEC_PIN"), Path.Combine(tmp, "sdk", "SPEC_PIN"), true);
+            File.Copy(Path.Combine(root, "sdk", "csharp", "global.json"), Path.Combine(tmp, "global.json"), true);
+            var manifest = File.ReadAllBytes(Path.Combine(root, "spec", "conformance", "pack", "manifest.json"));
+            manifest[manifest.Length / 2] ^= 0x01;
+            File.WriteAllBytes(Path.Combine(tmp, "spec", "conformance", "pack", "manifest.json"), manifest);
+            var proj = Path.Combine(root, "sdk", "csharp", "cli", "Pcoc.Cli", "Pcoc.Cli.csproj");
+            var build = new ProcessStartInfo("dotnet", "build \"" + proj + "\" -c Release --source " + EmptySource() + " --nologo")
+            {
+                WorkingDirectory = root,
+                UseShellExecute = false,
+            };
+            var built = Process.Start(build)!;
+            built.WaitForExit();
+            var dll = Path.Combine(root, "sdk", "csharp", "cli", "Pcoc.Cli", "bin", "Release", "net10.0", "pcoc.dll");
+            if (built.ExitCode != 0 || !File.Exists(dll))
+            {
+                Fail("quickstart-tamper", "build");
+                return;
+            }
+            var run = new ProcessStartInfo("dotnet", "exec \"" + dll + "\" quickstart")
+            {
+                WorkingDirectory = tmp,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            var proc = Process.Start(run)!;
+            var errTask = proc.StandardError.ReadToEndAsync();
+            var outTask = proc.StandardOutput.ReadToEndAsync();
+            proc.WaitForExit();
+            var stderr = errTask.GetAwaiter().GetResult();
+            outTask.GetAwaiter().GetResult();
+            if (proc.ExitCode != 0 && stderr.Contains("pin mismatch", StringComparison.Ordinal))
+            {
+                Pass("quickstart-tamper");
+            }
+            else
+            {
+                Fail("quickstart-tamper", "exit " + proc.ExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+        }
+        finally
+        {
+            try { Directory.Delete(tmp, true); } catch (Exception) { }
+        }
     }
 
     private static string? FirstDll(string dir)

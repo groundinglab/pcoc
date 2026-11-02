@@ -37,16 +37,12 @@ public static class Program
         var terrainS2 = Terrain.Fill(PkA, Beacon, s2);
         var terrainB = Terrain.Fill(PkB, Beacon, s1);
         Nl4(Add, terrainS1);
-        Add("terrain.txt", "terrain.PROD.terrain_sha256", ProdTerrain());
         Add("terrain.txt", "terrain.S1.terrain_sha256", Bytes.Hex(terrainS1.Digest()));
         Add("terrain.txt", "terrain.S2.terrain_sha256", Bytes.Hex(terrainS2.Digest()));
+        AddProd(Add);
         Fold(Add, terrainS1);
         Kat(Add, "kat-small", "S1", terrainS1, 1);
         Kat(Add, "test-3leg", "S2", terrainS2, 3);
-        Add("prod.txt", "prod.PROD.stage.0.leg.0.checkpoint", "");
-        Add("prod.txt", "prod.PROD.stage.0.leg.0.legs_le_hex", "");
-        Add("prod.txt", "prod.PROD.terrain_sha256", "");
-        Prod(rows["prod.txt"]);
         Wes(Add);
         RateRows(Add);
         AnchorRows(Add);
@@ -153,21 +149,19 @@ public static class Program
         return Sha256.Hash(Encoding.ASCII.GetBytes("pcoc-pack-2.2/beacon/" + g.ToString(System.Globalization.CultureInfo.InvariantCulture)));
     }
 
-    private static string ProdTerrain()
+    private static void AddProd(Action<string, string, string> add)
     {
-        var text = File.ReadAllText(FindPack("terrain.json"));
-        return Between(text, "\"terrain.PROD.terrain_sha256\": \"", "\"");
-    }
-
-    private static void Prod(List<(string, string)> list)
-    {
-        var text = File.ReadAllText(FindPack("prod.json"));
-        for (var i = 0; i < list.Count; i++)
-        {
-            var key = list[i].Item1;
-            var value = Between(text, "\"" + key + "\": \"", "\"");
-            list[i] = (key, value);
-        }
+        var terrain = Terrain.Fill(PkA, Beacon, Profile.Production);
+        var digest = Bytes.Hex(Sha256.Hash((ReadOnlySpan<byte>)terrain.Data));
+        var seed = Seed.Digest(PkA, Beacon);
+        var leg = Leg.Result(terrain, seed);
+        var checkpoint = Checkpoint.Bind(terrain, seed, seed, leg);
+        var legsHex = Bytes.Hex(Bytes.Le64(leg));
+        var checkpointHex = Bytes.Hex(checkpoint);
+        add("terrain.txt", "terrain.PROD.terrain_sha256", digest);
+        add("prod.txt", "prod.PROD.stage.0.leg.0.checkpoint", checkpointHex);
+        add("prod.txt", "prod.PROD.stage.0.leg.0.legs_le_hex", legsHex);
+        add("prod.txt", "prod.PROD.terrain_sha256", digest);
     }
 
     private static void Wes(Action<string, string, string> add)

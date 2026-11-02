@@ -198,17 +198,45 @@ public static class Program
         }
         var indexDir = WriteCasesIndex();
         var outcome = Verify.Measure(bytes, small, new DirIndex(indexDir), Draw.LabelSource("pcoc-pack-2.2/draw"), true);
-        var six = Field(outcome.Record, "six_leg");
+        var six = SixResults(outcome.Record);
+        var sixOk = six != null && six.Length == 6;
+        var sixText = six == null ? "" : string.Join(" ", six);
+        if (sixOk)
+        {
+            for (var k = 0; k < six!.Length; k++)
+            {
+                if (six[k] != "match")
+                {
+                    sixOk = false;
+                }
+            }
+            if (sixOk)
+            {
+                sixText = "match";
+            }
+        }
         var cps = AllMatch(outcome.Record, "checkpoints");
         var wps = AllMatch(outcome.Record, "waypoints");
-        var neg = CountNegatives(Path.Combine(root, "spec", "conformance", "pack", "negatives.json"));
-        var prod = ProdLegHex(Path.Combine(root, "spec", "conformance", "pack", "prod.json"));
+        var negPath = Path.Combine(root, "spec", "conformance", "pack", "negatives.json");
+        var prodPath = Path.Combine(root, "spec", "conformance", "pack", "prod.json");
+        if (!File.Exists(negPath) || !File.Exists(prodPath))
+        {
+            Console.Error.WriteLine("quickstart: negatives.json or prod.json not found");
+            return 1;
+        }
+        var neg = CountNegatives(negPath);
+        var packProd = PackProdLegHex(prodPath);
+        var prod = ComputeProdLegHex();
         Console.Out.WriteLine("pcoc " + BuildInfo.SdkVersion + " (csharp) spec-2.3.0 pack " + pin.Prefix + ": pin match");
         Console.Out.WriteLine("kernel " + BuildInfo.KernelName() + ", sha256 " + BuildInfo.Sha256Backend());
         Console.Out.WriteLine("O1-S1 object sha256 " + digest);
-        Console.Out.WriteLine("O1-S1 six_leg " + (six.Contains("\"match\"", StringComparison.Ordinal) ? "match" : "mismatch") + ", checkpoints " + (cps ? "match" : "mismatch") + ", waypoints " + (wps ? "match" : "mismatch"));
+        Console.Out.WriteLine("O1-S1 six_leg " + sixText + ", checkpoints " + (cps ? "match" : "mismatch") + ", waypoints " + (wps ? "match" : "mismatch"));
         Console.Out.WriteLine("negatives " + neg + " non-match");
         Console.Out.WriteLine("PROD leg 0 legs_le_hex " + prod);
+        if (!sixOk || !cps || !wps || neg != 13 || packProd == null || prod.Length == 0 || prod != packProd)
+        {
+            return 1;
+        }
         return 0;
     }
 
@@ -216,7 +244,7 @@ public static class Program
     private static int Candidates(string[] args)
     {
         var dir = args.Length >= 2 ? args[1] : "candidates";
-        var name = "pcoc" + "-gen";
+        var name = "pcoc-gen";
         var nativePath = Path.Combine(AppContext.BaseDirectory, name);
         var dll = Path.Combine(AppContext.BaseDirectory, name + ".dll");
         if (File.Exists(dll))
@@ -283,12 +311,135 @@ public static class Program
         return Path.GetDirectoryName(sdk)!;
     }
 
-    private static string Field(string json, string key)
+    private static string[]? SixResults(string json)
     {
-        var needle = "\"" + key + "\":";
-        var at = json.IndexOf(needle, StringComparison.Ordinal);
-        if (at < 0) return "";
-        return json.Substring(at + needle.Length);
+        const string key = "\"six_leg\":";
+        var at = json.IndexOf(key, StringComparison.Ordinal);
+        if (at < 0)
+        {
+            return null;
+        }
+        var i = at + key.Length;
+        while (i < json.Length && char.IsWhiteSpace(json[i]))
+        {
+            i++;
+        }
+        if (i >= json.Length)
+        {
+            return null;
+        }
+        if (json[i] == '"')
+        {
+            var token = ReadJsonString(json, i);
+            return token == null ? null : new[] { token };
+        }
+        if (json[i] != '{')
+        {
+            return null;
+        }
+        var end = ObjectEnd(json, i);
+        if (end < 0)
+        {
+            return null;
+        }
+        const string results = "\"results\":";
+        var r = json.IndexOf(results, i, end - i, StringComparison.Ordinal);
+        if (r < 0)
+        {
+            return null;
+        }
+        var k = r + results.Length;
+        while (k < end && char.IsWhiteSpace(json[k]))
+        {
+            k++;
+        }
+        if (k >= end || json[k] != '[')
+        {
+            return null;
+        }
+        k++;
+        var found = new System.Collections.Generic.List<string>();
+        while (k < end)
+        {
+            while (k < end && (json[k] == ',' || char.IsWhiteSpace(json[k])))
+            {
+                k++;
+            }
+            if (k < end && json[k] == ']')
+            {
+                break;
+            }
+            if (k >= end || json[k] != '"')
+            {
+                return null;
+            }
+            var token = ReadJsonString(json, k);
+            if (token == null)
+            {
+                return null;
+            }
+            found.Add(token);
+            k += token.Length + 2;
+        }
+        return found.ToArray();
+    }
+
+    private static string? ReadJsonString(string json, int openQuote)
+    {
+        if (openQuote >= json.Length || json[openQuote] != '"')
+        {
+            return null;
+        }
+        var k = openQuote + 1;
+        var start = k;
+        while (k < json.Length && json[k] != '"')
+        {
+            if (json[k] == '\\')
+            {
+                return null;
+            }
+            k++;
+        }
+        if (k >= json.Length)
+        {
+            return null;
+        }
+        return json.Substring(start, k - start);
+    }
+
+    private static int ObjectEnd(string json, int open)
+    {
+        var depth = 0;
+        for (var j = open; j < json.Length; j++)
+        {
+            var c = json[j];
+            if (c == '"')
+            {
+                j++;
+                while (j < json.Length && json[j] != '"')
+                {
+                    if (json[j] == '\\' && j + 1 < json.Length)
+                    {
+                        j++;
+                    }
+                    j++;
+                }
+                continue;
+            }
+            if (c == '{')
+            {
+                depth++;
+            }
+            else if (c == '}')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    return j;
+                }
+            }
+        }
+        return -1;
     }
 
     private static bool AllMatch(string json, string key)
@@ -302,24 +453,48 @@ public static class Program
 
     private static int CountNegatives(string path)
     {
-        if (!File.Exists(path))
-        {
-            return 13;
-        }
         var text = File.ReadAllText(path);
         var n = 0;
         var i = 0;
         while ((i = text.IndexOf("\"negatives.", i, StringComparison.Ordinal)) >= 0)
         {
-            var end = text.IndexOf('"', i + 1);
-            var key = text.Substring(i + 1, end - i - 1);
-            if (key.EndsWith(".matches_honest", StringComparison.Ordinal) && !key.Contains(".honest.", StringComparison.Ordinal))
+            var keyStart = i + 1;
+            var keyEnd = text.IndexOf('"', keyStart);
+            if (keyEnd < 0)
+            {
+                break;
+            }
+            var key = text.Substring(keyStart, keyEnd - keyStart);
+            i = keyEnd + 1;
+            var parts = key.Split('.');
+            if (parts.Length != 3 || parts[0] != "negatives" || parts[2] != "matches_honest" || parts[1] == "honest")
+            {
+                continue;
+            }
+            while (i < text.Length && char.IsWhiteSpace(text[i]))
+            {
+                i++;
+            }
+            if (i >= text.Length || text[i] != ':')
+            {
+                continue;
+            }
+            i++;
+            while (i < text.Length && char.IsWhiteSpace(text[i]))
+            {
+                i++;
+            }
+            if (i >= text.Length || text[i] != '"')
+            {
+                continue;
+            }
+            var value = ReadJsonString(text, i);
+            if (value == "false")
             {
                 n++;
             }
-            i = end + 1;
         }
-        return n == 0 ? 13 : n;
+        return n;
     }
 
     private static string WriteCasesIndex()
@@ -350,22 +525,32 @@ public static class Program
         return dir;
     }
 
-    private static string ProdLegHex(string path)
+    private static string? PackProdLegHex(string path)
     {
-        if (!File.Exists(path))
-        {
-            return "";
-        }
         var text = File.ReadAllText(path);
         const string key = "\"prod.PROD.stage.0.leg.0.legs_le_hex\": \"";
         var at = text.IndexOf(key, StringComparison.Ordinal);
         if (at < 0)
         {
-            return "";
+            return null;
         }
         at += key.Length;
         var end = text.IndexOf('"', at);
+        if (end < 0 || end == at)
+        {
+            return null;
+        }
         return text.Substring(at, end - at);
+    }
+
+    private static string ComputeProdLegHex()
+    {
+        var pk = Convert.FromHexString("f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9");
+        var beacon = Convert.FromHexString("bac91a1b52b8ce663404ef4c275df559246083d86ce925ab52d46c67735fb4db");
+        var terrain = Terrain.Fill(pk, beacon, Profile.Production);
+        var seed = Seed.Digest(pk, beacon);
+        var leg = Leg.Result(terrain, seed);
+        return Bytes.Hex(Bytes.Le64(leg));
     }
 }
 
