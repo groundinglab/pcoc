@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Path gate for ci.yml. Usage: changes.sh <base-sha|""> <head-sha>
-# Prints key=value lines (spec rust go java c gate claims bari index desktop desktop_windows docs xverify).
+# Prints key=value lines (spec rust go java c csharp gate claims bari index desktop desktop_windows docs xverify).
 # Empty, all-zero or unknown base => run everything. spec/ or .github/ or any
 # unclassified path => run everything. spec/* already covers spec/conformance/.
 # A file reintroduced at repo-root conformance/ hits the unclassified arm.
@@ -8,8 +8,8 @@
 # gate and the desktop app. services/bari is a path dependency of the index.
 set -euo pipefail
 base="${1:-}"; head="${2:-HEAD}"
-keys=(spec rust go java c gate claims bari index desktop desktop_windows docs xverify)
-declare -A on dir=([spec]=spec [rust]=sdk/rust [go]=sdk/go [java]=sdk/java [c]=sdk/c
+keys=(spec rust go java c csharp gate claims bari index desktop desktop_windows docs xverify)
+declare -A on dir=([spec]=spec [rust]=sdk/rust [go]=sdk/go [java]=sdk/java [c]=sdk/c [csharp]=sdk/csharp
   [gate]=services/admission-gate [claims]=services/admission-claims [bari]=services/bari [index]=services/index
   [desktop]=apps/desktop [desktop_windows]=apps/desktop-windows [docs]=. [xverify]=sdk/conformance)
 for k in "${keys[@]}"; do on[$k]=false; done
@@ -25,7 +25,8 @@ else
       sdk/go/*) on[go]=true; on[xverify]=true ;;
       sdk/java/*) on[java]=true; on[xverify]=true ;;
       sdk/c/*) on[c]=true; on[xverify]=true ;;
-      sdk/*) on[rust]=true; on[go]=true; on[java]=true; on[c]=true; on[gate]=true; on[desktop]=true; on[xverify]=true ;;
+      sdk/csharp/*) on[csharp]=true; on[xverify]=true ;;
+      sdk/*) on[rust]=true; on[go]=true; on[java]=true; on[c]=true; on[csharp]=true; on[gate]=true; on[desktop]=true; on[xverify]=true ;;
       services/admission-gate/*) on[gate]=true ;;
       services/admission-claims/*) on[claims]=true ;;
       services/bari/*) on[bari]=true; on[index]=true ;;

@@ -2,6 +2,8 @@
 target/
 **/target/
 sdk/java/build/
+sdk/csharp/**/bin/
+sdk/csharp/**/obj/
 __pycache__/
 *.pyc
 .venv/

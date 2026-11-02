@@ -1,6 +1,6 @@
 # Cross-verify gate
 
-`cross-verify.sh` is the cross-SDK conformance gate for the four Satoshi Hike 2.3 SDKs (Rust, C, Go, and Java). It builds each verify CLI from this tree and checks that they agree on the CASES v2 objects, the candidate files, the pinned digests, the thirteen permanent negatives, and the malformed inputs.
+`cross-verify.sh` is the cross-SDK conformance gate for the four Satoshi Hike 2.3 reference SDKs (Rust, C, Go, and Java) and the C# verifier-only SDK. It builds each verify CLI from this tree and checks that they agree on the CASES v2 objects, the candidate files, the pinned digests, the thirteen permanent negatives, and the malformed inputs. C# is verifier-only: the producer follows in slice 2, and it is not yet a reference SDK under Rule I1.
 
 The normative specification pack is [spec/](../../spec/) — see [GUIDE.md](../../spec/GUIDE.md) and [05-Conformance_Process.md](../../spec/05-Conformance_Process.md). Permanent negatives are stated in Conformance Process and pinned in [spec/conformance/pack/](../../spec/conformance/pack/). `cross-verify.sh` reads the same rows from [erratum-negatives.tsv](erratum-negatives.tsv). That table is harness input, not a second specification.
 
@@ -48,6 +48,7 @@ bash sdk/conformance/cross-verify.sh --tier full --ref-dir ../ref-round2 --out .
 - Rust 1.99, as pinned by `sdk/rust/rust-toolchain.toml`, with Cargo. The build is offline against the crates already named by `sdk/rust`.
 - Go, new enough for `sdk/go/go.mod` (`go 1.24.0`). The build uses the checksums in `sdk/go/go.sum`.
 - JDK 21. `sdk/java/build.gradle.kts` sets the compiler release to 21, so JDK 17 cannot compile that SDK.
+- .NET SDK 10.0.403, as pinned by `sdk/csharp/global.json`. The C# build uses no third-party NuGet packages.
 - gcc and make, for the C SDK (`-march=x86-64`).
 - Python 3, standard library only, for this harness.
 - A self-hosted runner. The script does not start a workflow.
