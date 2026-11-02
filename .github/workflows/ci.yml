@@ -142,6 +142,7 @@ jobs:
         with:
           global-json-file: sdk/csharp/global.json
         env:
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet
           DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
           DOTNET_CLI_TELEMETRY_OPTOUT: "1"
           DOTNET_NOLOGO: "1"
@@ -374,6 +375,7 @@ jobs:
         with:
           global-json-file: sdk/csharp/global.json
         env:
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet
           DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
           DOTNET_CLI_TELEMETRY_OPTOUT: "1"
           DOTNET_NOLOGO: "1"
