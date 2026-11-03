@@ -4,7 +4,7 @@ A Cloudflare Worker that reads published claims from an R2 bucket. It is GET-onl
 
 | Path | R2 key |
 |---|---|
-| `/.well-known/nostr.json` | `.well-known/nostr.json` |
+| `/.well-known/nostr.json?name=<name>` | `.well-known/nostr.json`, answering only `<name>` (no-store) |
 | `/claims/index.json` | `claims/index.json` |
 | `/claims/<64 hex>.json` | `claims/<hex>.json` (immutable) |
 | `/badge/<npub>` | `badge/<npub>.html` (immutable) |
