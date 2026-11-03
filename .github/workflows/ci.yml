@@ -41,6 +41,7 @@ jobs:
       go: ${{ steps.gate.outputs.go }}
       java: ${{ steps.gate.outputs.java }}
       c: ${{ steps.gate.outputs.c }}
+      csharp: ${{ steps.gate.outputs.csharp }}
       gate: ${{ steps.gate.outputs.gate }}
       claims: ${{ steps.gate.outputs.claims }}
       bari: ${{ steps.gate.outputs.bari }}
@@ -88,13 +89,13 @@ jobs:
   sdk:
     # One leg per language, in parallel on the heavy pool. A language whose
     # directory or 2.2 entry point is absent is skipped. Same path gate as before:
-    # any spec or SDK change runs all four legs.
+    # any spec or SDK change runs all five legs.
     needs: changes
-    if: (github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && (needs.changes.outputs.spec == 'true' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.go == 'true' || needs.changes.outputs.java == 'true' || needs.changes.outputs.c == 'true')
+    if: (github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && (needs.changes.outputs.spec == 'true' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.go == 'true' || needs.changes.outputs.java == 'true' || needs.changes.outputs.c == 'true' || needs.changes.outputs.csharp == 'true')
     strategy:
       fail-fast: false
       matrix:
-        lang: [rust, go, java, c]
+        lang: [rust, go, java, c, csharp]
     name: sdk (${{ matrix.lang }})
     runs-on: [self-hosted, linux, pcoc-heavy]
     timeout-minutes: 25
@@ -114,6 +115,7 @@ jobs:
             go) d=sdk/go/cmd/pcoc ;;
             java) d=sdk/java/check ;;
             c) d=sdk/c ;;
+            csharp) d=sdk/csharp ;;
           esac
           echo "run=$([[ -d $d ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
       - name: local cache dirs (runner-provided; in-tree fallback)
@@ -135,6 +137,15 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        if: steps.on.outputs.run == 'true' && matrix.lang == 'csharp'
+        with:
+          global-json-file: sdk/csharp/global.json
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet
+          DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+          DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+          DOTNET_NOLOGO: "1"
       - name: Rust workspace
         if: steps.on.outputs.run == 'true' && matrix.lang == 'rust'
         working-directory: sdk/rust
@@ -158,6 +169,17 @@ jobs:
         if: steps.on.outputs.run == 'true' && matrix.lang == 'c'
         working-directory: sdk/c
         run: make -j4 check
+      - name: C#
+        if: steps.on.outputs.run == 'true' && matrix.lang == 'csharp'
+        working-directory: sdk/csharp
+        env:
+          DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+          DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+          DOTNET_NOLOGO: "1"
+        run: |
+          dotnet run --project check/Pcoc.Check -c Release
+          dotnet build cli/Pcoc.Cli -c Release
+          sh check/negatives.sh
 
   services:
     needs: changes
@@ -350,6 +372,14 @@ jobs:
         with:
           distribution: temurin
           java-version: "21" # sdk/java compiles with release 21
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          global-json-file: sdk/csharp/global.json
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet
+          DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+          DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+          DOTNET_NOLOGO: "1"
       - name: cross-verify pr tier
         run: bash sdk/conformance/cross-verify.sh --tier pr
 

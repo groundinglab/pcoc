@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cross-verify harness for the four Satoshi Hike 2.2 SDKs.
+"""Cross-verify harness for the five Satoshi Hike 2.2 SDKs.
 
 Serves the CASES synthetic index on 127.0.0.1, runs each verifier, and writes
 the markdown report. No timings. No network except that loopback listener.
@@ -19,7 +19,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import urlopen
 
-LANGS = ("rust", "c", "go", "java")
+LANGS = ("rust", "c", "go", "java", "csharp")
 CANDIDATE_FILES = (
     "anchor.txt",
     "br1.txt",
@@ -649,8 +649,8 @@ def erratum2_field_table(label: str, parsed: dict[str, dict]) -> str:
     lines = [
         f"### `{label}`",
         "",
-        "| field | rust | c | go | java |",
-        "|---|---|---|---|---|",
+        "| field | rust | c | go | java | csharp |",
+        "|---|---|---|---|---|---|",
     ]
     for name, getter in rows:
         cells = [getter(parsed[lang]) for lang in LANGS]
@@ -733,6 +733,16 @@ class Gate:
                 *draw,
                 obj,
             ]
+        if lang == "csharp":
+            return [
+                self.args.csharp_cli,
+                "verify",
+                *profile,
+                "--index",
+                self.index_dir,
+                *draw,
+                obj,
+            ]
         binary = {"rust": self.args.rust_drv, "c": self.args.c_drv, "go": self.args.go_drv}[lang]
         return [binary, "--index-url", self.index_url, *profile, *draw, obj]
 
@@ -742,6 +752,7 @@ class Gate:
             "c": self.args.c_cli,
             "go": self.args.go_cli,
             "java": self.args.java_cli,
+            "csharp": self.args.csharp_cli,
         }[lang]
         return [binary, "verify", *extra, obj]
 
@@ -835,7 +846,7 @@ class Gate:
                     self.check_br1(sdk_rows["rust"] or {})
             if not self.args.ref_dir:
                 if present and all(b == present[0] for b in sdk_bytes.values()):
-                    lines.append(f"- `{name}`: the four SDKs are byte-identical")
+                    lines.append(f"- `{name}`: the {len(LANGS)} SDKs are byte-identical")
                 continue
             ref_bytes: dict[str, bytes] = {}
             ref_rows: dict[str, dict[str, str] | None] = {}
@@ -880,7 +891,7 @@ class Gate:
                 if len(ranked) > 1:
                     extra = "; a reference copy differs and is not the agreed bytes"
                 lines.append(
-                    f"- `{name}`: four SDKs match the agreed reference bytes ({', '.join(holders)}){extra}"
+                    f"- `{name}`: {len(LANGS)} SDKs match the agreed reference bytes ({', '.join(holders)}){extra}"
                 )
         if not self.args.ref_dir:
             pass
@@ -888,7 +899,7 @@ class Gate:
         self.part["candidates"] = "\n".join(lines)
 
     def check_br1(self, rows: dict[str, str]) -> None:
-        """SPEC §13.6 rows the four SDKs must agree on. Status is 204 or 402."""
+        """SPEC §13.6 rows the five SDKs must agree on. Status is 204 or 402."""
         expect = {
             "current": "204",
             "before": "204",
@@ -1089,6 +1100,8 @@ class Gate:
                 parts.append(f"rust vs {lang}: {diff_at(base, masked[lang])}")
         if masked["go"] != masked["java"]:
             parts.append(f"go vs java: {diff_at(masked['go'], masked['java'])}")
+        if masked["java"] != masked["csharp"]:
+            parts.append(f"java vs csharp: {diff_at(masked['java'], masked['csharp'])}")
         if parts:
             self.fail(f"{cell}: outside PENDING_ERRATUM_2; " + "; ".join(parts))
             return ""
@@ -1181,6 +1194,11 @@ class Gate:
                             "go vs java: "
                             + diff_at(outputs[label]["go"][1], outputs[label]["java"][1])
                         )
+                    if outputs[label]["java"][1] != outputs[label]["csharp"][1]:
+                        parts.append(
+                            "java vs csharp: "
+                            + diff_at(outputs[label]["java"][1], outputs[label]["csharp"][1])
+                        )
                     self.fail(cell + ": " + "; ".join(parts))
                     continue
                 code = next(iter(codes))
@@ -1237,8 +1255,8 @@ class Gate:
             "A cell is match when that verifier's section 14 record is byte-identical to every other verifier's record for the same object bytes, `shape` is `match`, every header `index_comparison` is `match` and `T` is an integer, every six-leg result is `match`, and the record contains no `not read`. On these objects the paths are empty, so `a`, `b`, `N`, `S`, and `delta_h` are `not defined`."
         )
         lines.append("")
-        lines.append("| source | sha256 | rust | c | go | java |")
-        lines.append("|---|---|---|---|---|---|")
+        lines.append("| source | sha256 | rust | c | go | java | csharp |")
+        lines.append("|---|---|---|---|---|---|---|")
         names = ["O1-S1.cbor", "O2-S2.cbor"]
         if self.args.tier == "full":
             names.append("O3-PROD.cbor")
@@ -1296,14 +1314,12 @@ class Gate:
                             continue
                         self.cells_match += 1
                         status[lang] = "match"
+                lang_cells = " | ".join(status.get(lang, "FAIL") for lang in LANGS)
                 lines.append(
-                    "| {src} | `{sha}` | {rust} | {c} | {go} | {java} |".format(
+                    "| {src} | `{sha}` | {cells} |".format(
                         src=", ".join(label for label, _p in sources),
                         sha=digest,
-                        rust=status.get("rust", "FAIL"),
-                        c=status.get("c", "FAIL"),
-                        go=status.get("go", "FAIL"),
-                        java=status.get("java", "FAIL"),
+                        cells=lang_cells,
                     )
                 )
         lines.append("")
@@ -1468,6 +1484,7 @@ def main() -> int:
     parser.add_argument("--c-cli", required=True)
     parser.add_argument("--go-cli", required=True)
     parser.add_argument("--java-cli", required=True)
+    parser.add_argument("--csharp-cli", required=True)
     parser.add_argument("--rust-drv", required=True)
     parser.add_argument("--c-drv", required=True)
     parser.add_argument("--go-drv", required=True)

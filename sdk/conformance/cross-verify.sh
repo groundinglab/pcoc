@@ -94,6 +94,16 @@ command -v go >/dev/null 2>&1 || missing "go ($HOME/.local/bin/go)"
 command -v gcc >/dev/null 2>&1 || missing "gcc"
 command -v make >/dev/null 2>&1 || missing "make"
 command -v python3 >/dev/null 2>&1 || missing "python3"
+if [ -n "${DOTNET_ROOT:-}" ] && [ -x "${DOTNET_ROOT}/dotnet" ]; then
+  export PATH="$DOTNET_ROOT:$PATH"
+elif [ -x "$HOME/.dotnet/dotnet" ]; then
+  export PATH="$HOME/.dotnet:$PATH"
+  export DOTNET_ROOT="$HOME/.dotnet"
+fi
+export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+export DOTNET_CLI_TELEMETRY_OPTOUT=1
+export DOTNET_NOLOGO=1
+command -v dotnet >/dev/null 2>&1 || missing "dotnet"
 
 # sdk/java/build.gradle.kts sets the compiler release to 21.
 if [ -z "${JAVA_HOME:-}" ] || ! "$JAVA_HOME/bin/javac" -version 2>&1 | grep -q 'javac 21'; then
@@ -128,7 +138,7 @@ export GOAMD64=v1
 export GOMAXPROCS=4
 export CGO_ENABLED=0
 
-echo "cross-verify: building the four verify CLIs" >&2
+echo "cross-verify: building the five verify CLIs" >&2
 
 (
   cd "$ROOT/sdk/c"
@@ -151,6 +161,24 @@ echo "cross-verify: building the four verify CLIs" >&2
   cd "$ROOT/sdk/java"
   nice -n 10 ./gradlew --offline jar -Dorg.gradle.workers.max=4
 ) >>"$LOG" 2>&1 || fail_build "Java SDK"
+
+(
+  cd "$ROOT/sdk/csharp"
+  nice -n 10 dotnet build cli/Pcoc.Cli/Pcoc.Cli.csproj -c Release --nologo
+) >>"$LOG" 2>&1 || fail_build "C# SDK"
+
+cat >"$BUILD/pcoc-csharp" <<EOF
+#!/bin/sh
+if [ -z "\${DOTNET_ROOT:-}" ] || [ ! -x "\${DOTNET_ROOT}/dotnet" ]; then
+  export DOTNET_ROOT="\$HOME/.dotnet"
+fi
+export PATH="\$DOTNET_ROOT:\$PATH"
+export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+export DOTNET_CLI_TELEMETRY_OPTOUT=1
+export DOTNET_NOLOGO=1
+exec dotnet exec "$ROOT/sdk/csharp/cli/Pcoc.Cli/bin/Release/net10.0/pcoc.dll" "\$@"
+EOF
+chmod +x "$BUILD/pcoc-csharp"
 
 echo "cross-verify: building index drivers for Rust, C, and Go" >&2
 
@@ -187,6 +215,7 @@ ARGS=(
   --c-cli "$ROOT/sdk/c/build/pcoc"
   --go-cli "$BUILD/pcoc-go"
   --java-cli "$ROOT/sdk/java/pcoc"
+  --csharp-cli "$BUILD/pcoc-csharp"
   --rust-drv "$BUILD/rust-target/release/xverify-rust"
   --c-drv "$BUILD/xverify-c"
   --go-drv "$BUILD/xverify-go"
