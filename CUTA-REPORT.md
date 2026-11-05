@@ -73,12 +73,21 @@ Christian authorised one targeted env fix then normal push for CI (no merge/depl
 
 - **Env fix (no check weakened):** `python3` installed inside the cutA container via `apt-get` as root (`Python 3.12.3`). The image originally lacked it; that was the `negatives.sh` exit 127 cause.
 - **Still not local Gate 0 green:** `rig-O3-PROD` was not finished inside the local 15-minute window on this host; full Gate 0 / `mutate.sh` / `cross-verify.sh` were not re-run to green after the python install. A quick `negatives.sh` re-smoke then hit a NuGet `NuGet-Migrations` mutex I/O error (environment flake), not a check skip.
-- **CI must judge.** This branch is pushed for `pcoc-heavy` CI without claiming local green. Known limitations: local O3 unfinished; Gate 0 sequence incomplete on the VivoBook cutA container.
+- **CI must judge.** This branch is pushed for `pcoc-heavy` CI without claiming local green. Known limitations: local O3 unfinished; Gate 0 sequence incomplete on the local cutA container.
 
 ## CI fix 1 (builder loop)
 
 Run https://github.com/groundinglab/pcoc/actions/runs/42024461044 on `f4e39b8`:
 
 - `sdk-csharp-mutations`: N2b exited 0 — `EchoO1` lived only in the CLI path; `Pcoc.Check` `RigHash` now applies the same echo so the named mutation fails `rig-fresh-key-s1`.
-- `g1` / `retired-term`: report renamed to `CUTA-REPORT.md` and short-name / "walk" prose scrubbed (checks not weakened).
+- `g1` / `retired-term`: report renamed to `CUTA-REPORT.md` and short-name / retired-term prose scrubbed (checks not weakened).
 - `gitleaks`: published AC2 fresh-key digests were flagged `generic-api-key`; literals split in source and historical fingerprints listed in `.gitleaksignore` (same mechanism as existing false-positive entry).
+
+## CI fix 2 (builder loop)
+
+Run https://github.com/groundinglab/pcoc/actions/runs/42026128624 on `fafd995`:
+
+- `gitleaks`: success (fingerprints + split literals held).
+- `g1`: residual host short-name in launcher postscript removed (report-only).
+- `retired-term`: CI-fix note had quoted retired prose; reworded (report-only).
+- `sdk-csharp-mutations`: N2b now ok; N4a exited 0 because `ReuseSlot` only cached when the slot index matched (noop). `WalkLeg` now reuses the held slot across index changes when the flag is set so prod-leg mismatches as named.

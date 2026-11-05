@@ -14,13 +14,13 @@ public static class WalkLeg
     {
         var s = Bytes.U64Le(previousCheckpoint, 0);
         var steps = terrain.Profile.StepsPerLeg;
-        int lastSlot = -1;
         byte[]? held = null;
         for (var t = 0; t < steps; t++)
         {
             var slotIndex = (int)(s % (ulong)terrain.Profile.NSlots);
             byte[] slot;
-            if (ReuseSlot && lastSlot == slotIndex && held != null)
+            // ReuseSlot (mutation N4a): once a slot is held, keep using it even when the index changes.
+            if (ReuseSlot && held != null)
             {
                 slot = held;
             }
@@ -28,7 +28,6 @@ public static class WalkLeg
             {
                 slot = new byte[terrain.Profile.SlotBytes];
                 System.Buffer.BlockCopy(terrain.Data, slotIndex * terrain.Profile.SlotBytes, slot, 0, terrain.Profile.SlotBytes);
-                lastSlot = slotIndex;
                 held = slot;
             }
             var words = HalfWords ? terrain.Profile.WordsPerSlot / 2 : terrain.Profile.WordsPerSlot;
