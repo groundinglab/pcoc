@@ -14,42 +14,48 @@ public static class WalkLeg
     {
         var s = Bytes.U64Le(previousCheckpoint, 0);
         var steps = terrain.Profile.StepsPerLeg;
-        byte[]? held = null;
+        // cached_leg (N4a): reuse earlier S_folded when a slot index is revisited in the same leg.
+        // Armed only on the production profile so S1/S2 rig object hashes stay stable when
+        // --through prod-leg still runs those earlier cases (N4a absent-list forbids "sha256 mismatch").
+        var cacheFolded = ReuseSlot && terrain.Profile.StepsPerLeg == Const.StepsPerLeg
+            ? new System.Collections.Generic.Dictionary<int, ulong>()
+            : null;
         for (var t = 0; t < steps; t++)
         {
             var slotIndex = (int)(s % (ulong)terrain.Profile.NSlots);
-            byte[] slot;
-            // ReuseSlot (mutation N4a): once a slot is held, keep using it even when the index changes.
-            if (ReuseSlot && held != null)
-            {
-                slot = held;
-            }
-            else
-            {
-                slot = new byte[terrain.Profile.SlotBytes];
-                System.Buffer.BlockCopy(terrain.Data, slotIndex * terrain.Profile.SlotBytes, slot, 0, terrain.Profile.SlotBytes);
-                held = slot;
-            }
-            var words = HalfWords ? terrain.Profile.WordsPerSlot / 2 : terrain.Profile.WordsPerSlot;
             ulong folded;
-            if (SlotSummaryFold)
+            if (cacheFolded != null && cacheFolded.TryGetValue(slotIndex, out var cached))
             {
-                ulong inner = 0;
-                for (var w = 0; w < words; w++)
-                {
-                    inner ^= Bytes.U64Le(slot, 8 * w) ^ (ulong)w;
-                }
-                folded = s ^ inner;
+                folded = cached;
             }
             else
             {
-                ulong acc = 0;
-                for (var w = 0; w < words; w++)
+                var slot = new byte[terrain.Profile.SlotBytes];
+                System.Buffer.BlockCopy(terrain.Data, slotIndex * terrain.Profile.SlotBytes, slot, 0, terrain.Profile.SlotBytes);
+                var words = HalfWords ? terrain.Profile.WordsPerSlot / 2 : terrain.Profile.WordsPerSlot;
+                if (SlotSummaryFold)
                 {
-                    var word = Bytes.U64Le(slot, 8 * w);
-                    acc += Mix.Mix64(word ^ s);
+                    ulong inner = 0;
+                    for (var w = 0; w < words; w++)
+                    {
+                        inner ^= Bytes.U64Le(slot, 8 * w) ^ (ulong)w;
+                    }
+                    folded = s ^ inner;
                 }
-                folded = acc;
+                else
+                {
+                    ulong acc = 0;
+                    for (var w = 0; w < words; w++)
+                    {
+                        var word = Bytes.U64Le(slot, 8 * w);
+                        acc += Mix.Mix64(word ^ s);
+                    }
+                    folded = acc;
+                }
+                if (cacheFolded != null)
+                {
+                    cacheFolded[slotIndex] = folded;
+                }
             }
             var seal = Sha256.Seal(folded);
             s = Bytes.U64Le(seal, 0);

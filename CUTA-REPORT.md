@@ -91,3 +91,11 @@ Run https://github.com/groundinglab/pcoc/actions/runs/42026128624 on `fafd995`:
 - `g1`: residual host short-name in launcher postscript removed (report-only).
 - `retired-term`: CI-fix note had quoted retired prose; reworded (report-only).
 - `sdk-csharp-mutations`: N2b now ok; N4a exited 0 because `ReuseSlot` only cached when the slot index matched (noop). `WalkLeg` now reuses the held slot across index changes when the flag is set so prod-leg mismatches as named.
+
+## CI fix 3 (builder loop)
+
+Run https://github.com/groundinglab/pcoc/actions/runs/42027487004 on `9a5a13c`:
+
+- `g1` / `retired-term` / `gitleaks` / `xverify`: success.
+- `sdk-csharp-mutations`: N2b ok; N4a got the prod-leg expect but earlier S1/S2 rig cases also printed `sha256 mismatch` (forbidden on N4a's absent list) because `ReuseSlot` reused slot bytes across index changes on every profile.
+- Fix: `ReuseSlot` now implements §16 `cached_leg` (reuse earlier `S_folded` on a revisited slot index), armed only on the production profile so `--through prod-leg` keeps S1/S2 object hashes stable while prod-leg mismatches.
