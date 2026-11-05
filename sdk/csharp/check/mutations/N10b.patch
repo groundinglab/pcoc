@@ -1,0 +1,11 @@
+--- a/sdk/csharp/src/Pcoc/Produce/Paid.cs
++++ b/sdk/csharp/src/Pcoc/Produce/Paid.cs
+@@ -4,7 +4,7 @@
+ [Spec("§13.6", "An accepted waypoint is answered 204 and Bari holds it.")]
+ public static class Paid
+ {
+-    public static bool DisplayOrder;
++    public static bool DisplayOrder = true;
+ 
+     [Spec("§9", "Every Rule BR1 block-hash comparison (current, before, after) is natural order on both sides")]
+     public static int Status(byte[] body, string nonceText, string headerHex, string origin, Br1.Tip tip)

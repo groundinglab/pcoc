@@ -1,0 +1,11 @@
+--- a/sdk/csharp/src/Pcoc/Produce/WalkLeg.cs
++++ b/sdk/csharp/src/Pcoc/Produce/WalkLeg.cs
+@@ -7,7 +7,7 @@
+     public static bool ReuseSlot;
+     public static bool HalfWords;
+     public static bool SlotSummaryFold;
+-    public static bool FlipFirstResult;
++    public static bool FlipFirstResult = true;
+ 
+     [Spec("§11.1", "each step must be driven by the full 16 KB slot")]
+     public static ulong Apply(Terrain terrain, byte[] previousCheckpoint)

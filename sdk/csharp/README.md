@@ -1,10 +1,10 @@
-# PCOC C# SDK 2.3.1
+# PCOC C# SDK 2.3.2
 
-Verifier-only. This tree verifies a Satoshi Hike 2.3 object and runs the public conformance pack. It does not produce a PCOC. The producer follows in slice 2.
+Producer (rig and test plane; live plane in the follow-on Cut B ticket) and verifier. This tree produces a Satoshi Hike 2.3 object on the scripted rig and the test plane, verifies a hike object, and runs the public conformance pack including the Rule I4 producer tests. The C# SDK is 2.3.2 while `sdk/VERSION` (shared) stays 2.3.1.
 
-It is not yet a reference SDK under Rule I1. A reference SDK passes the whole pack. This SDK does not run the Rust-only sign-in vectors (`sign-in.json`, `sign-in-origins.json`) and it does not run the Rule I4 producer or header-source tests.
+It is not yet a reference SDK under Rule I1 while the sign-in vectors (`sign-in.json`, `sign-in-origins.json`) are excluded. A reference SDK passes the whole pack. The live header-source half of Rule I4 is Cut B.
 
-`pcoc` is `verify`, `selftest`, `quickstart`, and `candidates`. `candidates` launches `pcoc-gen`, which is not a release artefact.
+`pcoc` is `verify`, `selftest`, `quickstart`, `candidates`, and `produce --rig`. `candidates` launches `pcoc-gen`, which is not a release artefact.
 
 ## Build
 

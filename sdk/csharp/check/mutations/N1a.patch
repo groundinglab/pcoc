@@ -1,0 +1,12 @@
+--- a/sdk/csharp/src/Pcoc/Produce/Drive.cs
++++ b/sdk/csharp/src/Pcoc/Produce/Drive.cs
+@@ -47,6 +47,9 @@
+     public static int ResendCountSeen;
+     public static bool SkipSolve;
+     public static int PostStageLimit = 17;
++    public static void WaitForTip()
++    {
++    }
+     private static System.Collections.Generic.List<PendingPost> _pending = new();
+     private static EventLog? _log;
+     private static bool[] _planted = System.Array.Empty<bool>();

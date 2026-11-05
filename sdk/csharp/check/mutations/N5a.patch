@@ -1,0 +1,11 @@
+--- a/sdk/csharp/src/Pcoc/Produce/Drive.cs
++++ b/sdk/csharp/src/Pcoc/Produce/Drive.cs
+@@ -4,7 +4,7 @@
+ [Spec("§13.2", "(seed_beacon, height_0) ← Observe()")]
+ public static class Drive
+ {
+-    public static bool InterruptOnHashAlone;
++    public static bool InterruptOnHashAlone = true;
+     public static bool InterruptOnHeightAlone;
+     public static bool JumpUseHPlusOne;
+     public static bool SeedWaitNext;

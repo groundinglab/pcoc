@@ -3,7 +3,7 @@ namespace Pcoc;
 /// §16.2
 public static class BuildInfo
 {
-    public const string SdkVersion = "2.3.1";
+    public const string SdkVersion = "2.3.2";
     public const string Language = "csharp";
 
     /// §16.2

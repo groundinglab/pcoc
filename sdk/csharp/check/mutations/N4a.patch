@@ -1,0 +1,11 @@
+--- a/sdk/csharp/src/Pcoc/Produce/WalkLeg.cs
++++ b/sdk/csharp/src/Pcoc/Produce/WalkLeg.cs
+@@ -4,7 +4,7 @@
+ [Spec("§11.2", "leg_result ← LegResult(terrain, previous)")]
+ public static class WalkLeg
+ {
+-    public static bool ReuseSlot;
++    public static bool ReuseSlot = true;
+     public static bool HalfWords;
+     public static bool SlotSummaryFold;
+     public static bool FlipFirstResult;

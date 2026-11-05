@@ -1,0 +1,11 @@
+--- a/sdk/csharp/src/Pcoc/Produce/EventLog.cs
++++ b/sdk/csharp/src/Pcoc/Produce/EventLog.cs
+@@ -4,7 +4,7 @@
+ [Spec("§13.5", "Only the live profile writes this log.")]
+ public sealed class EventLog
+ {
+-    public static bool SwapPostKeys;
++    public static bool SwapPostKeys = true;
+     public static bool WriteOnTest;
+ 
+     private readonly string? _path;

@@ -2,7 +2,7 @@
 
 Satoshi Hike 2.3. The specification pack is [spec/](../spec/) — start with [GUIDE.md](../spec/GUIDE.md) (Construction + Conformance are the definitional pair). Where an SDK and that pack disagree, the specification wins.
 
-The pack pin is [SPEC_PIN](SPEC_PIN): tag `spec-2.3.0` and the SHA-256 of [spec/conformance/pack/manifest.json](../spec/conformance/pack/manifest.json). There is no erratum key. The pack lists the vectors the four reference SDKs agree on, plus the Rust sign-in wire. The C# SDK is verifier-only (producer in slice 2) and is not yet a reference SDK under Rule I1. The SDK version in [VERSION](VERSION) is `2.3.1`, a patch version that implements SPEC 2.3. The same file inside tag `spec-2.3.0` still carries the 2.2 pin line and is not the SDK pin; read this one.
+The pack pin is [SPEC_PIN](SPEC_PIN): tag `spec-2.3.0` and the SHA-256 of [spec/conformance/pack/manifest.json](../spec/conformance/pack/manifest.json). There is no erratum key. The pack lists the vectors the four reference SDKs agree on, plus the Rust sign-in wire. The C# SDK is a producer (rig and test plane; live plane in Cut B) and a verifier, and it is not yet a reference SDK under Rule I1 while the sign-in vectors (`sign-in.json`, `sign-in-origins.json`) are excluded. The C# SDK is 2.3.2 while `sdk/VERSION` (shared) stays 2.3.1. The SDK version in [VERSION](VERSION) is `2.3.1`, a patch version that implements SPEC 2.3. The same file inside tag `spec-2.3.0` still carries the 2.2 pin line and is not the SDK pin; read this one.
 
 ## Which SDK
 
@@ -12,7 +12,7 @@ The Rust workspace in this tree is [sdk/rust](rust/).
 |---|---|
 | A Rust verifier, a scripted offline producer, or the `pcoc` command | `sdk/rust`: crates `pcoc` and `pcoc-produce`, binary `pcoc` |
 | C, Go, or Java | That language's own SDK tree |
-| C# (verifier only; producer in slice 2) | `sdk/csharp` |
+| C# (producer, rig and test plane; live plane in Cut B) | `sdk/csharp` |
 
 `pcoc` is the construction, the section 7 encodings, the section 14 verify record, the draws, the integer comparisons, and the Hashcash digest. `pcoc-produce` is the offline producer on the scripted rig. The `pcoc` command is `verify`, `selftest`, `candidates`, and `produce --rig`.
 

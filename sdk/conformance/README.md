@@ -1,6 +1,6 @@
 # Cross-verify gate
 
-`cross-verify.sh` is the cross-SDK conformance gate for the four Satoshi Hike 2.3 reference SDKs (Rust, C, Go, and Java) and the C# verifier-only SDK. It builds each verify CLI from this tree and checks that they agree on the CASES v2 objects, the candidate files, the pinned digests, the thirteen permanent negatives, and the malformed inputs. C# is verifier-only: the producer follows in slice 2, and it is not yet a reference SDK under Rule I1.
+`cross-verify.sh` is the cross-SDK conformance gate for the four Satoshi Hike 2.3 reference SDKs (Rust, C, Go, and Java) and the C# SDK. It builds each verify CLI from this tree and checks that they agree on the CASES v2 objects, the candidate files, the pinned digests, the thirteen permanent negatives, and the malformed inputs. C# is a producer (rig and test plane; live plane in Cut B) and a verifier, and it is not yet a reference SDK under Rule I1 while the sign-in vectors (`sign-in.json`, `sign-in-origins.json`) are excluded.
 
 The normative specification pack is [spec/](../../spec/) — see [GUIDE.md](../../spec/GUIDE.md) and [05-Conformance_Process.md](../../spec/05-Conformance_Process.md). Permanent negatives are stated in Conformance Process and pinned in [spec/conformance/pack/](../../spec/conformance/pack/). `cross-verify.sh` reads the same rows from [erratum-negatives.tsv](erratum-negatives.tsv). That table is harness input, not a second specification.
 

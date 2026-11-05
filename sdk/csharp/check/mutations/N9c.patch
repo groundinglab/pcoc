@@ -1,0 +1,11 @@
+--- a/sdk/csharp/src/Pcoc/Produce/Drive.cs
++++ b/sdk/csharp/src/Pcoc/Produce/Drive.cs
+@@ -16,7 +16,7 @@
+     public static bool AwaitPost;
+     public static bool AskAtOffsetOne;
+     public static bool AskWithout204;
+-    public static bool StoreUnchecked;
++    public static bool StoreUnchecked = true;
+     public static bool AskNewestOnly;
+     public static bool AskW17;
+     public static bool CloseWaitAsks;

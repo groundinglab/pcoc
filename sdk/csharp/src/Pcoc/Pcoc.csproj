@@ -8,4 +8,7 @@
     <Deterministic>true</Deterministic>
     <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Pcoc.Check" />
+  </ItemGroup>
 </Project>

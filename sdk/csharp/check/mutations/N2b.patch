@@ -1,0 +1,11 @@
+--- a/sdk/csharp/src/Pcoc/Produce/Cases.cs
++++ b/sdk/csharp/src/Pcoc/Produce/Cases.cs
+@@ -13,7 +13,7 @@
+ [Spec("§13.3", "A stage-loop test rig checks one production stage of this drive.")]
+ public static class Cases
+ {
+-    public static bool EchoO1;
++    public static bool EchoO1 = true;
+     public static bool EchoO2;
+     public static int S1Legs = 1;
+     public static int S2Stage5Legs = 3;

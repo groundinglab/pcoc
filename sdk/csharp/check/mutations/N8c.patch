@@ -1,0 +1,11 @@
+--- a/sdk/csharp/src/Pcoc/Produce/Drive.cs
++++ b/sdk/csharp/src/Pcoc/Produce/Drive.cs
+@@ -11,7 +11,7 @@
+     public static bool ObserveGetIndex;
+     public static int ResendTimes = 1;
+     public static int ResendDelay = Names.ResendDelaySeconds;
+-    public static bool ResendOn402;
++    public static bool ResendOn402 = true;
+     public static bool FollowRedirects;
+     public static bool AwaitPost;
+     public static bool AskAtOffsetOne;

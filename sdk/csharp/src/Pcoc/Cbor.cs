@@ -246,4 +246,126 @@ public static class Cbor
         }
         return true;
     }
+
+    /// §7.3
+    public static byte[] EncodeUint(ulong n)
+    {
+        return Head(0, n);
+    }
+
+    /// §7.3
+    public static byte[] EncodeBytes(byte[] b)
+    {
+        var head = Head(2, (ulong)b.Length);
+        var d = new byte[head.Length + b.Length];
+        System.Buffer.BlockCopy(head, 0, d, 0, head.Length);
+        System.Buffer.BlockCopy(b, 0, d, head.Length, b.Length);
+        return d;
+    }
+
+    /// §7.3
+    public static byte[] EncodeText(string s)
+    {
+        var raw = System.Text.Encoding.UTF8.GetBytes(s);
+        var head = Head(3, (ulong)raw.Length);
+        var d = new byte[head.Length + raw.Length];
+        System.Buffer.BlockCopy(head, 0, d, 0, head.Length);
+        System.Buffer.BlockCopy(raw, 0, d, head.Length, raw.Length);
+        return d;
+    }
+
+    /// §7.3
+    public static byte[] EncodeArray(byte[][] items)
+    {
+        var n = 0;
+        foreach (var it in items) n += it.Length;
+        var head = Head(4, (ulong)items.Length);
+        var d = new byte[head.Length + n];
+        System.Buffer.BlockCopy(head, 0, d, 0, head.Length);
+        var o = head.Length;
+        foreach (var it in items)
+        {
+            System.Buffer.BlockCopy(it, 0, d, o, it.Length);
+            o += it.Length;
+        }
+        return d;
+    }
+
+    /// §7.3
+    public static byte[] EncodeMap((string Key, byte[] Value)[] pairs)
+    {
+        var enc = new (byte[] K, byte[] V)[pairs.Length];
+        for (var i = 0; i < pairs.Length; i++)
+        {
+            enc[i] = (EncodeText(pairs[i].Key), pairs[i].Value);
+        }
+        System.Array.Sort(enc, (a, b) => CompareBytes(a.K, b.K));
+        var n = 0;
+        foreach (var (k, v) in enc) n += k.Length + v.Length;
+        var head = Head(5, (ulong)enc.Length);
+        var d = new byte[head.Length + n];
+        System.Buffer.BlockCopy(head, 0, d, 0, head.Length);
+        var o = head.Length;
+        foreach (var (k, v) in enc)
+        {
+            System.Buffer.BlockCopy(k, 0, d, o, k.Length);
+            o += k.Length;
+            System.Buffer.BlockCopy(v, 0, d, o, v.Length);
+            o += v.Length;
+        }
+        return d;
+    }
+
+    private static int CompareBytes(byte[] a, byte[] b)
+    {
+        var n = a.Length < b.Length ? a.Length : b.Length;
+        for (var i = 0; i < n; i++)
+        {
+            if (a[i] != b[i])
+            {
+                return a[i] - b[i];
+            }
+        }
+        return a.Length - b.Length;
+    }
+
+    private static byte[] Head(int major, ulong n)
+    {
+        var m = (byte)(major << 5);
+        if (n < 24)
+        {
+            return new[] { (byte)(m | (byte)n) };
+        }
+        if (n <= 0xff)
+        {
+            return new[] { (byte)(m | 24), (byte)n };
+        }
+        if (n <= 0xffff)
+        {
+            return new[] { (byte)(m | 25), (byte)(n >> 8), (byte)n };
+        }
+        if (n <= 0xffffffffUL)
+        {
+            return new[]
+            {
+                (byte)(m | 26),
+                (byte)(n >> 24),
+                (byte)(n >> 16),
+                (byte)(n >> 8),
+                (byte)n
+            };
+        }
+        return new[]
+        {
+            (byte)(m | 27),
+            (byte)(n >> 56),
+            (byte)(n >> 48),
+            (byte)(n >> 40),
+            (byte)(n >> 32),
+            (byte)(n >> 24),
+            (byte)(n >> 16),
+            (byte)(n >> 8),
+            (byte)n
+        };
+    }
 }

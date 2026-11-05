@@ -1,0 +1,11 @@
+--- a/sdk/csharp/src/Pcoc/Produce/EventLog.cs
++++ b/sdk/csharp/src/Pcoc/Produce/EventLog.cs
+@@ -5,7 +5,7 @@
+ public sealed class EventLog
+ {
+     public static bool SwapPostKeys;
+-    public static bool WriteOnTest;
++    public static bool WriteOnTest = true;
+ 
+     private readonly string? _path;
+     private readonly bool _live;

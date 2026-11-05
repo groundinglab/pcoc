@@ -1,0 +1,8 @@
+--- a/sdk/csharp/src/Pcoc/Produce/Names.cs
++++ b/sdk/csharp/src/Pcoc/Produce/Names.cs
+@@ -19,4 +19,5 @@
+ 
+     [Spec("§13.1", "The difficulty is 21 leading zero bits.")]
+     public const int HashcashBits = 21;
++    public const int HEADER_PEERS_MINIMUM = 2;
+ }

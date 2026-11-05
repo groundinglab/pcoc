@@ -1,0 +1,11 @@
+--- a/sdk/csharp/src/Pcoc/Produce/WalkLeg.cs
++++ b/sdk/csharp/src/Pcoc/Produce/WalkLeg.cs
+@@ -5,7 +5,7 @@
+ public static class WalkLeg
+ {
+     public static bool ReuseSlot;
+-    public static bool HalfWords;
++    public static bool HalfWords = true;
+     public static bool SlotSummaryFold;
+     public static bool FlipFirstResult;
+ 

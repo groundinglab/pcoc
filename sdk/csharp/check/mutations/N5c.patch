@@ -1,0 +1,11 @@
+--- a/sdk/csharp/src/Pcoc/Produce/Drive.cs
++++ b/sdk/csharp/src/Pcoc/Produce/Drive.cs
+@@ -7,7 +7,7 @@
+     public static bool InterruptOnHashAlone;
+     public static bool InterruptOnHeightAlone;
+     public static bool JumpUseHPlusOne;
+-    public static bool SeedWaitNext;
++    public static bool SeedWaitNext = true;
+     public static bool ObserveGetIndex;
+     public static int ResendTimes = 1;
+     public static int ResendDelay = Names.ResendDelaySeconds;

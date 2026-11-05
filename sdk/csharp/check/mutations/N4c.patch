@@ -1,0 +1,11 @@
+--- a/sdk/csharp/src/Pcoc/Produce/WalkLeg.cs
++++ b/sdk/csharp/src/Pcoc/Produce/WalkLeg.cs
+@@ -6,7 +6,7 @@
+ {
+     public static bool ReuseSlot;
+     public static bool HalfWords;
+-    public static bool SlotSummaryFold;
++    public static bool SlotSummaryFold = true;
+     public static bool FlipFirstResult;
+ 
+     [Spec("§11.1", "each step must be driven by the full 16 KB slot")]

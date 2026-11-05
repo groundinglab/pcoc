@@ -1,0 +1,11 @@
+--- a/sdk/csharp/src/Pcoc/Produce/Cases.cs
++++ b/sdk/csharp/src/Pcoc/Produce/Cases.cs
+@@ -16,7 +16,7 @@
+     public static bool EchoO1;
+     public static bool EchoO2;
+     public static int S1Legs = 1;
+-    public static int S2Stage5Legs = 3;
++    public static int S2Stage5Legs = 2;
+ 
+     [Spec("§10", "SHA-256 of an ASCII pcoc-pack-2.2/ label.")]
+     public static byte[] LabelDigest(string label)

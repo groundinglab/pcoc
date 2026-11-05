@@ -1,0 +1,11 @@
+--- a/sdk/csharp/src/Pcoc/Produce/Drive.cs
++++ b/sdk/csharp/src/Pcoc/Produce/Drive.cs
+@@ -20,7 +20,7 @@
+     public static bool AskNewestOnly;
+     public static bool AskW17;
+     public static bool CloseWaitAsks;
+-    public static bool PathSkipDescending;
++    public static bool PathSkipDescending = true;
+     public static bool LogSyncInLeg;
+     public static int WaitTipTimeoutSeconds;
+     public static bool BlockTipUntilAnswer;

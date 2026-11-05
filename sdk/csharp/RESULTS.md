@@ -1,6 +1,6 @@
-# C# SDK 2.3.1 check results
+# C# SDK 2.3.2 check results
 
-Verifier-only. Producer is slice 2. Sign-in vectors are excluded.
+Producer (rig and test plane; live plane in the follow-on Cut B ticket) and verifier. Rule I4 producer tests run. Sign-in vectors are excluded. The C# SDK is 2.3.2 while `sdk/VERSION` (shared) stays 2.3.1. It is not a reference SDK under Rule I1 while those vectors are excluded.
 
 `dotnet run --project check/Pcoc.Check -c Release` from `sdk/csharp` passes:
 

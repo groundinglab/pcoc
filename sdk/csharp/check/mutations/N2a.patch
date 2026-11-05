@@ -1,0 +1,11 @@
+--- a/sdk/csharp/src/Pcoc/Produce/Encoder.cs
++++ b/sdk/csharp/src/Pcoc/Produce/Encoder.cs
+@@ -4,7 +4,7 @@
+ [Spec("§7.3", "Produce emits the core deterministic encoding:")]
+ public static class Encoder
+ {
+-    public static bool SwapStageKeys;
++    public static bool SwapStageKeys = true;
+ 
+     [Spec("§7.3", "Produce emits the core deterministic encoding:")]
+     public static byte[] Encode(

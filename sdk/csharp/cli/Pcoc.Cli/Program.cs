@@ -21,6 +21,7 @@ public static class Program
                 "selftest" => Selftest(),
                 "quickstart" => Quickstart(),
                 "candidates" => Candidates(args),
+                "produce" => ProduceCmd(args),
                 _ => Usage(),
             };
         }
@@ -34,6 +35,7 @@ public static class Program
     {
         Console.Error.WriteLine("usage: pcoc verify [--profile production|conformance-small] [--sample-bytes N] [--slot-bytes N] [--terrain-bytes N] [--steps-per-leg N] [--index DIR|URL] [--draw-label LABEL] OBJECT");
         Console.Error.WriteLine("       pcoc selftest | quickstart | candidates [DIR]");
+        Console.Error.WriteLine("       pcoc produce --rig --case s1|s2|prod [--public-key HEX] --out PATH");
         return 2;
     }
 
@@ -145,6 +147,102 @@ public static class Program
             Console.Out.Write('\n');
         }
         return outcome.Exit;
+    }
+
+    /// §13.3
+    private static int ProduceCmd(string[] args)
+    {
+        var rig = false;
+        string? caseName = null;
+        string? keyHex = null;
+        string? outPath = null;
+        for (var i = 1; i < args.Length; i++)
+        {
+            var a = args[i];
+            if (a == "--rig")
+            {
+                rig = true;
+            }
+            else if (a == "--case")
+            {
+                caseName = Need(args, ref i);
+            }
+            else if (a == "--public-key")
+            {
+                keyHex = Need(args, ref i);
+            }
+            else if (a == "--out")
+            {
+                outPath = Need(args, ref i);
+            }
+            else
+            {
+                return Usage();
+            }
+        }
+        if (!rig || caseName == null || outPath == null)
+        {
+            return Usage();
+        }
+        Pcoc.Produce.CaseId id;
+        if (caseName == "s1")
+        {
+            id = Pcoc.Produce.CaseId.S1;
+        }
+        else if (caseName == "s2")
+        {
+            id = Pcoc.Produce.CaseId.S2;
+        }
+        else if (caseName == "prod")
+        {
+            id = Pcoc.Produce.CaseId.Prod;
+        }
+        else
+        {
+            return Usage();
+        }
+        byte[] key;
+        if (keyHex == null)
+        {
+            key = Pcoc.Produce.Cases.PackPublicKey();
+        }
+        else
+        {
+            var t = keyHex.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? keyHex.Substring(2) : keyHex;
+            if (t.Length != 64 || !Bytes.TryParseHex(t, out key) || key.Length != 32)
+            {
+                Console.Error.WriteLine("--public-key needs 64 hex digits");
+                return 2;
+            }
+        }
+        var bytes = Pcoc.Produce.Drive.RunRig(key, id);
+        if (Pcoc.Produce.Cases.EchoO1)
+        {
+            bytes = File.ReadAllBytes(FindObject("O1-S1.cbor"));
+        }
+        if (Pcoc.Produce.Cases.EchoO2)
+        {
+            bytes = File.ReadAllBytes(FindObject("O2-S2.cbor"));
+        }
+        File.WriteAllBytes(outPath, bytes);
+        Console.Error.Write(Pcoc.Produce.Drive.PathSkipText());
+        return 0;
+    }
+
+    private static string FindObject(string name)
+    {
+        foreach (var p in new[]
+        {
+            Path.Combine("objects", name),
+            Path.Combine("sdk", "csharp", "objects", name),
+        })
+        {
+            if (File.Exists(p))
+            {
+                return p;
+            }
+        }
+        return Path.Combine("objects", name);
     }
 
     /// §7.4

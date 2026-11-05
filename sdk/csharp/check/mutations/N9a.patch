@@ -1,0 +1,11 @@
+--- a/sdk/csharp/src/Pcoc/Produce/Drive.cs
++++ b/sdk/csharp/src/Pcoc/Produce/Drive.cs
+@@ -14,7 +14,7 @@
+     public static bool ResendOn402;
+     public static bool FollowRedirects;
+     public static bool AwaitPost;
+-    public static bool AskAtOffsetOne;
++    public static bool AskAtOffsetOne = true;
+     public static bool AskWithout204;
+     public static bool StoreUnchecked;
+     public static bool AskNewestOnly;

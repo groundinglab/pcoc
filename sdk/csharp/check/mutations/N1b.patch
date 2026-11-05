@@ -1,0 +1,11 @@
+--- a/sdk/csharp/src/Pcoc/Produce/Names.cs
++++ b/sdk/csharp/src/Pcoc/Produce/Names.cs
+@@ -15,7 +15,7 @@
+     public const int HEADER_PEER_SILENCE_SECONDS = 120;
+ 
+     [Spec("§13.1", "After a transitory send failure the producer resends the identical request exactly once, in the background, 30 seconds after that transport failure, and then drops the waypoint if the resend fails.")]
+-    public const int ResendDelaySeconds = 30;
++    public const int ResendDelaySeconds = 45;
+ 
+     [Spec("§13.1", "The difficulty is 21 leading zero bits.")]
+     public const int HashcashBits = 21;

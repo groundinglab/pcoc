@@ -12,36 +12,56 @@ public static class Program
     private static int _failed;
 
     /// §16
-    public static int Main()
+    public static int Main(string[] args)
     {
+        string? through = null;
+        if (args.Length == 2 && args[0] == "--through")
+        {
+            through = args[1];
+        }
+        else if (args.Length != 0)
+        {
+            Console.Error.WriteLine("usage: Pcoc.Check [--through CASE]");
+            return 2;
+        }
         var root = FindRoot();
         var pack = Path.Combine(root, "spec", "conformance", "pack");
         PinCheck(root, pack);
-        var work = Path.Combine(Path.GetTempPath(), "pcoc-csharp-cand-" + Environment.ProcessId);
-        Directory.CreateDirectory(work);
-        try
+        if (through == null)
         {
-            Generate(root, work);
-            foreach (var name in new[]
+            var work = Path.Combine(Path.GetTempPath(), "pcoc-csharp-cand-" + Environment.ProcessId);
+            Directory.CreateDirectory(work);
+            try
             {
-                "anchor.json", "br1.json", "draw.json", "fold.json", "hashcash.json", "kat-small.json",
-                "negatives.json", "nl4.json", "prod.json", "rate.json", "seed.json", "terrain.json",
-                "test-3leg.json", "unknown-kind.json", "wes.json"
-            })
-            {
-                Compare(pack, work, name);
+                Generate(root, work);
+                foreach (var name in new[]
+                {
+                    "anchor.json", "br1.json", "draw.json", "fold.json", "hashcash.json", "kat-small.json",
+                    "negatives.json", "nl4.json", "prod.json", "rate.json", "seed.json", "terrain.json",
+                    "test-3leg.json", "unknown-kind.json", "wes.json"
+                })
+                {
+                    Compare(pack, work, name);
+                }
+                Blockhash(Path.Combine(pack, "blockhash-display.json"));
+                SlotMutation();
+                ShaBackend();
+                Excluded();
+                QuickstartCases(root);
+                NegativesCanary(root);
             }
+            finally
+            {
+                try { Directory.Delete(work, true); } catch (Exception) { }
+            }
+        }
+        else
+        {
             Blockhash(Path.Combine(pack, "blockhash-display.json"));
             SlotMutation();
             ShaBackend();
-            Excluded();
-            QuickstartCases(root);
-            NegativesCanary(root);
         }
-        finally
-        {
-            try { Directory.Delete(work, true); } catch (Exception) { }
-        }
+        ProducerCases.Run(root, pack, through);
         if (_failed != 0)
         {
             Console.Error.WriteLine("failed " + _failed);
@@ -49,6 +69,10 @@ public static class Program
         }
         return 0;
     }
+
+    internal static void PassLine(string name) => Pass(name);
+
+    internal static void FailLine(string name, string why) => Fail(name, why);
 
     private static void Pass(string name)
     {
@@ -296,7 +320,7 @@ public static class Program
             var run = RunQuickstart(dll, tmp);
             string[] want =
             {
-                "pcoc 2.3.1 (csharp) spec-2.3.0 pack 91ded57e: pin match",
+                "pcoc 2.3.2 (csharp) spec-2.3.0 pack 91ded57e: pin match",
                 "kernel scalar, sha256 openssl",
                 "O1-S1 object sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246",
                 "O1-S1 six_leg match, checkpoints match, waypoints match",
