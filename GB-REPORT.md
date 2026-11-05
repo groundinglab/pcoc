@@ -66,3 +66,11 @@ Low, as authorised. Stopped short of claiming local Gate 0 green.
 ## Mutation patch review (builder self-check; Red binds)
 
 Each `N*.patch` is a one-hunk flag/const/Sleep change matching the named Negative; no new types, no I/O, no reflection.
+
+## CoS postscript (after session; Australia/Adelaide 5 Nov 2026 ~10:35–10:40 PM)
+
+Christian authorised one targeted env fix then normal push for CI (no merge/deploy).
+
+- **Env fix (no check weakened):** `python3` installed inside `gb-cutA` via `apt-get` as root (`Python 3.12.3`). The image originally lacked it; that was the `negatives.sh` exit 127 cause.
+- **Still not local Gate 0 green:** `rig-O3-PROD` was not finished inside the local 15-minute window on this host; full Gate 0 / `mutate.sh` / `cross-verify.sh` were not re-run to green after the python install. A quick `negatives.sh` re-smoke then hit a NuGet `NuGet-Migrations` mutex I/O error (environment flake), not a check skip.
+- **CI must judge.** This branch is pushed for `pcoc-heavy` CI without claiming local green. Known limitations: local O3 unfinished; Gate 0 sequence incomplete on VivoBook cutA container.
