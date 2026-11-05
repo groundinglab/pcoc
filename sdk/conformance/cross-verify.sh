@@ -219,6 +219,8 @@ ARGS=(
   --rust-drv "$BUILD/rust-target/release/xverify-rust"
   --c-drv "$BUILD/xverify-c"
   --go-drv "$BUILD/xverify-go"
+  --differential-keys 4
+  --differential-seed "pcoc#166-differential-v1"
 )
 if [ -n "$REF_DIR" ]; then
   ARGS+=(--ref-dir "$REF_DIR")

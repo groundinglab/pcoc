@@ -1,0 +1,37 @@
+# id	patch	expect (stderr line prefix)	absent (|-separated)	earlier pass lines (|-separated)  — pcoc#166 r6, maintainer-generated from the ticket's Negative lines; earlier pass lines limited to what Pcoc.Check --through prints
+N1a	N1a.patch	fail producer-section-refs: missing § on Produce.Drive.WaitForTip	pin mismatch|step unchanged|fold unchanged	pass manifest.json|pass slot-mutation|pass slot-mutation-16384
+N1b	N1b.patch	fail producer-section-refs: ResendDelaySeconds value 45 not in cited SPEC text	pin mismatch|step unchanged|fold unchanged|missing § on	pass manifest.json|pass slot-mutation|pass slot-mutation-16384
+N1c	N1c.patch	fail producer-section-refs: HEADER_PEERS_MINIMUM not in SPEC name list	pin mismatch|step unchanged|fold unchanged|missing § on	pass manifest.json|pass slot-mutation|pass slot-mutation-16384
+N2a	N2a.patch	fail rig-O1-S1: sha256 mismatch	pin mismatch|step unchanged|fold unchanged|producer-section-refs:	pass manifest.json|pass slot-mutation|pass slot-mutation-16384
+N2b	N2b.patch	fail rig-fresh-key-s1: sha256 mismatch	pin mismatch|step unchanged|fold unchanged|producer-section-refs:	pass manifest.json|pass slot-mutation|pass slot-mutation-16384|pass rig-O1-S1 (sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246)
+N2c	N2c.patch	fail rig-O1-S1: sha256 mismatch	pin mismatch|step unchanged|fold unchanged|producer-section-refs:	pass manifest.json|pass slot-mutation|pass slot-mutation-16384
+N2d	N2d.patch	fail rig-O2-S2: sha256 mismatch	pin mismatch|step unchanged|fold unchanged	pass manifest.json|pass slot-mutation
+N2e	N2e.patch	fail rig-O3-PROD: sha256 mismatch	pin mismatch|step unchanged|fold unchanged	pass manifest.json|pass slot-mutation
+N2f	N2f.patch	fail rig-fresh-key-s2: sha256 mismatch	pin mismatch|step unchanged|fold unchanged	pass manifest.json|pass rig-O2-S2 (sha256 6bfc769b831b62de86165d290b8cb8b4fc872d7759183ebbad4c0ab94c0be5e0)
+N4a	N4a.patch	fail prod-leg: legs_le_hex mismatch	pin mismatch|step unchanged|fold unchanged|sha256 mismatch	pass manifest.json|pass slot-mutation|pass slot-mutation-16384
+N4b	N4b.patch	fail prod-leg: legs_le_hex mismatch	pin mismatch|step unchanged|fold unchanged	pass manifest.json|pass slot-mutation|pass slot-mutation-16384
+N4c	N4c.patch	fail prod-negatives: slot_summary_fold matched	pin mismatch|step unchanged|fold unchanged	pass manifest.json|pass slot-mutation
+N5a	N5a.patch	fail same-height-not-interrupt: stage ended at equal height	pin mismatch|step unchanged|fold unchanged|sha256 mismatch	pass manifest.json|pass rig-O1-S1 (sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246)
+N5b	N5b.patch	fail observe-no-http: 1 HTTP requests seen, expected 0	pin mismatch|step unchanged|fold unchanged	pass manifest.json
+N5c	N5c.patch	fail seed-no-wait: seed beacon height 1001, expected 1000	pin mismatch|step unchanged|fold unchanged	pass manifest.json
+N5d	N5d.patch	fail interrupt-jump-as-read: interrupt height 1002, expected 1004	pin mismatch|step unchanged|fold unchanged	pass manifest.json
+N5e	N5e.patch	fail interrupt-hash-and-height: interrupt on equal hash	pin mismatch|step unchanged|fold unchanged	pass manifest.json
+N6a	N6a.patch	fail stalled-source-legs-continue: 0 legs recorded while the source was stalled	pin mismatch|step unchanged|fold unchanged|sha256 mismatch	pass manifest.json|pass rig-O1-S1 (sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246)
+N6b	N6b.patch	fail walk-path-no-blocking: Thread.Sleep in Produce/Drive.cs	pin mismatch|step unchanged|fold unchanged	pass manifest.json
+N6c	N6c.patch	fail tipread-returns-at-once: TipRead did not return on a frozen clock	pin mismatch|step unchanged|fold unchanged	pass manifest.json
+N7a	N7a.patch	fail close-at-i17-no-window: object closed after an ask settled	pin mismatch|step unchanged|fold unchanged|sha256 mismatch	pass manifest.json|pass rig-O1-S1 (sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246)
+N7b	N7b.patch	fail w17-never-asked-on-jump: 1 asks for W_17, expected 0	pin mismatch|step unchanged|fold unchanged	pass manifest.json
+N7c	N7c.patch	fail stderr-exact-bytes: stderr differs at byte	pin mismatch|step unchanged|fold unchanged	pass manifest.json
+N8a	N8a.patch	fail one-resend-after-503: 3 POSTs seen, expected 2	pin mismatch|step unchanged|fold unchanged|sha256 mismatch	pass manifest.json|pass rig-O1-S1 (sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246)
+N8b	N8b.patch	fail one-resend-after-transport: resend at 10 s, expected 30 s	pin mismatch|step unchanged|fold unchanged	pass manifest.json
+N8c	N8c.patch	fail no-resend-402: 2 POSTs seen, expected 1	pin mismatch|step unchanged|fold unchanged	pass manifest.json
+N8d	N8d.patch	fail no-redirect: 1 requests to the redirect target, expected 0	pin mismatch|step unchanged|fold unchanged	pass manifest.json
+N8e	N8e.patch	fail post-async-leg0-not-delayed: leg 0 waited for the POST	pin mismatch|step unchanged|fold unchanged	pass manifest.json
+N9a	N9a.patch	fail ask-window-2-3-4: ask sent at offset 1	pin mismatch|step unchanged|fold unchanged|sha256 mismatch	pass manifest.json|pass rig-O1-S1 (sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246)
+N9b	N9b.patch	fail ask-only-after-204: 1 asks without a 204, expected 0	pin mismatch|step unchanged|fold unchanged	pass manifest.json
+N9c	N9c.patch	fail unchecked-200-is-miss: unchecked path stored	pin mismatch|step unchanged|fold unchanged	pass manifest.json
+N9d	N9d.patch	fail ask-on-every-learned-header: asks at offsets 4, expected 2, 3, 4	pin mismatch|step unchanged|fold unchanged	pass manifest.json
+N10a	N10a.patch	fail rule-i4-producer: legs stopped while the log was unwritable	pin mismatch|step unchanged|fold unchanged|sha256 mismatch	pass manifest.json|pass rig-O1-S1 (sha256 800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246)
+N10b	N10b.patch	fail rule-i4-paid-rule: reversed fee header accepted	pin mismatch|step unchanged|fold unchanged|reversal	pass manifest.json|pass blockhash-display.json
+N10c	N10c.patch	fail event-log-live-only: .events written on the test profile	pin mismatch|step unchanged|fold unchanged	pass manifest.json
+N10d	N10d.patch	fail event-log-key-order: key order differs from §13.5	pin mismatch|step unchanged|fold unchanged	pass manifest.json

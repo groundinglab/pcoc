@@ -1329,6 +1329,90 @@ class Gate:
         lines.append("")
         self.part["matrix"] = "\n".join(lines)
 
+    # pcoc#166 AC3 (stamped hunk, option A): fresh public keys on the CASES schedule.
+    # Producers: C#, Rust and Go rigs must write byte-identical objects (C and Java rigs
+    # take no key at the pin). Verifiers: all five give one byte-identical record per
+    # C#-produced object, with exit 0 and no structural reason (structural() is the oracle;
+    # a verifier exit code alone is not, a tampered object still exits 0).
+    def run_differential(self) -> None:
+        k = self.args.differential_keys
+        lines = ["## Differential rig (pcoc#166 AC3)", ""]
+        if not k:
+            return
+        seed = self.args.differential_seed
+        cases = [("s1", "S1", "1", "O1-S1.cbor"), ("s2", "S2", "3", "O2-S2.cbor")]
+        lines.append(f"seed `{seed}`, keys {k}, cases s1 s2; key i = SHA-256(seed + '/' + i)")
+        lines.append("")
+        lines.append("| case | key | csharp sha256 | rust | go | five verifiers |")
+        lines.append("|---|---|---|---|---|---|")
+        rows = 0
+        with tempfile.TemporaryDirectory(prefix="xverify-diff-") as tmp:
+            for i in range(k):
+                key = hashlib.sha256(f"{seed}/{i}".encode("ascii")).hexdigest()
+                for case, prof, legs, pname in cases:
+                    paths = {lang: os.path.join(tmp, f"{lang}-{case}-{i}.cbor") for lang in ("csharp", "rust", "go")}
+                    cmds = {
+                        "csharp": [self.args.csharp_cli, "produce", "--rig", "--case", case, "--public-key", key, "--out", paths["csharp"]],
+                        "rust": [self.args.rust_cli, "produce", "--rig", "--case", case, "--public-key", key, "--out", paths["rust"]],
+                        "go": [self.args.go_cli, "produce", "--rig", "--profile", prof, "--public-key", key, "--legs", legs, "--out", paths["go"]],
+                    }
+                    digest = {}
+                    for lang, cmd in cmds.items():
+                        code, _out, err = run_cmd(cmd, env=self.env, timeout=600)
+                        if code != 0 or not os.path.isfile(paths[lang]):
+                            self.fail(f"cell differential:{lang}:{case}:{i}: produce exit {code} stderr {snippet(err)}")
+                            digest[lang] = None
+                            continue
+                        digest[lang] = sha256(open(paths[lang], "rb").read())
+                    cs = digest.get("csharp")
+                    for lang in ("rust", "go"):
+                        if cs and digest.get(lang) and digest[lang] != cs:
+                            a = open(paths["csharp"], "rb").read()
+                            b = open(paths[lang], "rb").read()
+                            self.fail(f"cell differential:{case}:{i}: C# object differs from {lang} ({diff_at(a, b)})")
+                    verdict = "not run"
+                    if cs:
+                        recs = {}
+                        for lang in LANGS:
+                            code, rec, err = self.verify_matrix(lang, paths["csharp"], pname)
+                            if code != 0 or rec is None:
+                                self.fail(f"cell differential:{case}:{i}: {lang} verify exit {code} stderr {snippet(err)}")
+                            recs[lang] = rec
+                        uniq = {r for r in recs.values() if r is not None}
+                        if len(uniq) != 1 or any(r is None for r in recs.values()):
+                            self.fail(f"cell differential:{case}:{i}: verify records are not byte-identical across the five verifiers")
+                            verdict = "FAIL"
+                        else:
+                            reasons = structural(json.loads(next(iter(uniq))))
+                            if reasons:
+                                self.fail(f"cell differential:{case}:{i}: " + "; ".join(reasons))
+                                verdict = "FAIL"
+                            else:
+                                verdict = "match"
+                    if i == 0 and case == "s1" and digest.get("rust"):
+                        # Comparator canary: a valid object with the wrong schedule (Go --legs 2)
+                        # must be reported as different from the Rust S1 object.
+                        wrong = os.path.join(tmp, "canary-s1-legs2.cbor")
+                        code, _out, err = run_cmd([self.args.go_cli, "produce", "--rig", "--profile", "S1", "--public-key", key, "--legs", "2", "--out", wrong], env=self.env, timeout=600)
+                        if code != 0 or not os.path.isfile(wrong) or sha256(open(wrong, "rb").read()) == digest["rust"]:
+                            self.fail("cell differential: comparator canary not detected")
+                    if cs and i == 0 and case == "s1":
+                        # Canary: one flipped byte (middle of the C# object) must not read as match.
+                        raw = bytearray(open(paths["csharp"], "rb").read())
+                        raw[len(raw) // 2] ^= 1
+                        tam = os.path.join(tmp, "tampered-s1-0.cbor")
+                        open(tam, "wb").write(bytes(raw))
+                        for lang in LANGS:
+                            code, rec, _err = self.verify_matrix(lang, tam, pname)
+                            if code == 0 and rec is not None and not structural(json.loads(rec)):
+                                self.fail(f"cell differential: tampered C# object was not rejected by {lang}")
+                    rows += 1
+                    lines.append(f"| {case} | {i} | `{cs}` | {'=' if digest.get('rust') == cs else 'DIFF'} | {'=' if digest.get('go') == cs else 'DIFF'} | {verdict} |")
+        if rows != 2 * k:
+            self.fail(f"cell differential: {rows} rows, expected {2 * k}")
+        lines.append("")
+        self.part["differential"] = "\n".join(lines)
+
     def pins_section(self) -> None:
         fails = [item for item in self.failures if item.startswith("cell pin:")]
         lines = ["## Pins", ""]
@@ -1381,7 +1465,7 @@ class Gate:
             "The CASES synthetic index is `GET /index/{height}` for heights 989 through 1018, served on 127.0.0.1 only. Java reads those bodies from `{height}.json`. Rust, C, and Go read them from the listener."
         )
         head.append("")
-        order = ("matrix", "pins", "candidates", "negatives", "six", "malformed", "cli")
+        order = ("matrix", "differential", "pins", "candidates", "negatives", "six", "malformed", "cli")
         body = "\n".join(self.part[name] for name in order if name in self.part)
         return "\n".join(head) + "\n" + body
 
@@ -1429,6 +1513,7 @@ class Gate:
                     sys.stderr.flush()
                     self.six_leg_negatives(leg_hex, base)
                 self.run_matrix(groups)
+                self.run_differential()
                 sys.stderr.write("malformed\n")
                 sys.stderr.flush()
                 self.check_malformed(base)
@@ -1488,6 +1573,8 @@ def main() -> int:
     parser.add_argument("--rust-drv", required=True)
     parser.add_argument("--c-drv", required=True)
     parser.add_argument("--go-drv", required=True)
+    parser.add_argument("--differential-keys", type=int, default=0)
+    parser.add_argument("--differential-seed", default="")
     args = parser.parse_args()
     if args.ref_dir:
         args.ref_dir = os.path.abspath(args.ref_dir)

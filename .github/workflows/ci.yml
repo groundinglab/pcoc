@@ -100,6 +100,9 @@ jobs:
     runs-on: [self-hosted, linux, pcoc-heavy]
     timeout-minutes: 25
     steps:
+      - name: job clock start (for the 20-min line)
+        if: matrix.lang == 'csharp'
+        run: echo "PCOC_JOB_T0=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -180,6 +183,57 @@ jobs:
           dotnet run --project check/Pcoc.Check -c Release
           dotnet build cli/Pcoc.Cli -c Release
           sh check/negatives.sh
+      - name: measured job time vs the 20-min line
+        if: always() && matrix.lang == 'csharp' && steps.on.outputs.run == 'true'
+        run: |
+          s=$(( $(date +%s) - PCOC_JOB_T0 ))
+          echo "sdk (csharp) measured job time: $((s / 60)) min $((s % 60)) s (from the job's first step)"
+          if [ "$s" -gt 1200 ]; then
+            echo "::warning title=sdk (csharp) over 20 min::$((s / 60)) min $((s % 60)) s. Escalation event: the builder stops that line; any ci.yml change is its own stamped hunk."
+          fi
+
+  sdk-csharp-mutations:
+    # C# mutation negatives (check/mutate.sh, stamped shared gate), split from sdk (csharp) so each
+    # job has its own time and its own result. No job-level if: (r8 review ruling 5): it runs
+    # on every event; fork PRs are stopped by the RS2 runner pre-job hook.
+    needs: changes
+    name: sdk-csharp-mutations
+    runs-on: [self-hosted, linux, pcoc-heavy]
+    timeout-minutes: 30
+    steps:
+      - name: job clock start (for the 20-min line)
+        run: echo "PCOC_JOB_T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: sparse worktree (full clone, cone mode, no partial filter)
+        run: git sparse-checkout set spec sdk
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          global-json-file: sdk/csharp/global.json
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet
+          DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+          DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+          DOTNET_NOLOGO: "1"
+      - name: C# mutation negatives
+        working-directory: sdk/csharp
+        env:
+          DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+          DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+          DOTNET_NOLOGO: "1"
+        run: |
+          dotnet build check/Pcoc.Check -c Release
+          sh check/mutate.sh
+      - name: measured job time vs the 20-min line
+        if: always()
+        run: |
+          s=$(( $(date +%s) - PCOC_JOB_T0 ))
+          echo "sdk-csharp-mutations measured job time: $((s / 60)) min $((s % 60)) s (from the job's first step)"
+          if [ "$s" -gt 1200 ]; then
+            echo "::warning title=sdk-csharp-mutations over 20 min::$((s / 60)) min $((s % 60)) s. Escalation event: the builder stops that line; any ci.yml change is its own stamped hunk."
+          fi
 
   services:
     needs: changes
@@ -403,7 +457,7 @@ jobs:
 
   ci-ok:
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    needs: [changes, spec, sdk, services, desktop, desktop-windows, docs, gitleaks, g1, retired-term, xverify]
+    needs: [changes, spec, sdk, sdk-csharp-mutations, services, desktop, desktop-windows, docs, gitleaks, g1, retired-term, xverify]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
