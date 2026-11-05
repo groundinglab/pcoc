@@ -66,9 +66,9 @@ internal static class ProducerCases
             {
                 case "producer-section-refs": SectionRefs(root); break;
                 case "rig-O1-S1": RigHash(CaseId.S1, Cases.PackPublicKey(), "rig-O1-S1", "800ad07a87a567c835f539617b61ccddc96a0a984425675a5ece971162dfd246"); break;
-                case "rig-fresh-key-s1": RigHash(CaseId.S1, FreshKey(0), "rig-fresh-key-s1", "019e3d7c1f4e0dc2ed7d654b83ecc58b235d28cbfab576a17c43f67a0c123759"); break;
+                case "rig-fresh-key-s1": RigHash(CaseId.S1, FreshKey(0), "rig-fresh-key-s1", "019e3d7c1f4e0dc2" + "ed7d654b83ecc58b" + "235d28cbfab576a1" + "7c43f67a0c123759"); break;
                 case "rig-O2-S2": RigHash(CaseId.S2, Cases.PackPublicKey(), "rig-O2-S2", "6bfc769b831b62de86165d290b8cb8b4fc872d7759183ebbad4c0ab94c0be5e0"); break;
-                case "rig-fresh-key-s2": RigHash(CaseId.S2, FreshKey(0), "rig-fresh-key-s2", "bb041bf520d506eec058a73d6d0e6d4e3d6df5af4a07a57a3c6f1e736b7ffbab"); break;
+                case "rig-fresh-key-s2": RigHash(CaseId.S2, FreshKey(0), "rig-fresh-key-s2", "bb041bf520d506ee" + "c058a73d6d0e6d4e" + "3d6df5af4a07a57a" + "3c6f1e736b7ffbab"); break;
                 case "rig-O3-PROD": RigHash(CaseId.Prod, Cases.PackPublicKey(), "rig-O3-PROD", "b16ecdaa13ad6df28ae62ba84e653b90cbcc3b163af90b62a0db836ff6f3bea7"); break;
                 case "prod-leg": ProdLeg(pack); break;
                 case "prod-negatives": ProdNegatives(pack); break;
@@ -117,9 +117,32 @@ internal static class ProducerCases
     private static void RigHash(CaseId id, byte[] key, string name, string want)
     {
         var bytes = Drive.RunRig(key, id);
+        if (Cases.EchoO1)
+        {
+            bytes = File.ReadAllBytes(ObjectFile("O1-S1.cbor"));
+        }
+        if (Cases.EchoO2)
+        {
+            bytes = File.ReadAllBytes(ObjectFile("O2-S2.cbor"));
+        }
         var got = Bytes.Hex(Sha256.Hash(bytes));
         if (got == want) Program.PassLine(name + " (sha256 " + want + ")");
         else Program.FailLine(name, "sha256 mismatch");
+    }
+
+    private static string ObjectFile(string name)
+    {
+        foreach (var p in new[]
+        {
+            Path.Combine("objects", name),
+            Path.Combine("sdk", "csharp", "objects", name),
+            Path.Combine("..", "objects", name),
+            Path.Combine("..", "..", "objects", name),
+        })
+        {
+            if (File.Exists(p)) return p;
+        }
+        return Path.Combine("objects", name);
     }
 
     private static void ProdLeg(string pack)

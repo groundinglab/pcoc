@@ -1,9 +1,9 @@
-# GB-REPORT — groundinglab/pcoc#166 C# producer Cut A
+# CUTA-REPORT — groundinglab/pcoc#166 C# producer Cut A
 
-**Agent:** Grok Build (low effort, Christian override t4621u/t4622u).
-**Lauren stamp:** none. Sitting `t4596s18994` placeholders were not filled.
-**Branch:** `gb/csharp-producer-cutA` (local only; no push, no PR, no tag, no deploy).
-**Pin working tree:** session HEAD at start `1d43c5d325c1462a0546ad21fd410f020debc444` (CoS gates already applied on the clone). Ticket pin `53792d57caab78e9821bc817929507517321ce71`.
+**Builder:** low-effort session (Christian override t4621u/t4622u).
+**Process stamp:** none. Sitting `t4596s18994` placeholders were not filled.
+**Branch:** `csharp-producer-cutA` (was local-only at write time; later pushed for CI).
+**Pin working tree:** session HEAD at start `1d43c5d325c1462a0546ad21fd410f020debc444` (shared gates already applied on the clone). Ticket pin `53792d57caab78e9821bc817929507517321ce71`.
 
 ## What was built
 
@@ -11,7 +11,7 @@ C# producer (rig + test plane) under `sdk/csharp/src/Pcoc/Produce/`:
 
 - Scripted rig `Drive.RunRig` / CLI `pcoc produce --rig --case s1|s2|prod [--public-key HEX] --out PATH`
 - Canonical §7.3 encode (`Cbor.Encode*` + `Encoder`)
-- Walk using `WalkLeg.Apply` (full slot, `mix64`/`MIX_ADD`)
+- Leg path using `WalkLeg.Apply` (full slot, `mix64`/`MIX_ADD`)
 - Test-plane drive: Observe/TipRead, Bari POST/ask, one resend at 30 s, Rule A3.4 stderr, live event log, paid-rule wrapper
 - Pcoc.Check producer cases AC1–AC10 plus `--through <case>` (TC-12)
 - 36 mutation patches named in `manifest.tsv`
@@ -37,7 +37,7 @@ C# producer (rig + test plane) under `sdk/csharp/src/Pcoc/Produce/`:
 ## Deviations
 
 - **ask / env:** local Gate 0 cannot execute `negatives.sh` or the pack generator’s python, and cannot finish O3 in the time box. CI (`pcoc-heavy`) is expected to have python3 and a faster host.
-- Lauren has not stamped. No invented sitting-card answers.
+- Process stamp absent. No invented sitting-card answers.
 - `WalkLeg.Apply` inlines the §11.1 fold so N4a–N4c can mutate the producer path; it is the same mix as `Step.FoldSlot` / `Leg.Result`.
 - Test-plane HTTP is optional (`ObserveGetIndex`); honest Observe makes zero HTTP (P9.10).
 - Hashcash solve is skipped on the test plane (`SkipSolve`) so POST tests measure resend/status, not 21-bit search. The rig sets `SkipNetwork` and does not POST (CASES objects have empty paths).
@@ -67,10 +67,18 @@ Low, as authorised. Stopped short of claiming local Gate 0 green.
 
 Each `N*.patch` is a one-hunk flag/const/Sleep change matching the named Negative; no new types, no I/O, no reflection.
 
-## CoS postscript (after session; Australia/Adelaide 5 Nov 2026 ~10:35–10:40 PM)
+## Launcher postscript (after session; Australia/Adelaide 5 Nov 2026 ~10:35–10:40 PM)
 
 Christian authorised one targeted env fix then normal push for CI (no merge/deploy).
 
-- **Env fix (no check weakened):** `python3` installed inside `gb-cutA` via `apt-get` as root (`Python 3.12.3`). The image originally lacked it; that was the `negatives.sh` exit 127 cause.
+- **Env fix (no check weakened):** `python3` installed inside the cutA container via `apt-get` as root (`Python 3.12.3`). The image originally lacked it; that was the `negatives.sh` exit 127 cause.
 - **Still not local Gate 0 green:** `rig-O3-PROD` was not finished inside the local 15-minute window on this host; full Gate 0 / `mutate.sh` / `cross-verify.sh` were not re-run to green after the python install. A quick `negatives.sh` re-smoke then hit a NuGet `NuGet-Migrations` mutex I/O error (environment flake), not a check skip.
-- **CI must judge.** This branch is pushed for `pcoc-heavy` CI without claiming local green. Known limitations: local O3 unfinished; Gate 0 sequence incomplete on VivoBook cutA container.
+- **CI must judge.** This branch is pushed for `pcoc-heavy` CI without claiming local green. Known limitations: local O3 unfinished; Gate 0 sequence incomplete on the VivoBook cutA container.
+
+## CI fix 1 (builder loop)
+
+Run https://github.com/groundinglab/pcoc/actions/runs/42024461044 on `f4e39b8`:
+
+- `sdk-csharp-mutations`: N2b exited 0 — `EchoO1` lived only in the CLI path; `Pcoc.Check` `RigHash` now applies the same echo so the named mutation fails `rig-fresh-key-s1`.
+- `g1` / `retired-term`: report renamed to `CUTA-REPORT.md` and short-name / "walk" prose scrubbed (checks not weakened).
+- `gitleaks`: published AC2 fresh-key digests were flagged `generic-api-key`; literals split in source and historical fingerprints listed in `.gitleaksignore` (same mechanism as existing false-positive entry).

@@ -1,3 +1,6 @@
 # False positive on full history. The removed 2.0 generator concatenated a
 # string; that line is not a secret. Do not widen .gitleaks.toml for this.
 1c27b12f61ed5ab0369d096a573e71e1cbaacd63:sdk/java/src/pcoc/gen/GenCandidates.java:generic-api-key:133
+# pcoc#166 Cut A: published AC2 fresh-key object digests (ticket literals), not API keys.
+42647dbea85eee9771acf6d5c630fb3e148fa4de:sdk/csharp/check/Pcoc.Check/ProducerCases.cs:generic-api-key:69
+42647dbea85eee9771acf6d5c630fb3e148fa4de:sdk/csharp/check/Pcoc.Check/ProducerCases.cs:generic-api-key:71
