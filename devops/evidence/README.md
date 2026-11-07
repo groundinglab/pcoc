@@ -4,7 +4,7 @@
 
 | Item | Outcome | Evidence and limit |
 |---|---|---|
-| Producer branch | Unfinished | `gb/csharp-producer-cutA`, last run head `bedc1d828337195c14de3e23722cc73d16b1f776` |
+| Producer branch | Unfinished | Last run head `bedc1d828337195c14de3e23722cc73d16b1f776` |
 | Latest producer CI | Failed, completed | [42031616695](https://github.com/groundinglab/pcoc/actions/runs/42031616695), last update 2026-11-05 23:45:38 ACDT; refreshed metadata, not a new test |
 | Prior same-head run | Failed | [42028918719](https://github.com/groundinglab/pcoc/actions/runs/42028918719); historical evidence, not a new execution |
 | Detailed producer checks | C# and mutations failed; cross-verify succeeded | Earlier remote job inspection; no claim the whole producer passed |

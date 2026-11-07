@@ -18,7 +18,7 @@ All are unversioned source revisions identified by full digest. Source present a
 |---|---|---|
 | `getting-started` | `95346c6c78c8923e62e23470c3eec0e35bf3d2e1380ddef209997ab289259627` | omitted. Platform onboarding, memory/routine/cloud suggestions are outside this kit. |
 | `intent-backed-ac` | `9bdbadd5af6879397d3cec400fec318a3356728688a66a42c76e53a38e3a9c1d` | portable replacement: Intent-backed acceptance. Original body omitted; task-driven original wording above, no new pre-PR gate. |
-| `local-gb-launch` | `b2df189876a473dcef6fba12181e01b8fe9fd9665aab27a39db4e59b4b0d8e27` | portable replacement: Local build and repair. Private builder/account adapters omitted; no prescribed host or auth steps. |
+| Owned local-build launch source (private identifier omitted) | `b2df189876a473dcef6fba12181e01b8fe9fd9665aab27a39db4e59b4b0d8e27` | portable replacement: Local build and repair. Private builder/account adapters omitted; no prescribed host or auth steps. |
 | `pcoc-lab-gates` | `2dea12a25d780c6b63378aadf4173da0ad9e09102f3d6f099fd7f154563d0f03` | lineage only: Lab/run planning. Duplicate precursor, not a second default. Original body omitted. |
 | `pcoc-lab-gates-2` | `ad601fedaae88724b9f73c08dbcde0d87050727bc7b8dfb8513b3b952677fd08` | portable replacement: Lab/run planning. SPEC-exact/measurement-host qualification retained as general method; private settings omitted. Installed supersession not inferred. |
 | `produce-ladder-lab` | `970b3ed3c34c6dabdcbb3a8fe0876f9321e4445432e1a89fed3e7f4d6217c8fb` | omitted. Domain research sweeps and illustrative economic outcomes are not this docs/build route. |
