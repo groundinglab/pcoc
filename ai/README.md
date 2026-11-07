@@ -34,3 +34,7 @@ The specification and its matching conformance pack define interoperability. Che
 - The checks that were actually run and their results.
 - Any conflict between an SDK and the specification.
 - Any change that touches key material, signatures, path validation, or admission policy.
+
+## Optional development method
+
+For the experimental manual workflow, task/evidence templates, portable reference recipes and honest status/limits, see [the public WIP kit](../devops/README.md) and [Building from a Specification with AI Agents](https://groundinglab.io/technical/building-from-a-specification/). This optional method is not the normative PCOC specification or proof of independent SPEC-only success. Keep the released-SDK integration route above as the default when it fits.
