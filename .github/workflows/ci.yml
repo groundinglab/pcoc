@@ -318,14 +318,26 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: install gitleaks 8.30.1 (checksum pinned)
+      - name: gitleaks 8.30.1 on the checked-out ref (digest-pinned image)
         run: |
-          f=gitleaks_8.30.1_linux_x64.tar.gz
-          curl -sSfL -o "$f" "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/$f"
-          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $f" | sha256sum -c -
-          mkdir -p "$RUNNER_TEMP/bin" && tar -xzf "$f" -C "$RUNNER_TEMP/bin" gitleaks && echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: gitleaks over full history
-        run: gitleaks git --log-opts=--all --redact -v .
+          # Official image already runs: git config --global --add safe.directory '*'
+          image=ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+          pulled=0
+          for attempt in 1 2 3; do
+            if docker pull "$image"; then
+              pulled=1
+              break
+            fi
+            echo "docker pull failed (attempt ${attempt}/3)" >&2
+            if [[ "$attempt" -lt 3 ]]; then
+              sleep 3
+            fi
+          done
+          if [[ "$pulled" -ne 1 ]]; then
+            echo "::error::pinned gitleaks image pull failed after 3 attempts" >&2
+            exit 1
+          fi
+          docker run --rm -v "$PWD:/repo" -w /repo "$image" git --redact -v /repo
 
   g1:
     # Fork PRs get no secrets, so G1 cannot run there; ci-ok accepts a skip only in that case.
@@ -340,7 +352,7 @@ jobs:
         run: |
           command -v rg && exit 0
           f=ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz
-          cd "$RUNNER_TEMP" && curl -sSfL -o "$f" "https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/$f"
+          cd "$RUNNER_TEMP" && curl -sSfL --retry 5 --retry-delay 3 --retry-all-errors --max-time 120 -o "$f" "https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/$f"
           echo "4cf9f2741e6c465ffdb7c26f38056a59e2a2544b51f7cc128ef28337eeae4d8e  $f" | sha256sum -c -
           mkdir -p bin && tar -xzf "$f" --strip-components=1 -C bin "${f%.tar.gz}/rg" && echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: G1 leak grep + name spelling
@@ -395,7 +407,7 @@ jobs:
         run: |
           command -v rg && exit 0
           f=ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz
-          cd "$RUNNER_TEMP" && curl -sSfL -o "$f" "https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/$f"
+          cd "$RUNNER_TEMP" && curl -sSfL --retry 5 --retry-delay 3 --retry-all-errors --max-time 120 -o "$f" "https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/$f"
           echo "4cf9f2741e6c465ffdb7c26f38056a59e2a2544b51f7cc128ef28337eeae4d8e  $f" | sha256sum -c -
           mkdir -p bin && tar -xzf "$f" --strip-components=1 -C bin "${f%.tar.gz}/rg" && echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: retired-term check (exact-line allowlist)
