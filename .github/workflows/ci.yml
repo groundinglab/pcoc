@@ -368,7 +368,7 @@ jobs:
             echo "::error::ripgrep install from the Ubuntu archive failed after 6 attempts" >&2
             exit 1
           fi
-      - name: G1 leak grep + name spelling
+      - name: G1 leak grep (blocking); name spelling (advisory)
         env:
           G1_PATTERNS: ${{ secrets.G1_PATTERNS }}
         run: bash .github/scripts/g1.sh
@@ -409,6 +409,8 @@ jobs:
         run: bash sdk/conformance/cross-verify.sh --tier pr
 
   retired-term:
+    # Editorial terminology (the word "walk" in prose). The job still runs.
+    # Hits are warnings and exit 0. ci-ok does not require this job.
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -436,7 +438,7 @@ jobs:
             echo "::error::ripgrep install from the Ubuntu archive failed after 6 attempts" >&2
             exit 1
           fi
-      - name: retired-term check (exact-line allowlist)
+      - name: retired-term check (advisory; exact-line allowlist)
         run: python3 .github/scripts/retired-term-prose.py
 
   ci-ok:
@@ -476,18 +478,20 @@ jobs:
           bad = []
           if needs["changes"]["result"] != "success":
               bad.append(f"changes={needs['changes']['result']}")
-          # always-on scans must succeed; g1 may be skipped only on a fork PR
+          # Blocking scans must succeed. g1 may be skipped only on a fork PR.
+          # retired-term is editorial and must not fail ci-ok (same as desktop).
           fork = os.environ.get("FORK_PR") == "true"
-          for name in ("gitleaks", "g1", "retired-term"):
+          for name in ("gitleaks", "g1"):
               r = needs[name]["result"]
               if r == "skipped" and name == "g1" and fork:
                   print("g1: skipped on fork PR (accepted)")
               elif r != "success":
                   bad.append(f"{name}={r}")
+          advisory = {"desktop", "retired-term"}
           for name, job in needs.items():
               r = job["result"]
               print(f"{name}: {r}")
-              if name != "desktop" and r in ("failure", "cancelled"):
+              if name not in advisory and r in ("failure", "cancelled"):
                   bad.append(f"{name}={r}")
           if bad:
               raise SystemExit("ci-ok FAIL: " + ", ".join(bad))
