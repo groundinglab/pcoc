@@ -1,3 +1,10 @@
 # False positive on full history. The removed 2.0 generator concatenated a
 # string; that line is not a secret. Do not widen .gitleaks.toml for this.
 1c27b12f61ed5ab0369d096a573e71e1cbaacd63:sdk/java/src/pcoc/gen/GenCandidates.java:generic-api-key:133
+
+# False positive on full history. These are
+# expected SHA-256 digests of rig output for cases rig-O1-S1 and rig-O2-S2,
+# compared by RigHash() and printed in PASS lines; not credentials. Exact
+# fingerprints only. Do not widen .gitleaks.toml for this.
+42647dbea85eee9771acf6d5c630fb3e148fa4de:sdk/csharp/check/Pcoc.Check/ProducerCases.cs:generic-api-key:69
+42647dbea85eee9771acf6d5c630fb3e148fa4de:sdk/csharp/check/Pcoc.Check/ProducerCases.cs:generic-api-key:71
