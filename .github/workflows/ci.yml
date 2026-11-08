@@ -348,13 +348,26 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: ripgrep 14.1.1 (checksum pinned, user-local)
+      - name: ripgrep from the Ubuntu archive
         run: |
           command -v rg && exit 0
-          f=ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz
-          cd "$RUNNER_TEMP" && curl -sSfL --retry 5 --retry-delay 3 --retry-all-errors --max-time 120 -o "$f" "https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/$f"
-          echo "4cf9f2741e6c465ffdb7c26f38056a59e2a2544b51f7cc128ef28337eeae4d8e  $f" | sha256sum -c -
-          mkdir -p bin && tar -xzf "$f" --strip-components=1 -C bin "${f%.tar.gz}/rg" && echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          # Signed distro package. Bounded retry: 6 attempts, 3s apart
+          # (same bound as the previous curl --retry 5).
+          ok=0
+          for attempt in 1 2 3 4 5 6; do
+            if sudo apt-get update && sudo apt-get install -y ripgrep; then
+              ok=1
+              break
+            fi
+            echo "apt-get install ripgrep failed (attempt ${attempt}/6)" >&2
+            if [[ "$attempt" -lt 6 ]]; then
+              sleep 3
+            fi
+          done
+          if [[ "$ok" -ne 1 ]]; then
+            echo "::error::ripgrep install from the Ubuntu archive failed after 6 attempts" >&2
+            exit 1
+          fi
       - name: G1 leak grep + name spelling
         env:
           G1_PATTERNS: ${{ secrets.G1_PATTERNS }}
@@ -403,13 +416,26 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: ripgrep 14.1.1 (checksum pinned, user-local)
+      - name: ripgrep from the Ubuntu archive
         run: |
           command -v rg && exit 0
-          f=ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz
-          cd "$RUNNER_TEMP" && curl -sSfL --retry 5 --retry-delay 3 --retry-all-errors --max-time 120 -o "$f" "https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/$f"
-          echo "4cf9f2741e6c465ffdb7c26f38056a59e2a2544b51f7cc128ef28337eeae4d8e  $f" | sha256sum -c -
-          mkdir -p bin && tar -xzf "$f" --strip-components=1 -C bin "${f%.tar.gz}/rg" && echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          # Signed distro package. Bounded retry: 6 attempts, 3s apart
+          # (same bound as the previous curl --retry 5).
+          ok=0
+          for attempt in 1 2 3 4 5 6; do
+            if sudo apt-get update && sudo apt-get install -y ripgrep; then
+              ok=1
+              break
+            fi
+            echo "apt-get install ripgrep failed (attempt ${attempt}/6)" >&2
+            if [[ "$attempt" -lt 6 ]]; then
+              sleep 3
+            fi
+          done
+          if [[ "$ok" -ne 1 ]]; then
+            echo "::error::ripgrep install from the Ubuntu archive failed after 6 attempts" >&2
+            exit 1
+          fi
       - name: retired-term check (exact-line allowlist)
         run: python3 .github/scripts/retired-term-prose.py
 
