@@ -2,7 +2,7 @@
 # string; that line is not a secret. Do not widen .gitleaks.toml for this.
 1c27b12f61ed5ab0369d096a573e71e1cbaacd63:sdk/java/src/pcoc/gen/GenCandidates.java:generic-api-key:133
 
-# False positive on full history (branch gb/csharp-producer-cutA). These are
+# False positive on full history. These are
 # expected SHA-256 digests of rig output for cases rig-O1-S1 and rig-O2-S2,
 # compared by RigHash() and printed in PASS lines; not credentials. Exact
 # fingerprints only. Do not widen .gitleaks.toml for this.
