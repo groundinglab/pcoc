@@ -1,20 +1,17 @@
-# CI for groundinglab/pcoc. Heavy suites run on the self-hosted RS2 pool (label pcoc-heavy,
-# local persistent caches). Light checks run on standard GitHub-hosted ubuntu-latest, which is
-# free for this public repo (Christian, 23 Oct 2026). Jobs never run for fork PRs (fork guard in
-# every job + runner pre-job hook on the self-hosted pool).
-# `ci-ok` is the single check to require. Suites are path-gated by .github/scripts/changes.sh;
-# a suite whose directory does not exist yet is skipped.
+# CI for groundinglab/pcoc (Christian, 9 Nov 2026). Heavy jobs run on the self-hosted
+# DAX pool (pcoc-dax-1..4, label pcoc-heavy). Light credential/docs gates stay on
+# ubuntu-latest — lightweight secret/docs gates, not a heavy fanout. No debian1 /
+# retired runners. No browser CI.
+# Path-gated via .github/scripts/changes.sh: PRs run affected suites only.
+# `ci-ok` is the single check to require. A suite whose directory does not exist yet is skipped.
+# Nightly schedule removed (no full suite by default). Use workflow_dispatch for an
+# on-demand full run. A push to main is the light watch only.
 name: ci
 
-# Branches carry the full suite (pull_request, heavy legs on RS2). A push to main
-# gets the light watch only (hosted). The full suite reruns on main nightly
-# (schedule) or on demand (workflow_dispatch), never on every merge.
 on:
   pull_request:
   push:
     branches: [main]
-  schedule:
-    - cron: "30 16 * * *" # 03:00 ACDT / 02:00 ACST, nightly full run on main
   workflow_dispatch:
 
 permissions:
