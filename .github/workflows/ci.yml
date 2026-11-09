@@ -1,4 +1,4 @@
-# CI for groundinglab/pcoc. All jobs run on retained DAX runners pcoc-dax-1..4
+# CI for groundinglab/pcoc. All jobs run on the retained self-hosted pool
 # (label pcoc-heavy). No GitHub-hosted runners. No nightly schedule (use workflow_dispatch
 # for an on-demand full run). Path-gated by .github/scripts/changes.sh — affected suites
 # only on PRs; no full suite by default. No browser CI. Fork PRs refused (job if + pre-job hook).
@@ -317,7 +317,7 @@ jobs:
         run: |
           set -euo pipefail
           # Same pin as ops checks (v8.30.1). Fetch the binary layer without docker so
-          # DAX rootless runners work.
+          # Self-hosted rootless runners work.
           index_digest_p1=c00b6bd0aeb3071cbcb79009cb16a60d
           index_digest_p2=d9e0a7c60e2be9ab65d25e6bc8abbb7f
           index_digest="sha256:${index_digest_p1}${index_digest_p2}"
@@ -397,7 +397,7 @@ jobs:
       - name: ripgrep (use runner copy or pinned static binary)
         run: |
           set -euo pipefail
-          # No sudo apt on self-hosted DAX. Prefer preinstalled rg; else fetch a
+          # No sudo apt on self-hosted runners. Prefer preinstalled rg; else fetch a
           # pinned static musl build into RUNNER_TEMP (job-local only).
           if command -v rg >/dev/null; then
             rg --version
@@ -472,7 +472,7 @@ jobs:
       - name: ripgrep (use runner copy or pinned static binary)
         run: |
           set -euo pipefail
-          # No sudo apt on self-hosted DAX. Prefer preinstalled rg; else fetch a
+          # No sudo apt on self-hosted runners. Prefer preinstalled rg; else fetch a
           # pinned static musl build into RUNNER_TEMP (job-local only).
           if command -v rg >/dev/null; then
             rg --version
