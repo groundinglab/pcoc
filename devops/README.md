@@ -2,7 +2,7 @@
 
 **Public snapshot:** 2026-11-08 · **Kit revision:** WIP-1. This is non-normative development guidance, not a PCOC specification, SDK release or permission to operate any service.
 
-[Start manually](#manual-quickstart) · [Copyable templates](templates/README.md) · [Portable recipes](skills/README.md) · [Source reconciliation and omissions](sources/README.md) · [Observed results](evidence/README.md) · [History and proposals](history/README.md)
+[Start manually](#manual-quickstart) · [CI posture](ci.md) · [Copyable templates](templates/README.md) · [Portable recipes](skills/README.md) · [Source reconciliation and omissions](sources/README.md) · [Observed results](evidence/README.md) · [History and proposals](history/README.md)
 
 ## What is being tested
 
