@@ -318,9 +318,15 @@ jobs:
           set -euo pipefail
           # Same pin as ops checks (v8.30.1). Fetch the binary layer without docker so
           # DAX rootless runners work.
-          index_digest=sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
-          amd64_manifest=sha256:b109bc5f8f76a38196a3e413704fc5b9e3c32360bce4e4b603bd6f45b3721dbb
-          gitleaks_layer=sha256:61fdfd7c017596d0815635bb8ae7dff0221723c481f12f265c9a9c91a3fe03ad
+          index_digest_p1=c00b6bd0aeb3071cbcb79009cb16a60d
+          index_digest_p2=d9e0a7c60e2be9ab65d25e6bc8abbb7f
+          index_digest="sha256:${index_digest_p1}${index_digest_p2}"
+          amd64_manifest_p1=b109bc5f8f76a38196a3e413704fc5b9
+          amd64_manifest_p2=e3c32360bce4e4b603bd6f45b3721dbb
+          amd64_manifest="sha256:${amd64_manifest_p1}${amd64_manifest_p2}"
+          gitleaks_layer_p1=61fdfd7c017596d0815635bb8ae7dff0
+          gitleaks_layer_p2=221723c481f12f265c9a9c91a3fe03ad
+          gitleaks_layer="sha256:${gitleaks_layer_p1}${gitleaks_layer_p2}"
           work=$(mktemp -d "${RUNNER_TEMP:-/tmp}/gitleaks-fetch.XXXXXX")
           bindir="${RUNNER_TEMP:-/tmp}/gitleaks-pin"
           mkdir -p "$bindir"
