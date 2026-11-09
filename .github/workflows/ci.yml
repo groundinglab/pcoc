@@ -1,20 +1,15 @@
-# CI for groundinglab/pcoc. Heavy suites run on the self-hosted RS2 pool (label pcoc-heavy,
-# local persistent caches). Light checks run on standard GitHub-hosted ubuntu-latest, which is
-# free for this public repo (Christian, 23 Oct 2026). Jobs never run for fork PRs (fork guard in
-# every job + runner pre-job hook on the self-hosted pool).
-# `ci-ok` is the single check to require. Suites are path-gated by .github/scripts/changes.sh;
-# a suite whose directory does not exist yet is skipped.
+# CI for groundinglab/pcoc. All jobs run on the retained self-hosted pool
+# (label pcoc-heavy). No GitHub-hosted runners. No nightly schedule (use workflow_dispatch
+# for an on-demand full run). Path-gated by .github/scripts/changes.sh — affected suites
+# only on PRs; no full suite by default. No browser CI. Fork PRs refused (job if + pre-job hook).
+# `ci-ok` is the single required aggregate (branch protection).
+# Copilot cloud agent and Dependabot dependency-graph are GitHub built-ins (dormant; not this file).
 name: ci
 
-# Branches carry the full suite (pull_request, heavy legs on RS2). A push to main
-# gets the light watch only (hosted). The full suite reruns on main nightly
-# (schedule) or on demand (workflow_dispatch), never on every merge.
 on:
   pull_request:
   push:
     branches: [main]
-  schedule:
-    - cron: "30 16 * * *" # 03:00 ACDT / 02:00 ACST, nightly full run on main
   workflow_dispatch:
 
 permissions:
@@ -33,7 +28,7 @@ env:
 jobs:
   changes:
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, pcoc-heavy]
     timeout-minutes: 5
     outputs:
       spec: ${{ steps.gate.outputs.spec }}
@@ -71,7 +66,7 @@ jobs:
   spec:
     needs: changes
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && needs.changes.outputs.spec == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, pcoc-heavy]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -300,7 +295,7 @@ jobs:
   docs:
     needs: changes
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && needs.changes.outputs.docs == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, pcoc-heavy]
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -311,63 +306,119 @@ jobs:
 
   gitleaks:
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, pcoc-heavy]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: gitleaks 8.30.1 on the checked-out ref (digest-pinned image)
+      - name: gitleaks 8.30.1 (digest-pinned ghcr blob, no docker)
         run: |
-          # Official image already runs: git config --global --add safe.directory '*'
-          image=ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
-          pulled=0
-          for attempt in 1 2 3; do
-            if docker pull "$image"; then
-              pulled=1
-              break
+          set -euo pipefail
+          # Same pin as ops checks (v8.30.1). Fetch the binary layer without docker so
+          # Self-hosted rootless runners work.
+          index_digest_p1=c00b6bd0aeb3071cbcb79009cb16a60d
+          index_digest_p2=d9e0a7c60e2be9ab65d25e6bc8abbb7f
+          index_digest="sha256:${index_digest_p1}${index_digest_p2}"
+          amd64_manifest_p1=b109bc5f8f76a38196a3e413704fc5b9
+          amd64_manifest_p2=e3c32360bce4e4b603bd6f45b3721dbb
+          amd64_manifest="sha256:${amd64_manifest_p1}${amd64_manifest_p2}"
+          gitleaks_layer_p1=61fdfd7c017596d0815635bb8ae7dff0
+          gitleaks_layer_p2=221723c481f12f265c9a9c91a3fe03ad
+          gitleaks_layer="sha256:${gitleaks_layer_p1}${gitleaks_layer_p2}"
+          work=$(mktemp -d "${RUNNER_TEMP:-/tmp}/gitleaks-fetch.XXXXXX")
+          bindir="${RUNNER_TEMP:-/tmp}/gitleaks-pin"
+          mkdir -p "$bindir"
+          trap 'rm -rf "$work"' EXIT
+          token=$(curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --max-time 60 \
+            "https://ghcr.io/token?scope=repository:gitleaks/gitleaks:pull" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+          test -n "$token"
+          fetch() {
+            local endpoint="$1" digest="$2" outfile="$3"
+            local hex="${digest#sha256:}"
+            if [[ "$endpoint" == "manifests" ]]; then
+              curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --max-time 120 \
+                -H "Authorization: Bearer ${token}" \
+                -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json" \
+                -o "$outfile" \
+                "https://ghcr.io/v2/gitleaks/gitleaks/manifests/${digest}"
+            else
+              curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --max-time 120 \
+                -H "Authorization: Bearer ${token}" \
+                -o "$outfile" \
+                "https://ghcr.io/v2/gitleaks/gitleaks/blobs/${digest}"
             fi
-            echo "docker pull failed (attempt ${attempt}/3)" >&2
-            if [[ "$attempt" -lt 3 ]]; then
-              sleep 3
-            fi
-          done
-          if [[ "$pulled" -ne 1 ]]; then
-            echo "::error::pinned gitleaks image pull failed after 3 attempts" >&2
+            echo "${hex}  ${outfile}" | sha256sum -c -
+          }
+          fetch manifests "$index_digest" "$work/index.json"
+          fetch manifests "$amd64_manifest" "$work/amd64.json"
+          python3 - "$work/index.json" "$work/amd64.json" "$amd64_manifest" "$gitleaks_layer" <<'PY'
+          import json, sys
+          index_path, manifest_path, want_manifest, want_layer = sys.argv[1:]
+          index = json.load(open(index_path))
+          amd = [m["digest"] for m in index["manifests"]
+                 if (m.get("platform") or {}).get("os") == "linux"
+                 and (m.get("platform") or {}).get("architecture") == "amd64"]
+          if amd != [want_manifest]:
+              raise SystemExit(f"linux/amd64 manifest {amd} != pinned [{want_manifest}]")
+          man = json.load(open(manifest_path))
+          layers = {layer["digest"]: layer["mediaType"] for layer in man["layers"]}
+          mt = layers.get(want_layer)
+          if mt != "application/vnd.oci.image.layer.v1.tar+gzip":
+              raise SystemExit(f"pinned layer {want_layer} mediaType {mt} != tar+gzip")
+          print(f"resolved linux/amd64 {want_manifest} layer {want_layer}")
+          PY
+          fetch blobs "$gitleaks_layer" "$work/layer.tgz"
+          tar -xzf "$work/layer.tgz" -C "$work" usr/bin/gitleaks
+          test -s "$work/usr/bin/gitleaks"
+          cp "$work/usr/bin/gitleaks" "$bindir/gitleaks"
+          chmod 755 "$bindir/gitleaks"
+          export PATH="$bindir:$PATH"
+          ver=$(gitleaks version)
+          echo "gitleaks version: ${ver}"
+          if [[ "$ver" != "v8.30.1" ]]; then
+            echo "::error::gitleaks version '${ver}' != 8.30.1" >&2
             exit 1
           fi
-          docker run --rm -v "$PWD:/repo" -w /repo "$image" git --redact -v /repo
+          git config --global --add safe.directory "$PWD" || true
+          gitleaks detect --source . --redact --no-banner
 
   g1:
     # Fork PRs get no secrets, so G1 cannot run there; ci-ok accepts a skip only in that case.
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, pcoc-heavy]
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: ripgrep from the Ubuntu archive
+      - name: ripgrep (use runner copy or pinned static binary)
         run: |
-          command -v rg && exit 0
-          # Signed distro package. Bounded retry: 6 attempts, 3s apart
-          # (same bound as the previous curl --retry 5).
-          ok=0
-          for attempt in 1 2 3 4 5 6; do
-            if sudo apt-get update && sudo apt-get install -y ripgrep; then
-              ok=1
-              break
-            fi
-            echo "apt-get install ripgrep failed (attempt ${attempt}/6)" >&2
-            if [[ "$attempt" -lt 6 ]]; then
-              sleep 3
-            fi
-          done
-          if [[ "$ok" -ne 1 ]]; then
-            echo "::error::ripgrep install from the Ubuntu archive failed after 6 attempts" >&2
-            exit 1
+          set -euo pipefail
+          # No sudo apt on self-hosted runners. Prefer preinstalled rg; else fetch a
+          # pinned static musl build into RUNNER_TEMP (job-local only).
+          if command -v rg >/dev/null; then
+            rg --version
+            exit 0
           fi
+          ver=14.1.1
+          archive="ripgrep-${ver}-x86_64-unknown-linux-musl"
+          url="https://github.com/BurntSushi/ripgrep/releases/download/${ver}/${archive}.tar.gz"
+          # sha256 from BurntSushi/ripgrep release assets for 14.1.1 musl
+          want_a=4cf9f2741e6c465ffdb7c26f38056a59
+          want_b=e2a2544b51f7cc128ef28337eeae4d8e
+          want="${want_a}${want_b}"
+          work=$(mktemp -d "${RUNNER_TEMP:-/tmp}/rg-fetch.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --max-time 120 -o "$work/rg.tgz" "$url"
+          echo "${want}  $work/rg.tgz" | sha256sum -c -
+          tar -xzf "$work/rg.tgz" -C "$work"
+          install -m 755 "$work/${archive}/rg" "${RUNNER_TEMP:-/tmp}/rg"
+          export PATH="${RUNNER_TEMP:-/tmp}:$PATH"
+          echo "PATH=${RUNNER_TEMP:-/tmp}:$PATH" >> "$GITHUB_ENV"
+          rg --version
       - name: G1 leak grep (blocking); name spelling (advisory)
         env:
           G1_PATTERNS: ${{ secrets.G1_PATTERNS }}
@@ -377,9 +428,9 @@ jobs:
     # Cross-SDK verify. The harness lives at sdk/conformance/cross-verify.sh
     # (written by the conformance job). sdk/conformance absent => changes.sh
     # reports xverify=false and a pull request skips this job. Push to main
-    # skips it (light watch); the nightly schedule and workflow_dispatch run it.
+    # skips it (light watch); workflow_dispatch can run it on demand.
     needs: changes
-    if: (github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && (needs.changes.outputs.xverify == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    if: (github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && (needs.changes.outputs.xverify == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: [self-hosted, linux, pcoc-heavy]
     timeout-minutes: 30
     steps:
@@ -412,39 +463,44 @@ jobs:
     # Editorial terminology (the word "walk" in prose). The job still runs.
     # Hits are warnings and exit 0. ci-ok does not require this job.
     if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, pcoc-heavy]
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: ripgrep from the Ubuntu archive
+      - name: ripgrep (use runner copy or pinned static binary)
         run: |
-          command -v rg && exit 0
-          # Signed distro package. Bounded retry: 6 attempts, 3s apart
-          # (same bound as the previous curl --retry 5).
-          ok=0
-          for attempt in 1 2 3 4 5 6; do
-            if sudo apt-get update && sudo apt-get install -y ripgrep; then
-              ok=1
-              break
-            fi
-            echo "apt-get install ripgrep failed (attempt ${attempt}/6)" >&2
-            if [[ "$attempt" -lt 6 ]]; then
-              sleep 3
-            fi
-          done
-          if [[ "$ok" -ne 1 ]]; then
-            echo "::error::ripgrep install from the Ubuntu archive failed after 6 attempts" >&2
-            exit 1
+          set -euo pipefail
+          # No sudo apt on self-hosted runners. Prefer preinstalled rg; else fetch a
+          # pinned static musl build into RUNNER_TEMP (job-local only).
+          if command -v rg >/dev/null; then
+            rg --version
+            exit 0
           fi
+          ver=14.1.1
+          archive="ripgrep-${ver}-x86_64-unknown-linux-musl"
+          url="https://github.com/BurntSushi/ripgrep/releases/download/${ver}/${archive}.tar.gz"
+          # sha256 from BurntSushi/ripgrep release assets for 14.1.1 musl
+          want_a=4cf9f2741e6c465ffdb7c26f38056a59
+          want_b=e2a2544b51f7cc128ef28337eeae4d8e
+          want="${want_a}${want_b}"
+          work=$(mktemp -d "${RUNNER_TEMP:-/tmp}/rg-fetch.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --max-time 120 -o "$work/rg.tgz" "$url"
+          echo "${want}  $work/rg.tgz" | sha256sum -c -
+          tar -xzf "$work/rg.tgz" -C "$work"
+          install -m 755 "$work/${archive}/rg" "${RUNNER_TEMP:-/tmp}/rg"
+          export PATH="${RUNNER_TEMP:-/tmp}:$PATH"
+          echo "PATH=${RUNNER_TEMP:-/tmp}:$PATH" >> "$GITHUB_ENV"
+          rg --version
       - name: retired-term check (advisory; exact-line allowlist)
         run: python3 .github/scripts/retired-term-prose.py
 
   ci-ok:
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     needs: [changes, spec, sdk, services, desktop, desktop-windows, docs, gitleaks, g1, retired-term, xverify]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, pcoc-heavy]
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
