@@ -32,3 +32,5 @@ The two-plane note is for someone running a test plane and a live plane side by 
 - [Integrate a verifier](technical/integrate-a-verifier.md)
 
 Verification measures the object. Whether to accept it is a separate policy decision.
+
+<!-- CI path-filter proof 9 Nov 2026: docs-only change; light jobs on pcoc-heavy. -->
