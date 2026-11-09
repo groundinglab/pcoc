@@ -388,15 +388,29 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: ripgrep available on runner
+      - name: ripgrep (use runner copy or pinned static binary)
         run: |
-          # DAX images ship rg; no sudo apt (self-hosted).
+          set -euo pipefail
+          # No sudo apt on self-hosted DAX. Prefer preinstalled rg; else fetch a
+          # pinned static musl build into RUNNER_TEMP (job-local only).
           if command -v rg >/dev/null; then
             rg --version
             exit 0
           fi
-          echo "::error::ripgrep (rg) missing on this pcoc-heavy runner" >&2
-          exit 1
+          ver=14.1.1
+          archive="ripgrep-${ver}-x86_64-unknown-linux-musl"
+          url="https://github.com/BurntSushi/ripgrep/releases/download/${ver}/${archive}.tar.gz"
+          # sha256 from BurntSushi/ripgrep release assets for 14.1.1 musl
+          want=4dad2431e6aea2e88b27976004868bf6e4bb767822bf4b33635ae9b138aad71a
+          work=$(mktemp -d "${RUNNER_TEMP:-/tmp}/rg-fetch.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --max-time 120 -o "$work/rg.tgz" "$url"
+          echo "${want}  $work/rg.tgz" | sha256sum -c -
+          tar -xzf "$work/rg.tgz" -C "$work"
+          install -m 755 "$work/${archive}/rg" "${RUNNER_TEMP:-/tmp}/rg"
+          export PATH="${RUNNER_TEMP:-/tmp}:$PATH"
+          echo "PATH=${RUNNER_TEMP:-/tmp}:$PATH" >> "$GITHUB_ENV"
+          rg --version
       - name: G1 leak grep (blocking); name spelling (advisory)
         env:
           G1_PATTERNS: ${{ secrets.G1_PATTERNS }}
@@ -447,15 +461,29 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: ripgrep available on runner
+      - name: ripgrep (use runner copy or pinned static binary)
         run: |
-          # DAX images ship rg; no sudo apt (self-hosted).
+          set -euo pipefail
+          # No sudo apt on self-hosted DAX. Prefer preinstalled rg; else fetch a
+          # pinned static musl build into RUNNER_TEMP (job-local only).
           if command -v rg >/dev/null; then
             rg --version
             exit 0
           fi
-          echo "::error::ripgrep (rg) missing on this pcoc-heavy runner" >&2
-          exit 1
+          ver=14.1.1
+          archive="ripgrep-${ver}-x86_64-unknown-linux-musl"
+          url="https://github.com/BurntSushi/ripgrep/releases/download/${ver}/${archive}.tar.gz"
+          # sha256 from BurntSushi/ripgrep release assets for 14.1.1 musl
+          want=4dad2431e6aea2e88b27976004868bf6e4bb767822bf4b33635ae9b138aad71a
+          work=$(mktemp -d "${RUNNER_TEMP:-/tmp}/rg-fetch.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --max-time 120 -o "$work/rg.tgz" "$url"
+          echo "${want}  $work/rg.tgz" | sha256sum -c -
+          tar -xzf "$work/rg.tgz" -C "$work"
+          install -m 755 "$work/${archive}/rg" "${RUNNER_TEMP:-/tmp}/rg"
+          export PATH="${RUNNER_TEMP:-/tmp}:$PATH"
+          echo "PATH=${RUNNER_TEMP:-/tmp}:$PATH" >> "$GITHUB_ENV"
+          rg --version
       - name: retired-term check (advisory; exact-line allowlist)
         run: python3 .github/scripts/retired-term-prose.py
 
